@@ -1,0 +1,23 @@
+:root {
+  font-family:
+    Inter, Pretendard, Arial, sans-serif;
+  color: #f4f7fb;
+  background: #0c1118;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-width: 320px;
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  min-height: 100vh;
+}
