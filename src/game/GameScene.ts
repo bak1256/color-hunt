@@ -91,6 +91,11 @@ export class GameScene extends Phaser.Scene {
     private ammo = 5;
     private readonly maxAmmo = 5;
 
+    private isReloading = false;
+    private readonly reloadDuration = 1500;
+
+    private hitMarker!: Phaser.GameObjects.Graphics;
+
     private canShoot = true;
     private readonly shotCooldown = 450;
 
@@ -126,6 +131,7 @@ export class GameScene extends Phaser.Scene {
         this.createHiders();
         this.createSelectionRing();
         this.createCrosshair();
+        this.createHitMarker();
         this.createKeyboardControls();
         this.createHud();
         this.registerInputEvents();
@@ -669,6 +675,66 @@ export class GameScene extends Phaser.Scene {
         this.crosshairCenter.setDepth(21);
     }
 
+    private showHitMarker(): void {
+        const centerX = this.gameWidth / 2;
+        const centerY = this.gameHeight / 2;
+        const innerDistance = 7;
+        const outerDistance = 16;
+
+        this.hitMarker.clear();
+        this.hitMarker.lineStyle(3, 0xffffff, 1);
+
+        this.hitMarker.lineBetween(
+            centerX - outerDistance,
+            centerY - outerDistance,
+            centerX - innerDistance,
+            centerY - innerDistance,
+        );
+
+        this.hitMarker.lineBetween(
+            centerX + outerDistance,
+            centerY - outerDistance,
+            centerX + innerDistance,
+            centerY - innerDistance,
+        );
+
+        this.hitMarker.lineBetween(
+            centerX - outerDistance,
+            centerY + outerDistance,
+            centerX - innerDistance,
+            centerY + innerDistance,
+        );
+
+        this.hitMarker.lineBetween(
+            centerX + outerDistance,
+            centerY + outerDistance,
+            centerX + innerDistance,
+            centerY + innerDistance,
+        );
+
+        this.hitMarker.setVisible(true);
+        this.hitMarker.setAlpha(1);
+        this.hitMarker.setScale(1);
+
+        this.tweens.killTweensOf(this.hitMarker);
+
+        this.tweens.add({
+            targets: this.hitMarker,
+            alpha: 0,
+            scale: 1.4,
+            duration: 180,
+            ease: 'Quad.easeOut',
+            onComplete: () => {
+                this.hitMarker.setVisible(false);
+            },
+        });
+    }
+
+    private createHitMarker(): void {
+        this.hitMarker = this.add.graphics();
+        this.hitMarker.setDepth(100);
+        this.hitMarker.setVisible(false);
+    }
     private createKeyboardControls(): void {
         if (!this.input.keyboard) {
             throw new Error('Keyboard input is not available.');
@@ -1080,6 +1146,7 @@ export class GameScene extends Phaser.Scene {
             this.time.now + this.huntDuration * 1000;
 
         this.canShoot = true;
+        this.isReloading = false;
 
         this.player.setPosition(
             this.gameWidth / 2,
@@ -1286,7 +1353,16 @@ export class GameScene extends Phaser.Scene {
         targetX: number,
         targetY: number,
     ): void {
-        if (!this.canShoot || this.phase !== 'hunt') {
+        if (this.phase !== 'hunt') {
+            return;
+        }
+
+        if (this.isReloading) {
+            this.showStatus('재장전 중입니다');
+            return;
+        }
+
+        if (!this.canShoot) {
             return;
         }
 
@@ -1323,6 +1399,10 @@ export class GameScene extends Phaser.Scene {
             muzzleY,
             aimAngle,
         );
+
+        if (hitHiders.size > 0) {
+            this.showHitMarker();
+        }
 
         hitHiders.forEach((hider) => {
             this.hitHider(hider);
@@ -1568,20 +1648,41 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
+        if (this.isReloading) {
+            this.showStatus('이미 재장전 중입니다');
+            return;
+        }
+
         if (this.ammo === this.maxAmmo) {
             this.showStatus('이미 탄약이 가득합니다');
             return;
         }
 
-        this.ammo = this.maxAmmo;
+        this.isReloading = true;
+        this.canShoot = false;
 
+        this.showStatus('재장전 중...');
         this.updateAmmoText();
-        this.showStatus('재장전 완료!');
+
+        this.time.delayedCall(this.reloadDuration, () => {
+            if (this.phase !== 'hunt') {
+                this.isReloading = false;
+                return;
+            }
+
+            this.ammo = this.maxAmmo;
+            this.isReloading = false;
+            this.canShoot = true;
+
+            this.updateAmmoText();
+            this.showStatus('재장전 완료!');
+        });
     }
 
     private resetGame(): void {
         this.ammo = this.maxAmmo;
         this.canShoot = true;
+        this.isReloading = false;
 
         this.hiders.forEach((hider, index) => {
             hider.alive = true;
@@ -1636,6 +1737,15 @@ export class GameScene extends Phaser.Scene {
     }
 
     private updateAmmoText(): void {
+        if (this.isReloading) {
+            this.ammoText.setText(
+                `RELOADING...\n${this.ammo} / ${this.maxAmmo}`,
+            );
+
+            this.ammoText.setColor('#ffdf70');
+            return;
+        }
+
         const shells = '●'.repeat(this.ammo);
 
         const emptyShells = '○'.repeat(
@@ -1645,6 +1755,8 @@ export class GameScene extends Phaser.Scene {
         this.ammoText.setText(
             `AMMO ${this.ammo} / ${this.maxAmmo}\n${shells}${emptyShells}`,
         );
+
+        this.ammoText.setColor('#ffffff');
     }
 
     private updateTargetText(): void {
