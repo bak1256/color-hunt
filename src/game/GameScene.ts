@@ -57,7 +57,7 @@ export class GameScene extends Phaser.Scene {
   private readonly shotCooldown = 450;
 
   private readonly pelletCount = 7;
-  private readonly pelletRange = 600;
+  private readonly pelletRange = 300;
   private readonly shotgunSpread = Phaser.Math.DegToRad(30);
 
   private readonly playerSpeed = 250;
