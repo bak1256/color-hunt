@@ -1,12 +1,27 @@
 import Phaser from 'phaser';
+import {
+    multiplayerClient,
+    type NetworkBrushShape,
+    type NetworkPaintPoint,
+    type NetworkPaintStroke,
+    type NetworkPlayerState,
+    type NetworkShotFired,
+    type NetworkHunterAim,
+    type NetworkWeaponState,
+    type NetworkRoundResult,
+    type PublicRoomInfo,
+} from '../network/MultiplayerClient';
+import { NetworkPlayerManager } from '../multiplayer/NetworkPlayerManager';
 
 type GamePhase =
+    | 'lobby'
+    | 'countdown'
     | 'paint'
     | 'hunt'
     | 'hunterVictory'
     | 'hiderVictory';
 
-type BrushShape = 'circle' | 'square';
+type BrushShape = 'dotCircle' | 'circle' | 'square';
 
 type HiderPartObject =
     | Phaser.GameObjects.Arc
@@ -46,7 +61,7 @@ export class GameScene extends Phaser.Scene {
     private readonly gameWidth = 960;
     private readonly gameHeight = 540;
 
-    private phase: GamePhase = 'paint';
+    private phase: GamePhase = 'lobby';
 
     /*
      * Hunter
@@ -68,10 +83,7 @@ export class GameScene extends Phaser.Scene {
     private moveLeftKey!: Phaser.Input.Keyboard.Key;
     private moveRightKey!: Phaser.Input.Keyboard.Key;
 
-    private startKey!: Phaser.Input.Keyboard.Key;
     private reloadKey!: Phaser.Input.Keyboard.Key;
-    private resetKey!: Phaser.Input.Keyboard.Key;
-    private nextHiderKey!: Phaser.Input.Keyboard.Key;
 
     private brushIncreaseKey!: Phaser.Input.Keyboard.Key;
     private brushDecreaseKey!: Phaser.Input.Keyboard.Key;
@@ -96,11 +108,11 @@ export class GameScene extends Phaser.Scene {
     /*
      * Painting
      */
-    private readonly defaultPaintColor = 0xff0000;
+    private readonly defaultPaintColor = 0x000000;
     private paintColor = this.defaultPaintColor;
 
-    private brushSize = 10;
-    private brushShape: BrushShape = 'circle';
+    private brushSize = 4;
+    private brushShape: BrushShape = 'dotCircle';
     private isPainting = false;
 
     private paintPreview!: Phaser.GameObjects.Graphics;
@@ -150,6 +162,41 @@ export class GameScene extends Phaser.Scene {
 
     private paintColorText!: Phaser.GameObjects.Text;
     private brushSizeText!: Phaser.GameObjects.Text;
+    private paletteObjects: Phaser.GameObjects.GameObject[] = [];
+    private paintZoomText!: Phaser.GameObjects.Text;
+    private paintControlHelpText!: Phaser.GameObjects.Text;
+
+    /*
+     * Multiplayer
+     */
+    private multiplayerText!: Phaser.GameObjects.Text;
+    private lobbyPanel!: Phaser.GameObjects.Rectangle;
+    private lobbyTitleText!: Phaser.GameObjects.Text;
+    private lobbyInfoText!: Phaser.GameObjects.Text;
+    private startGameButton!: Phaser.GameObjects.Text;
+    private roleHunterButton!: Phaser.GameObjects.Text;
+    private roleHiderButton!: Phaser.GameObjects.Text;
+    private mainMenuObjects: Phaser.GameObjects.GameObject[] = [];
+    private roomListObjects: Phaser.GameObjects.GameObject[] = [];
+    private hunterBlindPanel!: Phaser.GameObjects.Rectangle;
+    private hunterBlindText!: Phaser.GameObjects.Text;
+    private countdownPanel!: Phaser.GameObjects.Rectangle;
+    private countdownText!: Phaser.GameObjects.Text;
+    private weaponHeat = 0;
+    private weaponHeatUpdatedAt = 0;
+    private weaponOverheatedUntil = 0;
+    private paintWorldZoom = 1;
+    private lastHunterAimSentAt = 0;
+    private readonly hunterAimSendInterval = 50;
+    private backgroundBaseX = 0;
+    private backgroundBaseY = 0;
+    private networkPlayerCount = 0;
+    private networkUnsubscribers: Array<() => void> = [];
+    private networkPlayerManager!: NetworkPlayerManager;
+    private activeStrokePoints: NetworkPaintPoint[] = [];
+    private activeStrokeTargetSessionId = '';
+    private readonly remoteBrushTexturePrefix =
+        'remote-paint-brush';
 
     constructor() {
         super('GameScene');
@@ -177,16 +224,35 @@ export class GameScene extends Phaser.Scene {
         this.createHud();
 
         this.createPaintTools();
+        this.createPaintPalette();
         this.createPointerControls();
 
-        this.enterPaintPhase();
+        this.createMultiplayerHud();
+        this.createLobbyUi();
+        this.createHunterBlindUi();
+        this.createCountdownUi();
+
+        this.networkPlayerManager = new NetworkPlayerManager(
+            this,
+            this.gameWidth,
+            this.gameHeight,
+        );
+
+        this.registerMultiplayerEvents();
+        this.enterLobbyPhase();
+        this.showMainMenu();
     }
 
     update(_: number, delta: number): void {
         this.updateRoundTimer();
+        this.updateCountdownUi();
+        this.updateWeaponHeatHud();
+        this.updateNetworkPlayers(delta);
 
         if (this.phase === 'paint') {
-            this.updateSelectedHiderMovement(delta);
+            if (!multiplayerClient.isConnected()) {
+                this.updateSelectedHiderMovement(delta);
+            }
             this.updateBrushSizeInput();
 
             if (
@@ -196,38 +262,1632 @@ export class GameScene extends Phaser.Scene {
             ) {
                 this.toggleBrushShape();
             }
-
-            if (
-                Phaser.Input.Keyboard.JustDown(
-                    this.nextHiderKey,
-                )
-            ) {
-                this.selectNextHider();
-            }
-
-            if (
-                Phaser.Input.Keyboard.JustDown(this.startKey)
-            ) {
-                this.startHunt();
-            }
         }
 
         if (this.phase === 'hunt') {
-            this.updateHunterMovement(delta);
+            if (!multiplayerClient.isConnected()) {
+                this.updateHunterMovement(delta);
+            }
             this.updateAim();
 
             if (
-                Phaser.Input.Keyboard.JustDown(this.reloadKey)
+                !multiplayerClient.isConnected() &&
+                Phaser.Input.Keyboard.JustDown(
+                    this.reloadKey,
+                )
             ) {
                 this.reload();
             }
         }
+    }
+
+    /*
+     * Multiplayer
+     */
+
+    private createMultiplayerHud(): void {
+        this.multiplayerText = this.add
+            .text(
+                this.gameWidth - 16,
+                16,
+                'MULTI · CONNECTING...',
+                {
+                    fontFamily: 'monospace',
+                    fontSize: '13px',
+                    fontStyle: 'bold',
+                    color: '#5b4636',
+                    backgroundColor: '#fff4d6',
+                    padding: {
+                        x: 9,
+                        y: 6,
+                    },
+                    align: 'right',
+                },
+            )
+            .setOrigin(1, 0)
+            .setDepth(310);
+    }
+
+    private registerMultiplayerEvents(): void {
+        this.networkUnsubscribers.push(
+            multiplayerClient.onPlayerAdded(
+                (
+                    sessionId: string,
+                    player: NetworkPlayerState,
+                ) => {
+                    this.networkPlayerCount =
+                        multiplayerClient.getRoom()
+                            ?.state.players.size ?? 0;
+                    this.networkPlayerManager.addPlayer(
+                        sessionId,
+                        player,
+                    );
+
+                    console.log(
+                        '[Chameleon Hunt] Player added',
+                        sessionId,
+                        player.name,
+                        player.role,
+                    );
+
+                    this.updateMultiplayerHud();
+                },
+            ),
+        );
+
+        this.networkUnsubscribers.push(
+            multiplayerClient.onPlayerRemoved(
+                (
+                    sessionId: string,
+                    player: NetworkPlayerState,
+                ) => {
+                    this.networkPlayerCount =
+                        multiplayerClient.getRoom()
+                            ?.state.players.size ?? 0;
+                    this.networkPlayerManager.removePlayer(
+                        sessionId,
+                    );
+
+                    console.log(
+                        '[Chameleon Hunt] Player removed',
+                        sessionId,
+                        player.name,
+                    );
+
+                    this.updateMultiplayerHud();
+                },
+            ),
+        );
+
+        this.networkUnsubscribers.push(
+            multiplayerClient.onPlayerChanged(
+                (
+                    sessionId: string,
+                    player: NetworkPlayerState,
+                ) => {
+                    this.networkPlayerManager.updatePlayer(
+                        sessionId,
+                        player,
+                    );
+
+                    if (
+                        sessionId ===
+                        multiplayerClient.getSessionId()
+                    ) {
+                        this.updateMultiplayerHud();
+                        this.updateLobbyUi();
+                    }
+                },
+            ),
+        );
+
+        this.networkUnsubscribers.push(
+            multiplayerClient.onPaintStroke(
+                (stroke: NetworkPaintStroke) => {
+                    this.applyRemotePaintStroke(stroke);
+                },
+            ),
+        );
+
+        this.networkUnsubscribers.push(
+            multiplayerClient.onWeaponState(
+                (
+                    state: NetworkWeaponState,
+                ) => {
+                    this.weaponHeat =
+                        state.heat;
+
+                    this.weaponHeatUpdatedAt =
+                        state.updatedAt;
+
+                    this.weaponOverheatedUntil =
+                        state.overheatedUntil;
+
+                    this.updateWeaponHeatHud();
+                },
+            ),
+        );
+
+        this.networkUnsubscribers.push(
+            multiplayerClient.onRoundResult(
+                (
+                    result: NetworkRoundResult,
+                ) => {
+                    this.handleNetworkRoundResult(
+                        result,
+                    );
+                },
+            ),
+        );
+
+        this.networkUnsubscribers.push(
+            multiplayerClient.onResetRound(
+                () => {
+                    this.networkPlayerManager
+                        .setLocalHunterCustomizationMode(
+                            false,
+                        );
+
+                    this.networkPlayerManager
+                        .clearAllPaint();
+
+                    this.networkPlayerManager
+                        .clearRevealMarkers();
+
+                    this.networkPlayerManager
+                        .setNamesVisible(true);
+
+                    this.resetPaintWorldZoom();
+
+                    this.weaponHeat = 0;
+                    this.weaponHeatUpdatedAt =
+                        Date.now();
+                    this.weaponOverheatedUntil = 0;
+                    this.clearStatus();
+                },
+            ),
+        );
+
+        this.networkUnsubscribers.push(
+            multiplayerClient.onHunterAim(
+                (
+                    aim: NetworkHunterAim,
+                ) => {
+                    this.networkPlayerManager
+                        .updateHunterAim(
+                            aim.sessionId,
+                            aim.angle,
+                            aim.range,
+                        );
+                },
+            ),
+        );
+
+        this.networkUnsubscribers.push(
+            multiplayerClient.onShotFired(
+                (shot: NetworkShotFired) => {
+                    this.applyNetworkShot(shot);
+                },
+            ),
+        );
+
+        this.networkUnsubscribers.push(
+            multiplayerClient.onPhaseChanged(
+                (
+                    phase,
+                    phaseEndsAt,
+                ) => {
+                    this.applyNetworkPhase(
+                        phase,
+                        phaseEndsAt,
+                    );
+                },
+            ),
+        );
+
+        this.networkUnsubscribers.push(
+            multiplayerClient.onStartGameError(
+                (message: string) => {
+                    this.showStatus(message);
+                },
+            ),
+        );
+
+        this.networkUnsubscribers.push(
+            multiplayerClient.onConnectionChanged(
+                (connected: boolean) => {
+                    if (!connected) {
+                        this.setHunterPaintBlind(false);
+                        this.multiplayerText
+                            .setText('MULTI · DISCONNECTED')
+                            .setColor('#a33b3b');
+                    }
+                },
+            ),
+        );
+
+        this.events.once(
+            Phaser.Scenes.Events.SHUTDOWN,
+            () => {
+                this.networkUnsubscribers.forEach(
+                    (unsubscribe) => {
+                        unsubscribe();
+                    },
+                );
+
+                this.networkUnsubscribers = [];
+                this.networkPlayerManager.destroy();
+            },
+        );
+    }
+
+    private getSavedPlayerName(): string {
+        const savedName =
+            localStorage.getItem(
+                'chameleon-hunt-player-name',
+            );
+
+        if (savedName) {
+            return savedName;
+        }
+
+        const generatedName =
+            `Player-${Phaser.Math.Between(
+                1000,
+                9999,
+            )}`;
+
+        localStorage.setItem(
+            'chameleon-hunt-player-name',
+            generatedName,
+        );
+
+        return generatedName;
+    }
+
+    private async createGameRoom(
+        isPrivate: boolean,
+    ): Promise<void> {
+        const playerName =
+            window.prompt(
+                '닉네임을 입력하세요.',
+                this.getSavedPlayerName(),
+            )?.trim();
+
+        if (!playerName) {
+            return;
+        }
+
+        localStorage.setItem(
+            'chameleon-hunt-player-name',
+            playerName,
+        );
+
+        const roomTitle =
+            window.prompt(
+                '방 이름을 입력하세요.',
+                'Chameleon Room',
+            )?.trim();
+
+        if (!roomTitle) {
+            return;
+        }
+
+        const password =
+            isPrivate
+                ? window.prompt(
+                    '비밀번호를 입력하세요.',
+                    '',
+                ) ?? ''
+                : '';
 
         if (
-            Phaser.Input.Keyboard.JustDown(this.resetKey)
+            isPrivate &&
+            password.length === 0
         ) {
-            this.resetGame();
+            return;
         }
+
+        let room;
+
+        try {
+            room =
+                await multiplayerClient
+                    .createRoom({
+                        playerName,
+                        roomTitle,
+                        isPrivate,
+                        password,
+                    });
+        } catch (error) {
+            console.error(
+                '방 생성 요청 실패:',
+                error,
+            );
+
+            window.alert(
+                '방을 생성하지 못했습니다.',
+            );
+
+            return;
+        }
+
+        try {
+            this.handleJoinedRoom(room);
+        } catch (error) {
+            console.error(
+                '방 생성 후 화면 전환 실패:',
+                error,
+            );
+
+            // 방 연결은 성공한 상태이므로 실패 알림을 띄우지 않습니다.
+            this.clearMainMenuObjects();
+            this.multiplayerText.setVisible(true);
+            this.enterLobbyPhase();
+            this.updateMultiplayerHud();
+            this.updateLobbyUi();
+        }
+    }
+
+    private async joinPublicRoom(
+        roomId: string,
+    ): Promise<void> {
+        const playerName =
+            window.prompt(
+                '닉네임을 입력하세요.',
+                this.getSavedPlayerName(),
+            )?.trim();
+
+        if (!playerName) {
+            return;
+        }
+
+        localStorage.setItem(
+            'chameleon-hunt-player-name',
+            playerName,
+        );
+
+        let room;
+
+        try {
+            room =
+                await multiplayerClient
+                    .joinRoomById(
+                        roomId,
+                        {
+                            playerName,
+                        },
+                    );
+        } catch (error) {
+            console.error(
+                '방 참가 요청 실패:',
+                error,
+            );
+
+            window.alert(
+                '방에 참가하지 못했습니다.',
+            );
+
+            return;
+        }
+
+        this.handleJoinedRoomSafely(room);
+    }
+
+    private async joinPrivateRoom(): Promise<void> {
+        const roomId =
+            window.prompt(
+                '방 ID를 입력하세요.',
+                '',
+            )?.trim();
+
+        if (!roomId) {
+            return;
+        }
+
+        const password =
+            window.prompt(
+                '비밀번호를 입력하세요.',
+                '',
+            ) ?? '';
+
+        const playerName =
+            window.prompt(
+                '닉네임을 입력하세요.',
+                this.getSavedPlayerName(),
+            )?.trim();
+
+        if (!playerName) {
+            return;
+        }
+
+        localStorage.setItem(
+            'chameleon-hunt-player-name',
+            playerName,
+        );
+
+        let room;
+
+        try {
+            room =
+                await multiplayerClient
+                    .joinRoomById(
+                        roomId,
+                        {
+                            playerName,
+                            password,
+                        },
+                    );
+        } catch (error) {
+            console.error(
+                '비공개방 참가 요청 실패:',
+                error,
+            );
+
+            window.alert(
+                '방 ID 또는 비밀번호를 확인하세요.',
+            );
+
+            return;
+        }
+
+        this.handleJoinedRoomSafely(room);
+    }
+
+    private handleJoinedRoomSafely(
+        room: NonNullable<
+            ReturnType<
+                typeof multiplayerClient.getRoom
+            >
+        >,
+    ): void {
+        try {
+            this.handleJoinedRoom(room);
+        } catch (error) {
+            console.error(
+                '방 입장 후 화면 전환 실패:',
+                error,
+            );
+
+            this.clearMainMenuObjects();
+            this.multiplayerText.setVisible(true);
+            this.enterLobbyPhase();
+            this.updateMultiplayerHud();
+            this.updateLobbyUi();
+        }
+    }
+
+    private handleJoinedRoom(
+        room: NonNullable<
+            ReturnType<
+                typeof multiplayerClient.getRoom
+            >
+        >,
+    ): void {
+        this.clearMainMenuObjects();
+        this.multiplayerText.setVisible(true);
+
+        this.networkPlayerCount =
+            room.state.players?.size ?? 1;
+
+        /*
+         * 기본 생성은 onAdd 콜백이 담당합니다.
+         * 다만 이미 적용된 초기 Schema 항목이 있으면 한 번 더
+         * 정확한 서버 좌표로 보정합니다.
+         */
+        room.state.players?.forEach?.(
+            (
+                player: NetworkPlayerState,
+                sessionId: string,
+            ) => {
+                this.networkPlayerManager
+                    .updatePlayer(
+                        sessionId,
+                        player,
+                    );
+            },
+        );
+
+        this.applyNetworkPhase(
+            room.state.phase ?? 'lobby',
+            room.state.phaseEndsAt ?? 0,
+        );
+
+        this.updateMultiplayerHud();
+        this.updateLobbyUi();
+        this.hideLegacySinglePlayerActors();
+        this.clearStatus();
+
+        console.log(
+            '[Chameleon Hunt] Joined room',
+            {
+                roomId: room.roomId,
+                sessionId: room.sessionId,
+                roomTitle:
+                    room.state.roomTitle,
+            },
+        );
+    }
+
+    private updateNetworkPlayers(
+        delta: number,
+    ): void {
+        if (multiplayerClient.isConnected()) {
+            this.hideLegacySinglePlayerActors();
+        }
+
+        if (
+            !multiplayerClient.isConnected() ||
+            !this.networkPlayerManager
+        ) {
+            return;
+        }
+
+        if (
+            this.networkPlayerManager
+                .isLocalCustomizationMode()
+        ) {
+            /*
+             * Hunter 중앙 색칠 모드에서는 키 입력과
+             * 이동 패킷 전송을 모두 중지합니다.
+             */
+            this.networkPlayerManager.update();
+            return;
+        }
+
+        let directionX = 0;
+        let directionY = 0;
+
+        if (
+            this.moveLeftKey.isDown ||
+            this.cursors.left.isDown
+        ) {
+            directionX -= 1;
+        }
+
+        if (
+            this.moveRightKey.isDown ||
+            this.cursors.right.isDown
+        ) {
+            directionX += 1;
+        }
+
+        if (
+            this.moveUpKey.isDown ||
+            this.cursors.up.isDown
+        ) {
+            directionY -= 1;
+        }
+
+        if (
+            this.moveDownKey.isDown ||
+            this.cursors.down.isDown
+        ) {
+            directionY += 1;
+        }
+
+        this.networkPlayerManager.moveLocalPlayer(
+            directionX,
+            directionY,
+            delta,
+        );
+
+        this.networkPlayerManager.update();
+    }
+
+    private hideLegacySinglePlayerActors(): void {
+        this.player.setVisible(false);
+
+        this.hunterVisuals.forEach(
+            ({ object }) => {
+                object.setVisible(false);
+            },
+        );
+
+        this.gun.setVisible(false);
+        this.hunterLabel.setVisible(false);
+        this.selectionRing.setVisible(false);
+
+        this.hiders.forEach((hider) => {
+            this.setHiderVisible(hider, false);
+            hider.label.setVisible(false);
+        });
+    }
+
+    private makeMenuButton(
+        x: number,
+        y: number,
+        label: string,
+        onClick: () => void,
+    ): Phaser.GameObjects.Text {
+        const button = this.add
+            .text(
+                x,
+                y,
+                label,
+                {
+                    fontFamily: 'monospace',
+                    fontSize: '19px',
+                    fontStyle: 'bold',
+                    color: '#fffdf3',
+                    backgroundColor: '#5c8f66',
+                    padding: {
+                        x: 22,
+                        y: 11,
+                    },
+                },
+            )
+            .setOrigin(0.5)
+            .setDepth(502)
+            .setInteractive({
+                useHandCursor: true,
+            });
+
+        button.on(
+            'pointerdown',
+            onClick,
+        );
+
+        button.on(
+            'pointerover',
+            () => {
+                button.setScale(1.05);
+            },
+        );
+
+        button.on(
+            'pointerout',
+            () => {
+                button.setScale(1);
+            },
+        );
+
+        return button;
+    }
+
+    private showMainMenu(): void {
+        this.clearMainMenuObjects();
+        this.enterLobbyPhase();
+        this.updateLobbyUi();
+
+        this.lobbyPanel.setVisible(false);
+        this.lobbyTitleText.setVisible(false);
+        this.lobbyInfoText.setVisible(false);
+        this.startGameButton.setVisible(false);
+        this.roleHunterButton?.setVisible(false);
+        this.roleHiderButton?.setVisible(false);
+
+        this.multiplayerText.setVisible(false);
+
+        const panel = this.add
+            .rectangle(
+                this.gameWidth / 2,
+                this.gameHeight / 2,
+                700,
+                460,
+                0xfff4d6,
+                0.97,
+            )
+            .setStrokeStyle(
+                5,
+                0x6f8f65,
+                1,
+            )
+            .setDepth(500);
+
+        const title = this.add
+            .text(
+                this.gameWidth / 2,
+                78,
+                'CHAMELEON HUNT',
+                {
+                    fontFamily: 'monospace',
+                    fontSize: '38px',
+                    fontStyle: 'bold',
+                    color: '#476348',
+                },
+            )
+            .setOrigin(0.5)
+            .setDepth(501);
+
+        const subtitle = this.add
+            .text(
+                this.gameWidth / 2,
+                124,
+                '위장하고, 숨고, 찾아내세요!',
+                {
+                    fontFamily: 'monospace',
+                    fontSize: '16px',
+                    color: '#765c49',
+                },
+            )
+            .setOrigin(0.5)
+            .setDepth(501);
+
+        const publicCreate =
+            this.makeMenuButton(
+                280,
+                178,
+                '공개방 만들기',
+                () => {
+                    void this.createGameRoom(
+                        false,
+                    );
+                },
+            );
+
+        const privateCreate =
+            this.makeMenuButton(
+                480,
+                178,
+                '비공개방 만들기',
+                () => {
+                    void this.createGameRoom(
+                        true,
+                    );
+                },
+            );
+
+        const privateJoin =
+            this.makeMenuButton(
+                680,
+                178,
+                '비공개방 참가',
+                () => {
+                    void this.joinPrivateRoom();
+                },
+            );
+
+        const listTitle = this.add
+            .text(
+                175,
+                230,
+                '공개 게임방',
+                {
+                    fontFamily: 'monospace',
+                    fontSize: '20px',
+                    fontStyle: 'bold',
+                    color: '#476348',
+                },
+            )
+            .setDepth(501);
+
+        const refreshButton =
+            this.makeMenuButton(
+                760,
+                236,
+                '새로고침',
+                () => {
+                    void this.refreshPublicRoomList();
+                },
+            );
+
+        refreshButton
+            .setFontSize(15)
+            .setPadding(
+                14,
+                7,
+                14,
+                7,
+            );
+
+        this.mainMenuObjects.push(
+            panel,
+            title,
+            subtitle,
+            publicCreate,
+            privateCreate,
+            privateJoin,
+            listTitle,
+            refreshButton,
+        );
+
+        void this.refreshPublicRoomList();
+    }
+
+    private async refreshPublicRoomList(): Promise<void> {
+        this.roomListObjects.forEach(
+            (object) => {
+                object.destroy();
+            },
+        );
+
+        this.roomListObjects = [];
+
+        const loading = this.add
+            .text(
+                175,
+                275,
+                '방 목록을 불러오는 중...',
+                {
+                    fontFamily: 'monospace',
+                    fontSize: '15px',
+                    color: '#765c49',
+                },
+            )
+            .setDepth(503);
+
+        this.roomListObjects.push(
+            loading,
+        );
+
+        try {
+            const rooms =
+                (
+                    await multiplayerClient
+                        .listPublicRooms()
+                ).filter(
+                    (room: PublicRoomInfo) =>
+                        room.metadata
+                            ?.isPrivate !== true,
+                );
+
+            console.log(
+                '[Chameleon Hunt] Public rooms',
+                rooms,
+            );
+
+            loading.destroy();
+            this.roomListObjects = [];
+
+            if (rooms.length === 0) {
+                const emptyText =
+                    this.add
+                        .text(
+                            175,
+                            275,
+                            '생성된 공개방이 없습니다.',
+                            {
+                                fontFamily: 'monospace',
+                                fontSize: '15px',
+                                color: '#765c49',
+                            },
+                        )
+                        .setDepth(503);
+
+                this.roomListObjects.push(
+                    emptyText,
+                );
+
+                return;
+            }
+
+            rooms
+                .slice(0, 6)
+                .forEach(
+                    (
+                        room: PublicRoomInfo,
+                        index: number,
+                    ) => {
+                        const roomTitle =
+                            room.metadata
+                                ?.roomTitle ??
+                            'Chameleon Room';
+
+                        const phase =
+                            room.metadata
+                                ?.phase ??
+                            'lobby';
+
+                        const row =
+                            this.makeMenuButton(
+                                this.gameWidth / 2,
+                                275 +
+                                    index * 45,
+                                `${roomTitle}  ·  ${room.clients}/${room.maxClients}  ·  ${phase.toUpperCase()}`,
+                                () => {
+                                    void this.joinPublicRoom(
+                                        room.roomId,
+                                    );
+                                },
+                            );
+
+                        row
+                            .setFontSize(15)
+                            .setFixedSize(
+                                580,
+                                36,
+                            )
+                            .setAlign(
+                                'center',
+                            );
+
+                        this.roomListObjects.push(
+                            row,
+                        );
+                    },
+                );
+        } catch (error) {
+            console.error(
+                '공개방 목록 조회 실패:',
+                error,
+            );
+
+            loading.setText(
+                '방 목록을 불러오지 못했습니다.',
+            );
+        }
+    }
+
+    private clearMainMenuObjects(): void {
+        this.mainMenuObjects.forEach(
+            (object) => {
+                object.destroy();
+            },
+        );
+
+        this.roomListObjects.forEach(
+            (object) => {
+                object.destroy();
+            },
+        );
+
+        this.mainMenuObjects = [];
+        this.roomListObjects = [];
+    }
+
+    private createLobbyUi(): void {
+        this.lobbyPanel = this.add
+            .rectangle(
+                790,
+                this.gameHeight / 2,
+                310,
+                390,
+                0xfff4d6,
+                0.96,
+            )
+            .setStrokeStyle(
+                4,
+                0x6f8f65,
+                1,
+            )
+            .setDepth(400);
+
+        this.lobbyTitleText = this.add
+            .text(
+                790,
+                95,
+                'CHAMELEON HUNT',
+                {
+                    fontFamily: 'monospace',
+                    fontSize: '28px',
+                    fontStyle: 'bold',
+                    color: '#476348',
+                },
+            )
+            .setOrigin(0.5)
+            .setDepth(401);
+
+        this.lobbyInfoText = this.add
+            .text(
+                790,
+                145,
+                '서버 연결 중...',
+                {
+                    fontFamily: 'monospace',
+                    fontSize: '17px',
+                    color: '#5b4636',
+                    align: 'center',
+                    lineSpacing: 8,
+                },
+            )
+            .setOrigin(0.5, 0)
+            .setDepth(401);
+
+        this.startGameButton = this.add
+            .text(
+                790,
+                430,
+                'START GAME',
+                {
+                    fontFamily: 'monospace',
+                    fontSize: '21px',
+                    fontStyle: 'bold',
+                    color: '#fffdf3',
+                    backgroundColor: '#5c8f66',
+                    padding: {
+                        x: 24,
+                        y: 12,
+                    },
+                },
+            )
+            .setOrigin(0.5)
+            .setDepth(402)
+            .setInteractive({
+                useHandCursor: true,
+            });
+
+        this.startGameButton.on(
+            'pointerdown',
+            () => {
+                if (
+                    multiplayerClient.isHost() &&
+                    multiplayerClient.getPhase() ===
+                        'lobby'
+                ) {
+                    multiplayerClient.sendStartGame();
+                }
+            },
+        );
+
+        this.startGameButton.on(
+            'pointerover',
+            () => {
+                this.startGameButton.setScale(1.05);
+            },
+        );
+
+        this.startGameButton.on(
+            'pointerout',
+            () => {
+                this.startGameButton.setScale(1);
+            },
+        );
+
+        this.roleHunterButton =
+            this.makeMenuButton(
+                720,
+                385,
+                'HUNTER 지원',
+                () => {
+                    const localPlayer =
+                        multiplayerClient
+                            .getLocalPlayer();
+
+                    multiplayerClient
+                        .sendHunterVolunteer(
+                            !localPlayer
+                                ?.hunterVolunteer,
+                        );
+                },
+            )
+                .setDepth(402)
+                .setFontSize(17);
+
+        this.roleHiderButton =
+            this.makeMenuButton(
+                860,
+                385,
+                '지원 취소',
+                () => {
+                    multiplayerClient
+                        .sendHunterVolunteer(
+                            false,
+                        );
+                },
+            )
+                .setDepth(402)
+                .setFontSize(17);
+
+        this.updateLobbyUi();
+    }
+
+    private updateLobbyUi(): void {
+        if (!this.lobbyPanel) {
+            return;
+        }
+
+        const isLobby =
+            this.phase === 'lobby';
+
+        this.lobbyPanel.setVisible(isLobby);
+        this.lobbyTitleText.setVisible(isLobby);
+        this.lobbyInfoText.setVisible(isLobby);
+        this.roleHunterButton.setVisible(isLobby);
+        this.roleHiderButton.setVisible(isLobby);
+
+        if (!isLobby) {
+            this.startGameButton.setVisible(false);
+            this.roleHunterButton.setVisible(false);
+            this.roleHiderButton.setVisible(false);
+            return;
+        }
+
+        const roomId =
+            multiplayerClient.getRoomId() ??
+            '-';
+
+        const localPlayer =
+            multiplayerClient.getLocalPlayer();
+
+        const isHost =
+            multiplayerClient.isHost();
+
+        this.lobbyInfoText.setText(
+            [
+                `ROOM  ${roomId}`,
+                `TITLE  ${multiplayerClient.getRoom()?.state.roomTitle ?? '-'}`,
+                `PLAYERS  ${this.networkPlayerCount} / 10`,
+                `현재 역할  ${
+                    localPlayer?.role
+                        ?.toUpperCase() ??
+                    'HIDER'
+                }`,
+                `Hunter 지원  ${
+                    localPlayer
+                        ?.hunterVolunteer
+                        ? 'ON'
+                        : 'OFF'
+                }`,
+                `시작 시 Hunter 수  ${this.getRecommendedHunterCount(this.networkPlayerCount)}`,
+                isHost
+                    ? '당신은 방장입니다.'
+                    : '방장이 시작하기를 기다리는 중...',
+                'WASD로 대기실 캐릭터 이동',
+            ].join('\n'),
+        );
+
+        this.startGameButton
+            .setVisible(isHost)
+            .setAlpha(
+                this.networkPlayerCount >= 2
+                    ? 1
+                    : 0.55,
+            );
+
+        this.roleHunterButton
+            .setText(
+                localPlayer
+                    ?.hunterVolunteer
+                    ? 'HUNTER 지원 중'
+                    : 'HUNTER 지원',
+            )
+            .setAlpha(
+                localPlayer
+                    ?.hunterVolunteer
+                    ? 1
+                    : 0.72,
+            );
+
+        this.roleHiderButton
+            .setAlpha(
+                localPlayer
+                    ?.hunterVolunteer
+                    ? 1
+                    : 0.55,
+            );
+
+        this.startGameButton.setText(
+            this.networkPlayerCount >= 2
+                ? 'START GAME'
+                : 'WAITING FOR PLAYER',
+        );
+    }
+
+    private getRecommendedHunterCount(
+        playerCount: number,
+    ): number {
+        if (playerCount >= 9) {
+            return 3;
+        }
+
+        if (playerCount >= 5) {
+            return 2;
+        }
+
+        return 1;
+    }
+
+    private createCountdownUi(): void {
+        this.countdownPanel = this.add
+            .rectangle(
+                this.gameWidth / 2,
+                this.gameHeight / 2,
+                this.gameWidth,
+                this.gameHeight,
+                0x1d2a24,
+                0.78,
+            )
+            .setDepth(960)
+            .setVisible(false);
+
+        this.countdownText = this.add
+            .text(
+                this.gameWidth / 2,
+                this.gameHeight / 2,
+                '3',
+                {
+                    fontFamily: 'monospace',
+                    fontSize: '110px',
+                    fontStyle: 'bold',
+                    color: '#fff4d6',
+                    align: 'center',
+                },
+            )
+            .setOrigin(0.5)
+            .setDepth(961)
+            .setVisible(false);
+    }
+
+    private updateCountdownUi(): void {
+        const isStartCountdown =
+            this.phase === 'countdown';
+
+        const isRoundEnd =
+            this.phase === 'finished';
+
+        const visible =
+            isStartCountdown ||
+            isRoundEnd;
+
+        this.countdownPanel.setVisible(
+            visible,
+        );
+
+        this.countdownText.setVisible(
+            visible,
+        );
+
+        if (!visible) {
+            return;
+        }
+
+        if (isRoundEnd) {
+            return;
+        }
+
+        this.countdownText
+            .setFontSize(110);
+
+        const remaining =
+            Math.max(
+                1,
+                Math.ceil(
+                    (
+                        this.phaseEndTime -
+                        this.time.now
+                    ) / 1000,
+                ),
+            );
+
+        this.countdownText.setText(
+            String(remaining),
+        );
+    }
+
+    private updateWeaponHeatHud(): void {
+        if (
+            !multiplayerClient.isConnected() ||
+            this.phase !== 'hunt' ||
+            !this.networkPlayerManager
+                .isLocalHunter()
+        ) {
+            return;
+        }
+
+        const now = Date.now();
+        const elapsed =
+            Math.max(
+                0,
+                now -
+                this.weaponHeatUpdatedAt,
+            );
+
+        const estimatedHeat =
+            Math.max(
+                0,
+                this.weaponHeat -
+                elapsed * 0.025,
+            );
+
+        const overheated =
+            now <
+            this.weaponOverheatedUntil;
+
+        const filled =
+            Math.round(
+                estimatedHeat / 10,
+            );
+
+        const gauge =
+            '■'.repeat(filled) +
+            '□'.repeat(10 - filled);
+
+        this.ammoText
+            .setVisible(true)
+            .setText(
+                overheated
+                    ? `OVERHEATED\n${gauge}`
+                    : `HEAT ${Math.round(estimatedHeat)}%\n${gauge}`,
+            )
+            .setColor(
+                overheated
+                    ? '#ff776f'
+                    : estimatedHeat >= 70
+                        ? '#ffcf70'
+                        : '#ffffff',
+            );
+    }
+
+    private createHunterBlindUi(): void {
+        this.hunterBlindPanel = this.add
+            .rectangle(
+                this.gameWidth / 2,
+                this.gameHeight / 2,
+                this.gameWidth,
+                this.gameHeight,
+                0x1d2a24,
+                1,
+            )
+            .setDepth(800)
+            .setVisible(false);
+
+        this.hunterBlindText = this.add
+            .text(
+                this.gameWidth / 2,
+                72,
+                'HIDERS ARE PAINTING...\nHunter도 자신의 위장색을 칠해보세요.',
+                {
+                    fontFamily: 'monospace',
+                    fontSize: '27px',
+                    fontStyle: 'bold',
+                    color: '#fff4d6',
+                    align: 'center',
+                    lineSpacing: 12,
+                },
+            )
+            .setOrigin(0.5)
+            .setDepth(801)
+            .setVisible(false);
+    }
+
+    private setHunterPaintBlind(
+        visible: boolean,
+    ): void {
+        if (
+            this.hunterBlindPanel &&
+            this.hunterBlindText
+        ) {
+            this.hunterBlindPanel.setVisible(
+                visible,
+            );
+
+            this.hunterBlindText.setVisible(
+                visible,
+            );
+        }
+
+        if (
+            this.networkPlayerManager
+        ) {
+            this.networkPlayerManager
+                .setLocalHunterCustomizationMode(
+                    visible,
+                );
+        }
+
+        this.paintPreview.setDepth(
+            visible ? 970 : 200,
+        );
+    }
+
+    private clearStatus(): void {
+        this.statusText
+            .setText('')
+            .setVisible(false)
+            .setAlpha(1);
+    }
+
+    private enterLobbyPhase(): void {
+        this.phase = 'lobby';
+        this.resetPaintWorldZoom();
+        this.clearStatus();
+        this.setHunterPaintBlind(false);
+        this.phaseEndTime = 0;
+
+        this.phaseText.setText(
+            '🦎 MULTIPLAYER LOBBY',
+        );
+
+        this.timerText
+            .setText('WAITING')
+            .setColor('#26352b');
+
+        this.guideText.setText(
+            '방장이 START GAME 버튼을 누르면 시작합니다.',
+        );
+
+        this.paintPreview.setVisible(false);
+        this.setPaintPaletteVisible(false);
+        this.countdownPanel?.setVisible(false);
+        this.countdownText?.setVisible(false);
+        this.paintColorText.setVisible(false);
+        this.brushSizeText.setVisible(false);
+        this.setPaintPaletteVisible(false);
+
+        if (
+            multiplayerClient.isConnected()
+        ) {
+            this.networkPlayerManager
+                .resetLocalPaintZoom();
+        }
+        this.setPaintPaletteVisible(false);
+        this.ammoText.setVisible(false);
+        this.targetText.setVisible(false);
+
+        this.aimLine.clear();
+        this.crosshair.clear();
+
+        this.hideLegacySinglePlayerActors();
+        this.input.setDefaultCursor('default');
+
+        this.updateLobbyUi();
+    }
+
+    private handleNetworkRoundResult(
+        result: NetworkRoundResult,
+    ): void {
+        this.hideLegacySinglePlayerActors();
+        this.resetPaintWorldZoom();
+
+        this.networkPlayerManager
+            .setNamesVisible(false);
+
+        if (
+            result.winner ===
+            'hiders'
+        ) {
+            this.networkPlayerManager
+                .revealHiders(
+                    result.revealedHiders,
+                );
+
+            this.phaseText.setText(
+                '🌿 HIDERS WIN',
+            );
+
+            this.guideText.setText(
+                '10초 동안 Hider의 은신 위치를 공개합니다.',
+            );
+        } else {
+            this.networkPlayerManager
+                .clearRevealMarkers();
+
+            this.phaseText.setText(
+                '🔫 HUNTERS WIN',
+            );
+
+            this.guideText.setText(
+                '10초 후 대기실로 돌아갑니다.',
+            );
+        }
+    }
+
+    private applyNetworkPhase(
+        phase: string,
+        phaseEndsAt: number,
+    ): void {
+        const remainingMs =
+            Math.max(
+                0,
+                phaseEndsAt - Date.now(),
+            );
+
+        this.phaseEndTime =
+            this.time.now +
+            remainingMs;
+
+        if (phase === 'lobby') {
+            this.enterLobbyPhase();
+            return;
+        }
+
+        if (phase === 'countdown') {
+            this.clearStatus();
+            this.setHunterPaintBlind(false);
+            this.phase = 'countdown';
+            this.phaseEndTime =
+                this.time.now +
+                remainingMs;
+
+            this.updateLobbyUi();
+            return;
+        }
+
+        if (phase === 'paint') {
+            this.clearStatus();
+            this.enterPaintPhase();
+            this.setHunterPaintBlind(
+                this.networkPlayerManager
+                    .isLocalHunter(),
+            );
+            this.phaseEndTime =
+                this.time.now +
+                remainingMs;
+            return;
+        }
+
+        if (phase === 'hunt') {
+            this.clearStatus();
+
+            this.networkPlayerManager
+                .normalizeLocalPlayerForGameplay();
+
+            this.resetPaintWorldZoom();
+
+            this.setHunterPaintBlind(false);
+            this.setPaintPaletteVisible(false);
+            this.paintPreview.setVisible(false);
+
+            this.networkPlayerManager
+                .setNamesVisible(false);
+
+            this.networkPlayerManager
+                .setHunterGunsVisible();
+
+            this.startHunt();
+
+            this.phaseEndTime =
+                this.time.now +
+                remainingMs;
+
+            return;
+        }
+
+        if (phase === 'finished') {
+            this.clearStatus();
+            this.setHunterPaintBlind(false);
+            this.hideLegacySinglePlayerActors();
+            this.phase = 'hiderVictory';
+
+            this.phaseText.setText(
+                '🌿 ROUND FINISHED',
+            );
+
+            this.phaseEndTime =
+                this.time.now +
+                remainingMs;
+
+            this.timerText
+                .setText(
+                    `LOBBY ${Math.max(
+                        1,
+                        Math.ceil(
+                            remainingMs /
+                            1000,
+                        ),
+                    )}`,
+                )
+                .setColor('#8cff9b');
+
+            this.guideText.setText(
+                '라운드가 종료되었습니다.',
+            );
+
+            this.aimLine.clear();
+            this.crosshair.clear();
+        }
+
+        this.updateLobbyUi();
+    }
+
+    private updateMultiplayerHud(): void {
+        if (!this.multiplayerText) {
+            return;
+        }
+
+        const localPlayer =
+            multiplayerClient.getLocalPlayer();
+
+        const roomId =
+            multiplayerClient.getRoomId();
+
+        const role =
+            localPlayer?.role?.toUpperCase() ??
+            'WAITING';
+
+        this.multiplayerText
+            .setText(
+                [
+                    'CHAMELEON HUNT ONLINE',
+                    `ROOM ${roomId ?? '-'}`,
+                    `PLAYERS ${this.networkPlayerCount} / 10`,
+                    `ROLE ${role}`,
+                ].join('\n'),
+            )
+            .setColor('#35634a');
+
+        this.updateLobbyUi();
     }
 
     /*
@@ -247,6 +1907,12 @@ export class GameScene extends Phaser.Scene {
         );
 
         this.backgroundImage.setDepth(-20);
+
+        this.backgroundBaseX =
+            this.backgroundImage.x;
+
+        this.backgroundBaseY =
+            this.backgroundImage.y;
     }
 
     /*
@@ -723,31 +2389,6 @@ export class GameScene extends Phaser.Scene {
         );
     }
 
-    private selectNextHider(): void {
-        if (this.hiders.length === 0) {
-            return;
-        }
-
-        let nextIndex =
-            (this.selectedHiderIndex + 1) %
-            this.hiders.length;
-
-        for (
-            let count = 0;
-            count < this.hiders.length;
-            count += 1
-        ) {
-            if (this.hiders[nextIndex].alive) {
-                this.selectHider(nextIndex);
-                return;
-            }
-
-            nextIndex =
-                (nextIndex + 1) %
-                this.hiders.length;
-        }
-    }
-
     private updateSelectedHiderMovement(
         delta: number,
     ): void {
@@ -924,6 +2565,331 @@ export class GameScene extends Phaser.Scene {
      * Painting
      */
 
+    private adjustPaintWorldZoom(
+        wheelDeltaY: number,
+    ): number {
+        const localPosition =
+            this.networkPlayerManager
+                .getLocalPlayerPosition();
+
+        if (!localPosition) {
+            return 1;
+        }
+
+        const direction =
+            wheelDeltaY < 0
+                ? 1
+                : -1;
+
+        this.paintWorldZoom =
+            Phaser.Math.Clamp(
+                this.paintWorldZoom +
+                    direction * 0.25,
+                1,
+                3,
+            );
+
+        /*
+         * UI는 그대로 두고 배경과 캐릭터만
+         * 로컬 플레이어를 기준으로 확대합니다.
+         */
+        const zoom =
+            this.paintWorldZoom;
+
+        this.backgroundImage
+            .setScale(zoom)
+            .setPosition(
+                localPosition.x +
+                    (
+                        this.backgroundBaseX -
+                        localPosition.x
+                    ) *
+                    zoom,
+                localPosition.y +
+                    (
+                        this.backgroundBaseY -
+                        localPosition.y
+                    ) *
+                    zoom,
+            );
+
+        this.networkPlayerManager
+            .adjustLocalPaintZoom(
+                wheelDeltaY,
+            );
+
+        return zoom;
+    }
+
+    private resetPaintWorldZoom(): void {
+        this.paintWorldZoom = 1;
+
+        this.backgroundImage
+            .setScale(1)
+            .setPosition(
+                this.backgroundBaseX,
+                this.backgroundBaseY,
+            );
+
+        this.networkPlayerManager
+            ?.resetLocalPaintZoom();
+    }
+
+    private createPaintPalette(): void {
+        const colors = [
+            0x000000,
+            0xef4444,
+            0xf97316,
+            0xfacc15,
+            0x84cc16,
+            0x22c55e,
+            0x14b8a6,
+            0x38bdf8,
+            0x3b82f6,
+            0x8b5cf6,
+            0xec4899,
+            0x8b5a2b,
+            0xf5eee2,
+            0x9ca3af,
+            0x374151,
+        ];
+
+        const panel = this.add
+            .rectangle(
+                150,
+                this.gameHeight - 52,
+                280,
+                74,
+                0xfff4d6,
+                0.93,
+            )
+            .setStrokeStyle(
+                2,
+                0x6f8f65,
+                1,
+            )
+            .setDepth(870)
+            .setVisible(false);
+
+        const title = this.add
+            .text(
+                20,
+                this.gameHeight - 83,
+                'COLOR PALETTE',
+                {
+                    fontFamily: 'monospace',
+                    fontSize: '12px',
+                    fontStyle: 'bold',
+                    color: '#5b4636',
+                },
+            )
+            .setDepth(871)
+            .setVisible(false);
+
+        this.paletteObjects.push(
+            panel,
+            title,
+        );
+
+        colors.forEach(
+            (
+                color,
+                index,
+            ) => {
+                const column =
+                    index % 8;
+
+                const row =
+                    Math.floor(
+                        index / 7,
+                    );
+
+                const swatch =
+                    this.add.rectangle(
+                        38 +
+                            column * 32,
+                        this.gameHeight -
+                            58 +
+                            row * 30,
+                        24,
+                        24,
+                        color,
+                        1,
+                    )
+                        .setStrokeStyle(
+                            2,
+                            0xffffff,
+                            0.95,
+                        )
+                        .setDepth(872)
+                        .setVisible(false)
+                        .setInteractive({
+                            useHandCursor: true,
+                        });
+
+                swatch.on(
+                    'pointerdown',
+                    () => {
+                        this.paintColor =
+                            color;
+
+                        this.createBrushTexture();
+                        this.updatePaintHud();
+                        this.updatePaintPreviewImmediately();
+                        this.highlightPaletteColor(
+                            color,
+                        );
+                    },
+                );
+
+                swatch.setData(
+                    'paletteColor',
+                    color,
+                );
+
+                this.paletteObjects.push(
+                    swatch,
+                );
+            },
+        );
+
+        this.paintZoomText = this.add
+            .text(
+                305,
+                this.gameHeight - 72,
+                'ZOOM 1.0x\n마우스 휠',
+                {
+                    fontFamily: 'monospace',
+                    fontSize: '12px',
+                    fontStyle: 'bold',
+                    color: '#5b4636',
+                    backgroundColor: '#fff4d6dd',
+                    padding: {
+                        x: 8,
+                        y: 5,
+                    },
+                    align: 'center',
+                },
+            )
+            .setDepth(872)
+            .setVisible(false);
+
+        this.paintControlHelpText =
+            this.add
+                .text(
+                    this.gameWidth - 18,
+                    this.gameHeight - 18,
+                    '',
+                    {
+                        fontFamily:
+                            'monospace',
+                        fontSize: '13px',
+                        fontStyle: 'bold',
+                        color: '#26352b',
+                        backgroundColor:
+                            '#fff4d6ee',
+                        padding: {
+                            x: 12,
+                            y: 8,
+                        },
+                        align: 'right',
+                        lineSpacing: 4,
+                    },
+                )
+                .setOrigin(1, 1)
+                .setDepth(875)
+                .setVisible(false);
+
+        this.updatePaintControlHelp();
+    }
+
+    private updatePaintControlHelp(): void {
+        if (
+            !this.paintControlHelpText
+        ) {
+            return;
+        }
+
+        this.paintControlHelpText.setText(
+            [
+                'PAINT CONTROLS',
+                '좌클릭  색칠',
+                '우클릭  스포이드',
+                '휠      확대 / 축소',
+                '[ / ]   브러시 크기',
+                'B       브러시 모양',
+                `현재 ${this.getBrushShapeLabel()} · ${this.brushSize}`,
+            ].join('\n'),
+        );
+    }
+
+    private setPaintPaletteVisible(
+        visible: boolean,
+    ): void {
+        this.paletteObjects.forEach(
+            (object) => {
+                const visibleObject =
+                    object as Phaser.GameObjects.GameObject & {
+                        setVisible?: (
+                            value: boolean,
+                        ) => unknown;
+                    };
+
+                visibleObject.setVisible?.(
+                    visible,
+                );
+            },
+        );
+
+        this.paintZoomText?.setVisible(
+            visible &&
+            multiplayerClient.isConnected(),
+        );
+
+        this.paintControlHelpText?.setVisible(
+            visible,
+        );
+    }
+
+    private highlightPaletteColor(
+        selectedColor: number,
+    ): void {
+        this.paletteObjects.forEach(
+            (object) => {
+                if (
+                    !(object instanceof
+                        Phaser.GameObjects.Rectangle)
+                ) {
+                    return;
+                }
+
+                const color =
+                    object.getData(
+                        'paletteColor',
+                    );
+
+                if (
+                    typeof color !==
+                    'number'
+                ) {
+                    return;
+                }
+
+                object.setStrokeStyle(
+                    color ===
+                        selectedColor
+                        ? 4
+                        : 2,
+                    color ===
+                        selectedColor
+                        ? 0x111827
+                        : 0xffffff,
+                    1,
+                );
+            },
+        );
+    }
+
     private createPaintTools(): void {
         this.paintPreview = this.add.graphics();
         this.paintPreview.setDepth(200);
@@ -933,35 +2899,132 @@ export class GameScene extends Phaser.Scene {
         this.redrawPaintPreview();
     }
 
+    private getPaintPreviewBrushSize(): number {
+        if (
+            multiplayerClient.isConnected() &&
+            this.phase === 'paint'
+        ) {
+            return (
+                this.brushSize *
+                this.paintWorldZoom
+            );
+        }
+
+        return this.brushSize;
+    }
+
     private redrawPaintPreview(): void {
         if (!this.paintPreview) {
             return;
         }
 
-        this.paintPreview.clear();
-        this.paintPreview.fillStyle(this.paintColor, 0.4);
-        this.paintPreview.lineStyle(1, 0xffffff, 0.9);
+        const previewSize =
+            this.getPaintPreviewBrushSize();
 
-        if (this.brushShape === 'circle') {
-            this.paintPreview.fillCircle(0, 0, this.brushSize);
-            this.paintPreview.strokeCircle(0, 0, this.brushSize);
+        this.paintPreview.clear();
+        this.paintPreview.fillStyle(
+            this.paintColor,
+            0.45,
+        );
+        this.paintPreview.lineStyle(
+            1,
+            0x111827,
+            0.95,
+        );
+
+        if (
+            this.brushShape ===
+            'dotCircle'
+        ) {
+            this.drawPixelCirclePreview(
+                previewSize,
+            );
             return;
         }
 
-        const size = this.brushSize * 2;
+        if (
+            this.brushShape ===
+            'circle'
+        ) {
+            this.paintPreview.fillCircle(
+                0,
+                0,
+                previewSize,
+            );
+            this.paintPreview.strokeCircle(
+                0,
+                0,
+                previewSize,
+            );
+            return;
+        }
+
+        const diameter =
+            previewSize * 2;
 
         this.paintPreview.fillRect(
-            -this.brushSize,
-            -this.brushSize,
-            size,
-            size,
+            -previewSize,
+            -previewSize,
+            diameter,
+            diameter,
         );
 
         this.paintPreview.strokeRect(
-            -this.brushSize,
-            -this.brushSize,
-            size,
-            size,
+            -previewSize,
+            -previewSize,
+            diameter,
+            diameter,
+        );
+    }
+
+    private drawPixelCirclePreview(
+        radius: number,
+    ): void {
+        const pixelSize =
+            Math.max(
+                1,
+                this.paintWorldZoom,
+            );
+
+        const logicalRadius =
+            Math.max(
+                1,
+                Math.round(
+                    radius /
+                    pixelSize,
+                ),
+            );
+
+        for (
+            let y = -logicalRadius;
+            y <= logicalRadius;
+            y += 1
+        ) {
+            const halfWidth =
+                Math.floor(
+                    Math.sqrt(
+                        Math.max(
+                            0,
+                            logicalRadius *
+                                logicalRadius -
+                            y * y,
+                        ),
+                    ),
+                );
+
+            this.paintPreview.fillRect(
+                -halfWidth * pixelSize,
+                y * pixelSize,
+                (halfWidth * 2 + 1) *
+                    pixelSize,
+                pixelSize,
+            );
+        }
+
+        this.paintPreview.strokeCircle(
+            0,
+            0,
+            radius,
         );
     }
 
@@ -991,6 +3054,32 @@ export class GameScene extends Phaser.Scene {
                 }
 
                 if (!pointer.leftButtonDown()) {
+                    return;
+                }
+
+                if (
+                    multiplayerClient.isConnected()
+                ) {
+                    const point =
+                        this.networkPlayerManager
+                            .paintLocalPlayer(
+                                pointer.worldX,
+                                pointer.worldY,
+                                this.brushTextureKey,
+                            );
+
+                    if (!point) {
+                        return;
+                    }
+
+                    this.isPainting = true;
+                    this.activeStrokeTargetSessionId =
+                        multiplayerClient
+                            .getSessionId() ?? '';
+                    this.activeStrokePoints = [
+                        point,
+                    ];
+
                     return;
                 }
 
@@ -1027,6 +3116,27 @@ export class GameScene extends Phaser.Scene {
                     return;
                 }
 
+                if (
+                    multiplayerClient.isConnected()
+                ) {
+                    const point =
+                        this.networkPlayerManager
+                            .paintLocalPlayer(
+                                pointer.worldX,
+                                pointer.worldY,
+                                this.brushTextureKey,
+                            );
+
+                    if (point) {
+                        this.recordActivePaintPoint(
+                            point.x,
+                            point.y,
+                        );
+                    }
+
+                    return;
+                }
+
                 const hider =
                     this.hiders[this.selectedHiderIndex];
 
@@ -1046,6 +3156,44 @@ export class GameScene extends Phaser.Scene {
             Phaser.Input.Events.POINTER_UP,
             () => {
                 this.isPainting = false;
+                this.finishActivePaintStroke();
+            },
+        );
+
+        this.input.on(
+            Phaser.Input.Events.POINTER_WHEEL,
+            (
+                _pointer:
+                    Phaser.Input.Pointer,
+                _gameObjects:
+                    Phaser.GameObjects.GameObject[],
+                _deltaX: number,
+                deltaY: number,
+            ) => {
+                if (
+                    this.phase !== 'paint' ||
+                    !multiplayerClient.isConnected()
+                ) {
+                    return;
+                }
+
+                const zoom =
+                    this.adjustPaintWorldZoom(
+                        deltaY,
+                    );
+
+                const visibleBrushSize =
+                    this.brushSize * zoom;
+
+                this.paintZoomText.setText(
+                    [
+                        `ZOOM ${zoom.toFixed(2)}x`,
+                        `VISIBLE BRUSH ${visibleBrushSize.toFixed(1)}`,
+                        '마우스 휠',
+                    ].join('\n'),
+                );
+
+                this.updatePaintPreviewImmediately();
             },
         );
 
@@ -1077,6 +3225,11 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
+        this.recordActivePaintPoint(
+            textureX,
+            textureY,
+        );
+
         hider.paintTexture.stamp(
             this.brushTextureKey,
             undefined,
@@ -1097,6 +3250,143 @@ export class GameScene extends Phaser.Scene {
         renderTexture.render?.();
     }
 
+    private recordActivePaintPoint(
+        textureX: number,
+        textureY: number,
+    ): void {
+        if (
+            !this.isPainting ||
+            (
+                multiplayerClient.isConnected() &&
+                !this.activeStrokeTargetSessionId
+            )
+        ) {
+            return;
+        }
+
+        const previousPoint =
+            this.activeStrokePoints[
+                this.activeStrokePoints.length - 1
+            ];
+
+        if (previousPoint) {
+            const distance =
+                Phaser.Math.Distance.Between(
+                    previousPoint.x,
+                    previousPoint.y,
+                    textureX,
+                    textureY,
+                );
+
+            if (distance < 1.5) {
+                return;
+            }
+        }
+
+        this.activeStrokePoints.push({
+            x: Phaser.Math.Clamp(
+                textureX,
+                0,
+                80,
+            ),
+            y: Phaser.Math.Clamp(
+                textureY,
+                0,
+                120,
+            ),
+        });
+    }
+
+    private finishActivePaintStroke(): void {
+        if (
+            !multiplayerClient.isConnected() ||
+            !this.activeStrokeTargetSessionId ||
+            this.activeStrokePoints.length === 0
+        ) {
+            this.activeStrokePoints = [];
+            this.activeStrokeTargetSessionId = '';
+            return;
+        }
+
+        multiplayerClient.sendPaintStroke({
+            targetSessionId:
+                this.activeStrokeTargetSessionId,
+            color: this.paintColor,
+            size: this.brushSize,
+            shape: this.brushShape,
+            points: [
+                ...this.activeStrokePoints,
+            ],
+        });
+
+        this.activeStrokePoints = [];
+        this.activeStrokeTargetSessionId = '';
+    }
+
+    private applyRemotePaintStroke(
+        stroke: NetworkPaintStroke,
+    ): void {
+        if (stroke.points.length === 0) {
+            return;
+        }
+
+        const textureKey =
+            `${this.remoteBrushTexturePrefix}-` +
+            `${stroke.shape}-${stroke.size}-` +
+            `${stroke.color}`;
+
+        this.ensureRemoteBrushTexture(
+            textureKey,
+            stroke.color,
+            stroke.size,
+            stroke.shape,
+        );
+
+        this.networkPlayerManager.applyPaintStroke(
+            stroke,
+            textureKey,
+        );
+    }
+
+    private ensureRemoteBrushTexture(
+        textureKey: string,
+        color: number,
+        size: number,
+        shape: NetworkBrushShape,
+    ): void {
+        if (this.textures.exists(textureKey)) {
+            return;
+        }
+
+        const diameter = size * 2;
+        const graphics = this.add.graphics();
+
+        graphics.fillStyle(color, 1);
+
+        if (shape === 'circle') {
+            graphics.fillCircle(
+                size,
+                size,
+                size,
+            );
+        } else {
+            graphics.fillRect(
+                0,
+                0,
+                diameter,
+                diameter,
+            );
+        }
+
+        graphics.generateTexture(
+            textureKey,
+            diameter,
+            diameter,
+        );
+
+        graphics.destroy();
+    }
+
     private pickColorFromBackground(
         worldX: number,
         worldY: number,
@@ -1113,23 +3403,54 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
-        const imageX = Phaser.Math.Clamp(
-            Math.floor(
-                (worldX / this.gameWidth) *
-                sourceImage.width,
-            ),
-            0,
-            sourceImage.width - 1,
-        );
+        /*
+         * 확대된 배경의 현재 화면 경계를 기준으로 정규화합니다.
+         * 따라서 눈으로 클릭한 픽셀과 실제 스포이드 색이 일치합니다.
+         */
+        const bounds =
+            this.backgroundImage.getBounds();
 
-        const imageY = Phaser.Math.Clamp(
-            Math.floor(
-                (worldY / this.gameHeight) *
-                sourceImage.height,
-            ),
-            0,
-            sourceImage.height - 1,
-        );
+        const normalizedX =
+            Phaser.Math.Clamp(
+                (
+                    worldX -
+                    bounds.left
+                ) /
+                bounds.width,
+                0,
+                1,
+            );
+
+        const normalizedY =
+            Phaser.Math.Clamp(
+                (
+                    worldY -
+                    bounds.top
+                ) /
+                bounds.height,
+                0,
+                1,
+            );
+
+        const imageX =
+            Phaser.Math.Clamp(
+                Math.floor(
+                    normalizedX *
+                    sourceImage.width,
+                ),
+                0,
+                sourceImage.width - 1,
+            );
+
+        const imageY =
+            Phaser.Math.Clamp(
+                Math.floor(
+                    normalizedY *
+                    sourceImage.height,
+                ),
+                0,
+                sourceImage.height - 1,
+            );
 
         const canvas =
             document.createElement('canvas');
@@ -1137,7 +3458,8 @@ export class GameScene extends Phaser.Scene {
         canvas.width = 1;
         canvas.height = 1;
 
-        const context = canvas.getContext('2d');
+        const context =
+            canvas.getContext('2d');
 
         if (!context) {
             return;
@@ -1155,12 +3477,13 @@ export class GameScene extends Phaser.Scene {
             1,
         );
 
-        const pixel = context.getImageData(
-            0,
-            0,
-            1,
-            1,
-        ).data;
+        const pixel =
+            context.getImageData(
+                0,
+                0,
+                1,
+                1,
+            ).data;
 
         this.paintColor =
             Phaser.Display.Color.GetColor(
@@ -1173,13 +3496,14 @@ export class GameScene extends Phaser.Scene {
         this.updatePaintHud();
         this.updatePaintPreviewImmediately();
 
-        const hexColor = this.paintColor
-            .toString(16)
-            .padStart(6, '0')
-            .toUpperCase();
+        const hexColor =
+            this.paintColor
+                .toString(16)
+                .padStart(6, '0')
+                .toUpperCase();
 
         this.showStatus(
-            `색상 추출 완료: #${hexColor}`,
+            `색상 추출 #${hexColor}`,
         );
     }
 
@@ -1227,12 +3551,12 @@ export class GameScene extends Phaser.Scene {
                 this.brushIncreaseKey,
             )
         ) {
-            this.brushSize = Phaser.Math.Clamp(
-                this.brushSize + 2,
-                4,
-                30,
-            );
-
+            this.brushSize =
+                Phaser.Math.Clamp(
+                    this.brushSize + 1,
+                    1,
+                    24,
+                );
             brushSizeChanged = true;
         }
 
@@ -1241,12 +3565,12 @@ export class GameScene extends Phaser.Scene {
                 this.brushDecreaseKey,
             )
         ) {
-            this.brushSize = Phaser.Math.Clamp(
-                this.brushSize - 2,
-                4,
-                30,
-            );
-
+            this.brushSize =
+                Phaser.Math.Clamp(
+                    this.brushSize - 1,
+                    1,
+                    24,
+                );
             brushSizeChanged = true;
         }
 
@@ -1257,23 +3581,54 @@ export class GameScene extends Phaser.Scene {
         this.createBrushTexture();
         this.updatePaintHud();
         this.updatePaintPreviewImmediately();
+        this.updatePaintControlHelp();
     }
 
     private toggleBrushShape(): void {
+        const brushOrder:
+            BrushShape[] = [
+                'dotCircle',
+                'circle',
+                'square',
+            ];
+
+        const currentIndex =
+            brushOrder.indexOf(
+                this.brushShape,
+            );
+
         this.brushShape =
-            this.brushShape === 'circle'
-                ? 'square'
-                : 'circle';
+            brushOrder[
+                (currentIndex + 1) %
+                brushOrder.length
+            ];
 
         this.createBrushTexture();
         this.updatePaintHud();
         this.updatePaintPreviewImmediately();
+        this.updatePaintControlHelp();
 
         this.showStatus(
-            this.brushShape === 'circle'
-                ? '원형 브러시'
-                : '사각 도트 브러시',
+            `${this.getBrushShapeLabel()} 브러시`,
         );
+    }
+
+    private getBrushShapeLabel(): string {
+        if (
+            this.brushShape ===
+            'dotCircle'
+        ) {
+            return 'DOT CIRCLE';
+        }
+
+        if (
+            this.brushShape ===
+            'circle'
+        ) {
+            return 'SMOOTH CIRCLE';
+        }
+
+        return 'SQUARE DOT';
     }
 
     /*
@@ -1289,17 +3644,70 @@ export class GameScene extends Phaser.Scene {
     }
 
     private updateAim(): void {
+        if (
+            multiplayerClient.isConnected() &&
+            !this.networkPlayerManager
+                .isLocalHunter()
+        ) {
+            this.aimLine.clear();
+            this.crosshair.clear();
+            return;
+        }
+
+        const origin =
+            multiplayerClient.isConnected()
+                ? this.networkPlayerManager
+                    .getLocalPlayerPosition()
+                : new Phaser.Math.Vector2(
+                    this.player.x,
+                    this.player.y,
+                );
+
+        if (!origin) {
+            return;
+        }
+
         const pointer =
             this.input.activePointer;
 
-        const angle = Phaser.Math.Angle.Between(
-            this.player.x,
-            this.player.y,
-            pointer.worldX,
-            pointer.worldY,
-        );
+        const angle =
+            Phaser.Math.Angle.Between(
+                origin.x,
+                origin.y,
+                pointer.worldX,
+                pointer.worldY,
+            );
 
         this.gun.setRotation(angle);
+
+        if (
+            multiplayerClient.isConnected()
+        ) {
+            const now =
+                this.time.now;
+
+            this.networkPlayerManager
+                .updateHunterAim(
+                    multiplayerClient
+                        .getSessionId() ?? '',
+                    angle,
+                    245,
+                );
+
+            if (
+                now -
+                this.lastHunterAimSentAt >=
+                this.hunterAimSendInterval
+            ) {
+                this.lastHunterAimSentAt =
+                    now;
+
+                multiplayerClient
+                    .sendHunterAim(
+                        angle,
+                    );
+            }
+        }
 
         this.aimLine.clear();
         this.aimLine.lineStyle(
@@ -1308,15 +3716,17 @@ export class GameScene extends Phaser.Scene {
             0.35,
         );
 
-        const lineLength = 230;
+        const lineLength = 185;
 
         this.aimLine.lineBetween(
-            this.player.x,
-            this.player.y,
-            this.player.x +
-            Math.cos(angle) * lineLength,
-            this.player.y +
-            Math.sin(angle) * lineLength,
+            origin.x,
+            origin.y,
+            origin.x +
+                Math.cos(angle) *
+                    lineLength,
+            origin.y +
+                Math.sin(angle) *
+                    lineLength,
         );
 
         this.drawCrosshair(
@@ -1375,8 +3785,11 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
-        if (this.isReloading) {
-            this.showStatus('재장전 중입니다');
+        if (
+            multiplayerClient.isConnected() &&
+            !this.networkPlayerManager
+                .isLocalHunter()
+        ) {
             return;
         }
 
@@ -1384,69 +3797,123 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
-        if (this.ammo <= 0) {
-            this.showStatus(
-                '탄약이 없습니다. R 키로 재장전',
-            );
+        if (
+            multiplayerClient.isConnected()
+        ) {
+            if (
+                Date.now() <
+                this.weaponOverheatedUntil
+            ) {
+                this.showStatus(
+                    '샷건이 과열되었습니다',
+                );
+                return;
+            }
+        } else {
+            if (this.isReloading) {
+                this.showStatus(
+                    '재장전 중입니다',
+                );
+                return;
+            }
 
-            return;
+            if (this.ammo <= 0) {
+                this.showStatus(
+                    '탄약이 없습니다. R 키로 재장전',
+                );
+                return;
+            }
+
+            this.ammo -= 1;
+            this.updateAmmoText();
         }
 
         this.canShoot = false;
-        this.ammo -= 1;
-
-        this.updateAmmoText();
 
         const pointer =
             this.input.activePointer;
 
+        const origin =
+            multiplayerClient.isConnected()
+                ? this.networkPlayerManager
+                    .getLocalPlayerPosition()
+                : new Phaser.Math.Vector2(
+                    this.player.x,
+                    this.player.y,
+                );
+
+        if (!origin) {
+            return;
+        }
+
         const aimAngle = Phaser.Math.Angle.Between(
-            this.player.x,
-            this.player.y,
+            origin.x,
+            origin.y,
             pointer.worldX,
             pointer.worldY,
         );
 
-        const muzzleDistance = 42;
+        const muzzleDistance = 28;
 
         const muzzleX =
-            this.player.x +
+            origin.x +
             Math.cos(aimAngle) * muzzleDistance;
 
         const muzzleY =
-            this.player.y +
+            origin.y +
             Math.sin(aimAngle) * muzzleDistance;
 
-        this.createMuzzleFlash(
-            muzzleX,
-            muzzleY,
-        );
+        if (
+            multiplayerClient.isConnected()
+        ) {
+            multiplayerClient.sendFireShot(
+                aimAngle,
+            );
+        } else {
+            this.createMuzzleFlash(
+                muzzleX,
+                muzzleY,
+            );
 
-        const hitHiders = this.createPellets(
-            muzzleX,
-            muzzleY,
-            aimAngle,
-        );
+            const hitHiders =
+                this.createPellets(
+                    muzzleX,
+                    muzzleY,
+                    aimAngle,
+                );
 
-        if (hitHiders.size > 0) {
-            this.showHitMarker();
+            if (
+                hitHiders.size > 0
+            ) {
+                this.showHitMarker();
+            }
+
+            hitHiders.forEach(
+                (hider) => {
+                    this.hitHider(
+                        hider,
+                    );
+                },
+            );
+
+            if (
+                this.getAliveHiderCount() ===
+                0
+            ) {
+                this.showHunterVictory();
+                return;
+            }
         }
-
-        hitHiders.forEach((hider) => {
-            this.hitHider(hider);
-        });
 
         this.cameras.main.shake(
             90,
             0.004,
         );
 
-        if (this.getAliveHiderCount() === 0) {
-            this.showHunterVictory();
-            return;
-        }
-
-        if (this.ammo === 0) {
+        if (
+            !multiplayerClient.isConnected() &&
+            this.ammo === 0
+        ) {
             this.showStatus(
                 '탄약 소진! R 키로 재장전',
             );
@@ -1462,6 +3929,42 @@ export class GameScene extends Phaser.Scene {
                     this.canShoot = true;
                 }
             },
+        );
+    }
+
+    private applyNetworkShot(
+        shot: NetworkShotFired,
+    ): void {
+        this.createMuzzleFlash(
+            shot.startX,
+            shot.startY,
+        );
+
+        shot.pellets.forEach(
+            (pellet) => {
+                this.createPelletTrail(
+                    new Phaser.Geom.Line(
+                        shot.startX,
+                        shot.startY,
+                        pellet.endX,
+                        pellet.endY,
+                    ),
+                );
+            },
+        );
+
+        if (
+            shot.hitIds.length > 0 &&
+            shot.shooterId ===
+                multiplayerClient
+                    .getSessionId()
+        ) {
+            this.showHitMarker();
+        }
+
+        this.cameras.main.shake(
+            70,
+            0.003,
         );
     }
 
@@ -1857,20 +4360,8 @@ export class GameScene extends Phaser.Scene {
             Phaser.Input.Keyboard.KeyCodes.D,
         );
 
-        this.startKey = keyboard.addKey(
-            Phaser.Input.Keyboard.KeyCodes.ENTER,
-        );
-
         this.reloadKey = keyboard.addKey(
             Phaser.Input.Keyboard.KeyCodes.R,
-        );
-
-        this.resetKey = keyboard.addKey(
-            Phaser.Input.Keyboard.KeyCodes.N,
-        );
-
-        this.nextHiderKey = keyboard.addKey(
-            Phaser.Input.Keyboard.KeyCodes.TAB,
         );
 
         this.brushIncreaseKey = keyboard.addKey(
@@ -2084,7 +4575,7 @@ export class GameScene extends Phaser.Scene {
             `AMMO ${this.ammo} / ${this.maxAmmo}\n${loaded}${empty}`,
         );
 
-        this.ammoText.setColor('#ffffff');
+        this.ammoText.setColor('#26352b');
     }
 
     private updateTargetText(): void {
@@ -2131,13 +4622,13 @@ export class GameScene extends Phaser.Scene {
         );
 
         const shapeText =
-            this.brushShape === 'circle'
-                ? 'CIRCLE'
-                : 'SQUARE';
+            this.getBrushShapeLabel();
 
         this.brushSizeText.setText(
-            `BRUSH ${shapeText} ${this.brushSize} · B 전환 · [ / ]`,
+            `BRUSH ${shapeText} ${this.brushSize}`,
         );
+
+        this.updatePaintControlHelp();
     }
 
     private showStatus(message: string): void {
@@ -2187,7 +4678,10 @@ export class GameScene extends Phaser.Scene {
                 : '#ffffff',
         );
 
-        if (remainingMilliseconds > 0) {
+        if (
+            remainingMilliseconds > 0 ||
+            multiplayerClient.isConnected()
+        ) {
             return;
         }
 
@@ -2220,7 +4714,7 @@ export class GameScene extends Phaser.Scene {
         );
 
         this.guideText.setText(
-            '좌클릭 페인팅 · 우클릭 스포이드 · B 모양 · [ ] 크기 · WASD 이동 · Tab 변경 · Enter 시작',
+            '자신의 캐릭터를 배경과 비슷하게 위장하세요.',
         );
 
         this.player.setVisible(false);
@@ -2231,11 +4725,18 @@ export class GameScene extends Phaser.Scene {
         this.aimLine.clear();
         this.crosshair.clear();
 
+        this.networkPlayerManager
+            ?.clearHunterAimLines();
+
         this.selectionRing.setVisible(true);
         this.paintPreview.setVisible(false);
 
         this.paintColorText.setVisible(true);
         this.brushSizeText.setVisible(true);
+        this.setPaintPaletteVisible(true);
+        this.highlightPaletteColor(
+            this.paintColor,
+        );
 
         this.ammoText.setVisible(false);
         this.targetText.setVisible(false);
@@ -2256,7 +4757,17 @@ export class GameScene extends Phaser.Scene {
     }
 
     private startHunt(): void {
-        if (this.phase !== 'paint') {
+        if (
+            multiplayerClient.isConnected()
+        ) {
+            this.networkPlayerManager
+                .normalizeLocalPlayerForGameplay();
+        }
+
+        if (
+            this.phase !== 'paint' &&
+            !multiplayerClient.isConnected()
+        ) {
             return;
         }
 
@@ -2276,7 +4787,7 @@ export class GameScene extends Phaser.Scene {
         );
 
         this.guideText.setText(
-            'WASD 이동 · 마우스 조준 · 좌클릭 발사 · R 재장전 · N 초기화',
+            'WASD 이동 · 마우스 조준 · 좌클릭 발사 · R 재장전',
         );
 
         this.player.setPosition(
@@ -2330,7 +4841,7 @@ export class GameScene extends Phaser.Scene {
             .setColor('#ffdf70');
 
         this.guideText.setText(
-            '모든 하이더를 발견했습니다 · N 키로 다시 시작',
+            '모든 하이더를 발견했습니다 · 자동으로 대기실로 이동',
         );
 
         this.player.setVisible(false);
@@ -2356,6 +4867,12 @@ export class GameScene extends Phaser.Scene {
     }
 
     private showHiderVictory(): void {
+        if (
+            multiplayerClient.isConnected()
+        ) {
+            return;
+        }
+
         if (this.phase !== 'hunt') {
             return;
         }
@@ -2371,7 +4888,7 @@ export class GameScene extends Phaser.Scene {
             .setColor('#8cff9b');
 
         this.guideText.setText(
-            '시간 종료 · N 키로 다시 시작',
+            '시간 종료 · 자동으로 대기실로 이동',
         );
 
         this.player.setVisible(false);
@@ -2420,36 +4937,6 @@ export class GameScene extends Phaser.Scene {
         this.input.setDefaultCursor('default');
     }
 
-    /*
-     * Reset
-     */
-
-    private resetGame(): void {
-        this.tweens.killAll();
-
-        this.destroyHiders();
-        this.createHiders();
-
-        this.ammo = this.maxAmmo;
-        this.canShoot = true;
-        this.isReloading = false;
-        this.isPainting = false;
-
-        this.paintColor =
-            this.defaultPaintColor;
-        this.brushSize = 10;
-        this.brushShape = 'circle';
-
-        this.hitMarker.setVisible(false);
-        this.statusText.setVisible(false);
-
-        this.updateAmmoText();
-        this.updateTargetText();
-        this.updatePaintHud();
-
-        this.enterPaintPhase();
-    }
-
     private destroyHiders(): void {
         this.hiders.forEach((hider) => {
             this.getAllPartObjects(hider).forEach(
@@ -2493,29 +4980,84 @@ export class GameScene extends Phaser.Scene {
     }
 
     private createBrushTexture(): void {
-        if (this.textures.exists(this.brushTextureKey)) {
-            this.textures.remove(this.brushTextureKey);
+        if (
+            this.textures.exists(
+                this.brushTextureKey,
+            )
+        ) {
+            this.textures.remove(
+                this.brushTextureKey,
+            );
         }
 
-        const size = this.brushSize * 2;
-        const graphics = this.add.graphics();
+        const radius =
+            Math.max(
+                1,
+                Math.round(
+                    this.brushSize,
+                ),
+            );
 
-        graphics.fillStyle(this.paintColor, 1);
+        const diameter =
+            radius * 2 + 1;
 
-        if (this.brushShape === 'circle') {
+        const graphics =
+            this.add.graphics();
+
+        graphics.fillStyle(
+            this.paintColor,
+            1,
+        );
+
+        if (
+            this.brushShape ===
+            'dotCircle'
+        ) {
+            for (
+                let y = -radius;
+                y <= radius;
+                y += 1
+            ) {
+                const halfWidth =
+                    Math.floor(
+                        Math.sqrt(
+                            Math.max(
+                                0,
+                                radius * radius -
+                                y * y,
+                            ),
+                        ),
+                    );
+
+                graphics.fillRect(
+                    radius - halfWidth,
+                    radius + y,
+                    halfWidth * 2 + 1,
+                    1,
+                );
+            }
+        } else if (
+            this.brushShape ===
+            'circle'
+        ) {
             graphics.fillCircle(
-                this.brushSize,
-                this.brushSize,
-                this.brushSize,
+                radius,
+                radius,
+                radius,
             );
         } else {
-            graphics.fillRect(0, 0, size, size);
+            graphics.fillRect(
+                0,
+                0,
+                diameter,
+                diameter,
+            );
         }
 
         graphics.generateTexture(
             this.brushTextureKey,
-            size,
-            size,
+            diameter,
+            diameter,
         );
 
         graphics.destroy();
