@@ -5,35 +5,36 @@ type GamePhase =
     | 'hunt'
     | 'hunterVictory'
     | 'hiderVictory';
-type PartName = 'head' | 'body' | 'arms' | 'legs';
+
+type BrushShape = 'circle' | 'square';
 
 type HiderPartObject =
     | Phaser.GameObjects.Arc
     | Phaser.GameObjects.Rectangle;
 
-type HiderPart = {
+type HunterVisual = {
     object: HiderPartObject;
-    color: number;
+    offsetX: number;
+    offsetY: number;
 };
 
 type Hider = {
-    parts: {
-        head: HiderPart;
-        body: HiderPart;
-        leftArm: HiderPart;
-        rightArm: HiderPart;
-        leftLeg: HiderPart;
-        rightLeg: HiderPart;
-    };
-    label: Phaser.GameObjects.Text;
-    alive: boolean;
     centerX: number;
     centerY: number;
-};
+    alive: boolean;
 
-type ColorZone = {
-    object: Phaser.GameObjects.Rectangle;
-    color: number;
+    head: Phaser.GameObjects.Arc;
+    body: Phaser.GameObjects.Rectangle;
+    leftArm: Phaser.GameObjects.Rectangle;
+    rightArm: Phaser.GameObjects.Rectangle;
+    leftLeg: Phaser.GameObjects.Rectangle;
+    rightLeg: Phaser.GameObjects.Rectangle;
+
+    label: Phaser.GameObjects.Text;
+
+    paintTexture: Phaser.GameObjects.RenderTexture;
+    paintMaskShape: Phaser.GameObjects.Graphics;
+    paintMask: Phaser.Display.Masks.GeometryMask;
 };
 
 type Obstacle = {
@@ -42,99 +43,141 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    private readonly gameWidth = 960;
+    private readonly gameHeight = 540;
+
+    private phase: GamePhase = 'paint';
+
+    /*
+     * Hunter
+     */
     private player!: Phaser.GameObjects.Rectangle;
     private gun!: Phaser.GameObjects.Rectangle;
     private hunterLabel!: Phaser.GameObjects.Text;
+    private hunterVisuals: HunterVisual[] = [];
 
-    private crosshair!: Phaser.GameObjects.Arc;
-    private crosshairCenter!: Phaser.GameObjects.Arc;
-    private aimLine!: Phaser.GameObjects.Graphics;
+    private readonly playerSpeed = 240;
+
+    /*
+     * Keyboard
+     */
+    private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
+
+    private moveUpKey!: Phaser.Input.Keyboard.Key;
+    private moveDownKey!: Phaser.Input.Keyboard.Key;
+    private moveLeftKey!: Phaser.Input.Keyboard.Key;
+    private moveRightKey!: Phaser.Input.Keyboard.Key;
+
+    private startKey!: Phaser.Input.Keyboard.Key;
+    private reloadKey!: Phaser.Input.Keyboard.Key;
+    private resetKey!: Phaser.Input.Keyboard.Key;
+    private nextHiderKey!: Phaser.Input.Keyboard.Key;
+
+    private brushIncreaseKey!: Phaser.Input.Keyboard.Key;
+    private brushDecreaseKey!: Phaser.Input.Keyboard.Key;
+    private brushShapeKey!: Phaser.Input.Keyboard.Key;
+
+    /*
+     * Hiders
+     */
+    private hiders: Hider[] = [];
+    private selectedHiderIndex = 0;
 
     private selectionRing!: Phaser.GameObjects.Arc;
 
-    private ammoText!: Phaser.GameObjects.Text;
-    private targetText!: Phaser.GameObjects.Text;
-    private phaseText!: Phaser.GameObjects.Text;
-    private guideText!: Phaser.GameObjects.Text;
-    private selectedPartText!: Phaser.GameObjects.Text;
-    private statusText!: Phaser.GameObjects.Text;
-    private timerText!: Phaser.GameObjects.Text;
+    private readonly hiderSpeed = 140;
 
-    private hiders: Hider[] = [];
-    private colorZones: ColorZone[] = [];
+    /*
+     * Background and obstacles
+     */
+    private backgroundImage!: Phaser.GameObjects.Image;
     private obstacles: Obstacle[] = [];
 
-    private selectedHiderIndex = 0;
-    private selectedPart: PartName = 'body';
-    private phase: GamePhase = 'paint';
+    /*
+     * Painting
+     */
+    private readonly defaultPaintColor = 0xff0000;
+    private paintColor = this.defaultPaintColor;
 
-    private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
+    private brushSize = 10;
+    private brushShape: BrushShape = 'circle';
+    private isPainting = false;
 
-    private wasd!: {
-        W: Phaser.Input.Keyboard.Key;
-        A: Phaser.Input.Keyboard.Key;
-        S: Phaser.Input.Keyboard.Key;
-        D: Phaser.Input.Keyboard.Key;
-    };
+    private paintPreview!: Phaser.GameObjects.Graphics;
+    private brushTextureKey = 'paint-brush';
 
-    private reloadKey!: Phaser.Input.Keyboard.Key;
-    private resetKey!: Phaser.Input.Keyboard.Key;
-    private startKey!: Phaser.Input.Keyboard.Key;
-    private nextHiderKey!: Phaser.Input.Keyboard.Key;
-    private partKeys!: {
-        ONE: Phaser.Input.Keyboard.Key;
-        TWO: Phaser.Input.Keyboard.Key;
-        THREE: Phaser.Input.Keyboard.Key;
-        FOUR: Phaser.Input.Keyboard.Key;
-    };
+    /*
+     * Aiming
+     */
+    private aimLine!: Phaser.GameObjects.Graphics;
+    private crosshair!: Phaser.GameObjects.Graphics;
 
+    /*
+     * Shotgun
+     */
     private ammo = 5;
     private readonly maxAmmo = 5;
 
+    private canShoot = true;
     private isReloading = false;
+
+    private readonly shotCooldown = 450;
     private readonly reloadDuration = 1500;
+
+    private readonly pelletCount: number = 7;
+    private readonly pelletRange = 300;
+    private readonly pelletSpread = Phaser.Math.DegToRad(18);
 
     private hitMarker!: Phaser.GameObjects.Graphics;
 
-    private canShoot = true;
-    private readonly shotCooldown = 450;
-
-    private readonly pelletCount = 7;
-
-    // 이전 단계에서 줄인 샷건 사정거리
-    private readonly pelletRange = 150;
-
-    private readonly shotgunSpread = Phaser.Math.DegToRad(30);
-
-    private readonly playerSpeed = 250;
-    private readonly hiderSpeed = 140;
-
-    private readonly paintDuration = 20;
+    /*
+     * Timer
+     */
+    private readonly paintDuration = 45;
     private readonly huntDuration = 30;
 
     private phaseEndTime = 0;
 
-    private readonly gameWidth = 960;
-    private readonly gameHeight = 540;
+    /*
+     * HUD
+     */
+    private phaseText!: Phaser.GameObjects.Text;
+    private timerText!: Phaser.GameObjects.Text;
+    private guideText!: Phaser.GameObjects.Text;
+    private statusText!: Phaser.GameObjects.Text;
+    private ammoText!: Phaser.GameObjects.Text;
+    private targetText!: Phaser.GameObjects.Text;
+
+    private paintColorText!: Phaser.GameObjects.Text;
+    private brushSizeText!: Phaser.GameObjects.Text;
 
     constructor() {
         super('GameScene');
     }
 
-    create(): void {
-        this.cameras.main.setBackgroundColor('#243447');
+    preload(): void {
+        this.load.image(
+            'forest-background',
+            '/assets/backgrounds/forest-01.png',
+        );
+    }
 
-        this.createBackgroundZones();
-        this.createGrid();
+    create(): void {
+        this.createImageBackground();
         this.createObstacles();
+
         this.createHunter();
         this.createHiders();
         this.createSelectionRing();
-        this.createCrosshair();
+
+        this.createAimObjects();
         this.createHitMarker();
+
         this.createKeyboardControls();
         this.createHud();
-        this.registerInputEvents();
+
+        this.createPaintTools();
+        this.createPointerControls();
 
         this.enterPaintPhase();
     }
@@ -142,280 +185,98 @@ export class GameScene extends Phaser.Scene {
     update(_: number, delta: number): void {
         this.updateRoundTimer();
 
-        if (this.phase === 'hunt') {
-            this.updatePlayerMovement(delta);
-            this.updateAim();
-
-            if (Phaser.Input.Keyboard.JustDown(this.reloadKey)) {
-                this.reload();
-            }
-        }
-
         if (this.phase === 'paint') {
-            this.updatePartSelection();
             this.updateSelectedHiderMovement(delta);
+            this.updateBrushSizeInput();
 
-            if (Phaser.Input.Keyboard.JustDown(this.nextHiderKey)) {
+            if (
+                Phaser.Input.Keyboard.JustDown(
+                    this.brushShapeKey,
+                )
+            ) {
+                this.toggleBrushShape();
+            }
+
+            if (
+                Phaser.Input.Keyboard.JustDown(
+                    this.nextHiderKey,
+                )
+            ) {
                 this.selectNextHider();
             }
 
-            if (Phaser.Input.Keyboard.JustDown(this.startKey)) {
+            if (
+                Phaser.Input.Keyboard.JustDown(this.startKey)
+            ) {
                 this.startHunt();
             }
         }
 
-        if (Phaser.Input.Keyboard.JustDown(this.resetKey)) {
+        if (this.phase === 'hunt') {
+            this.updateHunterMovement(delta);
+            this.updateAim();
+
+            if (
+                Phaser.Input.Keyboard.JustDown(this.reloadKey)
+            ) {
+                this.reload();
+            }
+        }
+
+        if (
+            Phaser.Input.Keyboard.JustDown(this.resetKey)
+        ) {
             this.resetGame();
         }
     }
 
-    private updateSelectedHiderMovement(delta: number): void {
-        const hider = this.hiders[this.selectedHiderIndex];
+    /*
+     * Background
+     */
 
-        if (!hider || !hider.alive) {
-            return;
-        }
-
-        let directionX = 0;
-        let directionY = 0;
-
-        if (this.cursors.left.isDown || this.wasd.A.isDown) {
-            directionX -= 1;
-        }
-
-        if (this.cursors.right.isDown || this.wasd.D.isDown) {
-            directionX += 1;
-        }
-
-        if (this.cursors.up.isDown || this.wasd.W.isDown) {
-            directionY -= 1;
-        }
-
-        if (this.cursors.down.isDown || this.wasd.S.isDown) {
-            directionY += 1;
-        }
-
-        const direction = new Phaser.Math.Vector2(
-            directionX,
-            directionY,
+    private createImageBackground(): void {
+        this.backgroundImage = this.add.image(
+            this.gameWidth / 2,
+            this.gameHeight / 2,
+            'forest-background',
         );
 
-        if (direction.lengthSq() === 0) {
-            return;
-        }
-
-        direction.normalize();
-
-        const distance = this.hiderSpeed * (delta / 1000);
-
-        const requestedX = direction.x * distance;
-        const requestedY = direction.y * distance;
-
-        const nextCenterX = Phaser.Math.Clamp(
-            hider.centerX + requestedX,
-            40,
-            this.gameWidth - 40,
+        this.backgroundImage.setDisplaySize(
+            this.gameWidth,
+            this.gameHeight,
         );
 
-        const nextCenterY = Phaser.Math.Clamp(
-            hider.centerY + requestedY,
-            75,
-            this.gameHeight - 65,
-        );
-
-        const movementX = nextCenterX - hider.centerX;
-        const movementY = nextCenterY - hider.centerY;
-
-        this.moveHider(hider, movementX, movementY);
+        this.backgroundImage.setDepth(-20);
     }
 
-    private moveHider(
-        hider: Hider,
-        movementX: number,
-        movementY: number,
-    ): void {
-        if (movementX === 0 && movementY === 0) {
-            return;
-        }
-
-        hider.centerX += movementX;
-        hider.centerY += movementY;
-
-        this.getAllPartObjects(hider).forEach((object) => {
-            object.x += movementX;
-            object.y += movementY;
-        });
-
-        hider.label.x += movementX;
-        hider.label.y += movementY;
-
-        if (this.isHiderTouchingObstacle(hider)) {
-            hider.centerX -= movementX;
-            hider.centerY -= movementY;
-
-            this.getAllPartObjects(hider).forEach((object) => {
-                object.x -= movementX;
-                object.y -= movementY;
-            });
-
-            hider.label.x -= movementX;
-            hider.label.y -= movementY;
-        }
-
-        if (hider === this.hiders[this.selectedHiderIndex]) {
-            this.selectionRing.setPosition(
-                hider.centerX,
-                hider.centerY + 5,
-            );
-        }
-    }
-
-    private isHiderTouchingObstacle(
-        hider: Hider,
-    ): boolean {
-        return this.getAllPartObjects(hider).some((part) => {
-            const partBounds = part.getBounds();
-
-            return this.obstacles.some((obstacle) =>
-                Phaser.Geom.Intersects.RectangleToRectangle(
-                    partBounds,
-                    obstacle.bounds,
-                ),
-            );
-        });
-    }
-
-    private selectNextHider(): void {
-        const nextIndex =
-            (this.selectedHiderIndex + 1) % this.hiders.length;
-
-        this.selectHider(nextIndex);
-    }
-    private createBackgroundZones(): void {
-        const zoneData = [
-            {
-                x: 160,
-                y: 135,
-                width: 280,
-                height: 190,
-                color: 0x4f7f52,
-            },
-            {
-                x: 480,
-                y: 135,
-                width: 320,
-                height: 190,
-                color: 0x4b6f8f,
-            },
-            {
-                x: 800,
-                y: 135,
-                width: 280,
-                height: 190,
-                color: 0x8a6545,
-            },
-            {
-                x: 160,
-                y: 405,
-                width: 280,
-                height: 270,
-                color: 0x80638f,
-            },
-            {
-                x: 480,
-                y: 405,
-                width: 320,
-                height: 270,
-                color: 0xb78a45,
-            },
-            {
-                x: 800,
-                y: 405,
-                width: 280,
-                height: 270,
-                color: 0x65727c,
-            },
-        ];
-
-        this.colorZones = zoneData.map((data) => {
-            const object = this.add.rectangle(
-                data.x,
-                data.y,
-                data.width,
-                data.height,
-                data.color,
-            );
-
-            object.setStrokeStyle(3, 0xffffff, 0.12);
-            object.setDepth(0);
-            object.setInteractive({ useHandCursor: true });
-
-            object.on('pointerover', () => {
-                if (this.phase !== 'paint') {
-                    return;
-                }
-
-                object.setStrokeStyle(4, 0xffffff, 0.7);
-            });
-
-            object.on('pointerout', () => {
-                object.setStrokeStyle(3, 0xffffff, 0.12);
-            });
-
-            object.on('pointerdown', () => {
-                if (this.phase !== 'paint') {
-                    return;
-                }
-
-                this.paintSelectedPart(data.color);
-            });
-
-            return {
-                object,
-                color: data.color,
-            };
-        });
-    }
-
-    private createGrid(): void {
-        const graphics = this.add.graphics();
-
-        graphics.lineStyle(1, 0xffffff, 0.07);
-        graphics.setDepth(1);
-
-        for (let x = 0; x <= this.gameWidth; x += 40) {
-            graphics.lineBetween(x, 0, x, this.gameHeight);
-        }
-
-        for (let y = 0; y <= this.gameHeight; y += 40) {
-            graphics.lineBetween(0, y, this.gameWidth, y);
-        }
-    }
+    /*
+     * Obstacles
+     */
 
     private createObstacles(): void {
         const obstacleData = [
             {
-                x: 290,
+                x: 285,
                 y: 210,
-                width: 120,
+                width: 125,
                 height: 32,
             },
             {
-                x: 650,
-                y: 240,
+                x: 640,
+                y: 230,
                 width: 32,
-                height: 150,
+                height: 140,
             },
             {
-                x: 340,
-                y: 410,
+                x: 350,
+                y: 415,
                 width: 150,
-                height: 35,
+                height: 34,
             },
             {
-                x: 790,
-                y: 390,
-                width: 110,
+                x: 795,
+                y: 385,
+                width: 115,
                 height: 40,
             },
         ];
@@ -426,10 +287,12 @@ export class GameScene extends Phaser.Scene {
                 data.y,
                 data.width,
                 data.height,
-                0x30343b,
+                0x353b42,
+                0.9,
             );
 
-            object.setStrokeStyle(4, 0x111111);
+            object.setStrokeStyle(0, 0x000000, 0);
+            object.setAlpha(0);
             object.setDepth(3);
 
             const bounds = new Phaser.Geom.Rectangle(
@@ -446,47 +309,173 @@ export class GameScene extends Phaser.Scene {
         });
     }
 
-    private createHunter(): void {
-        this.player = this.add.rectangle(
-            this.gameWidth / 2,
-            this.gameHeight / 2,
-            40,
-            55,
-            0xffc857,
-        );
+    /*
+     * Hunter
+     */
 
-        this.player.setStrokeStyle(3, 0xffffff);
+    private createHunter(): void {
+        const x = 100;
+        const y = this.gameHeight / 2;
+
+        // 이동 및 충돌 판정용 투명 본체
+        this.player = this.add.rectangle(x, y, 24, 42, 0x000000, 0);
         this.player.setDepth(10);
 
+        const head = this.add.circle(x, y - 17, 13, 0xfff7e8);
+        const body = this.add.rectangle(x, y + 5, 20, 24, 0x4f86c6);
+        const leftArm = this.add.rectangle(x - 13, y + 4, 7, 18, 0x4f86c6);
+        const rightArm = this.add.rectangle(x + 13, y + 4, 7, 18, 0x4f86c6);
+        const leftLeg = this.add.rectangle(x - 6, y + 22, 8, 14, 0x355f91);
+        const rightLeg = this.add.rectangle(x + 6, y + 22, 8, 14, 0x355f91);
+
+        // 이미지에서 보였던 파란 모자 느낌
+        const hatBrim = this.add.rectangle(x, y - 27, 28, 6, 0x2f5f98);
+        const hatTop = this.add.rectangle(x, y - 33, 20, 9, 0x477fb8);
+        const scarf = this.add.rectangle(x, y - 3, 18, 5, 0xf2c14e);
+
+        this.hunterVisuals = [
+            { object: head, offsetX: 0, offsetY: -17 },
+            { object: body, offsetX: 0, offsetY: 5 },
+            { object: leftArm, offsetX: -13, offsetY: 4 },
+            { object: rightArm, offsetX: 13, offsetY: 4 },
+            { object: leftLeg, offsetX: -6, offsetY: 22 },
+            { object: rightLeg, offsetX: 6, offsetY: 22 },
+            { object: hatBrim, offsetX: 0, offsetY: -27 },
+            { object: hatTop, offsetX: 0, offsetY: -33 },
+            { object: scarf, offsetX: 0, offsetY: -3 },
+        ];
+
+        this.hunterVisuals.forEach(({ object }) => {
+            object.setStrokeStyle(1, 0x5b4636, 0.75);
+            object.setDepth(10);
+        });
+
         this.gun = this.add.rectangle(
-            this.player.x,
-            this.player.y,
-            48,
-            12,
-            0x2b2b2b,
+            x + 20,
+            y + 3,
+            32,
+            7,
+            0x6b4b2a,
         );
 
-        this.gun.setOrigin(0, 0.5);
-        this.gun.setStrokeStyle(2, 0xffffff);
+        this.gun.setOrigin(0.15, 0.5);
         this.gun.setDepth(11);
 
         this.hunterLabel = this.add
-            .text(this.player.x, this.player.y - 48, 'HUNTER', {
+            .text(x, y - 49, 'HUNTER', {
                 fontFamily: 'Arial',
-                fontSize: '16px',
-                color: '#ffffff',
-                backgroundColor: '#00000080',
-                padding: {
-                    x: 6,
-                    y: 3,
-                },
+                fontSize: '13px',
+                fontStyle: 'bold',
+                color: '#315f94',
+                backgroundColor: '#fff4d6',
+                padding: { x: 6, y: 3 },
             })
             .setOrigin(0.5)
             .setDepth(12);
-
-        this.aimLine = this.add.graphics();
-        this.aimLine.setDepth(8);
     }
+
+    private updateHunterMovement(delta: number): void {
+        let movementX = 0;
+        let movementY = 0;
+
+        if (
+            this.moveLeftKey.isDown ||
+            this.cursors.left.isDown
+        ) {
+            movementX -= 1;
+        }
+
+        if (
+            this.moveRightKey.isDown ||
+            this.cursors.right.isDown
+        ) {
+            movementX += 1;
+        }
+
+        if (
+            this.moveUpKey.isDown ||
+            this.cursors.up.isDown
+        ) {
+            movementY -= 1;
+        }
+
+        if (
+            this.moveDownKey.isDown ||
+            this.cursors.down.isDown
+        ) {
+            movementY += 1;
+        }
+
+        if (movementX === 0 && movementY === 0) {
+            return;
+        }
+
+        const direction = new Phaser.Math.Vector2(
+            movementX,
+            movementY,
+        ).normalize();
+
+        const distance =
+            this.playerSpeed * (delta / 1000);
+
+        const previousX = this.player.x;
+        const previousY = this.player.y;
+
+        this.player.x += direction.x * distance;
+        this.player.y += direction.y * distance;
+
+        this.player.x = Phaser.Math.Clamp(
+            this.player.x,
+            this.player.width / 2,
+            this.gameWidth - this.player.width / 2,
+        );
+
+        this.player.y = Phaser.Math.Clamp(
+            this.player.y,
+            this.player.height / 2,
+            this.gameHeight - this.player.height / 2,
+        );
+
+        if (this.isHunterTouchingObstacle()) {
+            this.player.setPosition(previousX, previousY);
+        }
+
+        this.updateHunterObjects();
+    }
+
+    private updateHunterObjects(): void {
+        this.hunterVisuals.forEach(({ object, offsetX, offsetY }) => {
+            object.setPosition(
+                this.player.x + offsetX,
+                this.player.y + offsetY,
+            );
+        });
+
+        this.gun.setPosition(
+            this.player.x,
+            this.player.y + 3,
+        );
+
+        this.hunterLabel.setPosition(
+            this.player.x,
+            this.player.y - 49,
+        );
+    }
+
+    private isHunterTouchingObstacle(): boolean {
+        const hunterBounds = this.player.getBounds();
+
+        return this.obstacles.some((obstacle) =>
+            Phaser.Geom.Intersects.RectangleToRectangle(
+                hunterBounds,
+                obstacle.bounds,
+            ),
+        );
+    }
+
+    /*
+     * Hiders
+     */
 
     private createHiders(): void {
         const positions = [
@@ -495,8 +484,13 @@ export class GameScene extends Phaser.Scene {
             { x: 720, y: 415 },
         ];
 
-        this.hiders = positions.map((position, index) =>
-            this.createHider(position.x, position.y, index),
+        this.hiders = positions.map(
+            (position, index) =>
+                this.createHider(
+                    position.x,
+                    position.y,
+                    index,
+                ),
         );
     }
 
@@ -505,39 +499,47 @@ export class GameScene extends Phaser.Scene {
         y: number,
         index: number,
     ): Hider {
-        const head = this.add.circle(x, y - 35, 13, 0xffffff);
-        const body = this.add.rectangle(x, y, 28, 42, 0xffffff);
+        // 얼굴 요소 없이 실루엣만 귀여운 SD 비율
+        const head = this.add.circle(x, y - 22, 13, 0xfffbf2);
+
+        const body = this.add.rectangle(
+            x,
+            y + 1,
+            21,
+            23,
+            0xfffbf2,
+        );
 
         const leftArm = this.add.rectangle(
-            x - 22,
-            y,
-            12,
-            38,
-            0xffffff,
+            x - 14,
+            y + 1,
+            7,
+            18,
+            0xfffbf2,
         );
 
         const rightArm = this.add.rectangle(
-            x + 22,
-            y,
-            12,
-            38,
-            0xffffff,
+            x + 14,
+            y + 1,
+            7,
+            18,
+            0xfffbf2,
         );
 
         const leftLeg = this.add.rectangle(
-            x - 9,
-            y + 38,
-            12,
-            34,
-            0xffffff,
+            x - 6,
+            y + 20,
+            8,
+            15,
+            0xfffbf2,
         );
 
         const rightLeg = this.add.rectangle(
-            x + 9,
-            y + 38,
-            12,
-            34,
-            0xffffff,
+            x + 6,
+            y + 20,
+            8,
+            15,
+            0xfffbf2,
         );
 
         const objects: HiderPartObject[] = [
@@ -550,98 +552,147 @@ export class GameScene extends Phaser.Scene {
         ];
 
         objects.forEach((object) => {
-            object.setStrokeStyle(2, 0xe2e8f0, 0.9);
+            object.setStrokeStyle(1, 0x8d6e63, 0.75);
             object.setDepth(5);
-            object.setInteractive({ useHandCursor: true });
         });
 
+        const paintLayer = this.createPaintLayer(x, y);
+
         const label = this.add
-            .text(x, y - 65, `HIDER ${index + 1}`, {
+            .text(x, y - 43, `HIDER ${index + 1}`, {
                 fontFamily: 'Arial',
                 fontSize: '14px',
-                color: '#ffffff',
-                backgroundColor: '#000000aa',
+                fontStyle: 'bold',
+                color: '#5b4636',
+                backgroundColor: '#fff4d6',
                 padding: {
                     x: 7,
                     y: 4,
                 },
             })
             .setOrigin(0.5)
-            .setDepth(7);
+            .setDepth(9);
 
-        const hider: Hider = {
-            parts: {
-                head: {
-                    object: head,
-                    color: 0xffffff,
-                },
-                body: {
-                    object: body,
-                    color: 0xffffff,
-                },
-                leftArm: {
-                    object: leftArm,
-                    color: 0xffffff,
-                },
-                rightArm: {
-                    object: rightArm,
-                    color: 0xffffff,
-                },
-                leftLeg: {
-                    object: leftLeg,
-                    color: 0xffffff,
-                },
-                rightLeg: {
-                    object: rightLeg,
-                    color: 0xffffff,
-                },
-            },
-            label,
-            alive: true,
+        return {
             centerX: x,
             centerY: y,
+            alive: true,
+
+            head,
+            body,
+            leftArm,
+            rightArm,
+            leftLeg,
+            rightLeg,
+            label,
+
+            paintTexture: paintLayer.paintTexture,
+            paintMaskShape:
+                paintLayer.paintMaskShape,
+            paintMask: paintLayer.paintMask,
         };
+    }
 
-        objects.forEach((object) => {
-            object.on('pointerdown', () => {
-                if (this.phase !== 'paint' || !hider.alive) {
-                    return;
-                }
+    private createPaintLayer(
+        centerX: number,
+        centerY: number,
+    ): {
+        paintTexture: Phaser.GameObjects.RenderTexture;
+        paintMaskShape: Phaser.GameObjects.Graphics;
+        paintMask: Phaser.Display.Masks.GeometryMask;
+    } {
+        const textureWidth = 60;
+        const textureHeight = 76;
 
-                this.selectHider(index);
-            });
+        const textureX = centerX - textureWidth / 2;
+        const textureY = centerY - 38;
 
-            object.on('pointerover', () => {
-                if (this.phase !== 'paint' || !hider.alive) {
-                    return;
-                }
+        const paintTexture = this.add.renderTexture(
+            textureX,
+            textureY,
+            textureWidth,
+            textureHeight,
+        );
 
-                object.setScale(1.1);
-            });
+        paintTexture.setOrigin(0, 0);
+        paintTexture.setDepth(20);
 
-            object.on('pointerout', () => {
-                if (this.phase !== 'paint' || !hider.alive) {
-                    return;
-                }
+        // 처음 흰색으로 채우지 않음
+        // 기존 하이더 몸체가 흰색이므로 그대로 보임
+        paintTexture.clear();
 
-                object.setScale(1);
-            });
-        });
+        const paintMaskShape = this.add.graphics();
 
-        return hider;
+        // 마스크는 로컬 좌표로 그림
+        this.drawLocalHiderMask(paintMaskShape);
+
+        // RenderTexture와 같은 위치에 배치
+        paintMaskShape.setPosition(
+            textureX,
+            textureY,
+        );
+
+        paintMaskShape.setVisible(false);
+
+        const paintMask =
+            paintMaskShape.createGeometryMask();
+
+        paintTexture.setMask(paintMask);
+
+        return {
+            paintTexture,
+            paintMaskShape,
+            paintMask,
+        };
+    }
+
+    private drawLocalHiderMask(
+        graphics: Phaser.GameObjects.Graphics,
+    ): void {
+        graphics.clear();
+        graphics.fillStyle(0xffffff, 1);
+
+        // RenderTexture: 60 x 76, 중심은 (30, 38)
+        const centerX = 30;
+        const centerY = 38;
+
+        graphics.fillCircle(centerX, centerY - 22, 13);
+        graphics.fillRect(centerX - 10.5, centerY - 10.5, 21, 23);
+        graphics.fillRect(centerX - 17.5, centerY - 8, 7, 18);
+        graphics.fillRect(centerX + 10.5, centerY - 8, 7, 18);
+        graphics.fillRect(centerX - 10, centerY + 12, 8, 15);
+        graphics.fillRect(centerX + 2, centerY + 12, 8, 15);
+    }
+
+    private getAllPartObjects(
+        hider: Hider,
+    ): HiderPartObject[] {
+        return [
+            hider.head,
+            hider.body,
+            hider.leftArm,
+            hider.rightArm,
+            hider.leftLeg,
+            hider.rightLeg,
+        ];
     }
 
     private createSelectionRing(): void {
         this.selectionRing = this.add.circle(
             0,
             0,
-            48,
-            0xffff00,
+            38,
+            0xffe082,
             0,
         );
 
-        this.selectionRing.setStrokeStyle(3, 0xffff00, 1);
-        this.selectionRing.setDepth(6);
+        this.selectionRing.setStrokeStyle(
+            3,
+            0xffe082,
+            1,
+        );
+
+        this.selectionRing.setDepth(8);
 
         this.tweens.add({
             targets: this.selectionRing,
@@ -653,36 +704,1079 @@ export class GameScene extends Phaser.Scene {
         });
     }
 
-    private createCrosshair(): void {
-        this.crosshair = this.add.circle(
-            0,
-            0,
-            10,
-            0xff4d4d,
-            0,
+    private selectHider(index: number): void {
+        const hider = this.hiders[index];
+
+        if (!hider || !hider.alive) {
+            return;
+        }
+
+        this.selectedHiderIndex = index;
+
+        this.selectionRing.setPosition(
+            hider.centerX,
+            hider.centerY + 4,
         );
 
-        this.crosshair.setStrokeStyle(2, 0xff4d4d);
-        this.crosshair.setDepth(20);
+        this.showStatus(
+            `HIDER ${index + 1} 선택`,
+        );
+    }
 
-        this.crosshairCenter = this.add.circle(
+    private selectNextHider(): void {
+        if (this.hiders.length === 0) {
+            return;
+        }
+
+        let nextIndex =
+            (this.selectedHiderIndex + 1) %
+            this.hiders.length;
+
+        for (
+            let count = 0;
+            count < this.hiders.length;
+            count += 1
+        ) {
+            if (this.hiders[nextIndex].alive) {
+                this.selectHider(nextIndex);
+                return;
+            }
+
+            nextIndex =
+                (nextIndex + 1) %
+                this.hiders.length;
+        }
+    }
+
+    private updateSelectedHiderMovement(
+        delta: number,
+    ): void {
+        const hider =
+            this.hiders[this.selectedHiderIndex];
+
+        if (!hider || !hider.alive) {
+            return;
+        }
+
+        let movementX = 0;
+        let movementY = 0;
+
+        if (this.moveLeftKey.isDown) {
+            movementX -= 1;
+        }
+
+        if (this.moveRightKey.isDown) {
+            movementX += 1;
+        }
+
+        if (this.moveUpKey.isDown) {
+            movementY -= 1;
+        }
+
+        if (this.moveDownKey.isDown) {
+            movementY += 1;
+        }
+
+        if (movementX === 0 && movementY === 0) {
+            return;
+        }
+
+        const direction = new Phaser.Math.Vector2(
+            movementX,
+            movementY,
+        ).normalize();
+
+        const distance =
+            this.hiderSpeed * (delta / 1000);
+
+        this.moveHider(
+            hider,
+            direction.x * distance,
+            direction.y * distance,
+        );
+    }
+
+    private moveHider(
+        hider: Hider,
+        movementX: number,
+        movementY: number,
+    ): void {
+        const previousCenterX = hider.centerX;
+        const previousCenterY = hider.centerY;
+
+        this.applyHiderMovement(
+            hider,
+            movementX,
+            movementY,
+        );
+
+        const outsideBounds =
+            hider.centerX < 45 ||
+            hider.centerX > this.gameWidth - 45 ||
+            hider.centerY < 90 ||
+            hider.centerY > this.gameHeight - 72;
+
+        if (
+            outsideBounds ||
+            this.isHiderTouchingObstacle(hider)
+        ) {
+            this.applyHiderMovement(
+                hider,
+                previousCenterX - hider.centerX,
+                previousCenterY - hider.centerY,
+            );
+        }
+
+        this.selectionRing.setPosition(
+            hider.centerX,
+            hider.centerY + 4,
+        );
+    }
+
+    private applyHiderMovement(
+        hider: Hider,
+        movementX: number,
+        movementY: number,
+    ): void {
+        hider.centerX += movementX;
+        hider.centerY += movementY;
+
+        this.getAllPartObjects(hider).forEach(
+            (object) => {
+                object.x += movementX;
+                object.y += movementY;
+            },
+        );
+
+        hider.label.x += movementX;
+        hider.label.y += movementY;
+
+        hider.paintTexture.x += movementX;
+        hider.paintTexture.y += movementY;
+
+        hider.paintMaskShape.x += movementX;
+        hider.paintMaskShape.y += movementY;
+    }
+
+    private isHiderTouchingObstacle(
+        hider: Hider,
+    ): boolean {
+        return this.getAllPartObjects(hider).some(
+            (part) => {
+                const partBounds = part.getBounds();
+
+                return this.obstacles.some((obstacle) =>
+                    Phaser.Geom.Intersects.RectangleToRectangle(
+                        partBounds,
+                        obstacle.bounds,
+                    ),
+                );
+            },
+        );
+    }
+
+    private findHiderAtPoint(
+        worldX: number,
+        worldY: number,
+    ): {
+        hider: Hider;
+        index: number;
+    } | null {
+        for (
+            let index = this.hiders.length - 1;
+            index >= 0;
+            index -= 1
+        ) {
+            const hider = this.hiders[index];
+
+            if (
+                hider.alive &&
+                this.isPointerInsideHider(
+                    hider,
+                    worldX,
+                    worldY,
+                )
+            ) {
+                return {
+                    hider,
+                    index,
+                };
+            }
+        }
+
+        return null;
+    }
+
+    private isPointerInsideHider(
+        hider: Hider,
+        worldX: number,
+        worldY: number,
+    ): boolean {
+        return this.getAllPartObjects(hider).some(
+            (part) =>
+                part
+                    .getBounds()
+                    .contains(worldX, worldY),
+        );
+    }
+
+    /*
+     * Painting
+     */
+
+    private createPaintTools(): void {
+        this.paintPreview = this.add.graphics();
+        this.paintPreview.setDepth(200);
+        this.paintPreview.setVisible(false);
+
+        this.createBrushTexture();
+        this.redrawPaintPreview();
+    }
+
+    private redrawPaintPreview(): void {
+        if (!this.paintPreview) {
+            return;
+        }
+
+        this.paintPreview.clear();
+        this.paintPreview.fillStyle(this.paintColor, 0.4);
+        this.paintPreview.lineStyle(1, 0xffffff, 0.9);
+
+        if (this.brushShape === 'circle') {
+            this.paintPreview.fillCircle(0, 0, this.brushSize);
+            this.paintPreview.strokeCircle(0, 0, this.brushSize);
+            return;
+        }
+
+        const size = this.brushSize * 2;
+
+        this.paintPreview.fillRect(
+            -this.brushSize,
+            -this.brushSize,
+            size,
+            size,
+        );
+
+        this.paintPreview.strokeRect(
+            -this.brushSize,
+            -this.brushSize,
+            size,
+            size,
+        );
+    }
+
+    private createPointerControls(): void {
+        this.input.on(
+            Phaser.Input.Events.POINTER_DOWN,
+            (pointer: Phaser.Input.Pointer) => {
+                if (this.phase === 'hunt') {
+                    if (pointer.leftButtonDown()) {
+                        this.fireShotgun();
+                    }
+
+                    return;
+                }
+
+                if (this.phase !== 'paint') {
+                    return;
+                }
+
+                if (pointer.rightButtonDown()) {
+                    this.pickColorFromBackground(
+                        pointer.worldX,
+                        pointer.worldY,
+                    );
+
+                    return;
+                }
+
+                if (!pointer.leftButtonDown()) {
+                    return;
+                }
+
+                const selected = this.findHiderAtPoint(
+                    pointer.worldX,
+                    pointer.worldY,
+                );
+
+                if (!selected) {
+                    return;
+                }
+
+                this.selectHider(selected.index);
+                this.isPainting = true;
+
+                this.paintOnHider(
+                    selected.hider,
+                    pointer.worldX,
+                    pointer.worldY,
+                );
+            },
+        );
+
+        this.input.on(
+            Phaser.Input.Events.POINTER_MOVE,
+            (pointer: Phaser.Input.Pointer) => {
+                this.updatePaintPreview(pointer);
+
+                if (
+                    this.phase !== 'paint' ||
+                    !this.isPainting ||
+                    !pointer.isDown
+                ) {
+                    return;
+                }
+
+                const hider =
+                    this.hiders[this.selectedHiderIndex];
+
+                if (!hider || !hider.alive) {
+                    return;
+                }
+
+                this.paintOnHider(
+                    hider,
+                    pointer.worldX,
+                    pointer.worldY,
+                );
+            },
+        );
+
+        this.input.on(
+            Phaser.Input.Events.POINTER_UP,
+            () => {
+                this.isPainting = false;
+            },
+        );
+
+        this.game.canvas.addEventListener(
+            'contextmenu',
+            (event) => {
+                event.preventDefault();
+            },
+        );
+    }
+
+    private paintOnHider(
+        hider: Hider,
+        worldX: number,
+        worldY: number,
+    ): void {
+        const textureX =
+            worldX - hider.paintTexture.x;
+
+        const textureY =
+            worldY - hider.paintTexture.y;
+
+        if (
+            textureX < 0 ||
+            textureY < 0 ||
+            textureX > hider.paintTexture.width ||
+            textureY > hider.paintTexture.height
+        ) {
+            return;
+        }
+
+        hider.paintTexture.stamp(
+            this.brushTextureKey,
+            undefined,
+            textureX,
+            textureY,
+            {
+                originX: 0.5,
+                originY: 0.5,
+            },
+        );
+
+        // Phaser 4에서는 DynamicTexture 변경 사항을 실제 화면에
+        // 반영하려면 render()를 호출해야 합니다.
+        const renderTexture = hider.paintTexture as unknown as {
+            render?: () => void;
+        };
+
+        renderTexture.render?.();
+    }
+
+    private pickColorFromBackground(
+        worldX: number,
+        worldY: number,
+    ): void {
+        const sourceImage = this.textures
+            .get('forest-background')
+            .getSourceImage() as HTMLImageElement;
+
+        if (!sourceImage) {
+            this.showStatus(
+                '배경 이미지를 읽을 수 없습니다',
+            );
+
+            return;
+        }
+
+        const imageX = Phaser.Math.Clamp(
+            Math.floor(
+                (worldX / this.gameWidth) *
+                sourceImage.width,
+            ),
+            0,
+            sourceImage.width - 1,
+        );
+
+        const imageY = Phaser.Math.Clamp(
+            Math.floor(
+                (worldY / this.gameHeight) *
+                sourceImage.height,
+            ),
+            0,
+            sourceImage.height - 1,
+        );
+
+        const canvas =
+            document.createElement('canvas');
+
+        canvas.width = 1;
+        canvas.height = 1;
+
+        const context = canvas.getContext('2d');
+
+        if (!context) {
+            return;
+        }
+
+        context.drawImage(
+            sourceImage,
+            imageX,
+            imageY,
+            1,
+            1,
             0,
             0,
+            1,
+            1,
+        );
+
+        const pixel = context.getImageData(
+            0,
+            0,
+            1,
+            1,
+        ).data;
+
+        this.paintColor =
+            Phaser.Display.Color.GetColor(
+                pixel[0],
+                pixel[1],
+                pixel[2],
+            );
+
+        this.createBrushTexture();
+        this.updatePaintHud();
+        this.updatePaintPreviewImmediately();
+
+        const hexColor = this.paintColor
+            .toString(16)
+            .padStart(6, '0')
+            .toUpperCase();
+
+        this.showStatus(
+            `색상 추출 완료: #${hexColor}`,
+        );
+    }
+
+    private updatePaintPreview(
+        pointer: Phaser.Input.Pointer,
+    ): void {
+        if (this.phase !== 'paint') {
+            this.paintPreview.setVisible(false);
+            return;
+        }
+
+        this.paintPreview.setPosition(
+            pointer.worldX,
+            pointer.worldY,
+        );
+
+        this.redrawPaintPreview();
+        this.paintPreview.setVisible(true);
+    }
+
+    private updatePaintPreviewImmediately(): void {
+        if (
+            this.phase !== 'paint' ||
+            !this.paintPreview
+        ) {
+            return;
+        }
+
+        const pointer = this.input.activePointer;
+
+        this.paintPreview.setPosition(
+            pointer.worldX,
+            pointer.worldY,
+        );
+
+        this.redrawPaintPreview();
+        this.paintPreview.setVisible(true);
+    }
+
+    private updateBrushSizeInput(): void {
+        let brushSizeChanged = false;
+
+        if (
+            Phaser.Input.Keyboard.JustDown(
+                this.brushIncreaseKey,
+            )
+        ) {
+            this.brushSize = Phaser.Math.Clamp(
+                this.brushSize + 2,
+                4,
+                30,
+            );
+
+            brushSizeChanged = true;
+        }
+
+        if (
+            Phaser.Input.Keyboard.JustDown(
+                this.brushDecreaseKey,
+            )
+        ) {
+            this.brushSize = Phaser.Math.Clamp(
+                this.brushSize - 2,
+                4,
+                30,
+            );
+
+            brushSizeChanged = true;
+        }
+
+        if (!brushSizeChanged) {
+            return;
+        }
+
+        this.createBrushTexture();
+        this.updatePaintHud();
+        this.updatePaintPreviewImmediately();
+    }
+
+    private toggleBrushShape(): void {
+        this.brushShape =
+            this.brushShape === 'circle'
+                ? 'square'
+                : 'circle';
+
+        this.createBrushTexture();
+        this.updatePaintHud();
+        this.updatePaintPreviewImmediately();
+
+        this.showStatus(
+            this.brushShape === 'circle'
+                ? '원형 브러시'
+                : '사각 도트 브러시',
+        );
+    }
+
+    /*
+     * Aim and shotgun
+     */
+
+    private createAimObjects(): void {
+        this.aimLine = this.add.graphics();
+        this.aimLine.setDepth(20);
+
+        this.crosshair = this.add.graphics();
+        this.crosshair.setDepth(100);
+    }
+
+    private updateAim(): void {
+        const pointer =
+            this.input.activePointer;
+
+        const angle = Phaser.Math.Angle.Between(
+            this.player.x,
+            this.player.y,
+            pointer.worldX,
+            pointer.worldY,
+        );
+
+        this.gun.setRotation(angle);
+
+        this.aimLine.clear();
+        this.aimLine.lineStyle(
             2,
-            0xff4d4d,
+            0xffffff,
+            0.35,
         );
 
-        this.crosshairCenter.setDepth(21);
+        const lineLength = 230;
+
+        this.aimLine.lineBetween(
+            this.player.x,
+            this.player.y,
+            this.player.x +
+            Math.cos(angle) * lineLength,
+            this.player.y +
+            Math.sin(angle) * lineLength,
+        );
+
+        this.drawCrosshair(
+            pointer.worldX,
+            pointer.worldY,
+        );
+    }
+
+    private drawCrosshair(
+        x: number,
+        y: number,
+    ): void {
+        const size = 11;
+        const gap = 4;
+
+        this.crosshair.clear();
+        this.crosshair.lineStyle(
+            2,
+            0xffffff,
+            1,
+        );
+
+        this.crosshair.lineBetween(
+            x - size,
+            y,
+            x - gap,
+            y,
+        );
+
+        this.crosshair.lineBetween(
+            x + gap,
+            y,
+            x + size,
+            y,
+        );
+
+        this.crosshair.lineBetween(
+            x,
+            y - size,
+            x,
+            y - gap,
+        );
+
+        this.crosshair.lineBetween(
+            x,
+            y + gap,
+            x,
+            y + size,
+        );
+
+        this.crosshair.strokeCircle(x, y, 2);
+    }
+
+    private fireShotgun(): void {
+        if (this.phase !== 'hunt') {
+            return;
+        }
+
+        if (this.isReloading) {
+            this.showStatus('재장전 중입니다');
+            return;
+        }
+
+        if (!this.canShoot) {
+            return;
+        }
+
+        if (this.ammo <= 0) {
+            this.showStatus(
+                '탄약이 없습니다. R 키로 재장전',
+            );
+
+            return;
+        }
+
+        this.canShoot = false;
+        this.ammo -= 1;
+
+        this.updateAmmoText();
+
+        const pointer =
+            this.input.activePointer;
+
+        const aimAngle = Phaser.Math.Angle.Between(
+            this.player.x,
+            this.player.y,
+            pointer.worldX,
+            pointer.worldY,
+        );
+
+        const muzzleDistance = 42;
+
+        const muzzleX =
+            this.player.x +
+            Math.cos(aimAngle) * muzzleDistance;
+
+        const muzzleY =
+            this.player.y +
+            Math.sin(aimAngle) * muzzleDistance;
+
+        this.createMuzzleFlash(
+            muzzleX,
+            muzzleY,
+        );
+
+        const hitHiders = this.createPellets(
+            muzzleX,
+            muzzleY,
+            aimAngle,
+        );
+
+        if (hitHiders.size > 0) {
+            this.showHitMarker();
+        }
+
+        hitHiders.forEach((hider) => {
+            this.hitHider(hider);
+        });
+
+        this.cameras.main.shake(
+            90,
+            0.004,
+        );
+
+        if (this.getAliveHiderCount() === 0) {
+            this.showHunterVictory();
+            return;
+        }
+
+        if (this.ammo === 0) {
+            this.showStatus(
+                '탄약 소진! R 키로 재장전',
+            );
+        }
+
+        this.time.delayedCall(
+            this.shotCooldown,
+            () => {
+                if (
+                    this.phase === 'hunt' &&
+                    !this.isReloading
+                ) {
+                    this.canShoot = true;
+                }
+            },
+        );
+    }
+
+    private createPellets(
+        startX: number,
+        startY: number,
+        aimAngle: number,
+    ): Set<Hider> {
+        const hitHiders = new Set<Hider>();
+
+        for (
+            let index = 0;
+            index < this.pelletCount;
+            index += 1
+        ) {
+            const ratio =
+                index / (this.pelletCount - 1);
+
+            const spreadOffset = Phaser.Math.Linear(
+                -this.pelletSpread / 2,
+                this.pelletSpread / 2,
+                ratio,
+            );
+
+            const randomOffset =
+                Phaser.Math.FloatBetween(
+                    -0.025,
+                    0.025,
+                );
+
+            const pelletAngle =
+                aimAngle +
+                spreadOffset +
+                randomOffset;
+
+            const range = Phaser.Math.Between(
+                Math.floor(
+                    this.pelletRange * 0.82,
+                ),
+                this.pelletRange,
+            );
+
+            const originalEndX =
+                startX +
+                Math.cos(pelletAngle) * range;
+
+            const originalEndY =
+                startY +
+                Math.sin(pelletAngle) * range;
+
+            const blockedEnd =
+                this.getBlockedPelletEnd(
+                    startX,
+                    startY,
+                    originalEndX,
+                    originalEndY,
+                );
+
+            const pelletLine = new Phaser.Geom.Line(
+                startX,
+                startY,
+                blockedEnd.x,
+                blockedEnd.y,
+            );
+
+            this.createPelletTrail(pelletLine);
+
+            this.hiders.forEach((hider) => {
+                if (
+                    !hider.alive ||
+                    hitHiders.has(hider)
+                ) {
+                    return;
+                }
+
+                const wasHit =
+                    this.getAllPartObjects(hider).some(
+                        (part) =>
+                            Phaser.Geom.Intersects.LineToRectangle(
+                                pelletLine,
+                                part.getBounds(),
+                            ),
+                    );
+
+                if (wasHit) {
+                    hitHiders.add(hider);
+                }
+            });
+        }
+
+        return hitHiders;
+    }
+
+    private getBlockedPelletEnd(
+        startX: number,
+        startY: number,
+        endX: number,
+        endY: number,
+    ): Phaser.Math.Vector2 {
+        const distance =
+            Phaser.Math.Distance.Between(
+                startX,
+                startY,
+                endX,
+                endY,
+            );
+
+        const stepSize = 4;
+
+        const stepCount = Math.ceil(
+            distance / stepSize,
+        );
+
+        for (
+            let step = 1;
+            step <= stepCount;
+            step += 1
+        ) {
+            const ratio = step / stepCount;
+
+            const currentX = Phaser.Math.Linear(
+                startX,
+                endX,
+                ratio,
+            );
+
+            const currentY = Phaser.Math.Linear(
+                startY,
+                endY,
+                ratio,
+            );
+
+            const blocked = this.obstacles.some(
+                (obstacle) =>
+                    Phaser.Geom.Rectangle.Contains(
+                        obstacle.bounds,
+                        currentX,
+                        currentY,
+                    ),
+            );
+
+            if (blocked) {
+                return new Phaser.Math.Vector2(
+                    currentX,
+                    currentY,
+                );
+            }
+        }
+
+        return new Phaser.Math.Vector2(
+            endX,
+            endY,
+        );
+    }
+
+    private createPelletTrail(
+        line: Phaser.Geom.Line,
+    ): void {
+        const trail = this.add.graphics();
+
+        trail.setDepth(50);
+        trail.lineStyle(2, 0xfff4c2, 0.85);
+
+        trail.lineBetween(
+            line.x1,
+            line.y1,
+            line.x2,
+            line.y2,
+        );
+
+        this.tweens.add({
+            targets: trail,
+            alpha: 0,
+            duration: 130,
+            onComplete: () => {
+                trail.destroy();
+            },
+        });
+    }
+
+    private createMuzzleFlash(
+        x: number,
+        y: number,
+    ): void {
+        const flash = this.add.circle(
+            x,
+            y,
+            12,
+            0xffd54f,
+            0.9,
+        );
+
+        flash.setDepth(60);
+
+        this.tweens.add({
+            targets: flash,
+            scale: 2,
+            alpha: 0,
+            duration: 100,
+            onComplete: () => {
+                flash.destroy();
+            },
+        });
+    }
+
+    private hitHider(hider: Hider): void {
+        if (!hider.alive) {
+            return;
+        }
+
+        hider.alive = false;
+
+        const targets: Phaser.GameObjects.GameObject[] = [
+            ...this.getAllPartObjects(hider),
+            hider.paintTexture,
+            hider.label,
+        ];
+
+        hider.label
+            .setText('FOUND!')
+            .setColor('#ff6b6b');
+
+        this.tweens.add({
+            targets,
+            alpha: 0,
+            scale: 1.18,
+            duration: 350,
+            ease: 'Quad.easeOut',
+            onComplete: () => {
+                this.getAllPartObjects(hider).forEach(
+                    (object) => {
+                        object.setVisible(false);
+                    },
+                );
+
+                hider.paintTexture.setVisible(false);
+                hider.label.setVisible(false);
+            },
+        });
+
+        this.updateTargetText();
+    }
+
+    private reload(): void {
+        if (this.phase !== 'hunt') {
+            return;
+        }
+
+        if (this.isReloading) {
+            this.showStatus(
+                '이미 재장전 중입니다',
+            );
+
+            return;
+        }
+
+        if (this.ammo === this.maxAmmo) {
+            this.showStatus(
+                '탄약이 이미 가득합니다',
+            );
+
+            return;
+        }
+
+        this.isReloading = true;
+        this.canShoot = false;
+
+        this.updateAmmoText();
+        this.showStatus('재장전 중...');
+
+        this.time.delayedCall(
+            this.reloadDuration,
+            () => {
+                if (this.phase !== 'hunt') {
+                    this.isReloading = false;
+                    return;
+                }
+
+                this.ammo = this.maxAmmo;
+                this.isReloading = false;
+                this.canShoot = true;
+
+                this.updateAmmoText();
+                this.showStatus('재장전 완료!');
+            },
+        );
+    }
+
+    /*
+     * Hit marker
+     */
+
+    private createHitMarker(): void {
+        this.hitMarker = this.add.graphics();
+
+        this.hitMarker.setDepth(150);
+        this.hitMarker.setVisible(false);
     }
 
     private showHitMarker(): void {
-        const centerX = this.gameWidth / 2;
-        const centerY = this.gameHeight / 2;
-        const innerDistance = 7;
-        const outerDistance = 16;
+        const pointer =
+            this.input.activePointer;
+
+        const centerX = pointer.worldX;
+        const centerY = pointer.worldY;
+
+        const innerDistance = 6;
+        const outerDistance = 15;
 
         this.hitMarker.clear();
-        this.hitMarker.lineStyle(3, 0xffffff, 1);
+        this.hitMarker.lineStyle(
+            3,
+            0xffffff,
+            1,
+        );
 
         this.hitMarker.lineBetween(
             centerX - outerDistance,
@@ -716,175 +1810,354 @@ export class GameScene extends Phaser.Scene {
         this.hitMarker.setAlpha(1);
         this.hitMarker.setScale(1);
 
-        this.tweens.killTweensOf(this.hitMarker);
+        this.tweens.killTweensOf(
+            this.hitMarker,
+        );
 
         this.tweens.add({
             targets: this.hitMarker,
             alpha: 0,
-            scale: 1.4,
+            scale: 1.35,
             duration: 180,
-            ease: 'Quad.easeOut',
             onComplete: () => {
                 this.hitMarker.setVisible(false);
             },
         });
     }
 
-    private createHitMarker(): void {
-        this.hitMarker = this.add.graphics();
-        this.hitMarker.setDepth(100);
-        this.hitMarker.setVisible(false);
-    }
+    /*
+     * Keyboard
+     */
+
     private createKeyboardControls(): void {
-        if (!this.input.keyboard) {
-            throw new Error('Keyboard input is not available.');
+        const keyboard = this.input.keyboard;
+
+        if (!keyboard) {
+            throw new Error(
+                'Keyboard input is unavailable.',
+            );
         }
 
-        this.cursors = this.input.keyboard.createCursorKeys();
+        this.cursors =
+            keyboard.createCursorKeys();
 
-        this.wasd = this.input.keyboard.addKeys({
-            W: Phaser.Input.Keyboard.KeyCodes.W,
-            A: Phaser.Input.Keyboard.KeyCodes.A,
-            S: Phaser.Input.Keyboard.KeyCodes.S,
-            D: Phaser.Input.Keyboard.KeyCodes.D,
-        }) as typeof this.wasd;
-
-        this.reloadKey = this.input.keyboard.addKey(
-            Phaser.Input.Keyboard.KeyCodes.R,
+        this.moveUpKey = keyboard.addKey(
+            Phaser.Input.Keyboard.KeyCodes.W,
         );
 
-        this.resetKey = this.input.keyboard.addKey(
-            Phaser.Input.Keyboard.KeyCodes.N,
+        this.moveDownKey = keyboard.addKey(
+            Phaser.Input.Keyboard.KeyCodes.S,
         );
 
-        this.startKey = this.input.keyboard.addKey(
+        this.moveLeftKey = keyboard.addKey(
+            Phaser.Input.Keyboard.KeyCodes.A,
+        );
+
+        this.moveRightKey = keyboard.addKey(
+            Phaser.Input.Keyboard.KeyCodes.D,
+        );
+
+        this.startKey = keyboard.addKey(
             Phaser.Input.Keyboard.KeyCodes.ENTER,
         );
 
-        this.nextHiderKey = this.input.keyboard.addKey(
+        this.reloadKey = keyboard.addKey(
+            Phaser.Input.Keyboard.KeyCodes.R,
+        );
+
+        this.resetKey = keyboard.addKey(
+            Phaser.Input.Keyboard.KeyCodes.N,
+        );
+
+        this.nextHiderKey = keyboard.addKey(
             Phaser.Input.Keyboard.KeyCodes.TAB,
         );
 
-        this.nextHiderKey.on('down', (event: KeyboardEvent) => {
-            event.preventDefault();
-        });
+        this.brushIncreaseKey = keyboard.addKey(
+            Phaser.Input.Keyboard.KeyCodes.CLOSED_BRACKET,
+        );
 
-        this.partKeys = this.input.keyboard.addKeys({
-            ONE: Phaser.Input.Keyboard.KeyCodes.ONE,
-            TWO: Phaser.Input.Keyboard.KeyCodes.TWO,
-            THREE: Phaser.Input.Keyboard.KeyCodes.THREE,
-            FOUR: Phaser.Input.Keyboard.KeyCodes.FOUR,
-        }) as typeof this.partKeys;
+        this.brushDecreaseKey = keyboard.addKey(
+            Phaser.Input.Keyboard.KeyCodes.OPEN_BRACKET,
+        );
 
+        this.brushShapeKey = keyboard.addKey(
+            Phaser.Input.Keyboard.KeyCodes.B,
+        );
+
+        keyboard.addCapture([
+            Phaser.Input.Keyboard.KeyCodes.TAB,
+            Phaser.Input.Keyboard.KeyCodes.SPACE,
+            Phaser.Input.Keyboard.KeyCodes.UP,
+            Phaser.Input.Keyboard.KeyCodes.DOWN,
+            Phaser.Input.Keyboard.KeyCodes.LEFT,
+            Phaser.Input.Keyboard.KeyCodes.RIGHT,
+        ]);
     }
+
+    /*
+     * HUD
+     */
 
     private createHud(): void {
         this.phaseText = this.add
-            .text(this.gameWidth / 2, 18, '', {
-                fontFamily: 'Arial',
-                fontSize: '24px',
-                fontStyle: 'bold',
-                color: '#ffffff',
-                backgroundColor: '#000000bb',
-                padding: {
-                    x: 16,
-                    y: 8,
+            .text(
+                this.gameWidth / 2,
+                14,
+                '',
+                {
+                    fontFamily: 'monospace',
+                    fontSize: '22px',
+                    fontStyle: 'bold',
+                    color: '#5b4636',
+                    backgroundColor: '#fff4d6',
+                    padding: {
+                        x: 16,
+                        y: 8,
+                    },
                 },
-            })
+            )
             .setOrigin(0.5, 0)
-            .setDepth(40);
-
-        this.guideText = this.add
-            .text(20, 20, '', {
-                fontFamily: 'Arial',
-                fontSize: '16px',
-                color: '#ffffff',
-                backgroundColor: '#00000099',
-                padding: {
-                    x: 12,
-                    y: 8,
-                },
-            })
-            .setDepth(40);
-
-        this.selectedPartText = this.add
-            .text(20, 78, '', {
-                fontFamily: 'Arial',
-                fontSize: '18px',
-                fontStyle: 'bold',
-                color: '#ffff66',
-                backgroundColor: '#00000099',
-                padding: {
-                    x: 12,
-                    y: 8,
-                },
-            })
-            .setDepth(40);
-
-        this.ammoText = this.add
-            .text(this.gameWidth - 24, 20, '', {
-                fontFamily: 'Arial',
-                fontSize: '24px',
-                fontStyle: 'bold',
-                color: '#ffffff',
-                backgroundColor: '#00000099',
-                padding: {
-                    x: 14,
-                    y: 9,
-                },
-            })
-            .setOrigin(1, 0)
-            .setDepth(40);
-
-        this.targetText = this.add
-            .text(this.gameWidth - 24, 100, '', {
-                fontFamily: 'Arial',
-                fontSize: '20px',
-                fontStyle: 'bold',
-                color: '#ffffff',
-                backgroundColor: '#00000099',
-                padding: {
-                    x: 14,
-                    y: 9,
-                },
-            })
-            .setOrigin(1, 0)
-            .setDepth(40);
-
-        this.statusText = this.add
-            .text(this.gameWidth / 2, this.gameHeight - 38, '', {
-                fontFamily: 'Arial',
-                fontSize: '21px',
-                fontStyle: 'bold',
-                color: '#ffdf70',
-                backgroundColor: '#000000cc',
-                padding: {
-                    x: 18,
-                    y: 10,
-                },
-            })
-            .setOrigin(0.5)
-            .setDepth(50)
-            .setVisible(false);
+            .setDepth(300);
 
         this.timerText = this.add
-            .text(this.gameWidth / 2, 70, '', {
-                fontFamily: 'Arial',
-                fontSize: '28px',
-                fontStyle: 'bold',
-                color: '#ffffff',
-                backgroundColor: '#000000bb',
-                padding: {
-                    x: 16,
-                    y: 8,
+            .text(
+                this.gameWidth / 2,
+                62,
+                '',
+                {
+                    fontFamily: 'monospace',
+                    fontSize: '22px',
+                    fontStyle: 'bold',
+                    color: '#5b4636',
+                    backgroundColor: '#fff4d6',
+                    padding: {
+                        x: 14,
+                        y: 7,
+                    },
                 },
-            })
+            )
             .setOrigin(0.5, 0)
-            .setDepth(40);
+            .setDepth(300);
+
+        this.guideText = this.add
+            .text(
+                this.gameWidth / 2,
+                this.gameHeight - 34,
+                '',
+                {
+                    fontFamily: 'monospace',
+                    fontSize: '15px',
+                    color: '#5b4636',
+                    backgroundColor: '#fff4d6',
+                    padding: {
+                        x: 12,
+                        y: 7,
+                    },
+                },
+            )
+            .setOrigin(0.5)
+            .setDepth(300);
+
+        this.statusText = this.add
+            .text(
+                this.gameWidth / 2,
+                105,
+                '',
+                {
+                    fontFamily: 'monospace',
+                    fontSize: '16px',
+                    fontStyle: 'bold',
+                    color: '#5b4636',
+                    backgroundColor: '#fff4d6',
+                    padding: {
+                        x: 10,
+                        y: 6,
+                    },
+                },
+            )
+            .setOrigin(0.5)
+            .setDepth(300)
+            .setVisible(false);
+
+        this.ammoText = this.add
+            .text(
+                this.gameWidth - 20,
+                20,
+                '',
+                {
+                    fontFamily: 'monospace',
+                    fontSize: '16px',
+                    fontStyle: 'bold',
+                    color: '#5b4636',
+                    backgroundColor: '#fff4d6',
+                    padding: {
+                        x: 10,
+                        y: 7,
+                    },
+                    align: 'right',
+                },
+            )
+            .setOrigin(1, 0)
+            .setDepth(300);
+
+        this.targetText = this.add
+            .text(
+                this.gameWidth - 20,
+                82,
+                '',
+                {
+                    fontFamily: 'monospace',
+                    fontSize: '16px',
+                    fontStyle: 'bold',
+                    color: '#5b4636',
+                    backgroundColor: '#fff4d6',
+                    padding: {
+                        x: 10,
+                        y: 7,
+                    },
+                },
+            )
+            .setOrigin(1, 0)
+            .setDepth(300);
+
+        this.paintColorText = this.add
+            .text(
+                20,
+                20,
+                '',
+                {
+                    fontFamily: 'monospace',
+                    fontSize: '16px',
+                    fontStyle: 'bold',
+                    color: '#5b4636',
+                    backgroundColor: '#fff4d6',
+                    padding: {
+                        x: 10,
+                        y: 7,
+                    },
+                },
+            )
+            .setDepth(300);
+
+        this.brushSizeText = this.add
+            .text(
+                20,
+                61,
+                '',
+                {
+                    fontFamily: 'monospace',
+                    fontSize: '16px',
+                    fontStyle: 'bold',
+                    color: '#5b4636',
+                    backgroundColor: '#fff4d6',
+                    padding: {
+                        x: 10,
+                        y: 7,
+                    },
+                },
+            )
+            .setDepth(300);
+
         this.updateAmmoText();
         this.updateTargetText();
-        this.updateSelectedPartText();
+        this.updatePaintHud();
     }
+
+    private updateAmmoText(): void {
+        if (this.isReloading) {
+            this.ammoText.setText(
+                `RELOADING...\n${this.ammo} / ${this.maxAmmo}`,
+            );
+
+            this.ammoText.setColor('#ffdf70');
+            return;
+        }
+
+        const loaded = '●'.repeat(this.ammo);
+
+        const empty = '○'.repeat(
+            this.maxAmmo - this.ammo,
+        );
+
+        this.ammoText.setText(
+            `AMMO ${this.ammo} / ${this.maxAmmo}\n${loaded}${empty}`,
+        );
+
+        this.ammoText.setColor('#ffffff');
+    }
+
+    private updateTargetText(): void {
+        this.targetText.setText(
+            `HIDERS ${this.getAliveHiderCount()} / ${this.hiders.length}`,
+        );
+    }
+
+    private updatePaintHud(): void {
+        if (
+            !this.paintColorText ||
+            !this.brushSizeText
+        ) {
+            return;
+        }
+
+        const hexColor = this.paintColor
+            .toString(16)
+            .padStart(6, '0')
+            .toUpperCase();
+
+        this.paintColorText.setText(
+            `COLOR #${hexColor}`,
+        );
+
+        this.paintColorText.setBackgroundColor(
+            `#${hexColor}`,
+        );
+
+        const color =
+            Phaser.Display.Color.IntegerToColor(
+                this.paintColor,
+            );
+
+        const brightness =
+            color.red * 0.299 +
+            color.green * 0.587 +
+            color.blue * 0.114;
+
+        this.paintColorText.setColor(
+            brightness > 150
+                ? '#000000'
+                : '#ffffff',
+        );
+
+        const shapeText =
+            this.brushShape === 'circle'
+                ? 'CIRCLE'
+                : 'SQUARE';
+
+        this.brushSizeText.setText(
+            `BRUSH ${shapeText} ${this.brushSize} · B 전환 · [ / ]`,
+        );
+    }
+
+    private showStatus(message: string): void {
+        this.statusText
+            .setText(message)
+            .setVisible(true)
+            .setAlpha(1);
+
+        this.time.delayedCall(1400, () => {
+            if (
+                this.statusText.text === message
+            ) {
+                this.statusText.setVisible(false);
+            }
+        });
+    }
+
+    /*
+     * Timer and phase
+     */
 
     private updateRoundTimer(): void {
         if (
@@ -899,18 +2172,20 @@ export class GameScene extends Phaser.Scene {
 
         const remainingSeconds = Math.max(
             0,
-            Math.ceil(remainingMilliseconds / 1000),
+            Math.ceil(
+                remainingMilliseconds / 1000,
+            ),
         );
 
         this.timerText.setText(
             `TIME ${remainingSeconds}`,
         );
 
-        if (remainingSeconds <= 5) {
-            this.timerText.setColor('#ff5c5c');
-        } else {
-            this.timerText.setColor('#ffffff');
-        }
+        this.timerText.setColor(
+            remainingSeconds <= 5
+                ? '#ff5c5c'
+                : '#ffffff',
+        );
 
         if (remainingMilliseconds > 0) {
             return;
@@ -926,213 +2201,58 @@ export class GameScene extends Phaser.Scene {
         }
     }
 
-    private registerInputEvents(): void {
-        this.input.on(
-            'pointerdown',
-            (pointer: Phaser.Input.Pointer) => {
-                if (this.phase !== 'hunt') {
-                    return;
-                }
-
-                if (!pointer.leftButtonDown()) {
-                    return;
-                }
-
-                this.fireShotgun(pointer.worldX, pointer.worldY);
-            },
-        );
-    }
-
     private enterPaintPhase(): void {
         this.phase = 'paint';
+
         this.phaseEndTime =
-            this.time.now + this.paintDuration * 1000;
+            this.time.now +
+            this.paintDuration * 1000;
+
         this.selectedHiderIndex = 0;
-        this.selectedPart = 'body';
+        this.isPainting = false;
+        this.paintColor =
+            this.defaultPaintColor;
+
+        this.createBrushTexture();
+
+        this.phaseText.setText(
+            '🎨 CAMOUFLAGE PHASE',
+        );
+
+        this.guideText.setText(
+            '좌클릭 페인팅 · 우클릭 스포이드 · B 모양 · [ ] 크기 · WASD 이동 · Tab 변경 · Enter 시작',
+        );
 
         this.player.setVisible(false);
+        this.hunterVisuals.forEach(({ object }) => object.setVisible(false));
         this.gun.setVisible(false);
         this.hunterLabel.setVisible(false);
-        this.aimLine.setVisible(false);
 
-        this.crosshair.setVisible(false);
-        this.crosshairCenter.setVisible(false);
+        this.aimLine.clear();
+        this.crosshair.clear();
+
+        this.selectionRing.setVisible(true);
+        this.paintPreview.setVisible(false);
+
+        this.paintColorText.setVisible(true);
+        this.brushSizeText.setVisible(true);
 
         this.ammoText.setVisible(false);
-        this.targetText.setVisible(true);
-        this.selectionRing.setVisible(true);
-        this.selectedPartText.setVisible(true);
+        this.targetText.setVisible(false);
 
-        this.hiders.forEach((hider, index) => {
-            this.getAllPartObjects(hider).forEach((object) => {
-                object.setInteractive({ useHandCursor: true });
-            });
-
-            hider.label
-                .setVisible(true)
-                .setColor('#ffffff')
-                .setText(`HIDER ${index + 1}`);
-        });
-
-        this.colorZones.forEach((zone) => {
-            zone.object.setInteractive({ useHandCursor: true });
+        this.hiders.forEach((hider) => {
+            this.setHiderVisible(hider, true);
+            hider.label.setVisible(true);
         });
 
         this.selectHider(0);
-        this.updateSelectedPartText();
-
-        this.phaseText.setText('🎨 CAMOUFLAGE PHASE');
-
-        this.guideText.setText(
-            'WASD 이동 · Tab 변경 · 1~4 부위 선택 · Enter 즉시 시작',
-        );
-
-        this.input.setDefaultCursor('default');
-
-        this.updateTargetText();
-        this.showStatus(
-            `${this.paintDuration}초 안에 위장하고 숨으세요`,
-        );
-    }
-
-    private updatePartSelection(): void {
-        if (Phaser.Input.Keyboard.JustDown(this.partKeys.ONE)) {
-            this.selectPart('head');
-        }
-
-        if (Phaser.Input.Keyboard.JustDown(this.partKeys.TWO)) {
-            this.selectPart('body');
-        }
-
-        if (Phaser.Input.Keyboard.JustDown(this.partKeys.THREE)) {
-            this.selectPart('arms');
-        }
-
-        if (Phaser.Input.Keyboard.JustDown(this.partKeys.FOUR)) {
-            this.selectPart('legs');
-        }
-    }
-
-    private selectPart(part: PartName): void {
-        this.selectedPart = part;
-        this.updateSelectedPartText();
+        this.updatePaintHud();
 
         this.showStatus(
-            `${this.getPartDisplayName(part)} 선택`,
-        );
-    }
-
-    private selectHider(index: number): void {
-        const hider = this.hiders[index];
-
-        if (!hider || !hider.alive) {
-            return;
-        }
-
-        this.selectedHiderIndex = index;
-
-        this.selectionRing.setPosition(
-            hider.centerX,
-            hider.centerY + 5,
+            `${this.paintDuration}초 안에 위장하세요`,
         );
 
-        this.hiders.forEach((currentHider, currentIndex) => {
-            if (currentIndex === index) {
-                currentHider.label.setColor('#ffff66');
-                currentHider.label.setText(
-                    `HIDER ${currentIndex + 1} · SELECTED`,
-                );
-            } else {
-                currentHider.label.setColor('#ffffff');
-                currentHider.label.setText(
-                    `HIDER ${currentIndex + 1}`,
-                );
-            }
-        });
-
-        this.updateSelectedPartText();
-        this.showStatus(`HIDER ${index + 1} 선택`);
-    }
-
-    private paintSelectedPart(color: number): void {
-        const hider = this.hiders[this.selectedHiderIndex];
-
-        if (!hider || !hider.alive) {
-            return;
-        }
-
-        const parts = this.getSelectedParts(hider);
-
-        parts.forEach((part) => {
-            part.color = color;
-            part.object.setFillStyle(color);
-            part.object.setStrokeStyle(2, 0xffffff, 0.25);
-
-            this.tweens.add({
-                targets: part.object,
-                scale: 1.2,
-                duration: 100,
-                yoyo: true,
-                ease: 'Quad.easeOut',
-            });
-        });
-
-        const colorText = `#${color
-            .toString(16)
-            .padStart(6, '0')
-            .toUpperCase()}`;
-
-        this.showStatus(
-            `HIDER ${this.selectedHiderIndex + 1} ${this.getPartDisplayName(
-                this.selectedPart,
-            )}: ${colorText}`,
-        );
-    }
-
-    private getSelectedParts(hider: Hider): HiderPart[] {
-        switch (this.selectedPart) {
-            case 'head':
-                return [hider.parts.head];
-
-            case 'body':
-                return [hider.parts.body];
-
-            case 'arms':
-                return [
-                    hider.parts.leftArm,
-                    hider.parts.rightArm,
-                ];
-
-            case 'legs':
-                return [
-                    hider.parts.leftLeg,
-                    hider.parts.rightLeg,
-                ];
-        }
-    }
-
-    private getPartDisplayName(part: PartName): string {
-        switch (part) {
-            case 'head':
-                return '머리';
-
-            case 'body':
-                return '몸통';
-
-            case 'arms':
-                return '팔';
-
-            case 'legs':
-                return '다리';
-        }
-    }
-
-    private updateSelectedPartText(): void {
-        this.selectedPartText.setText(
-            `선택: HIDER ${this.selectedHiderIndex + 1} / ${this.getPartDisplayName(
-                this.selectedPart,
-            )}`,
-        );
+        this.input.setDefaultCursor('crosshair');
     }
 
     private startHunt(): void {
@@ -1143,648 +2263,87 @@ export class GameScene extends Phaser.Scene {
         this.phase = 'hunt';
 
         this.phaseEndTime =
-            this.time.now + this.huntDuration * 1000;
+            this.time.now +
+            this.huntDuration * 1000;
 
+        this.ammo = this.maxAmmo;
         this.canShoot = true;
         this.isReloading = false;
+        this.isPainting = false;
+
+        this.phaseText.setText(
+            '🔫 HUNT PHASE',
+        );
+
+        this.guideText.setText(
+            'WASD 이동 · 마우스 조준 · 좌클릭 발사 · R 재장전 · N 초기화',
+        );
 
         this.player.setPosition(
-            this.gameWidth / 2,
+            100,
             this.gameHeight / 2,
         );
 
-        this.gun.setPosition(
-            this.player.x,
-            this.player.y,
-        );
-
-        this.hunterLabel.setPosition(
-            this.player.x,
-            this.player.y - 48,
-        );
+        this.updateHunterObjects();
 
         this.player.setVisible(true);
+        this.hunterVisuals.forEach(({ object }) => object.setVisible(true));
         this.gun.setVisible(true);
         this.hunterLabel.setVisible(true);
-        this.aimLine.setVisible(true);
 
-        this.crosshair.setVisible(true);
-        this.crosshairCenter.setVisible(true);
+        this.selectionRing.setVisible(false);
+        this.paintPreview.setVisible(false);
+
+        this.paintColorText.setVisible(false);
+        this.brushSizeText.setVisible(false);
 
         this.ammoText.setVisible(true);
         this.targetText.setVisible(true);
-        this.selectionRing.setVisible(false);
-        this.selectedPartText.setVisible(false);
 
         this.hiders.forEach((hider) => {
-            this.getAllPartObjects(hider).forEach((object) => {
-                object.disableInteractive();
-                object.setScale(1);
-            });
-
             hider.label.setVisible(false);
         });
 
-        this.colorZones.forEach((zone) => {
-            zone.object.disableInteractive();
-            zone.object.setStrokeStyle(3, 0xffffff, 0.12);
-        });
-
-        this.phaseText.setText('🔫 HUNT PHASE');
-
-        this.guideText.setText(
-            'WASD 이동 · Tab 하이더 변경 · 1 머리 · 2 몸통 · 3 팔 · 4 다리 · Enter 사냥',
-        );
-
-        this.input.setDefaultCursor('none');
+        this.updateAmmoText();
+        this.updateTargetText();
 
         this.showStatus(
             `${this.huntDuration}초 안에 하이더를 찾으세요`,
         );
+
+        this.input.setDefaultCursor('none');
     }
 
-    private updatePlayerMovement(delta: number): void {
-        let directionX = 0;
-        let directionY = 0;
-
-        if (this.cursors.left.isDown || this.wasd.A.isDown) {
-            directionX -= 1;
-        }
-
-        if (this.cursors.right.isDown || this.wasd.D.isDown) {
-            directionX += 1;
-        }
-
-        if (this.cursors.up.isDown || this.wasd.W.isDown) {
-            directionY -= 1;
-        }
-
-        if (this.cursors.down.isDown || this.wasd.S.isDown) {
-            directionY += 1;
-        }
-
-        const direction = new Phaser.Math.Vector2(
-            directionX,
-            directionY,
-        );
-
-        if (direction.lengthSq() > 0) {
-            direction.normalize();
-
-            const distance = this.playerSpeed * (delta / 1000);
-
-            const previousX = this.player.x;
-            const previousY = this.player.y;
-
-            this.player.x += direction.x * distance;
-            this.player.y += direction.y * distance;
-
-            this.player.x = Phaser.Math.Clamp(
-                this.player.x,
-                this.player.width / 2,
-                this.gameWidth - this.player.width / 2,
-            );
-
-            this.player.y = Phaser.Math.Clamp(
-                this.player.y,
-                this.player.height / 2,
-                this.gameHeight - this.player.height / 2,
-            );
-
-            if (this.isHunterTouchingObstacle()) {
-                this.player.setPosition(previousX, previousY);
-            }
-        }
-
-        this.gun.setPosition(this.player.x, this.player.y);
-
-        this.hunterLabel.setPosition(
-            this.player.x,
-            this.player.y - 48,
-        );
-    }
-
-    private isHunterTouchingObstacle(): boolean {
-        const hunterBounds = this.player.getBounds();
-
-        return this.obstacles.some((obstacle) =>
-            Phaser.Geom.Intersects.RectangleToRectangle(
-                hunterBounds,
-                obstacle.bounds,
-            ),
-        );
-    }
-
-    private updateAim(): void {
-        const pointer = this.input.activePointer;
-
-        const mouseX = pointer.worldX;
-        const mouseY = pointer.worldY;
-
-        const aimAngle = Phaser.Math.Angle.Between(
-            this.player.x,
-            this.player.y,
-            mouseX,
-            mouseY,
-        );
-
-        this.gun.setRotation(aimAngle);
-        this.crosshair.setPosition(mouseX, mouseY);
-        this.crosshairCenter.setPosition(mouseX, mouseY);
-
-        this.drawAimLine(mouseX, mouseY, aimAngle);
-    }
-
-    private drawAimLine(
-        mouseX: number,
-        mouseY: number,
-        aimAngle: number,
-    ): void {
-        this.aimLine.clear();
-        this.aimLine.lineStyle(1, 0xffffff, 0.2);
-
-        const distance = Phaser.Math.Distance.Between(
-            this.player.x,
-            this.player.y,
-            mouseX,
-            mouseY,
-        );
-
-        const visibleDistance = Math.min(
-            distance,
-            this.pelletRange,
-        );
-
-        const dashLength = 8;
-        const gapLength = 8;
-
-        for (
-            let current = 55;
-            current < visibleDistance;
-            current += dashLength + gapLength
-        ) {
-            const startX =
-                this.player.x + Math.cos(aimAngle) * current;
-
-            const startY =
-                this.player.y + Math.sin(aimAngle) * current;
-
-            const endDistance = Math.min(
-                current + dashLength,
-                visibleDistance,
-            );
-
-            const endX =
-                this.player.x + Math.cos(aimAngle) * endDistance;
-
-            const endY =
-                this.player.y + Math.sin(aimAngle) * endDistance;
-
-            this.aimLine.lineBetween(
-                startX,
-                startY,
-                endX,
-                endY,
-            );
-        }
-    }
-
-    private fireShotgun(
-        targetX: number,
-        targetY: number,
-    ): void {
+    private showHunterVictory(): void {
         if (this.phase !== 'hunt') {
             return;
         }
 
-        if (this.isReloading) {
-            this.showStatus('재장전 중입니다');
-            return;
-        }
-
-        if (!this.canShoot) {
-            return;
-        }
-
-        if (this.ammo <= 0) {
-            this.showStatus('탄약이 없습니다! R 키로 재장전');
-            this.cameras.main.shake(80, 0.002);
-            return;
-        }
-
-        this.canShoot = false;
-        this.ammo -= 1;
-
-        this.updateAmmoText();
-
-        const aimAngle = Phaser.Math.Angle.Between(
-            this.player.x,
-            this.player.y,
-            targetX,
-            targetY,
-        );
-
-        const muzzleDistance = 48;
-
-        const muzzleX =
-            this.player.x + Math.cos(aimAngle) * muzzleDistance;
-
-        const muzzleY =
-            this.player.y + Math.sin(aimAngle) * muzzleDistance;
-
-        this.createMuzzleFlash(muzzleX, muzzleY);
-
-        const hitHiders = this.createPellets(
-            muzzleX,
-            muzzleY,
-            aimAngle,
-        );
-
-        if (hitHiders.size > 0) {
-            this.showHitMarker();
-        }
-
-        hitHiders.forEach((hider) => {
-            this.hitHider(hider);
-        });
-
-        this.cameras.main.shake(110, 0.006);
-
-        this.time.delayedCall(this.shotCooldown, () => {
-            this.canShoot = true;
-        });
-
-        if (this.getAliveHiderCount() === 0) {
-            this.showVictory();
-        } else if (this.ammo === 0) {
-            this.showStatus('탄약 소진! R 키로 재장전');
-        }
-    }
-
-    private createPellets(
-        startX: number,
-        startY: number,
-        centerAngle: number,
-    ): Set<Hider> {
-        const pelletGraphics = this.add.graphics();
-        pelletGraphics.setDepth(15);
-
-        const hitHiders = new Set<Hider>();
-        const halfSpread = this.shotgunSpread / 2;
-
-        for (
-            let index = 0;
-            index < this.pelletCount;
-            index += 1
-        ) {
-            const ratio = index / (this.pelletCount - 1);
-
-            const spreadOffset = Phaser.Math.Linear(
-                -halfSpread,
-                halfSpread,
-                ratio,
-            );
-
-            const randomOffset = Phaser.Math.FloatBetween(
-                -0.025,
-                0.025,
-            );
-
-            const pelletAngle =
-                centerAngle + spreadOffset + randomOffset;
-
-            const range = Phaser.Math.Between(
-                Math.floor(this.pelletRange * 0.82),
-                this.pelletRange,
-            );
-
-            const originalEndX =
-                startX + Math.cos(pelletAngle) * range;
-
-            const originalEndY =
-                startY + Math.sin(pelletAngle) * range;
-
-            const blockedPoint = this.getBlockedPelletEnd(
-                startX,
-                startY,
-                originalEndX,
-                originalEndY,
-            );
-
-            const endX = blockedPoint.x;
-            const endY = blockedPoint.y;
-
-            pelletGraphics.lineStyle(2, 0xffe08a, 0.9);
-            pelletGraphics.lineBetween(
-                startX,
-                startY,
-                endX,
-                endY,
-            );
-
-            pelletGraphics.fillStyle(0xffb347, 0.8);
-            pelletGraphics.fillCircle(endX, endY, 3);
-
-            const pelletLine = new Phaser.Geom.Line(
-                startX,
-                startY,
-                endX,
-                endY,
-            );
-
-            this.hiders.forEach((hider) => {
-                if (!hider.alive) {
-                    return;
-                }
-
-                if (this.isHiderHitByLine(hider, pelletLine)) {
-                    hitHiders.add(hider);
-                }
-            });
-        }
-
-        this.tweens.add({
-            targets: pelletGraphics,
-            alpha: 0,
-            duration: 130,
-            ease: 'Quad.easeOut',
-            onComplete: () => {
-                pelletGraphics.destroy();
-            },
-        });
-
-        return hitHiders;
-    }
-
-    private getBlockedPelletEnd(
-        startX: number,
-        startY: number,
-        endX: number,
-        endY: number,
-    ): Phaser.Math.Vector2 {
-        const distance = Phaser.Math.Distance.Between(
-            startX,
-            startY,
-            endX,
-            endY,
-        );
-
-        const stepSize = 4;
-        const stepCount = Math.ceil(distance / stepSize);
-
-        for (let step = 1; step <= stepCount; step += 1) {
-            const ratio = step / stepCount;
-
-            const currentX = Phaser.Math.Linear(
-                startX,
-                endX,
-                ratio,
-            );
-
-            const currentY = Phaser.Math.Linear(
-                startY,
-                endY,
-                ratio,
-            );
-
-            const isBlocked = this.obstacles.some((obstacle) =>
-                Phaser.Geom.Rectangle.Contains(
-                    obstacle.bounds,
-                    currentX,
-                    currentY,
-                ),
-            );
-
-            if (isBlocked) {
-                return new Phaser.Math.Vector2(
-                    currentX,
-                    currentY,
-                );
-            }
-        }
-
-        return new Phaser.Math.Vector2(endX, endY);
-    }
-
-    private isHiderHitByLine(
-        hider: Hider,
-        line: Phaser.Geom.Line,
-    ): boolean {
-        return this.getAllPartObjects(hider).some((object) => {
-            const bounds = object.getBounds();
-
-            return Phaser.Geom.Intersects.LineToRectangle(
-                line,
-                bounds,
-            );
-        });
-    }
-
-    private hitHider(hider: Hider): void {
-        if (!hider.alive) {
-            return;
-        }
-
-        hider.alive = false;
-
-        const objects = this.getAllPartObjects(hider);
-
-        objects.forEach((object) => {
-            object.setFillStyle(0xff3b3b);
-            object.setStrokeStyle(2, 0xffffff);
-        });
-
-        this.tweens.add({
-            targets: objects,
-            alpha: 0,
-            scale: 1.5,
-            duration: 350,
-            ease: 'Back.easeIn',
-            onComplete: () => {
-                objects.forEach((object) => {
-                    object.setVisible(false);
-                });
-            },
-        });
-
-        this.updateTargetText();
-    }
-
-    private createMuzzleFlash(x: number, y: number): void {
-        const flash = this.add.circle(
-            x,
-            y,
-            15,
-            0xfff1a8,
-            1,
-        );
-
-        const outerFlash = this.add.circle(
-            x,
-            y,
-            25,
-            0xff8c42,
-            0.45,
-        );
-
-        flash.setDepth(16);
-        outerFlash.setDepth(15);
-
-        this.tweens.add({
-            targets: [flash, outerFlash],
-            scale: 1.7,
-            alpha: 0,
-            duration: 100,
-            ease: 'Quad.easeOut',
-            onComplete: () => {
-                flash.destroy();
-                outerFlash.destroy();
-            },
-        });
-    }
-
-    private reload(): void {
-        if (this.phase !== 'hunt') {
-            return;
-        }
-
-        if (this.isReloading) {
-            this.showStatus('이미 재장전 중입니다');
-            return;
-        }
-
-        if (this.ammo === this.maxAmmo) {
-            this.showStatus('이미 탄약이 가득합니다');
-            return;
-        }
-
-        this.isReloading = true;
-        this.canShoot = false;
-
-        this.showStatus('재장전 중...');
-        this.updateAmmoText();
-
-        this.time.delayedCall(this.reloadDuration, () => {
-            if (this.phase !== 'hunt') {
-                this.isReloading = false;
-                return;
-            }
-
-            this.ammo = this.maxAmmo;
-            this.isReloading = false;
-            this.canShoot = true;
-
-            this.updateAmmoText();
-            this.showStatus('재장전 완료!');
-        });
-    }
-
-    private resetGame(): void {
-        this.ammo = this.maxAmmo;
-        this.canShoot = true;
-        this.isReloading = false;
-
-        this.hiders.forEach((hider, index) => {
-            hider.alive = true;
-
-            const parts = [
-                hider.parts.head,
-                hider.parts.body,
-                hider.parts.leftArm,
-                hider.parts.rightArm,
-                hider.parts.leftLeg,
-                hider.parts.rightLeg,
-            ];
-
-            parts.forEach((part) => {
-                part.color = 0xffffff;
-
-                part.object
-                    .setVisible(true)
-                    .setAlpha(1)
-                    .setScale(1)
-                    .setFillStyle(0xffffff)
-                    .setStrokeStyle(2, 0xe2e8f0, 0.9);
-            });
-
-            hider.label
-                .setVisible(true)
-                .setAlpha(1)
-                .setColor('#ffffff')
-                .setText(`HIDER ${index + 1}`);
-        });
-
-        this.updateAmmoText();
-        this.updateTargetText();
-        this.enterPaintPhase();
-    }
-
-    private getAllPartObjects(
-        hider: Hider,
-    ): HiderPartObject[] {
-        return [
-            hider.parts.head.object,
-            hider.parts.body.object,
-            hider.parts.leftArm.object,
-            hider.parts.rightArm.object,
-            hider.parts.leftLeg.object,
-            hider.parts.rightLeg.object,
-        ];
-    }
-
-    private getAliveHiderCount(): number {
-        return this.hiders.filter((hider) => hider.alive).length;
-    }
-
-    private updateAmmoText(): void {
-        if (this.isReloading) {
-            this.ammoText.setText(
-                `RELOADING...\n${this.ammo} / ${this.maxAmmo}`,
-            );
-
-            this.ammoText.setColor('#ffdf70');
-            return;
-        }
-
-        const shells = '●'.repeat(this.ammo);
-
-        const emptyShells = '○'.repeat(
-            this.maxAmmo - this.ammo,
-        );
-
-        this.ammoText.setText(
-            `AMMO ${this.ammo} / ${this.maxAmmo}\n${shells}${emptyShells}`,
-        );
-
-        this.ammoText.setColor('#ffffff');
-    }
-
-    private updateTargetText(): void {
-        this.targetText.setText(
-            `TARGETS ${this.getAliveHiderCount()} / ${this.hiders.length}`,
-        );
-    }
-
-    private showVictory(): void {
         this.phase = 'hunterVictory';
 
-        this.phaseText.setText('🏆 HUNTER VICTORY');
-        this.timerText.setText('HUNTER WIN');
-        this.timerText.setColor('#ffdf70');
-
-        this.guideText.setText(
-            '모든 하이더 발견 · N 키로 새 게임',
+        this.phaseText.setText(
+            '🏆 HUNTER VICTORY',
         );
 
-        this.crosshair.setVisible(false);
-        this.crosshairCenter.setVisible(false);
-        this.aimLine.clear();
+        this.timerText
+            .setText('HUNTER WIN')
+            .setColor('#ffdf70');
+
+        this.guideText.setText(
+            '모든 하이더를 발견했습니다 · N 키로 다시 시작',
+        );
 
         this.player.setVisible(false);
+        this.hunterVisuals.forEach(({ object }) => object.setVisible(false));
         this.gun.setVisible(false);
         this.hunterLabel.setVisible(false);
 
-        this.showStatus('모든 하이더를 찾았습니다!');
+        this.aimLine.clear();
+        this.crosshair.clear();
+
+        this.showStatus(
+            '모든 하이더를 찾았습니다!',
+        );
 
         this.cameras.main.flash(
             350,
@@ -1803,21 +2362,25 @@ export class GameScene extends Phaser.Scene {
 
         this.phase = 'hiderVictory';
 
-        this.phaseText.setText('🌿 HIDER VICTORY');
-        this.timerText.setText('HIDERS WIN');
-        this.timerText.setColor('#8cff9b');
-
-        this.guideText.setText(
-            '시간 종료 · N 키로 새 게임',
+        this.phaseText.setText(
+            '🌿 HIDER VICTORY',
         );
 
-        this.crosshair.setVisible(false);
-        this.crosshairCenter.setVisible(false);
-        this.aimLine.clear();
+        this.timerText
+            .setText('HIDERS WIN')
+            .setColor('#8cff9b');
+
+        this.guideText.setText(
+            '시간 종료 · N 키로 다시 시작',
+        );
 
         this.player.setVisible(false);
+        this.hunterVisuals.forEach(({ object }) => object.setVisible(false));
         this.gun.setVisible(false);
         this.hunterLabel.setVisible(false);
+
+        this.aimLine.clear();
+        this.crosshair.clear();
 
         this.hiders.forEach((hider) => {
             if (!hider.alive) {
@@ -1825,25 +2388,26 @@ export class GameScene extends Phaser.Scene {
             }
 
             hider.label
-                .setVisible(true)
                 .setText('SURVIVED')
-                .setColor('#8cff9b');
+                .setColor('#8cff9b')
+                .setVisible(true);
 
-            this.getAllPartObjects(hider).forEach((object) => {
-                object.setVisible(true);
+            const targets: Phaser.GameObjects.GameObject[] = [
+                ...this.getAllPartObjects(hider),
+                    hider.paintTexture,
+            ];
 
-                this.tweens.add({
-                    targets: object,
-                    scale: 1.25,
-                    duration: 250,
-                    yoyo: true,
-                    repeat: 2,
-                });
+            this.tweens.add({
+                targets,
+                scale: 1.18,
+                duration: 220,
+                yoyo: true,
+                repeat: 2,
             });
         });
 
         this.showStatus(
-            `${this.getAliveHiderCount()}명의 하이더가 살아남았습니다!`,
+            `${this.getAliveHiderCount()}명의 하이더가 살아남았습니다`,
         );
 
         this.cameras.main.flash(
@@ -1856,21 +2420,107 @@ export class GameScene extends Phaser.Scene {
         this.input.setDefaultCursor('default');
     }
 
-    private showStatus(message: string): void {
-        this.statusText.setText(message);
-        this.statusText.setVisible(true);
-        this.statusText.setAlpha(1);
+    /*
+     * Reset
+     */
 
-        this.tweens.killTweensOf(this.statusText);
+    private resetGame(): void {
+        this.tweens.killAll();
 
-        this.tweens.add({
-            targets: this.statusText,
-            alpha: 0,
-            delay: 1300,
-            duration: 400,
-            onComplete: () => {
-                this.statusText.setVisible(false);
-            },
-        });
+        this.destroyHiders();
+        this.createHiders();
+
+        this.ammo = this.maxAmmo;
+        this.canShoot = true;
+        this.isReloading = false;
+        this.isPainting = false;
+
+        this.paintColor =
+            this.defaultPaintColor;
+        this.brushSize = 10;
+        this.brushShape = 'circle';
+
+        this.hitMarker.setVisible(false);
+        this.statusText.setVisible(false);
+
+        this.updateAmmoText();
+        this.updateTargetText();
+        this.updatePaintHud();
+
+        this.enterPaintPhase();
     }
+
+    private destroyHiders(): void {
+        this.hiders.forEach((hider) => {
+            this.getAllPartObjects(hider).forEach(
+                (object) => {
+                    object.destroy();
+                },
+            );
+
+            hider.label.destroy();
+            hider.paintTexture.destroy();
+            hider.paintMask.destroy();
+            hider.paintMaskShape.destroy();
+        });
+
+        this.hiders = [];
+    }
+
+    private setHiderVisible(
+        hider: Hider,
+        visible: boolean,
+    ): void {
+        this.getAllPartObjects(hider).forEach(
+            (object) => {
+                object
+                    .setVisible(visible)
+                    .setAlpha(1)
+                    .setScale(1);
+            },
+        );
+
+        hider.paintTexture
+            .setVisible(visible)
+            .setAlpha(1)
+            .setScale(1);
+    }
+
+    private getAliveHiderCount(): number {
+        return this.hiders.filter(
+            (hider) => hider.alive,
+        ).length;
+    }
+
+    private createBrushTexture(): void {
+        if (this.textures.exists(this.brushTextureKey)) {
+            this.textures.remove(this.brushTextureKey);
+        }
+
+        const size = this.brushSize * 2;
+        const graphics = this.add.graphics();
+
+        graphics.fillStyle(this.paintColor, 1);
+
+        if (this.brushShape === 'circle') {
+            graphics.fillCircle(
+                this.brushSize,
+                this.brushSize,
+                this.brushSize,
+            );
+        } else {
+            graphics.fillRect(0, 0, size, size);
+        }
+
+        graphics.generateTexture(
+            this.brushTextureKey,
+            size,
+            size,
+        );
+
+        graphics.destroy();
+    }
+
 }
+
+export default GameScene;
