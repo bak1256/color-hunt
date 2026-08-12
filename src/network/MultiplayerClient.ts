@@ -43,6 +43,9 @@ export type NetworkShotFired = {
     endY: number;
   }>;
   hitIds: string[];
+  precisionReward: number;
+  reserve: number;
+  precisionPoints: number;
 };
 
 export type ShotFiredHandler = (
@@ -63,6 +66,10 @@ export type NetworkWeaponState = {
   heat: number;
   updatedAt: number;
   overheatedUntil: number;
+  reserve: number;
+  maxReserve: number;
+  precisionPoints: number;
+  shotsFired: number;
 };
 
 export type WeaponStateHandler = (
@@ -95,6 +102,15 @@ export type NetworkPlayerState = {
   alive: boolean;
 };
 
+export type NetworkLobbySnapshot = {
+  hostId: string;
+  players: Array<
+    NetworkPlayerState & {
+      sessionId: string;
+    }
+  >;
+};
+
 export type NetworkGameState = {
   gameName: string;
   roomTitle: string;
@@ -102,6 +118,7 @@ export type NetworkGameState = {
   phase: NetworkGamePhase;
   phaseEndsAt: number;
   hunterCount: number;
+  winner: "hunters" | "hiders" | "";
   hostId: string;
   hunterId: string;
   players: Map<string, NetworkPlayerState>;
@@ -171,6 +188,24 @@ export class MultiplayerClient {
     typeof Callbacks.get
   >;
 
+  /*
+   * 최초 Schema snapshot이 브라우저/타이밍에 따라 누락되는 경우를 위한
+   * plain-message 기반 Lobby fallback cache.
+   */
+  private readonly snapshotPlayers =
+    new Map<
+      string,
+      NetworkPlayerState
+    >();
+
+  private snapshotHostId = "";
+
+  /*
+   * create()가 성공한 순간의 sessionId를 기억합니다.
+   * 최초 Schema hostId가 아직 비어 있어도 생성자는 로컬에서 방장으로 취급합니다.
+   */
+  private createdRoomHostSessionId = "";
+
   private readonly playerAddedHandlers =
     new Set<PlayerAddedHandler>();
 
@@ -206,6 +241,12 @@ export class MultiplayerClient {
 
   private readonly startGameErrorHandlers =
     new Set<StartGameErrorHandler>();
+
+  private readonly playerDisconnectedHandlers =
+    new Set<PlayerDisconnectedHandler>();
+
+  private readonly roundAbortedHandlers =
+    new Set<RoundAbortedHandler>();
 
   constructor() {
     this.serverUrl =
@@ -245,7 +286,61 @@ export class MultiplayerClient {
         },
       );
 
-    this.attachRoom(room);
+    this.createdRoomHostSessionId =
+      room.sessionId;
+
+
+    /*
+     * 서버 create가 성공한 뒤 attach/UI callback에서 오류가 나더라도
+     * 네트워크 방 생성 성공 자체를 reject하지 않습니다.
+     */
+    try {
+      this.attachRoom(room);
+    } catch (error) {
+      console.error(
+        "[Chameleon Hunt] Room created but initial client attach had an error",
+        error,
+      );
+
+      /*
+       * attachRoom 시작 시 this.room은 이미 지정되므로 연결은 유지합니다.
+       * GameScene의 self-heal/handshake가 UI를 다시 구성할 수 있습니다.
+       */
+      this.room = room;
+
+      if (!this.callbacks) {
+        try {
+          this.callbacks =
+            Callbacks.get(room);
+
+          this.registerRoomCallbacks(
+            room,
+            this.callbacks,
+          );
+        } catch (
+          callbackError
+        ) {
+          console.error(
+            "[Chameleon Hunt] Callback registration recovery failed",
+            callbackError,
+          );
+        }
+      }
+
+      try {
+        this.emitConnectionChanged(
+          true,
+        );
+      } catch (
+        emitError
+      ) {
+        console.error(
+          "[Chameleon Hunt] Connection notification recovery failed",
+          emitError,
+        );
+      }
+    }
+
     return room;
   }
 
@@ -257,8 +352,8 @@ export class MultiplayerClient {
   > {
     await this.disconnect();
 
-    const room =
-      await this.client.joinById<
+    const joinPromise =
+      this.client.joinById<
         NetworkGameState
       >(
         roomId.trim(),
@@ -272,7 +367,107 @@ export class MultiplayerClient {
         },
       );
 
-    this.attachRoom(room);
+    /*
+     * 로비 목록이 갱신되기 직전에 사라진 방을 누르는 경우,
+     * 일부 환경에서 joinById가 즉시 reject되지 않고 오래 pending될 수 있습니다.
+     * UI가 영원히 "방에 참가하는 중..."에 머물지 않도록 hard timeout을 둡니다.
+     */
+    let timedOut = false;
+
+    const timeoutPromise =
+      new Promise<never>(
+        (_, reject) => {
+          globalThis.setTimeout(
+            () => {
+              timedOut = true;
+              reject(
+                new Error(
+                  "ROOM_JOIN_TIMEOUT_OR_MISSING",
+                ),
+              );
+            },
+            5000,
+          );
+        },
+      );
+
+    let room:
+      Room<NetworkGameState>;
+
+    try {
+      room =
+        await Promise.race([
+          joinPromise,
+          timeoutPromise,
+        ]);
+    } catch (error) {
+      /*
+       * timeout 뒤 아주 늦게 join이 성공하더라도 유령 연결을 남기지 않습니다.
+       */
+      if (timedOut) {
+        void joinPromise
+          .then(
+            (lateRoom) =>
+              lateRoom.leave(),
+          )
+          .catch(() => {
+            // 이미 서버에서 거절된 경우 정리할 것이 없습니다.
+          });
+      }
+
+      throw error;
+    }
+
+    this.createdRoomHostSessionId =
+      "";
+
+
+    /*
+     * joinById 서버 성공과 클라이언트 UI callback 성공을 분리합니다.
+     */
+    try {
+      this.attachRoom(room);
+    } catch (error) {
+      console.error(
+        "[Chameleon Hunt] Room joined but initial client attach had an error",
+        error,
+      );
+
+      this.room = room;
+
+      if (!this.callbacks) {
+        try {
+          this.callbacks =
+            Callbacks.get(room);
+
+          this.registerRoomCallbacks(
+            room,
+            this.callbacks,
+          );
+        } catch (
+          callbackError
+        ) {
+          console.error(
+            "[Chameleon Hunt] Join callback registration recovery failed",
+            callbackError,
+          );
+        }
+      }
+
+      try {
+        this.emitConnectionChanged(
+          true,
+        );
+      } catch (
+        emitError
+      ) {
+        console.error(
+          "[Chameleon Hunt] Join connection notification recovery failed",
+          emitError,
+        );
+      }
+    }
+
     return room;
   }
 
@@ -311,9 +506,180 @@ export class MultiplayerClient {
     return rooms;
   }
 
-  private attachRoom(
+  private applyLobbySnapshot(
+    snapshot:
+      NetworkLobbySnapshot,
+  ): void {
+    this.snapshotHostId =
+      String(
+        snapshot.hostId ?? "",
+      );
+
+    const incomingIds =
+      new Set<string>();
+
+    snapshot.players.forEach(
+      (rawPlayer) => {
+        const sessionId =
+          String(
+            rawPlayer.sessionId ??
+            "",
+          );
+
+        if (!sessionId) {
+          return;
+        }
+
+        incomingIds.add(
+          sessionId,
+        );
+
+        const player:
+          NetworkPlayerState = {
+            name:
+              String(
+                rawPlayer.name ??
+                "Player",
+              ),
+            role:
+              rawPlayer.role ===
+                "hunter"
+                ? "hunter"
+                : "hider",
+            hunterVolunteer:
+              Boolean(
+                rawPlayer
+                  .hunterVolunteer,
+              ),
+            x:
+              Number(
+                rawPlayer.x ?? 0,
+              ),
+            y:
+              Number(
+                rawPlayer.y ?? 0,
+              ),
+            alive:
+              Boolean(
+                rawPlayer.alive,
+              ),
+          };
+
+        const existed =
+          this.snapshotPlayers.has(
+            sessionId,
+          );
+
+        this.snapshotPlayers.set(
+          sessionId,
+          player,
+        );
+
+        /*
+         * GameScene/NetworkPlayerManager에는 Schema onAdd와 동일한 이벤트로 전달.
+         * addPlayer()는 중복 sessionId를 update로 처리하므로 안전합니다.
+         */
+        this.playerAddedHandlers
+          .forEach(
+            (handler) => {
+              try {
+                handler(
+                  sessionId,
+                  player,
+                );
+              } catch (error) {
+                console.error(
+                  "[Chameleon Hunt] Lobby snapshot player handler failed",
+                  {
+                    sessionId,
+                    error,
+                  },
+                );
+              }
+            },
+          );
+
+        if (existed) {
+          this.playerChangedHandlers
+            .forEach(
+              (handler) => {
+                try {
+                  handler(
+                    sessionId,
+                    player,
+                  );
+                } catch (error) {
+                  console.error(
+                    "[Chameleon Hunt] Lobby snapshot change handler failed",
+                    {
+                      sessionId,
+                      error,
+                    },
+                  );
+                }
+              },
+            );
+        }
+      },
+    );
+
+    [...this.snapshotPlayers.keys()]
+      .forEach(
+        (sessionId) => {
+          if (
+            !incomingIds.has(
+              sessionId,
+            )
+          ) {
+            this.snapshotPlayers.delete(
+              sessionId,
+            );
+          }
+        },
+      );
+  }
+
+  requestLobbySnapshot(): void {
+    const room = this.room;
+
+    if (!room) {
+      return;
+    }
+
+    room.send(
+      "request_lobby_snapshot",
+      {},
+    );
+  }
+
+  getPlayerCount(): number {
+    const schemaCount =
+      this.room?.state
+        ?.players
+        ?.size ?? 0;
+
+    return Math.max(
+      schemaCount,
+      this.snapshotPlayers.size,
+    );
+  }
+
+  getSnapshotPlayer(
+    sessionId: string,
+  ):
+    | NetworkPlayerState
+    | undefined {
+    return this.snapshotPlayers.get(
+      sessionId,
+    );
+  }
+
+private attachRoom(
     room: Room<NetworkGameState>,
   ): void {
+    this.snapshotPlayers.clear();
+    this.snapshotHostId = "";
+
     this.room = room;
     this.callbacks =
       Callbacks.get(room);
@@ -323,7 +689,124 @@ export class MultiplayerClient {
       this.callbacks,
     );
 
-    this.emitConnectionChanged(true);
+    /*
+     * IMPORTANT: create()/joinById()가 resolve될 때는 최초 Schema snapshot이
+     * 이미 적용된 뒤일 수 있습니다. 그 뒤 callbacks.onAdd()를 등록하면
+     * 첫 player add 이벤트를 놓치는 환경이 생기며, 이것이 "첫 접속만 멈춤,
+     * 새로고침 후 두 번째는 정상" 증상의 핵심 원인이 될 수 있습니다.
+     *
+     * 따라서 callback 등록 직후 현재 snapshot을 명시적으로 replay합니다.
+     * 이후 실시간 onAdd는 기존 callback이 계속 담당합니다.
+     */
+    room.state?.players?.forEach?.(
+      (
+        player: NetworkPlayerState,
+        sessionId: string,
+      ) => {
+        this.playerAddedHandlers
+          .forEach(
+            (handler) => {
+              try {
+                handler(
+                  sessionId,
+                  player,
+                );
+              } catch (error) {
+                console.error(
+                  "[Chameleon Hunt] Initial player replay handler failed",
+                  {
+                    sessionId,
+                    error,
+                  },
+                );
+              }
+            },
+          );
+
+        this.callbacks?.onChange(
+          player,
+          () => {
+            this.playerChangedHandlers
+              .forEach(
+                (handler) => {
+                  try {
+                    handler(
+                      sessionId,
+                      player,
+                    );
+                  } catch (error) {
+                    console.error(
+                      "[Chameleon Hunt] Initial player change handler failed",
+                      {
+                        sessionId,
+                        error,
+                      },
+                    );
+                  }
+                },
+              );
+          },
+        );
+      },
+    );
+
+    /*
+     * 최초 phase 역시 onChange 등록 전에 snapshot으로 도착할 수 있으므로
+     * 현재 값을 한 번 즉시 전달합니다.
+     */
+    this.phaseChangedHandlers
+      .forEach(
+        (handler) => {
+          try {
+            handler(
+              room.state?.phase ??
+                "lobby",
+              room.state
+                ?.phaseEndsAt ?? 0,
+            );
+          } catch (error) {
+            console.error(
+              "[Chameleon Hunt] Initial phase replay handler failed",
+              error,
+            );
+          }
+        },
+      );
+
+    try {
+      this.emitConnectionChanged(
+        true,
+      );
+    } catch (error) {
+      console.error(
+        "[Chameleon Hunt] Connection handler failed after successful room attach",
+        error,
+      );
+    }
+
+    /*
+     * onMessage 등록이 끝난 뒤 서버에 현재 Lobby 전체를 직접 요청합니다.
+     * 최초 Schema 동기화를 놓쳤더라도 이 응답으로 반드시 복구됩니다.
+     */
+    this.requestLobbySnapshot();
+
+    globalThis.setTimeout(
+      () => {
+        if (this.room === room) {
+          this.requestLobbySnapshot();
+        }
+      },
+      120,
+    );
+
+    globalThis.setTimeout(
+      () => {
+        if (this.room === room) {
+          this.requestLobbySnapshot();
+        }
+      },
+      450,
+    );
 
     console.log(
       "[Chameleon Hunt] Connected",
@@ -408,10 +891,22 @@ export class MultiplayerClient {
       },
     );
 
-    callbacks.onChange(
-      room.state,
-      () => {
-        this.phaseChangedHandlers
+    room.onMessage<
+      NetworkLobbySnapshot
+    >(
+      "lobby_snapshot",
+      (snapshot) => {
+        this.applyLobbySnapshot(
+          snapshot,
+        );
+      },
+    );
+
+    if (room.state) {
+      callbacks.onChange(
+        room.state,
+        () => {
+          this.phaseChangedHandlers
           .forEach(
             (handler) => {
               handler(
@@ -421,8 +916,9 @@ export class MultiplayerClient {
               );
             },
           );
-      },
-    );
+        },
+      );
+    }
 
     room.onMessage<{
       message?: string;
@@ -434,6 +930,52 @@ export class MultiplayerClient {
           "게임을 시작할 수 없습니다.";
 
         this.startGameErrorHandlers
+          .forEach(
+            (handler) => {
+              handler(message);
+            },
+          );
+      },
+    );
+
+    room.onMessage<{
+      sessionId?: string;
+      name?: string;
+    }>(
+      "player_disconnected",
+      (payload) => {
+        const normalized = {
+          sessionId:
+            String(
+              payload.sessionId ??
+                "",
+            ),
+          name:
+            String(
+              payload.name ??
+                "Player",
+            ),
+        };
+
+        this.playerDisconnectedHandlers
+          .forEach(
+            (handler) => {
+              handler(normalized);
+            },
+          );
+      },
+    );
+
+    room.onMessage<{
+      message?: string;
+    }>(
+      "round_aborted",
+      (payload) => {
+        const message =
+          payload.message ??
+          "게임을 계속할 수 없어 대기실로 돌아갑니다.";
+
+        this.roundAbortedHandlers
           .forEach(
             (handler) => {
               handler(message);
@@ -520,8 +1062,18 @@ export class MultiplayerClient {
           {
             code,
             reason,
+            roomId:
+              room.roomId,
           },
         );
+
+        /*
+         * 이전 Room을 백그라운드로 leave한 뒤 그 onLeave가 늦게 와도
+         * 이미 새 Room에 접속했다면 새 연결 상태를 절대 지우지 않습니다.
+         */
+        if (this.room !== room) {
+          return;
+        }
 
         this.room = undefined;
         this.callbacks =
@@ -634,9 +1186,20 @@ export class MultiplayerClient {
   }
 
   isHost(): boolean {
+    const room = this.room;
+
+    if (!room) {
+      return false;
+    }
+
+    const hostId =
+      room.state?.hostId ||
+      this.snapshotHostId ||
+      this.createdRoomHostSessionId;
+
     return (
-      this.room?.state.hostId ===
-      this.room?.sessionId
+      hostId ===
+      room.sessionId
     );
   }
 
@@ -681,8 +1244,27 @@ export class MultiplayerClient {
       return undefined;
     }
 
-    return room.state.players
-      .get(room.sessionId);
+    /*
+     * Colyseus 0.17 최초 JOIN_ROOM 직후에는 Room 객체가 먼저 생기고
+     * Schema root의 `players` MapSchema가 한두 tick 뒤에 준비될 수 있습니다.
+     *
+     * 따라서 `room.state.players.get()`을 바로 호출하면
+     * `Cannot read properties of undefined (reading 'get')`가 발생합니다.
+     */
+    const schemaPlayers =
+      room.state?.players;
+
+    const schemaPlayer =
+      schemaPlayers?.get?.(
+        room.sessionId,
+      );
+
+    return (
+      schemaPlayer ??
+      this.snapshotPlayers.get(
+        room.sessionId,
+      )
+    );
   }
 
   isConnected(): boolean {
@@ -836,6 +1418,32 @@ export class MultiplayerClient {
     };
   }
 
+  onPlayerDisconnected(
+    handler:
+      PlayerDisconnectedHandler,
+  ): () => void {
+    this.playerDisconnectedHandlers
+      .add(handler);
+
+    return () => {
+      this.playerDisconnectedHandlers
+        .delete(handler);
+    };
+  }
+
+  onRoundAborted(
+    handler:
+      RoundAbortedHandler,
+  ): () => void {
+    this.roundAbortedHandlers
+      .add(handler);
+
+    return () => {
+      this.roundAbortedHandlers
+        .delete(handler);
+    };
+  }
+
   onConnectionChanged(
     handler:
       ConnectionChangedHandler,
@@ -856,13 +1464,27 @@ export class MultiplayerClient {
       return;
     }
 
+    /*
+     * UI/새 join을 WebSocket close handshake가 끝날 때까지 막지 않습니다.
+     * 기존 room 참조를 먼저 끊고 leave는 백그라운드로 정리합니다.
+     */
     this.room = undefined;
     this.callbacks = undefined;
-
-    await room.leave();
+    this.snapshotPlayers.clear();
+    this.snapshotHostId = "";
+    this.createdRoomHostSessionId = "";
 
     this.emitConnectionChanged(
       false,
+    );
+
+    void room.leave().catch(
+      (error) => {
+        console.warn(
+          "[Chameleon Hunt] Previous room leave cleanup failed",
+          error,
+        );
+      },
     );
   }
 
