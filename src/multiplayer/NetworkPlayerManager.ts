@@ -2557,14 +2557,14 @@ export class NetworkPlayerManager {
     view.leftArm
       ?.setRotation(0)
       .setPosition(
-        -13,
+        -12,
         6,
       );
 
     view.rightArm
       ?.setRotation(0)
       .setPosition(
-        13,
+        12,
         6,
       );
 
@@ -2572,14 +2572,14 @@ export class NetworkPlayerManager {
       ?.setRotation(0)
       .setPosition(
         -5,
-        23,
+        22,
       );
 
     view.rightLeg
       ?.setRotation(0)
       .setPosition(
         5,
-        23,
+        22,
       );
 
     view.shadow?.setScale(
@@ -2618,15 +2618,20 @@ export class NetworkPlayerManager {
         ?.state.phase === "hunt";
 
     /*
-     * 사냥 중 숨어서 멈춰 있는 Hider는 walkBlend를 천천히 감쇠시키지 않습니다.
-     * 즉시 완전한 정지 pose로 고정해 Hunter 카메라가 움직일 때
-     * 미세한 squash/stretch가 위장 위치를 드러내는 문제를 막습니다.
+     * Hider paint is a single 80x120 raster layer.  Animating arms/legs
+     * independently while the raster stays rigid makes the camouflage
+     * visibly detach from the body.
+     *
+     * Hiders therefore move as one rigid painted character:
+     * - container position still follows movement/network state
+     * - head/body/arms/legs stay in their neutral pose
+     * - paint layer receives exactly the same container transform
+     *
+     * Hunter animation remains unchanged.
      */
-    if (
-      huntActive &&
-      view.role === "hider"
-    ) {
+    if (view.role === "hider") {
       if (
+        huntActive &&
         view.huntFrozenX !== undefined &&
         view.huntFrozenY !== undefined
       ) {
@@ -2636,15 +2641,45 @@ export class NetworkPlayerManager {
         );
       }
 
+      view.walkBlend = 0;
       view.container.setScale(1);
 
-      this.resetWalkPoseImmediately(
-        view,
+      view.leftArm
+        ?.setRotation(0)
+        .setPosition(
+          -12,
+          6,
+        );
+
+      view.rightArm
+        ?.setRotation(0)
+        .setPosition(
+          12,
+          6,
+        );
+
+      view.leftLeg
+        ?.setRotation(0)
+        .setPosition(
+          -5,
+          22,
+        );
+
+      view.rightLeg
+        ?.setRotation(0)
+        .setPosition(
+          5,
+          22,
+        );
+
+      view.shadow?.setScale(
+        1,
+        1,
       );
 
       this.syncPaintLayerPosition(
         view,
-        true,
+        huntActive,
       );
       return;
     }

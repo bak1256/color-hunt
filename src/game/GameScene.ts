@@ -7913,32 +7913,49 @@ export class GameScene extends Phaser.Scene {
             this.gameHeight - 38;
 
         const setBrushSizeFromSlider =
-            (pointerX: number): void => {
-                const clampedX =
-                    Phaser.Math.Clamp(
-                        pointerX,
-                        sliderMinX,
-                        sliderMaxX,
-                    );
+            (
+                screenX: number,
+            ): void => {
+                if (
+                    !this.brushSizeSliderTrack
+                ) {
+                    return;
+                }
+
+                /*
+                 * The paint HUD is re-scaled/repositioned when camera zoom
+                 * changes.  Therefore the original sliderMinX/sliderMaxX are
+                 * NOT necessarily the visible track coordinates.
+                 *
+                 * Read the track's current screen-space bounds every time.
+                 */
+                const bounds =
+                    this.brushSizeSliderTrack
+                        .getBounds();
+
+                const visibleMinX =
+                    bounds.left;
+                const visibleMaxX =
+                    bounds.right;
 
                 const ratio =
-                    (clampedX -
-                        sliderMinX) /
-                    (sliderMaxX -
-                        sliderMinX);
-
-                const nextSize =
                     Phaser.Math.Clamp(
-                        Math.round(
-                            1 +
-                            ratio * 19,
+                        (
+                            screenX -
+                            visibleMinX
+                        ) /
+                        Math.max(
+                            1,
+                            visibleMaxX -
+                                visibleMinX,
                         ),
+                        0,
                         1,
-                        20,
                     );
 
                 this.setBrushSize(
-                    nextSize,
+                    1 +
+                    ratio * 19,
                 );
             };
 
@@ -8020,6 +8037,9 @@ export class GameScene extends Phaser.Scene {
                 pointer:
                     Phaser.Input.Pointer,
             ) => {
+                pointer.event
+                    ?.stopPropagation?.();
+
                 setBrushSizeFromSlider(
                     pointer.x,
                 );
@@ -8036,6 +8056,9 @@ export class GameScene extends Phaser.Scene {
                 pointer:
                     Phaser.Input.Pointer,
             ) => {
+                pointer.event
+                    ?.stopPropagation?.();
+
                 setBrushSizeFromSlider(
                     pointer.x,
                 );
@@ -8835,8 +8858,15 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
-        const minX = 320;
-        const maxX = 515;
+        const trackBounds =
+            this.brushSizeSliderTrack
+                .getBounds();
+
+        const minX =
+            trackBounds.left;
+        const maxX =
+            trackBounds.right;
+
         const ratio =
             Phaser.Math.Clamp(
                 (this.brushSize - 1) /
@@ -8844,23 +8874,66 @@ export class GameScene extends Phaser.Scene {
                 0,
                 1,
             );
-        const x =
+
+        const screenX =
             Phaser.Math.Linear(
                 minX,
                 maxX,
                 ratio,
             );
 
+        /*
+         * Convert the desired visible screen coordinate back to the
+         * object's local/game X.  With scrollFactor=0 and HUD zoom scaling,
+         * simply assigning the old hardcoded x causes the knob to drift.
+         */
+        const currentBounds =
+            this.brushSizeSliderKnob
+                .getBounds();
+
+        const currentCenterX =
+            (
+                currentBounds.left +
+                currentBounds.right
+            ) / 2;
+
+        this.brushSizeSliderKnob.x +=
+            screenX -
+            currentCenterX;
+
+        const fillBounds =
+            this.brushSizeSliderFill
+                .getBounds();
+
+        const fillScaleX =
+            this.brushSizeSliderFill.scaleX ||
+            1;
+
         this.brushSizeSliderFill
-            .setSize(
+            .setDisplaySize(
                 Math.max(
                     0,
-                    x - minX,
+                    screenX - minX,
                 ),
-                6,
+                Math.max(
+                    1,
+                    fillBounds.height,
+                ),
             );
-        this.brushSizeSliderKnob
-            .setX(x);
+
+        if (
+            !Number.isFinite(
+                this.brushSizeSliderFill
+                    .displayWidth,
+            )
+        ) {
+            this.brushSizeSliderFill
+                .setScale(
+                    fillScaleX,
+                    this.brushSizeSliderFill
+                        .scaleY,
+                );
+        }
         this.brushSizeSliderLabel
             .setText(
                 `${this.brushSize}px`,
