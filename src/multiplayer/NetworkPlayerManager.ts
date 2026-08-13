@@ -51,6 +51,7 @@ export class NetworkPlayerManager {
   private readonly players =
     new Map<string, NetworkPlayerView>();
 
+
   private localX = 480;
   private localY = 270;
 
@@ -66,6 +67,14 @@ export class NetworkPlayerManager {
   private readonly hunterMoveSpeed = 125;
   private readonly sendInterval = 50;
   private lastSendTime = 0;
+
+  /*
+   * 로컬 이동 중 서버 echo 좌표가 local prediction을 매 packet마다
+   * 되감지 않도록 입력 직후 짧은 reconciliation grace를 둡니다.
+   */
+  private lastLocalMoveInputAt = 0;
+  private readonly localMoveReconcileGraceMs = 180;
+  private readonly localHardCorrectionDistance = 32;
 
   constructor(
     scene: Phaser.Scene,
@@ -90,6 +99,7 @@ export class NetworkPlayerManager {
     this.localMovementInitialized = false;
     this.localX = 480;
     this.localY = 270;
+    this.lastLocalMoveInputAt = 0;
   }
 
   syncPlayersFromCurrentRoom(): void {
@@ -456,6 +466,7 @@ export class NetworkPlayerManager {
         this.localX = player.x;
         this.localY = player.y;
         this.localMovementInitialized = true;
+        this.lastLocalMoveInputAt = 0;
 
         this.setViewPosition(
           view,
@@ -533,19 +544,90 @@ export class NetworkPlayerManager {
       multiplayerClient.getSessionId() &&
       !view.customizationMode
     ) {
-      /*
-       * Lobby/Hunt의 실제 기준은 서버 좌표입니다.
-       * 화면 좌표와 local movement 좌표를 항상 같은 값으로 맞춥니다.
-       */
-      this.localX = player.x;
-      this.localY = player.y;
+      const now =
+        this.scene.time.now;
 
-      if (!this.localMovementInitialized) {
+      const recentlyMoving =
+        now -
+          this.lastLocalMoveInputAt <
+        this.localMoveReconcileGraceMs;
+
+      const correctionDistance =
+        Phaser.Math.Distance.Between(
+          this.localX,
+          this.localY,
+          player.x,
+          player.y,
+        );
+
+      /*
+       * 로컬 캐릭터는 입력 중 client prediction을 우선합니다.
+       * 예전에는 서버 echo packet이 올 때마다 localX/localY를 과거 좌표로
+       * 되감아서, 특히 Hunter 첫 이동에서 앞/뒤로 덜덜거렸습니다.
+       *
+       * - 이동 중 작은 오차: 무시
+       * - 큰 오차(32px 이상): 서버 좌표로 hard correction
+       * - 입력이 멈춘 뒤: 서버 좌표로 부드럽게 정합
+       */
+      if (
+        !this.localMovementInitialized
+      ) {
+        this.localX = player.x;
+        this.localY = player.y;
+
         this.setViewPosition(
           view,
           player.x,
           player.y,
         );
+
+        this.localMovementInitialized =
+          true;
+      } else if (
+        correctionDistance >=
+        this.localHardCorrectionDistance
+      ) {
+        this.localX = player.x;
+        this.localY = player.y;
+
+        this.setViewPosition(
+          view,
+          player.x,
+          player.y,
+        );
+      } else if (!recentlyMoving) {
+        /*
+         * 정지 중에는 작은 서버 오차만 천천히 흡수해서
+         * 다시 이동을 시작할 때 기준 좌표가 틀어지지 않게 합니다.
+         */
+        this.localX =
+          Phaser.Math.Linear(
+            this.localX,
+            player.x,
+            0.35,
+          );
+
+        this.localY =
+          Phaser.Math.Linear(
+            this.localY,
+            player.y,
+            0.35,
+          );
+
+        if (
+          Phaser.Math.Distance.Between(
+            view.container.x,
+            view.container.y,
+            this.localX,
+            this.localY,
+          ) > 0.75
+        ) {
+          this.setViewPosition(
+            view,
+            this.localX,
+            this.localY,
+          );
+        }
       }
     }
   }
@@ -605,18 +687,24 @@ export class NetworkPlayerManager {
     view.movingUntil =
       this.scene.time.now + 120;
 
+    this.lastLocalMoveInputAt =
+      this.scene.time.now;
+
     if (
       multiplayerClient.getRoom()
-        ?.state?.phase === "lobby"
+        ?.state?.phase === "lobby" &&
+      !this.localMovementInitialized
     ) {
       /*
-       * WASD 입력 순간 보이는 container 위치를 그대로 이동 시작점으로 씁니다.
-       * 따라서 첫 키 입력에서 다른 좌표로 스냅하지 않습니다.
+       * 최초 입력 1회만 화면 위치를 이동 기준으로 채택합니다.
+       * 매 프레임 container 위치로 localX를 재설정하면
+       * 입력/서버 sync가 서로 싸우며 미세 진동할 수 있습니다.
        */
       this.localX = view.container.x;
       this.localY = view.container.y;
       view.targetX = view.container.x;
       view.targetY = view.container.y;
+      this.localMovementInitialized = true;
     }
 
     direction.normalize();
@@ -686,7 +774,25 @@ export class NetworkPlayerManager {
             delta,
           );
 
-          this.syncPaintLayerPosition(view);
+          /*
+           * applyWalkMotion 안에서 hunt idle Hider는 이미 pixel-snap까지
+           * 처리하므로 다시 sub-pixel 위치로 덮어쓰지 않습니다.
+           */
+          if (
+            !(
+              multiplayerClient.getRoom()
+                ?.state.phase ===
+                  "hunt" &&
+              view.role ===
+                "hider" &&
+              !moving
+            )
+          ) {
+            this.syncPaintLayerPosition(
+              view,
+            );
+          }
+
           return;
         }
 
@@ -735,9 +841,31 @@ export class NetworkPlayerManager {
             view.targetY,
           );
 
-        if (distance > 0.4) {
+        const huntActive =
+          multiplayerClient.getRoom()
+            ?.state.phase === "hunt";
+
+        /*
+         * Hider는 네트워크 좌표의 아주 작은 흔들림(패킷 보간/부동소수점)을
+         * 걷기 시작으로 취급하지 않습니다.
+         */
+        const movementThreshold =
+          huntActive &&
+          view.role === "hider"
+            ? 1.25
+            : 0.4;
+
+        if (
+          distance >
+          movementThreshold
+        ) {
           view.movingUntil =
             this.scene.time.now + 140;
+        } else if (
+          huntActive &&
+          view.role === "hider"
+        ) {
+          view.movingUntil = 0;
         }
 
         /*
@@ -1038,15 +1166,27 @@ export class NetworkPlayerManager {
      */
 
     /*
-     * RenderTexture 주변의 합리적인 범위만 허용합니다.
-     * 가장자리 바깥에서 브러시를 걸쳐 칠하는 것은 허용하되,
-     * 완전히 먼 곳의 드래그는 불필요한 네트워크 stroke로 만들지 않습니다.
+     * Paint 입력 범위를 실제 캐릭터 몸 크기에 맞춥니다.
+     *
+     * 실제 캐릭터 실루엣은 대략:
+     *   X: -16.5 ~ +16.5
+     *   Y: -24   ~ +30
+     *
+     * 기존 -48~48 / -68~68 범위는 몸보다 지나치게 커서,
+     * 스크린샷처럼 캐릭터 주변 허공까지 paint stamp가 남을 수 있었습니다.
+     *
+     * 가장자리 색칠 편의성을 잃지 않도록 3~4px 정도의 작은 여유만 둡니다.
      */
+    const paintBodyMinX = -20;
+    const paintBodyMaxX = 20;
+    const paintBodyMinY = -28;
+    const paintBodyMaxY = 34;
+
     if (
-      localX < -48 ||
-      localX > 48 ||
-      localY < -68 ||
-      localY > 68
+      localX < paintBodyMinX ||
+      localX > paintBodyMaxX ||
+      localY < paintBodyMinY ||
+      localY > paintBodyMaxY
     ) {
       return null;
     }
@@ -1114,6 +1254,19 @@ export class NetworkPlayerManager {
         Math.round(point.x);
       const pixelY =
         Math.round(point.y);
+
+      /*
+       * Network stroke도 80x120 paint texture 안의 캐릭터 주변 영역으로 제한.
+       * localX = pixelX - 40 / localY = pixelY - 60 기준입니다.
+       */
+      if (
+        pixelX < 20 ||
+        pixelX > 60 ||
+        pixelY < 32 ||
+        pixelY > 94
+      ) {
+        return;
+      }
 
       view.paintLayer!.texture.stamp(
         textureKey,
@@ -1984,12 +2137,92 @@ export class NetworkPlayerManager {
     };
   }
 
+  private resetWalkPoseImmediately(
+    view: NetworkPlayerView,
+  ): void {
+    view.walkBlend = 0;
+
+    view.container.setScale(
+      1,
+      1,
+    );
+
+    view.leftArm
+      ?.setRotation(0)
+      .setPosition(
+        -13,
+        6,
+      );
+
+    view.rightArm
+      ?.setRotation(0)
+      .setPosition(
+        13,
+        6,
+      );
+
+    view.leftLeg
+      ?.setRotation(0)
+      .setPosition(
+        -5,
+        23,
+      );
+
+    view.rightLeg
+      ?.setRotation(0)
+      .setPosition(
+        5,
+        23,
+      );
+
+    view.shadow?.setScale(
+      1,
+      1,
+    );
+
+    const gun =
+      view.container.getData(
+        "network-gun",
+      ) as
+        | Phaser.GameObjects.Container
+        | undefined;
+
+    gun?.setY(
+      view.gunBaseY ?? 3,
+    );
+
+    this.syncPaintLayerPosition(
+      view,
+      true,
+    );
+  }
+
   private applyWalkMotion(
     view: NetworkPlayerView,
     moving: boolean,
     delta: number,
   ): void {
     if (view.customizationMode) {
+      return;
+    }
+
+    const huntActive =
+      multiplayerClient.getRoom()
+        ?.state.phase === "hunt";
+
+    /*
+     * 사냥 중 숨어서 멈춰 있는 Hider는 walkBlend를 천천히 감쇠시키지 않습니다.
+     * 즉시 완전한 정지 pose로 고정해 Hunter 카메라가 움직일 때
+     * 미세한 squash/stretch가 위장 위치를 드러내는 문제를 막습니다.
+     */
+    if (
+      huntActive &&
+      view.role === "hider" &&
+      !moving
+    ) {
+      this.resetWalkPoseImmediately(
+        view,
+      );
       return;
     }
 
@@ -2274,6 +2507,7 @@ export class NetworkPlayerManager {
 
   private syncPaintLayerPosition(
     view: NetworkPlayerView,
+    forcePixelSnap = false,
   ): void {
     if (!view.paintLayer) {
       return;
@@ -2284,6 +2518,41 @@ export class NetworkPlayerManager {
 
     const scaleY =
       view.container.scaleY || 1;
+
+    const huntActive =
+      multiplayerClient.getRoom()
+        ?.state.phase === "hunt";
+
+    const shouldPixelSnap =
+      forcePixelSnap ||
+      (
+        huntActive &&
+        view.role === "hider" &&
+        view.walkBlend <= 0.001
+      );
+
+    const rawPaintX =
+      view.container.x -
+      40 * scaleX;
+
+    const rawPaintY =
+      view.container.y -
+      60 * scaleY;
+
+    /*
+     * 숨은 Hider의 paint texture와 mask를 동일한 정수 픽셀 좌표에 고정합니다.
+     * 카메라 이동 시 texture/mask가 서로 다른 sub-pixel에서 샘플링되어
+     * 가장자리가 일렁이는 현상을 줄입니다.
+     */
+    const paintX =
+      shouldPixelSnap
+        ? Math.round(rawPaintX)
+        : rawPaintX;
+
+    const paintY =
+      shouldPixelSnap
+        ? Math.round(rawPaintY)
+        : rawPaintY;
 
     view.paintLayer.texture
       .setDepth(
@@ -2299,10 +2568,8 @@ export class NetworkPlayerManager {
           : view.paintLayer.texture.visible,
       )
       .setPosition(
-        view.container.x -
-          40 * scaleX,
-        view.container.y -
-          60 * scaleY,
+        paintX,
+        paintY,
       )
       .setScale(
         scaleX,
@@ -2311,10 +2578,8 @@ export class NetworkPlayerManager {
 
     view.paintLayer.maskShape
       .setPosition(
-        view.container.x -
-          40 * scaleX,
-        view.container.y -
-          60 * scaleY,
+        paintX,
+        paintY,
       )
       .setScale(
         scaleX,

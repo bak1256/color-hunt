@@ -196,6 +196,18 @@ export class GameScene extends Phaser.Scene {
     private guideText!: Phaser.GameObjects.Text;
     private statusText!: Phaser.GameObjects.Text;
     private ammoText!: Phaser.GameObjects.Text;
+
+    /*
+     * Hunter weapon HUD
+     * - ammo: 숫자/SHELLS 문자열 대신 shotgun shell 아이콘
+     * - heat: 문자 □ 게이지 대신 연속형 animated bar
+     */
+    private hunterWeaponHudContainer!: Phaser.GameObjects.Container;
+    private hunterAmmoGraphics!: Phaser.GameObjects.Graphics;
+    private hunterHeatGraphics!: Phaser.GameObjects.Graphics;
+    private hunterHeatLabel!: Phaser.GameObjects.Text;
+    private hunterOverheatLabel!: Phaser.GameObjects.Text;
+
     private targetText!: Phaser.GameObjects.Text;
 
     private paintColorText!: Phaser.GameObjects.Text;
@@ -218,6 +230,24 @@ export class GameScene extends Phaser.Scene {
     private roleHiderButton!: Phaser.GameObjects.Text;
     private inviteLinkButton!: Phaser.GameObjects.Text;
     private leaveRoomButton!: Phaser.GameObjects.Text;
+
+    /*
+     * Map selection
+     */
+    private readonly selectableMaps = [
+        'random',
+        ...Array.from(
+            { length: 12 },
+            (_, index) =>
+                `map${index + 1}`,
+        ),
+    ];
+    private mapSelectorPanel!: Phaser.GameObjects.Rectangle;
+    private mapSelectorLabel!: Phaser.GameObjects.Text;
+    private mapPreviousButton!: Phaser.GameObjects.Text;
+    private mapNextButton!: Phaser.GameObjects.Text;
+    private currentBackgroundTextureKey = 'forest-background';
+
     private inviteJoinTriggered = false;
     private menuModalOverlay?: HTMLDivElement;
     private pendingInviteRoomId = '';
@@ -241,6 +271,7 @@ export class GameScene extends Phaser.Scene {
     private readonly hunterAimSendInterval = 50;
     private readonly gameplayCameraZoom = 1.65;
     private roundResultWinner: 'hunters' | 'hiders' | null = null;
+    private roundResultMessage = '';
     private gameplayCameraActive = false;
     private gameplayUiSnapshots = new Map<
         Phaser.GameObjects.GameObject,
@@ -349,6 +380,17 @@ export class GameScene extends Phaser.Scene {
             'forest-background',
             '/assets/backgrounds/forest-01.png',
         );
+
+        for (
+            let index = 1;
+            index <= 12;
+            index += 1
+        ) {
+            this.load.image(
+                `map-background-${index}`,
+                `/assets/backgrounds/map${index}.png`,
+            );
+        }
     }
 
     private consumePendingReloadCreate():
@@ -1046,6 +1088,7 @@ export class GameScene extends Phaser.Scene {
 
         this.createMultiplayerHud();
         this.createLobbyUi();
+        this.createMapSelectorUi();
         this.createHunterBlindUi();
         this.createCountdownUi();
         this.createHuntTensionUi();
@@ -1281,6 +1324,8 @@ export class GameScene extends Phaser.Scene {
          * main menu/modal 상태만 제거하고 현재 Room state를 Scene에 적용합니다.
          */
         this.repairConnectedRoomUiIfNeeded();
+        this.syncMapBackground();
+        this.updateMapSelectorUi();
 
         if (this.isMultiplayerSession()) {
             this.hideLegacySinglePlayerActors();
@@ -1501,6 +1546,7 @@ export class GameScene extends Phaser.Scene {
             ),
         );
 
+
         this.networkUnsubscribers.push(
             multiplayerClient.onRoundResult(
                 (
@@ -1586,6 +1632,19 @@ export class GameScene extends Phaser.Scene {
             multiplayerClient.onStartGameError(
                 (message: string) => {
                     this.showStatus(message);
+                },
+            ),
+        );
+
+        this.networkUnsubscribers.push(
+            multiplayerClient.onHuntersOutOfAmmo(
+                (_message: string) => {
+                    this.statusText
+                        .setText(
+                            '헌터의 탄약이 모두 소진되었습니다. HIDER 승리!',
+                        )
+                        .setVisible(true)
+                        .setAlpha(1);
                 },
             ),
         );
@@ -3867,6 +3926,300 @@ export class GameScene extends Phaser.Scene {
         this.updateLobbyUi();
     }
 
+    private createMapSelectorUi(): void {
+        /*
+         * 대기방의 맵 자체가 미리보기 역할을 합니다.
+         * 이 작은 HUD에서는 방장이 좌/우로 선택값만 바꿉니다.
+         */
+        this.mapSelectorPanel =
+            this.add.rectangle(
+                205,
+                42,
+                330,
+                48,
+                0x172027,
+                0.84,
+            )
+                .setStrokeStyle(
+                    2,
+                    0xf4f0dd,
+                    0.72,
+                )
+                .setDepth(450)
+                .setVisible(false);
+
+        this.mapPreviousButton =
+            this.add.text(
+                70,
+                42,
+                '◀',
+                {
+                    fontFamily:
+                        'monospace',
+                    fontSize: '24px',
+                    fontStyle: 'bold',
+                    color: '#ffffff',
+                    backgroundColor:
+                        '#5c8f66',
+                    padding: {
+                        x: 10,
+                        y: 4,
+                    },
+                },
+            )
+                .setOrigin(0.5)
+                .setDepth(451)
+                .setVisible(false)
+                .setInteractive({
+                    useHandCursor: true,
+                });
+
+        this.mapSelectorLabel =
+            this.add.text(
+                205,
+                42,
+                'MAP  RANDOM',
+                {
+                    fontFamily:
+                        'monospace',
+                    fontSize: '16px',
+                    fontStyle: 'bold',
+                    color: '#ffffff',
+                    align: 'center',
+                },
+            )
+                .setOrigin(0.5)
+                .setDepth(451)
+                .setVisible(false);
+
+        this.mapNextButton =
+            this.add.text(
+                340,
+                42,
+                '▶',
+                {
+                    fontFamily:
+                        'monospace',
+                    fontSize: '24px',
+                    fontStyle: 'bold',
+                    color: '#ffffff',
+                    backgroundColor:
+                        '#5c8f66',
+                    padding: {
+                        x: 10,
+                        y: 4,
+                    },
+                },
+            )
+                .setOrigin(0.5)
+                .setDepth(451)
+                .setVisible(false)
+                .setInteractive({
+                    useHandCursor: true,
+                });
+
+        this.mapPreviousButton.on(
+            'pointerdown',
+            () => {
+                this.changeLobbyMapSelection(
+                    -1,
+                );
+            },
+        );
+
+        this.mapNextButton.on(
+            'pointerdown',
+            () => {
+                this.changeLobbyMapSelection(
+                    1,
+                );
+            },
+        );
+    }
+
+    private changeLobbyMapSelection(
+        direction: -1 | 1,
+    ): void {
+        if (
+            !multiplayerClient.isHost() ||
+            multiplayerClient.getPhase() !==
+                'lobby'
+        ) {
+            return;
+        }
+
+        const selected =
+            multiplayerClient
+                .getSelectedMap();
+
+        const currentIndex =
+            Math.max(
+                0,
+                this.selectableMaps
+                    .indexOf(selected),
+            );
+
+        const nextIndex =
+            (
+                currentIndex +
+                direction +
+                this.selectableMaps.length
+            ) %
+            this.selectableMaps.length;
+
+        multiplayerClient
+            .sendMapSelection(
+                this.selectableMaps[
+                    nextIndex
+                ],
+            );
+    }
+
+    private getBackgroundTextureKey(
+        mapName: string,
+    ): string {
+        const match =
+            /^map([1-9]|1[0-2])$/.exec(
+                mapName,
+            );
+
+        if (!match) {
+            return 'forest-background';
+        }
+
+        return `map-background-${match[1]}`;
+    }
+
+    private syncMapBackground(): void {
+        const room =
+            multiplayerClient.getRoom();
+
+        let mapName = 'forest';
+
+        if (
+            room &&
+            this.phase === 'lobby'
+        ) {
+            const selected =
+                multiplayerClient
+                    .getSelectedMap();
+
+            /*
+             * RANDOM은 실제 라운드 시작 전까지 정보를 숨기고
+             * 기존 forest-01 대기방을 보여줍니다.
+             */
+            mapName =
+                selected === 'random'
+                    ? 'forest'
+                    : selected;
+        } else if (
+            room &&
+            (
+                this.phase === 'countdown' ||
+                this.phase === 'paint' ||
+                this.phase === 'hunt' ||
+                this.phase === 'finished'
+            )
+        ) {
+            mapName =
+                multiplayerClient
+                    .getActiveMap();
+        }
+
+        const textureKey =
+            this.getBackgroundTextureKey(
+                mapName,
+            );
+
+        if (
+            textureKey ===
+                this.currentBackgroundTextureKey ||
+            !this.textures.exists(
+                textureKey,
+            )
+        ) {
+            return;
+        }
+
+        this.currentBackgroundTextureKey =
+            textureKey;
+
+        this.backgroundImage
+            .setTexture(textureKey)
+            .setDisplaySize(
+                this.gameWidth,
+                this.gameHeight,
+            );
+
+        /*
+         * 텍스처마다 원본 크기가 다를 수 있으므로 새 display scale을
+         * paint zoom의 기준값으로 다시 저장합니다.
+         */
+        this.backgroundBaseScaleX =
+            this.backgroundImage.scaleX;
+
+        this.backgroundBaseScaleY =
+            this.backgroundImage.scaleY;
+    }
+
+    private updateMapSelectorUi(): void {
+        if (
+            !this.mapSelectorPanel
+        ) {
+            return;
+        }
+
+        const visible =
+            this.phase === 'lobby' &&
+            multiplayerClient
+                .isConnected();
+
+        const isHost =
+            multiplayerClient.isHost();
+
+        const selected =
+            multiplayerClient
+                .getSelectedMap();
+
+        const index =
+            this.selectableMaps
+                .indexOf(selected);
+
+        const label =
+            selected === 'random'
+                ? 'MAP  RANDOM'
+                : `MAP  ${Math.max(1, index)} / 12`;
+
+        this.mapSelectorPanel
+            .setVisible(visible);
+
+        this.mapSelectorLabel
+            .setText(label)
+            .setVisible(visible);
+
+        this.mapPreviousButton
+            .setVisible(
+                visible &&
+                isHost,
+            )
+            .setAlpha(
+                isHost
+                    ? 1
+                    : 0.4,
+            );
+
+        this.mapNextButton
+            .setVisible(
+                visible &&
+                isHost,
+            )
+            .setAlpha(
+                isHost
+                    ? 1
+                    : 0.4,
+            );
+    }
+
     private updateLobbyUi(): void {
         if (!this.lobbyPanel) {
             return;
@@ -3887,6 +4240,7 @@ export class GameScene extends Phaser.Scene {
 
         this.lobbyPanel.setVisible(isLobby);
         this.lobbyTitleText.setVisible(isLobby);
+        this.updateMapSelectorUi();
         this.roleHunterButton.setVisible(isLobby);
         this.roleHiderButton.setVisible(isLobby);
 
@@ -3900,6 +4254,10 @@ export class GameScene extends Phaser.Scene {
             this.roleHiderButton.setVisible(false);
             this.inviteLinkButton?.setVisible(false);
             this.leaveRoomButton?.setVisible(false);
+            this.mapSelectorPanel?.setVisible(false);
+            this.mapSelectorLabel?.setVisible(false);
+            this.mapPreviousButton?.setVisible(false);
+            this.mapNextButton?.setVisible(false);
             return;
         }
 
@@ -3932,6 +4290,15 @@ export class GameScene extends Phaser.Scene {
                             : 'OFF'
                     }`,
                     `시작 시 Hunter 수  ${this.getRecommendedHunterCount(this.networkPlayerCount)}`,
+                    `MAP  ${
+                        multiplayerClient
+                            .getSelectedMap() ===
+                            'random'
+                            ? 'RANDOM'
+                            : multiplayerClient
+                                .getSelectedMap()
+                                .toUpperCase()
+                    }`,
                     isHost
                         ? '당신은 방장입니다.'
                         : '방장이 시작하기를 기다리는 중...',
@@ -4028,6 +4395,24 @@ export class GameScene extends Phaser.Scene {
             .clearAllPlayers();
 
         this.enterLobbyPhase();
+
+        this.currentBackgroundTextureKey =
+            'forest-background';
+
+        this.backgroundImage
+            .setTexture(
+                'forest-background',
+            )
+            .setDisplaySize(
+                this.gameWidth,
+                this.gameHeight,
+            );
+
+        this.backgroundBaseScaleX =
+            this.backgroundImage.scaleX;
+        this.backgroundBaseScaleY =
+            this.backgroundImage.scaleY;
+
         this.showMainMenu();
 
         this.roomTransitionInProgress = false;
@@ -4233,30 +4618,29 @@ export class GameScene extends Phaser.Scene {
                 .canLocalControlHunter() ||
             localRole === 'hunter';
 
-        if (
-            !multiplayerClient.isConnected() ||
-            this.phase !== 'hunt' ||
-            !localIsHunter
-        ) {
-            if (
-                this.phase === 'hunt'
-            ) {
-                this.ammoText
-                    .setVisible(false);
-            }
+        const visible =
+            multiplayerClient
+                .isConnected() &&
+            this.phase === 'hunt' &&
+            localIsHunter;
 
-            return;
-        }
+        this.hunterWeaponHudContainer
+            ?.setVisible(visible);
 
         /*
-         * Hunt 중 Hunter라면 역할 동기화 순서와 관계없이
-         * SHELLS / HEAT HUD를 매 프레임 다시 표시합니다.
+         * Multiplayer에서는 기존 문자열 SHELLS / □ / PRECISION HUD를
+         * 완전히 사용하지 않습니다.
          */
-        this.ammoText
-            .setVisible(true)
-            .setAlpha(1)
-            .setDepth(5000)
-            .setScrollFactor(0);
+        if (
+            this.isMultiplayerSession()
+        ) {
+            this.ammoText
+                ?.setVisible(false);
+        }
+
+        if (!visible) {
+            return;
+        }
 
         const now = Date.now();
 
@@ -4267,46 +4651,250 @@ export class GameScene extends Phaser.Scene {
                 this.weaponHeatUpdatedAt,
             );
 
+        /*
+         * 서버에서 받은 마지막 heat 값을 기준으로,
+         * 서버와 동일한 cooldown 속도로 매 프레임 부드럽게 감소시킵니다.
+         */
         const estimatedHeat =
-            Math.max(
-                0,
+            Phaser.Math.Clamp(
                 this.weaponHeat -
-                elapsed * 0.025,
+                    elapsed * 0.025,
+                0,
+                100,
             );
 
         const overheated =
             now <
             this.weaponOverheatedUntil;
 
-        const filled =
-            Math.round(
-                estimatedHeat /
-                10,
+        /*
+         * AMMO
+         * 숫자와 SHELLS 텍스트 대신 shotgun shell 모양 자체를 개수로 표시.
+         * 남은 탄 = 컬러 shell
+         * 사용한 탄 = 흐린 outline shell
+         */
+        this.hunterAmmoGraphics.clear();
+
+        const iconWidth = 9;
+        const iconHeight = 16;
+        const iconGap = 5;
+        const startX = 2;
+        const startY = 2;
+
+        for (
+            let index = 0;
+            index <
+                this.hunterMaxReserve;
+            index += 1
+        ) {
+            const x =
+                startX +
+                index *
+                    (
+                        iconWidth +
+                        iconGap
+                    );
+
+            const loaded =
+                index <
+                this.hunterReserve;
+
+            if (loaded) {
+                /*
+                 * Shotgun shell:
+                 * 둥근 빨간 탄두 + 붉은 몸통 + 황동색 바닥.
+                 */
+                this.hunterAmmoGraphics
+                    .fillStyle(
+                        0xd94b3d,
+                        1,
+                    )
+                    .fillRoundedRect(
+                        x + 1,
+                        startY,
+                        iconWidth - 2,
+                        iconHeight - 4,
+                        3,
+                    )
+                    .fillStyle(
+                        0xe0ad37,
+                        1,
+                    )
+                    .fillRect(
+                        x,
+                        startY +
+                            iconHeight -
+                            5,
+                        iconWidth,
+                        5,
+                    )
+                    .lineStyle(
+                        1,
+                        0x59483b,
+                        1,
+                    )
+                    .strokeRoundedRect(
+                        x + 1,
+                        startY,
+                        iconWidth - 2,
+                        iconHeight - 4,
+                        3,
+                    )
+                    .strokeRect(
+                        x,
+                        startY +
+                            iconHeight -
+                            5,
+                        iconWidth,
+                        5,
+                    );
+            } else {
+                this.hunterAmmoGraphics
+                    .lineStyle(
+                        1,
+                        0x897f72,
+                        0.55,
+                    )
+                    .strokeRoundedRect(
+                        x + 1,
+                        startY,
+                        iconWidth - 2,
+                        iconHeight - 4,
+                        3,
+                    )
+                    .strokeRect(
+                        x,
+                        startY +
+                            iconHeight -
+                            5,
+                        iconWidth,
+                        5,
+                    );
+            }
+        }
+
+        /*
+         * HEAT BAR
+         * □ 문자 대신 0~100% 연속 길이.
+         * 안전: green -> 주의: yellow/orange -> 위험: red
+         */
+        const barX = 36;
+        const barY = 23;
+        const barWidth = 138;
+        const barHeight = 9;
+
+        this.hunterHeatGraphics.clear();
+
+        this.hunterHeatGraphics
+            .fillStyle(
+                0x252d29,
+                0.22,
+            )
+            .fillRoundedRect(
+                barX,
+                barY,
+                barWidth,
+                barHeight,
+                3,
             );
 
-        const gauge =
-            '■'.repeat(filled) +
-            '□'.repeat(
-                10 - filled,
-            );
+        const ratio =
+            estimatedHeat / 100;
 
-        this.ammoText
-            .setVisible(true)
-            .setAlpha(1)
-            .setDepth(5000)
+        let heatColor =
+            0x55a95d;
+
+        if (
+            estimatedHeat <= 50
+        ) {
+            const mixed =
+                Phaser.Display.Color
+                    .Interpolate
+                    .ColorWithColor(
+                        Phaser.Display.Color
+                            .ValueToColor(
+                                0x55a95d,
+                            ),
+                        Phaser.Display.Color
+                            .ValueToColor(
+                                0xf1c84b,
+                            ),
+                        100,
+                        Math.round(
+                            estimatedHeat *
+                                2,
+                        ),
+                    );
+
+            heatColor =
+                Phaser.Display.Color
+                    .GetColor(
+                        mixed.r,
+                        mixed.g,
+                        mixed.b,
+                    );
+        } else {
+            const mixed =
+                Phaser.Display.Color
+                    .Interpolate
+                    .ColorWithColor(
+                        Phaser.Display.Color
+                            .ValueToColor(
+                                0xf1c84b,
+                            ),
+                        Phaser.Display.Color
+                            .ValueToColor(
+                                0xd83a34,
+                            ),
+                        100,
+                        Math.round(
+                            (
+                                estimatedHeat -
+                                50
+                            ) * 2,
+                        ),
+                    );
+
+            heatColor =
+                Phaser.Display.Color
+                    .GetColor(
+                        mixed.r,
+                        mixed.g,
+                        mixed.b,
+                    );
+        }
+
+        if (ratio > 0) {
+            this.hunterHeatGraphics
+                .fillStyle(
+                    heatColor,
+                    1,
+                )
+                .fillRoundedRect(
+                    barX,
+                    barY,
+                    Math.max(
+                        2,
+                        barWidth *
+                            ratio,
+                    ),
+                    barHeight,
+                    3,
+                );
+        }
+
+        /*
+         * 과열 중에는 작은 경고만 표시.
+         * PRECISION은 의미가 직관적이지 않아 HUD에서 제거했습니다.
+         */
+        this.hunterOverheatLabel
             .setText(
                 overheated
-                    ? `SHELLS ${this.hunterReserve}/${this.hunterMaxReserve}\nOVERHEATED ${gauge}\nPRECISION ${this.hunterPrecisionPoints}`
-                    : `SHELLS ${this.hunterReserve}/${this.hunterMaxReserve}\nHEAT ${Math.round(
-                        estimatedHeat,
-                    )}% ${gauge}\nPRECISION ${this.hunterPrecisionPoints}`,
+                    ? 'OVERHEAT!'
+                    : '',
             )
-            .setColor(
-                overheated
-                    ? '#d32f2f'
-                    : estimatedHeat >= 70
-                        ? '#9a6700'
-                        : '#26352b',
+            .setVisible(
+                overheated,
             );
     }
 
@@ -5459,6 +6047,7 @@ export class GameScene extends Phaser.Scene {
     private enterLobbyPhase(): void {
         this.phase = 'lobby';
         this.syncPhaseMusic();
+        this.syncMapBackground();
         this.hidePoints = 0;
         this.nextHeartbeatAt = 0;
         this.hideHuntTensionUi();
@@ -5545,6 +6134,7 @@ export class GameScene extends Phaser.Scene {
         }
         this.setPaintPaletteVisible(false);
         this.ammoText.setVisible(false);
+        this.hunterWeaponHudContainer?.setVisible(false);
         this.targetText.setVisible(false);
 
         this.aimLine.clear();
@@ -5567,6 +6157,7 @@ export class GameScene extends Phaser.Scene {
             this.guideText,
             this.statusText,
             this.ammoText,
+            this.hunterWeaponHudContainer,
             this.targetText,
             this.paintColorText,
             this.brushSizeText,
@@ -5946,9 +6537,34 @@ export class GameScene extends Phaser.Scene {
                 .setText('')
                 .setVisible(false);
 
+            const hiderWinText =
+                result.reason ===
+                    'ammo_depleted'
+                    ? 'HIDER 승리! 헌터의 탄약이 모두 소진되어 패배했습니다.'
+                    : 'HIDER 승리! 은신 위치를 공개합니다.';
+
+            this.roundResultMessage =
+                hiderWinText;
+
             this.guideText
+                .setPosition(
+                    this.gameWidth / 2,
+                    112,
+                )
+                .setOrigin(0.5, 0)
+                .setDepth(5200)
+                .setFontSize(20)
+                .setBackgroundColor(
+                    'rgba(255, 244, 214, 0.96)',
+                )
+                .setPadding(
+                    16,
+                    9,
+                    16,
+                    9,
+                )
                 .setText(
-                    'HIDER 승리! 은신 위치를 공개합니다.',
+                    hiderWinText,
                 )
                 .setColor('#1f2937');
         } else {
@@ -5959,9 +6575,28 @@ export class GameScene extends Phaser.Scene {
                 .setText('')
                 .setVisible(false);
 
+            this.roundResultMessage =
+                'HUNTER 승리!';
+
             this.guideText
+                .setPosition(
+                    this.gameWidth / 2,
+                    112,
+                )
+                .setOrigin(0.5, 0)
+                .setDepth(5200)
+                .setFontSize(20)
+                .setBackgroundColor(
+                    'rgba(255, 244, 214, 0.96)',
+                )
+                .setPadding(
+                    16,
+                    9,
+                    16,
+                    9,
+                )
                 .setText(
-                    'HUNTER 승리!',
+                    this.roundResultMessage,
                 )
                 .setColor('#d32f2f');
         }
@@ -5983,6 +6618,26 @@ export class GameScene extends Phaser.Scene {
 
         if (phase === 'lobby') {
             this.roundResultWinner = null;
+            this.roundResultMessage = '';
+
+            this.guideText
+                .setPosition(
+                    18,
+                    192,
+                )
+                .setOrigin(0, 0)
+                .setDepth(300)
+                .setFontSize(15)
+                .setBackgroundColor(
+                    'rgba(255, 244, 214, 0.86)',
+                )
+                .setPadding(
+                    12,
+                    7,
+                    12,
+                    7,
+                );
+
             this.resetGameplayCamera();
             this.enterLobbyPhase();
             return;
@@ -6105,6 +6760,7 @@ export class GameScene extends Phaser.Scene {
         if (phase === 'hunt') {
             this.clearStatus();
 
+
             this.phaseText
                 .setText('')
                 .setVisible(false);
@@ -6191,9 +6847,37 @@ export class GameScene extends Phaser.Scene {
                 )
                 .setColor('#8cff9b');
 
-            this.guideText.setText(
-                '라운드가 종료되었습니다.',
-            );
+            /*
+             * round_result가 먼저 도착하면 그 구체적인 승리/패배 사유를
+             * finished phase가 덮어쓰지 않습니다.
+             * ammo_depleted 문구는 결과 화면이 끝날 때까지 계속 유지됩니다.
+             */
+            this.guideText
+                .setPosition(
+                    this.gameWidth / 2,
+                    112,
+                )
+                .setOrigin(0.5, 0)
+                .setDepth(5200)
+                .setFontSize(20)
+                .setBackgroundColor(
+                    'rgba(255, 244, 214, 0.96)',
+                )
+                .setPadding(
+                    16,
+                    9,
+                    16,
+                    9,
+                )
+                .setText(
+                    this.roundResultMessage ||
+                        (
+                            this.roundResultWinner ===
+                                'hunters'
+                                ? 'HUNTER 승리!'
+                                : 'HIDER 승리!'
+                        ),
+                );
 
             this.aimLine.clear();
             this.crosshair.clear();
@@ -6248,6 +6932,8 @@ export class GameScene extends Phaser.Scene {
         );
 
         this.backgroundImage.setDepth(-20);
+        this.currentBackgroundTextureKey =
+            'forest-background';
 
         this.backgroundBaseX =
             this.backgroundImage.x;
@@ -6272,59 +6958,11 @@ export class GameScene extends Phaser.Scene {
      */
 
     private createObstacles(): void {
-        const obstacleData = [
-            {
-                x: 285,
-                y: 210,
-                width: 125,
-                height: 32,
-            },
-            {
-                x: 640,
-                y: 230,
-                width: 32,
-                height: 140,
-            },
-            {
-                x: 350,
-                y: 415,
-                width: 150,
-                height: 34,
-            },
-            {
-                x: 795,
-                y: 385,
-                width: 115,
-                height: 40,
-            },
-        ];
-
-        this.obstacles = obstacleData.map((data) => {
-            const object = this.add.rectangle(
-                data.x,
-                data.y,
-                data.width,
-                data.height,
-                0x353b42,
-                0.9,
-            );
-
-            object.setStrokeStyle(0, 0x000000, 0);
-            object.setAlpha(0);
-            object.setDepth(3);
-
-            const bounds = new Phaser.Geom.Rectangle(
-                data.x - data.width / 2,
-                data.y - data.height / 2,
-                data.width,
-                data.height,
-            );
-
-            return {
-                object,
-                bounds,
-            };
-        });
+        /*
+         * Random obstacle system removed in v0.10.10.4.
+         * No gameplay obstacles are created.
+         */
+        this.obstacles = [];
     }
 
     /*
@@ -7450,7 +8088,7 @@ export class GameScene extends Phaser.Scene {
         const sourceImage =
             this.textures
                 .get(
-                    'forest-background',
+                    this.currentBackgroundTextureKey,
                 )
                 .getSourceImage() as
                     | HTMLImageElement
@@ -8162,7 +8800,7 @@ export class GameScene extends Phaser.Scene {
                     if (localIsHunter) {
                         /*
                          * Hunter Paint는 실제 배경을 검은 장막으로 가리고 있으므로
-                         * 보이지 않는 forest-background pixel을 우클릭으로
+                         * 보이지 않는 현재 gameplay background pixel을 우클릭으로
                          * 추출하는 것을 금지합니다.
                          */
                         this.showStatus(
@@ -8609,7 +9247,9 @@ export class GameScene extends Phaser.Scene {
         worldY: number,
     ): void {
         const sourceImage = this.textures
-            .get('forest-background')
+            .get(
+                this.currentBackgroundTextureKey,
+            )
             .getSourceImage() as HTMLImageElement;
 
         if (!sourceImage) {
@@ -9836,6 +10476,10 @@ export class GameScene extends Phaser.Scene {
             .setDepth(300)
             .setVisible(false);
 
+        /*
+         * 기존 ammoText는 오프라인 테스트 호환용으로만 남기고
+         * Multiplayer Hunt에서는 보이지 않게 합니다.
+         */
         this.ammoText = this.add
             .text(
                 18,
@@ -9846,17 +10490,80 @@ export class GameScene extends Phaser.Scene {
                     fontSize: '16px',
                     fontStyle: 'bold',
                     color: '#5b4636',
-                    backgroundColor: 'rgba(255, 244, 214, 0.86)',
-                    padding: {
-                        x: 10,
-                        y: 7,
-                    },
-                    align: 'right',
                 },
             )
             .setOrigin(0, 0)
             .setDepth(5000)
-            .setScrollFactor(0);
+            .setScrollFactor(0)
+            .setVisible(false);
+
+        this.hunterAmmoGraphics =
+            this.add.graphics();
+
+        this.hunterHeatGraphics =
+            this.add.graphics();
+
+        this.hunterHeatLabel =
+            this.add.text(
+                0,
+                27,
+                'HEAT',
+                {
+                    fontFamily:
+                        'monospace',
+                    fontSize: '11px',
+                    fontStyle: 'bold',
+                    color: '#334139',
+                },
+            )
+                .setOrigin(0, 0.5);
+
+        this.hunterOverheatLabel =
+            this.add.text(
+                174,
+                27,
+                '',
+                {
+                    fontFamily:
+                        'monospace',
+                    fontSize: '10px',
+                    fontStyle: 'bold',
+                    color: '#d32f2f',
+                },
+            )
+                .setOrigin(1, 0.5);
+
+        const weaponHudBackground =
+            this.add.rectangle(
+                87,
+                19,
+                184,
+                52,
+                0xfff4d6,
+                0.9,
+            )
+                .setOrigin(0.5)
+                .setStrokeStyle(
+                    1,
+                    0x8d8066,
+                    0.75,
+                );
+
+        this.hunterWeaponHudContainer =
+            this.add.container(
+                18,
+                76,
+                [
+                    weaponHudBackground,
+                    this.hunterAmmoGraphics,
+                    this.hunterHeatGraphics,
+                    this.hunterHeatLabel,
+                    this.hunterOverheatLabel,
+                ],
+            )
+                .setDepth(5000)
+                .setScrollFactor(0)
+                .setVisible(false);
 
         this.targetText = this.add
             .text(
@@ -9925,63 +10632,11 @@ export class GameScene extends Phaser.Scene {
         if (
             this.isMultiplayerSession()
         ) {
-            /*
-             * 멀티는 5발 탄창 시스템이 아니라 과열 시스템을 사용합니다.
-             * 따라서 의미 없는 ''를 표시하지 않습니다.
-             * 실제 현재 열 상태로부터 과열 전 연속 발사 가능 횟수를 계산합니다.
-             */
-            const now = Date.now();
-
-            const elapsed =
-                Math.max(
-                    0,
-                    now -
-                    this.weaponHeatUpdatedAt,
-                );
-
-            const estimatedHeat =
-                Math.max(
-                    0,
-                    this.weaponHeat -
-                    elapsed * 0.025,
-                );
-
-            const overheated =
-                now <
-                this.weaponOverheatedUntil;
-
-            const safeShells =
-                overheated
-                    ? 0
-                    : Math.max(
-                        0,
-                        Math.ceil(
-                            (
-                                100 -
-                                estimatedHeat
-                            ) /
-                            34,
-                        ),
-                    );
-
             this.ammoText
-                .setText(
-                    `SHELLS ${'●'.repeat(
-                        safeShells,
-                    )}${'○'.repeat(
-                        Math.max(
-                            0,
-                            3 -
-                            safeShells,
-                        ),
-                    )}`,
-                )
-                .setColor(
-                    safeShells === 0
-                        ? '#d32f2f'
-                        : '#26352b',
-                );
+                .setText('')
+                .setVisible(false);
 
+            this.updateWeaponHeatHud();
             return;
         }
 

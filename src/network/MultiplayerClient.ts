@@ -81,6 +81,10 @@ export type ResetRoundHandler =
 
 export type NetworkRoundResult = {
   winner: "hunters" | "hiders";
+  reason?:
+    | "all_hiders_found"
+    | "timeout"
+    | "ammo_depleted";
   revealedHiders: Array<{
     sessionId: string;
     x: number;
@@ -93,6 +97,7 @@ export type RoundResultHandler = (
   result: NetworkRoundResult,
 ) => void;
 
+
 export type NetworkPlayerState = {
   name: string;
   role: NetworkPlayerRole;
@@ -104,6 +109,8 @@ export type NetworkPlayerState = {
 
 export type NetworkLobbySnapshot = {
   hostId: string;
+  selectedMap?: string;
+  activeMap?: string;
   players: Array<
     NetworkPlayerState & {
       sessionId: string;
@@ -121,6 +128,8 @@ export type NetworkGameState = {
   winner: "hunters" | "hiders" | "";
   hostId: string;
   hunterId: string;
+  selectedMap: string;
+  activeMap: string;
   players: Map<string, NetworkPlayerState>;
 };
 
@@ -180,6 +189,10 @@ export type StartGameErrorHandler = (
   message: string,
 ) => void;
 
+export type HuntersOutOfAmmoHandler = (
+  message: string,
+) => void;
+
 export class MultiplayerClient {
   private readonly client: Client;
   private readonly serverUrl: string;
@@ -199,6 +212,8 @@ export class MultiplayerClient {
     >();
 
   private snapshotHostId = "";
+  private snapshotSelectedMap = "random";
+  private snapshotActiveMap = "forest";
 
   /*
    * create()가 성공한 순간의 sessionId를 기억합니다.
@@ -236,11 +251,15 @@ export class MultiplayerClient {
   private readonly roundResultHandlers =
     new Set<RoundResultHandler>();
 
+
   private readonly phaseChangedHandlers =
     new Set<PhaseChangedHandler>();
 
   private readonly startGameErrorHandlers =
     new Set<StartGameErrorHandler>();
+
+  private readonly huntersOutOfAmmoHandlers =
+    new Set<HuntersOutOfAmmoHandler>();
 
   private readonly playerDisconnectedHandlers =
     new Set<PlayerDisconnectedHandler>();
@@ -515,6 +534,20 @@ export class MultiplayerClient {
         snapshot.hostId ?? "",
       );
 
+    this.snapshotSelectedMap =
+      String(
+        snapshot.selectedMap ??
+        this.room?.state?.selectedMap ??
+        "random",
+      );
+
+    this.snapshotActiveMap =
+      String(
+        snapshot.activeMap ??
+        this.room?.state?.activeMap ??
+        "forest",
+      );
+
     const incomingIds =
       new Set<string>();
 
@@ -679,6 +712,8 @@ private attachRoom(
   ): void {
     this.snapshotPlayers.clear();
     this.snapshotHostId = "";
+    this.snapshotSelectedMap = "random";
+    this.snapshotActiveMap = "forest";
 
     this.room = room;
     this.callbacks =
@@ -939,6 +974,24 @@ private attachRoom(
     );
 
     room.onMessage<{
+      message?: string;
+    }>(
+      "hunters_out_of_ammo",
+      (payload) => {
+        const message =
+          payload.message ??
+          "헌터의 총알이 모두 떨어졌습니다!";
+
+        this.huntersOutOfAmmoHandlers
+          .forEach(
+            (handler) => {
+              handler(message);
+            },
+          );
+      },
+    );
+
+    room.onMessage<{
       sessionId?: string;
       name?: string;
     }>(
@@ -1025,6 +1078,7 @@ private attachRoom(
           );
       },
     );
+
 
     room.onMessage<
       NetworkRoundResult
@@ -1155,10 +1209,40 @@ private attachRoom(
     );
   }
 
+  sendMapSelection(
+    map: string,
+  ): void {
+    this.room?.send(
+      "select_map",
+      {
+        map,
+      },
+    );
+  }
+
   sendStartGame(): void {
     this.room?.send(
       "start_game",
       {},
+    );
+  }
+
+
+  getSelectedMap(): string {
+    return (
+      this.room?.state
+        ?.selectedMap ??
+      this.snapshotSelectedMap ??
+      "random"
+    );
+  }
+
+  getActiveMap(): string {
+    return (
+      this.room?.state
+        ?.activeMap ??
+      this.snapshotActiveMap ??
+      "forest"
     );
   }
 
@@ -1337,6 +1421,7 @@ private attachRoom(
     };
   }
 
+
   onRoundResult(
     handler: RoundResultHandler,
   ): () => void {
@@ -1414,6 +1499,19 @@ private attachRoom(
 
     return () => {
       this.startGameErrorHandlers
+        .delete(handler);
+    };
+  }
+
+  onHuntersOutOfAmmo(
+    handler:
+      HuntersOutOfAmmoHandler,
+  ): () => void {
+    this.huntersOutOfAmmoHandlers
+      .add(handler);
+
+    return () => {
+      this.huntersOutOfAmmoHandlers
         .delete(handler);
     };
   }
