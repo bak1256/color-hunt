@@ -9323,31 +9323,36 @@ export class GameScene extends Phaser.Scene {
                 this.activeStrokePoints.length - 1
             ];
 
-        if (previousPoint) {
-            const distance =
-                Phaser.Math.Distance.Between(
-                    previousPoint.x,
-                    previousPoint.y,
-                    textureX,
-                    textureY,
-                );
+        const nextX =
+            Phaser.Math.Clamp(
+                Math.round(textureX),
+                0,
+                80,
+            );
 
-            if (distance < 1.5) {
-                return;
-            }
+        const nextY =
+            Phaser.Math.Clamp(
+                Math.round(textureY),
+                0,
+                120,
+            );
+
+        /*
+         * Local interpolation stamps raster pixels continuously.
+         * Only skip an identical pixel; otherwise remote clients must
+         * receive the same path the painter actually saw.
+         */
+        if (
+            previousPoint &&
+            Math.round(previousPoint.x) === nextX &&
+            Math.round(previousPoint.y) === nextY
+        ) {
+            return;
         }
 
         this.activeStrokePoints.push({
-            x: Phaser.Math.Clamp(
-                textureX,
-                0,
-                80,
-            ),
-            y: Phaser.Math.Clamp(
-                textureY,
-                0,
-                120,
-            ),
+            x: nextX,
+            y: nextY,
         });
     }
 

@@ -1245,49 +1245,21 @@ export class NetworkPlayerManager {
      *
      * 가장자리 색칠 편의성을 잃지 않도록 3~4px 정도의 작은 여유만 둡니다.
      */
-    const insideHead =
-      localX * localX +
-        (localY + 12) *
-          (localY + 12) <=
-      12 * 12;
-
-    const insideBody =
-      localX >= -9 &&
-      localX <= 9 &&
-      localY >= -5 &&
-      localY <= 19;
-
-    const insideLeftArm =
-      localX >= -16 &&
-      localX <= -10 &&
-      localY >= -3 &&
-      localY <= 15;
-
-    const insideRightArm =
-      localX >= 10 &&
-      localX <= 16 &&
-      localY >= -3 &&
-      localY <= 15;
-
-    const insideLeftLeg =
-      localX >= -8 &&
-      localX <= -2 &&
-      localY >= 17 &&
-      localY <= 29;
-
-    const insideRightLeg =
-      localX >= 2 &&
-      localX <= 8 &&
-      localY >= 17 &&
-      localY <= 29;
-
+    /*
+     * A large brush may reach a visible edge from a center just outside
+     * the exact silhouette.  If center input is limited to the silhouette,
+     * that edge can become impossible to repaint later with a 1px brush.
+     *
+     * Accept a tight body-area box for pointer centers and let the shared
+     * geometry mask decide the final visible pixels.  Thus no paint is
+     * visible outside the character, while every visible edge remains
+     * reachable with a small brush.
+     */
     if (
-      !insideHead &&
-      !insideBody &&
-      !insideLeftArm &&
-      !insideRightArm &&
-      !insideLeftLeg &&
-      !insideRightLeg
+      localX < -18 ||
+      localX > 18 ||
+      localY < -26 ||
+      localY > 31
     ) {
       return null;
     }
@@ -1408,15 +1380,16 @@ export class NetworkPlayerManager {
       const pixelY =
         Math.round(point.y);
 
-      /*
-       * Network stroke도 80x120 paint texture 안의 캐릭터 주변 영역으로 제한.
-       * localX = pixelX - 40 / localY = pixelY - 60 기준입니다.
-       */
+      const localX =
+        pixelX - 40;
+      const localY =
+        pixelY - 60;
+
       if (
-        pixelX < 20 ||
-        pixelX > 60 ||
-        pixelY < 32 ||
-        pixelY > 94
+        localX < -18 ||
+        localX > 18 ||
+        localY < -26 ||
+        localY > 31
       ) {
         return;
       }
@@ -1435,6 +1408,12 @@ export class NetworkPlayerManager {
 
     this.renderPaintTexture(
       view.paintLayer.texture,
+    );
+
+    this.syncPaintLayerPosition(
+      view,
+      multiplayerClient.getRoom()
+        ?.state.phase === "hunt",
     );
   }
 
@@ -2071,7 +2050,7 @@ export class NetworkPlayerManager {
       this.scene.add.rectangle(
         -13,
         6,
-        7,
+        6,
         18,
         color,
       )
@@ -2083,7 +2062,7 @@ export class NetworkPlayerManager {
       this.scene.add.rectangle(
         13,
         6,
-        7,
+        6,
         18,
         color,
       )
@@ -2095,8 +2074,8 @@ export class NetworkPlayerManager {
       this.scene.add.rectangle(
         -5,
         23,
-        7,
-        13,
+        6,
+        12,
         color,
       )
         .setName(
@@ -2107,8 +2086,8 @@ export class NetworkPlayerManager {
       this.scene.add.rectangle(
         5,
         23,
-        7,
-        13,
+        6,
+        12,
         color,
       )
         .setName(
@@ -2265,10 +2244,10 @@ export class NetworkPlayerManager {
      * visible geometry:
      *   head      circle(0, -12, 12)
      *   body      rect(0, 7, 18, 24)
-     *   leftArm   rect(-13, 6, 7, 18)
-     *   rightArm  rect(13, 6, 7, 18)
-     *   leftLeg   rect(-5, 23, 7, 13)
-     *   rightLeg  rect(5, 23, 7, 13)
+     *   leftArm   rect(-13, 6, 6, 18)
+     *   rightArm  rect(13, 6, 6, 18)
+     *   leftLeg   rect(-5, 23, 6, 12)
+     *   rightLeg  rect(5, 23, 6, 12)
      *
      * 이전 mask의 팔/다리는 8px/14px로 실제 7px/13px 몸체와 달랐습니다.
      */
@@ -2786,15 +2765,11 @@ export class NetworkPlayerManager {
     const scaleY =
       view.container.scaleY || 1;
 
-    const huntActive =
-      multiplayerClient.getRoom()
-        ?.state.phase === "hunt";
-
     const shouldPixelSnap =
       forcePixelSnap ||
       (
-        huntActive &&
-        view.role === "hider"
+        view.role === "hider" &&
+        !view.customizationMode
       );
 
     const rawPaintX =
