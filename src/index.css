@@ -21,3 +21,12 @@ body {
 body {
   min-height: 100vh;
 }
+
+html,
+body {
+  overscroll-behavior: none;
+}
+
+#root {
+  min-height: 100dvh;
+}

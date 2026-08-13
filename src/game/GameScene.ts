@@ -231,8 +231,12 @@ export class GameScene extends Phaser.Scene {
         const moveY = 275;
         const aimX =
             this.gameWidth - 170;
+        /*
+         * Keep Hunter controls above the bottom-right minimap.
+         * Minimap occupies roughly y=402..522 in the 960x540 game space.
+         */
         const aimY =
-            this.gameHeight - 92;
+            this.gameHeight - 190;
         const fireX =
             this.gameWidth - 64;
         const fireY =
@@ -620,7 +624,7 @@ export class GameScene extends Phaser.Scene {
                 screenX,
                 screenY,
                 this.gameWidth - 170,
-                this.gameHeight - 92,
+                this.gameHeight - 190,
             );
 
         if (
@@ -637,7 +641,7 @@ export class GameScene extends Phaser.Scene {
                 screenX,
                 screenY,
                 this.gameWidth - 64,
-                this.gameHeight - 92,
+                this.gameHeight - 190,
             );
 
         return Boolean(
@@ -649,9 +653,7 @@ export class GameScene extends Phaser.Scene {
     private updateMobilePinchGesture(): void {
         if (
             this.phase !== 'paint' ||
-            !this.isMultiplayerSession() ||
-            this.networkPlayerManager
-                .canLocalControlHunter()
+            !this.isMultiplayerSession()
         ) {
             this.mobilePinchDistance = 0;
             return;
@@ -740,7 +742,7 @@ export class GameScene extends Phaser.Scene {
         const baseY =
             kind === 'move'
                 ? 275
-                : this.gameHeight - 92;
+                : this.gameHeight - 190;
 
         const deltaX =
             screenX - baseX;
@@ -884,7 +886,7 @@ export class GameScene extends Phaser.Scene {
                         this.gameWidth - 170,
                     ),
                     this.getFixedHudCompensatedY(
-                        this.gameHeight - 92,
+                        this.gameHeight - 190,
                     ),
                 );
         }
@@ -5204,6 +5206,7 @@ export class GameScene extends Phaser.Scene {
             tr('방에서 나왔습니다.'),
         );
     }
+
 
     private createCountdownUi(): void {
         this.countdownPanel = this.add
