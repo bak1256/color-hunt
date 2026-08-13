@@ -129,7 +129,7 @@ export class GameScene extends Phaser.Scene {
     private paintColor = this.defaultPaintColor;
 
     private brushSize = 4;
-    private brushShape: BrushShape = 'dotCircle';
+    private brushShape: BrushShape = 'circle';
     private isPainting = false;
 
     private paintPreview!: Phaser.GameObjects.Graphics;
@@ -222,13 +222,21 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
-        const moveX = 92;
-        const baseY =
-            this.gameHeight - 88;
+        /*
+         * Movement is deliberately placed in the upper-left gameplay area.
+         * The paint palette occupies the lower-left, so both remain visible
+         * and independently touchable during Paint.
+         */
+        const moveX = 82;
+        const moveY = 158;
         const aimX =
-            this.gameWidth - 92;
+            this.gameWidth - 170;
+        const aimY =
+            this.gameHeight - 92;
         const fireX =
-            this.gameWidth - 188;
+            this.gameWidth - 64;
+        const fireY =
+            aimY;
 
         const createBase =
             (
@@ -240,15 +248,15 @@ export class GameScene extends Phaser.Scene {
                     y,
                     this.mobileJoystickRadius,
                     0x0f1720,
-                    0.28,
+                    0.30,
                 )
                     .setStrokeStyle(
-                        2,
+                        3,
                         0xffffff,
-                        0.42,
+                        0.52,
                     )
                     .setScrollFactor(0)
-                    .setDepth(3000)
+                    .setDepth(6000)
                     .setVisible(false);
 
         const createKnob =
@@ -259,43 +267,43 @@ export class GameScene extends Phaser.Scene {
                 this.add.circle(
                     x,
                     y,
-                    18,
+                    19,
                     0xffffff,
-                    0.36,
+                    0.42,
                 )
                     .setStrokeStyle(
                         2,
                         0xffffff,
-                        0.58,
+                        0.70,
                     )
                     .setScrollFactor(0)
-                    .setDepth(3001)
+                    .setDepth(6001)
                     .setVisible(false);
 
         this.mobileMoveBase =
-            createBase(moveX, baseY);
+            createBase(moveX, moveY);
         this.mobileMoveKnob =
-            createKnob(moveX, baseY);
+            createKnob(moveX, moveY);
         this.mobileAimBase =
-            createBase(aimX, baseY);
+            createBase(aimX, aimY);
         this.mobileAimKnob =
-            createKnob(aimX, baseY);
+            createKnob(aimX, aimY);
 
         this.mobileFireButton =
             this.add.circle(
                 fireX,
-                baseY - 8,
-                30,
+                fireY,
+                34,
                 0xb53535,
-                0.42,
+                0.52,
             )
                 .setStrokeStyle(
-                    2,
+                    3,
                     0xffffff,
-                    0.58,
+                    0.70,
                 )
                 .setScrollFactor(0)
-                .setDepth(3000)
+                .setDepth(6000)
                 .setVisible(false)
                 .setInteractive({
                     useHandCursor: true,
@@ -304,11 +312,11 @@ export class GameScene extends Phaser.Scene {
         this.mobileFireLabel =
             this.add.text(
                 fireX,
-                baseY - 8,
+                fireY,
                 'FIRE',
                 {
                     fontFamily: 'monospace',
-                    fontSize: '11px',
+                    fontSize: '12px',
                     fontStyle: 'bold',
                     color: '#ffffff',
                     align: 'center',
@@ -316,10 +324,13 @@ export class GameScene extends Phaser.Scene {
             )
                 .setOrigin(0.5)
                 .setScrollFactor(0)
-                .setDepth(3001)
+                .setDepth(6001)
                 .setVisible(false);
 
-        this.input.addPointer(2);
+        /*
+         * Enough pointers for move + aim + fire / pinch gestures.
+         */
+        this.input.addPointer(4);
 
         this.input.on(
             Phaser.Input.Events.POINTER_DOWN,
@@ -327,17 +338,20 @@ export class GameScene extends Phaser.Scene {
                 pointer:
                     Phaser.Input.Pointer,
             ) => {
-                const screenX =
-                    pointer.x;
-                const screenY =
-                    pointer.y;
+                this.mobileTouchPoints.set(
+                    pointer.id,
+                    new Phaser.Math.Vector2(
+                        pointer.x,
+                        pointer.y,
+                    ),
+                );
 
                 const moveDistance =
                     Phaser.Math.Distance.Between(
-                        screenX,
-                        screenY,
+                        pointer.x,
+                        pointer.y,
                         moveX,
-                        baseY,
+                        moveY,
                     );
 
                 if (
@@ -350,9 +364,10 @@ export class GameScene extends Phaser.Scene {
                         pointer.id;
                     this.updateMobileJoystick(
                         'move',
-                        screenX,
-                        screenY,
+                        pointer.x,
+                        pointer.y,
                     );
+                    this.mobilePinchDistance = 0;
                     return;
                 }
 
@@ -364,10 +379,10 @@ export class GameScene extends Phaser.Scene {
                 ) {
                     const aimDistance =
                         Phaser.Math.Distance.Between(
-                            screenX,
-                            screenY,
+                            pointer.x,
+                            pointer.y,
                             aimX,
-                            baseY,
+                            aimY,
                         );
 
                     if (
@@ -380,11 +395,14 @@ export class GameScene extends Phaser.Scene {
                             pointer.id;
                         this.updateMobileJoystick(
                             'aim',
-                            screenX,
-                            screenY,
+                            pointer.x,
+                            pointer.y,
                         );
+                        return;
                     }
                 }
+
+                this.updateMobilePinchGesture();
             },
         );
 
@@ -395,6 +413,22 @@ export class GameScene extends Phaser.Scene {
                     Phaser.Input.Pointer,
             ) => {
                 if (
+                    !this.mobileTouchPoints.has(
+                        pointer.id,
+                    )
+                ) {
+                    return;
+                }
+
+                this.mobileTouchPoints.set(
+                    pointer.id,
+                    new Phaser.Math.Vector2(
+                        pointer.x,
+                        pointer.y,
+                    ),
+                );
+
+                if (
                     pointer.id ===
                     this.mobileMovePointerId
                 ) {
@@ -403,6 +437,7 @@ export class GameScene extends Phaser.Scene {
                         pointer.x,
                         pointer.y,
                     );
+                    return;
                 }
 
                 if (
@@ -414,7 +449,10 @@ export class GameScene extends Phaser.Scene {
                         pointer.x,
                         pointer.y,
                     );
+                    return;
                 }
+
+                this.updateMobilePinchGesture();
             },
         );
 
@@ -423,6 +461,10 @@ export class GameScene extends Phaser.Scene {
                 pointer:
                     Phaser.Input.Pointer,
             ): void => {
+                this.mobileTouchPoints.delete(
+                    pointer.id,
+                );
+
                 if (
                     pointer.id ===
                     this.mobileMovePointerId
@@ -432,8 +474,12 @@ export class GameScene extends Phaser.Scene {
                     this.mobileMoveY = 0;
                     this.mobileMoveKnob
                         ?.setPosition(
-                            moveX,
-                            baseY,
+                            this.getFixedHudCompensatedX(
+                                moveX,
+                            ),
+                            this.getFixedHudCompensatedY(
+                                moveY,
+                            ),
                         );
                 }
 
@@ -444,9 +490,20 @@ export class GameScene extends Phaser.Scene {
                     this.mobileAimPointerId = -1;
                     this.mobileAimKnob
                         ?.setPosition(
-                            aimX,
-                            baseY,
+                            this.getFixedHudCompensatedX(
+                                aimX,
+                            ),
+                            this.getFixedHudCompensatedY(
+                                aimY,
+                            ),
                         );
+                }
+
+                if (
+                    this.mobileTouchPoints.size <
+                    2
+                ) {
+                    this.mobilePinchDistance = 0;
                 }
             };
 
@@ -485,6 +542,182 @@ export class GameScene extends Phaser.Scene {
         );
     }
 
+    private getFixedHudCompensatedX(
+        baseX: number,
+    ): number {
+        const zoom =
+            Math.max(
+                0.01,
+                this.cameras.main.zoom,
+            );
+
+        return (
+            this.gameWidth / 2 +
+            (
+                baseX -
+                this.gameWidth / 2
+            ) /
+            zoom
+        );
+    }
+
+    private getFixedHudCompensatedY(
+        baseY: number,
+    ): number {
+        const zoom =
+            Math.max(
+                0.01,
+                this.cameras.main.zoom,
+            );
+
+        return (
+            this.gameHeight / 2 +
+            (
+                baseY -
+                this.gameHeight / 2
+            ) /
+            zoom
+        );
+    }
+
+    private isMobileControlScreenPoint(
+        screenX: number,
+        screenY: number,
+    ): boolean {
+        if (!this.mobileControlsEnabled) {
+            return false;
+        }
+
+        const moveDistance =
+            Phaser.Math.Distance.Between(
+                screenX,
+                screenY,
+                82,
+                158,
+            );
+
+        if (
+            this.mobileMoveBase?.visible &&
+            moveDistance <=
+                this.mobileJoystickRadius *
+                1.65
+        ) {
+            return true;
+        }
+
+        const aimDistance =
+            Phaser.Math.Distance.Between(
+                screenX,
+                screenY,
+                this.gameWidth - 170,
+                this.gameHeight - 92,
+            );
+
+        if (
+            this.mobileAimBase?.visible &&
+            aimDistance <=
+                this.mobileJoystickRadius *
+                1.65
+        ) {
+            return true;
+        }
+
+        const fireDistance =
+            Phaser.Math.Distance.Between(
+                screenX,
+                screenY,
+                this.gameWidth - 64,
+                this.gameHeight - 92,
+            );
+
+        return Boolean(
+            this.mobileFireButton?.visible &&
+            fireDistance <= 48
+        );
+    }
+
+    private updateMobilePinchGesture(): void {
+        if (
+            this.phase !== 'paint' ||
+            !this.isMultiplayerSession() ||
+            this.networkPlayerManager
+                .canLocalControlHunter()
+        ) {
+            this.mobilePinchDistance = 0;
+            return;
+        }
+
+        const points =
+            [...this.mobileTouchPoints.entries()]
+                .filter(
+                    ([id, point]) =>
+                        id !==
+                            this.mobileMovePointerId &&
+                        id !==
+                            this.mobileAimPointerId &&
+                        !this.isMobileControlScreenPoint(
+                            point.x,
+                            point.y,
+                        ),
+                )
+                .map(
+                    ([, point]) =>
+                        point,
+                );
+
+        if (points.length < 2) {
+            this.mobilePinchDistance = 0;
+            return;
+        }
+
+        const distance =
+            Phaser.Math.Distance.Between(
+                points[0].x,
+                points[0].y,
+                points[1].x,
+                points[1].y,
+            );
+
+        if (
+            this.mobilePinchDistance <= 0
+        ) {
+            this.mobilePinchDistance =
+                distance;
+            return;
+        }
+
+        const delta =
+            distance -
+            this.mobilePinchDistance;
+
+        if (Math.abs(delta) < 10) {
+            return;
+        }
+
+        const zoom =
+            this.adjustPaintWorldZoom(
+                delta > 0
+                    ? -1
+                    : 1,
+            );
+
+        this.mobilePinchDistance =
+            distance;
+
+        this.networkPlayerManager
+            .showOnlyLocalPlayer();
+
+        this.paintZoomText.setText(
+            [
+                tr(`ZOOM ${zoom.toFixed(2)}x`),
+                tr(`BRUSH ${this.brushSize}`),
+                tr('두 손가락: 확대/축소'),
+            ].join('\n'),
+        );
+
+        this.updatePaintPreviewImmediately();
+    }
+
     private updateMobileJoystick(
         kind: 'move' | 'aim',
         screenX: number,
@@ -492,10 +725,12 @@ export class GameScene extends Phaser.Scene {
     ): void {
         const baseX =
             kind === 'move'
-                ? 92
-                : this.gameWidth - 92;
+                ? 82
+                : this.gameWidth - 170;
         const baseY =
-            this.gameHeight - 88;
+            kind === 'move'
+                ? 158
+                : this.gameHeight - 92;
 
         const deltaX =
             screenX - baseX;
@@ -534,8 +769,12 @@ export class GameScene extends Phaser.Scene {
         if (kind === 'move') {
             this.mobileMoveKnob
                 ?.setPosition(
-                    knobX,
-                    knobY,
+                    this.getFixedHudCompensatedX(
+                        knobX,
+                    ),
+                    this.getFixedHudCompensatedY(
+                        knobY,
+                    ),
                 );
 
             const strength =
@@ -562,8 +801,12 @@ export class GameScene extends Phaser.Scene {
 
         this.mobileAimKnob
             ?.setPosition(
-                knobX,
-                knobY,
+                this.getFixedHudCompensatedX(
+                    knobX,
+                ),
+                this.getFixedHudCompensatedY(
+                    knobY,
+                ),
             );
 
         if (length >= 6) {
@@ -625,8 +868,12 @@ export class GameScene extends Phaser.Scene {
             this.mobileAimPointerId = -1;
             this.mobileAimKnob
                 ?.setPosition(
-                    this.gameWidth - 92,
-                    this.gameHeight - 88,
+                    this.getFixedHudCompensatedX(
+                        this.gameWidth - 170,
+                    ),
+                    this.getFixedHudCompensatedY(
+                        this.gameHeight - 92,
+                    ),
                 );
         }
     }
@@ -772,7 +1019,12 @@ export class GameScene extends Phaser.Scene {
     private mobileMoveX = 0;
     private mobileMoveY = 0;
     private mobileAimAngle = 0;
-    private readonly mobileJoystickRadius = 42;
+    private readonly mobileJoystickRadius = 46;
+    private mobileTouchPoints =
+        new Map<number, Phaser.Math.Vector2>();
+    private mobilePinchDistance = 0;
+    private eyedropperArmed = false;
+    private eyedropperButton?: Phaser.GameObjects.Text;
 
     constructor() {
         super('GameScene');
@@ -6712,6 +6964,12 @@ export class GameScene extends Phaser.Scene {
             this.hunterMinimapMarker,
             ...this.paletteObjects,
             ...this.hunterCamoPaletteObjects,
+            this.mobileMoveBase,
+            this.mobileMoveKnob,
+            this.mobileAimBase,
+            this.mobileAimKnob,
+            this.mobileFireButton,
+            this.mobileFireLabel,
         ].filter(
             (object): object is Phaser.GameObjects.GameObject =>
                 Boolean(object),
@@ -8330,10 +8588,6 @@ export class GameScene extends Phaser.Scene {
             label: string;
         }> = [
             {
-                shape: 'dotCircle',
-                label: `▦ ${tr('픽셀')}`,
-            },
-            {
                 shape: 'circle',
                 label: `● ${tr('원형')}`,
             },
@@ -8387,6 +8641,8 @@ export class GameScene extends Phaser.Scene {
                 button.on(
                     'pointerdown',
                     () => {
+                        this.eyedropperArmed =
+                            false;
                         this.brushShape =
                             option.shape;
 
@@ -8397,6 +8653,7 @@ export class GameScene extends Phaser.Scene {
                         this.highlightBrushShape(
                             option.shape,
                         );
+                        this.updateEyedropperButtonUi();
                     },
                 );
 
@@ -8404,6 +8661,77 @@ export class GameScene extends Phaser.Scene {
                     button,
                 );
             },
+        );
+
+        /*
+         * Pixel brush is no longer exposed in the palette.  Its old third
+         * slot is now a touch-friendly eyedropper button.
+         */
+        this.eyedropperButton =
+            this.add.text(
+                475,
+                this.gameHeight - 78,
+                `◉ ${tr('스포이드')}`,
+                {
+                    fontFamily: 'monospace',
+                    fontSize: '10px',
+                    fontStyle: 'bold',
+                    color: '#26352b',
+                    backgroundColor: '#e8efd8',
+                    padding: {
+                        x: 5,
+                        y: 4,
+                    },
+                },
+            )
+                .setOrigin(0.5)
+                .setFixedSize(72, 28)
+                .setAlign('center')
+                .setDepth(873)
+                .setVisible(false)
+                .setInteractive({
+                    useHandCursor: true,
+                });
+
+        this.eyedropperButton.on(
+            'pointerdown',
+            (
+                pointer:
+                    Phaser.Input.Pointer,
+            ) => {
+                pointer.event
+                    ?.stopPropagation?.();
+
+                const localIsHunter =
+                    this.isMultiplayerSession() &&
+                    this.networkPlayerManager
+                        .canLocalControlHunter();
+
+                if (localIsHunter) {
+                    this.eyedropperArmed = false;
+                    this.showStatus(
+                        tr('헌터는 숨겨진 배경을 스포이드할 수 없습니다. CAMO SWATCH를 사용하세요.'),
+                    );
+                    this.updateEyedropperButtonUi();
+                    return;
+                }
+
+                this.finishActivePaintStroke();
+                this.isPainting = false;
+                this.eyedropperArmed =
+                    !this.eyedropperArmed;
+                this.updateEyedropperButtonUi();
+
+                if (this.eyedropperArmed) {
+                    this.showStatus(
+                        tr('스포이드: 배경에서 원하는 색을 터치하세요'),
+                    );
+                }
+            },
+        );
+
+        this.paletteObjects.push(
+            this.eyedropperButton,
         );
 
         const sliderMinX = 320;
@@ -8652,6 +8980,24 @@ export class GameScene extends Phaser.Scene {
                 .setVisible(false);
 
         this.updatePaintControlHelp();
+    }
+
+    private updateEyedropperButtonUi(): void {
+        if (!this.eyedropperButton) {
+            return;
+        }
+
+        this.eyedropperButton
+            .setBackgroundColor(
+                this.eyedropperArmed
+                    ? '#5c8f66'
+                    : '#e8efd8',
+            )
+            .setColor(
+                this.eyedropperArmed
+                    ? '#fffdf3'
+                    : '#26352b',
+            );
     }
 
     private createHunterCamoPalette(): void {
@@ -9634,6 +9980,16 @@ export class GameScene extends Phaser.Scene {
         this.input.on(
             Phaser.Input.Events.POINTER_DOWN,
             (pointer: Phaser.Input.Pointer) => {
+                if (
+                    this.mobileControlsEnabled &&
+                    this.isMobileControlScreenPoint(
+                        pointer.x,
+                        pointer.y,
+                    )
+                ) {
+                    return;
+                }
+
                 if (this.phase === 'hunt') {
                     if (
                         pointer.leftButtonDown() &&
@@ -9650,6 +10006,35 @@ export class GameScene extends Phaser.Scene {
                 }
 
                 if (this.phase !== 'paint') {
+                    return;
+                }
+
+                if (this.eyedropperArmed) {
+                    this.finishActivePaintStroke();
+                    this.isPainting = false;
+                    this.activeStrokePoints = [];
+                    this.activeStrokeTargetSessionId = '';
+
+                    const localIsHunter =
+                        this.isMultiplayerSession() &&
+                        this.networkPlayerManager
+                            .canLocalControlHunter();
+
+                    if (localIsHunter) {
+                        this.eyedropperArmed = false;
+                        this.updateEyedropperButtonUi();
+                        this.showStatus(
+                            tr('헌터는 숨겨진 배경을 스포이드할 수 없습니다. CAMO SWATCH를 사용하세요.'),
+                        );
+                        return;
+                    }
+
+                    this.pickColorFromBackground(
+                        pointer.worldX,
+                        pointer.worldY,
+                    );
+                    this.eyedropperArmed = false;
+                    this.updateEyedropperButtonUi();
                     return;
                 }
 
@@ -9747,6 +10132,15 @@ export class GameScene extends Phaser.Scene {
         this.input.on(
             Phaser.Input.Events.POINTER_MOVE,
             (pointer: Phaser.Input.Pointer) => {
+                if (
+                    pointer.id ===
+                        this.mobileMovePointerId ||
+                    pointer.id ===
+                        this.mobileAimPointerId
+                ) {
+                    return;
+                }
+
                 this.updatePaintPreview(pointer);
 
                 if (
