@@ -2746,7 +2746,7 @@ export class GameScene extends Phaser.Scene {
                     (event) => {
                         event.stopPropagation();
                     },
-                    true,
+                    false,
                 );
             },
         );
@@ -4084,9 +4084,9 @@ export class GameScene extends Phaser.Scene {
         const roomCard = this.add
             .rectangle(
                 325,
-                326,
+                315,
                 510,
-                330,
+                290,
                 0x111f28,
                 0.98,
             )
@@ -4100,9 +4100,9 @@ export class GameScene extends Phaser.Scene {
         const actionCard = this.add
             .rectangle(
                 725,
-                326,
+                315,
                 254,
-                330,
+                290,
                 0x111f28,
                 0.98,
             )
@@ -4116,7 +4116,7 @@ export class GameScene extends Phaser.Scene {
         const listTitle = this.add
             .text(
                 94,
-                176,
+                184,
                 tr('공개 게임방'),
                 {
                     fontFamily:
@@ -4131,7 +4131,7 @@ export class GameScene extends Phaser.Scene {
         const roomDivider = this.add
             .rectangle(
                 325,
-                211,
+                214,
                 466,
                 1,
                 0x415a52,
@@ -4143,7 +4143,7 @@ export class GameScene extends Phaser.Scene {
         const roomListHeader =
             this.add.text(
                 102,
-                219,
+                221,
                 `${tr('방 이름')}      ${tr('인원')}      ${tr('상태')}`,
                 {
                     fontFamily:
@@ -4160,9 +4160,9 @@ export class GameScene extends Phaser.Scene {
          */
         const refreshButton =
             this.makeMenuButton(
-                518,
-                176,
-                `↻ ${tr('새로고침')}`,
+                522,
+                184,
+                `↻  ${tr('새로고침')}`,
                 () => {
                     void this.refreshPublicRoomList(true);
                 },
@@ -4170,8 +4170,8 @@ export class GameScene extends Phaser.Scene {
 
         refreshButton
             .setFixedSize(
-                96,
-                32,
+                92,
+                30,
             )
             .setAlign('center')
             .setOrigin(0.5)
@@ -4196,7 +4196,7 @@ export class GameScene extends Phaser.Scene {
         const actionTitle = this.add
             .text(
                 622,
-                176,
+                184,
                 tr('게임 시작하기'),
                 {
                     fontFamily:
@@ -4228,10 +4228,10 @@ export class GameScene extends Phaser.Scene {
                         backgroundColor:
                             color,
                         fixedWidth: 214,
-                        fixedHeight: 60,
+                        fixedHeight: 54,
                         align: 'center',
                         padding: {
-                            top: 20,
+                            top: 17,
                         },
                     },
                 )
@@ -4261,7 +4261,7 @@ export class GameScene extends Phaser.Scene {
 
         const publicCreate =
             makeAction(
-                246,
+                242,
                 `＋  ${tr('공개방 만들기')}`,
                 '#2e6a40',
                 () => {
@@ -4273,7 +4273,7 @@ export class GameScene extends Phaser.Scene {
 
         const privateCreate =
             makeAction(
-                320,
+                306,
                 `▣  ${tr('비공개방 만들기')}`,
                 '#203b59',
                 () => {
@@ -4285,7 +4285,7 @@ export class GameScene extends Phaser.Scene {
 
         const privateJoin =
             makeAction(
-                394,
+                370,
                 `◎  ${tr('비공개방 참가')}`,
                 '#493170',
                 () => {
@@ -4296,9 +4296,9 @@ export class GameScene extends Phaser.Scene {
         const helpCard = this.add
             .rectangle(
                 725,
-                470,
+                428,
                 214,
-                70,
+                50,
                 0x17252d,
                 1,
             )
@@ -4312,14 +4312,14 @@ export class GameScene extends Phaser.Scene {
         const helpText = this.add
             .text(
                 632,
-                447,
+                412,
                 `${tr('게임 설명')}\n${tr('위장하고, 숨고, 찾아내세요!')}`,
                 {
                     fontFamily:
                         'Arial, sans-serif',
                     fontSize: '11px',
                     color: '#bdc9c2',
-                    lineSpacing: 6,
+                    lineSpacing: 4,
                     wordWrap: {
                         width: 186,
                     },
@@ -4329,10 +4329,10 @@ export class GameScene extends Phaser.Scene {
 
         const languageBar =
             this.add.rectangle(
-                325,
-                503,
-                510,
-                42,
+                480,
+                486,
+                780,
+                34,
                 0x101b23,
                 1,
             )
@@ -4359,8 +4359,8 @@ export class GameScene extends Phaser.Scene {
 
                     const button =
                         this.add.text(
-                            170 + index * 104,
-                            503,
+                            310 + index * 112,
+                            486,
                             label,
                             {
                                 fontFamily:
@@ -4378,11 +4378,11 @@ export class GameScene extends Phaser.Scene {
                                     selected
                                         ? '#356447'
                                         : '#17242c',
-                                fixedWidth: 88,
-                                fixedHeight: 28,
+                                fixedWidth: 96,
+                                fixedHeight: 26,
                                 align: 'center',
                                 padding: {
-                                    top: 7,
+                                    top: 6,
                                 },
                             },
                         )
@@ -4445,7 +4445,7 @@ export class GameScene extends Phaser.Scene {
                 ? this.add
                     .text(
                         102,
-                        236,
+                        246,
                         tr('방 목록을 불러오는 중...'),
                         {
                             fontFamily: 'Arial, sans-serif',
@@ -4506,7 +4506,7 @@ export class GameScene extends Phaser.Scene {
                     this.add
                         .text(
                             102,
-                            236,
+                            246,
                             tr('생성된 공개방이 없습니다.'),
                             {
                                 fontFamily: 'Arial, sans-serif',
@@ -4543,8 +4543,8 @@ export class GameScene extends Phaser.Scene {
                         const row =
                             this.makeMenuButton(
                                 325,
-                                246 +
-                                    index * 48,
+                                252 +
+                                    index * 39,
                                 `${roomTitle} · ${room.clients}/${room.maxClients} · ${trPhase(phase)}`,
                                 () => {
                                     /*
@@ -4566,7 +4566,7 @@ export class GameScene extends Phaser.Scene {
                             )
                             .setFixedSize(
                                 456,
-                                38,
+                                34,
                             )
                             .setAlign(
                                 'left',
@@ -4576,7 +4576,7 @@ export class GameScene extends Phaser.Scene {
                             )
                             .setPadding(
                                 14,
-                                10,
+                                8,
                                 0,
                                 0,
                             )
