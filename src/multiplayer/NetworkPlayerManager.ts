@@ -245,6 +245,26 @@ export class NetworkPlayerManager {
 
         view.targetX = player.x;
         view.targetY = player.y;
+
+        const initialOffset =
+          Phaser.Math.Distance.Between(
+            view.container.x,
+            view.container.y,
+            player.x,
+            player.y,
+          );
+
+        if (
+          !view.spawnSynced ||
+          initialOffset > 28
+        ) {
+          this.setViewPosition(
+            view,
+            player.x,
+            player.y,
+          );
+        }
+
         view.spawnSynced = true;
       },
     );
@@ -317,7 +337,7 @@ export class NetworkPlayerManager {
       revealMarker: undefined,
       targetX: player.x,
       targetY: player.y,
-      spawnSynced: true,
+      spawnSynced: false,
       paintLayer,
       walkPhase: 0,
       walkBlend: 0,
@@ -511,6 +531,10 @@ export class NetworkPlayerManager {
       this.updateRoleBodyVisibility(
         view.container,
         player.role,
+      );
+
+      view.shadow?.setVisible(
+        player.role === "hunter",
       );
 
       view.nameText.setText(
@@ -2244,9 +2268,7 @@ export class NetworkPlayerManager {
     );
 
     context.fillStyle =
-      role === "hunter"
-        ? "#5f91c9"
-        : "#f5eee2";
+      "#f5eee2";
 
     for (
       let y = 0;
@@ -2369,6 +2391,8 @@ export class NetworkPlayerManager {
       )
         .setName(
           "network-player-shadow",
+        )        .setVisible(
+          player.role === "hunter",
         );
 
     const color =

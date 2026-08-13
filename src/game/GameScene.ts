@@ -230,6 +230,7 @@ export class GameScene extends Phaser.Scene {
     private inviteLinkButton!: Phaser.GameObjects.Text;
     private leaveRoomButton!: Phaser.GameObjects.Text;
     private lobbyHintText!: Phaser.GameObjects.Text;
+    private lobbyMovementHelpText!: Phaser.GameObjects.Text;
     private lobbyPaintDurationLabel!: Phaser.GameObjects.Text;
     private paintDurationButtons: Phaser.GameObjects.Text[] = [];
     private brushSizeSliderTrack?: Phaser.GameObjects.Rectangle;
@@ -3357,8 +3358,8 @@ export class GameScene extends Phaser.Scene {
 
         const refreshButton =
             this.makeMenuButton(
-                390,
-                231,
+                405,
+                230,
                 tr('새로고침'),
                 () => {
                     void this.refreshPublicRoomList(true);
@@ -3367,11 +3368,11 @@ export class GameScene extends Phaser.Scene {
 
         refreshButton
             .setFixedSize(
-                78,
-                26,
+                82,
+                30,
             )
             .setAlign('center')
-            .setOrigin(0.5)
+            .setOrigin(0.5, 0.5)
             .setFontSize(
                 getLanguage() === 'en'
                     ? 10
@@ -3379,7 +3380,7 @@ export class GameScene extends Phaser.Scene {
             )
             .setPadding(
                 0,
-                0,
+                2,
                 0,
                 0,
             );
@@ -3766,7 +3767,7 @@ export class GameScene extends Phaser.Scene {
         this.lobbyHintText =
             this.add.text(
                 790,
-                318,
+                288,
                 '',
                 {
                     fontFamily:
@@ -3775,6 +3776,29 @@ export class GameScene extends Phaser.Scene {
                     fontStyle: 'bold',
                     color: '#d13b32',
                     align: 'center',
+                },
+            )
+                .setOrigin(0.5)
+                .setDepth(402);
+
+        this.lobbyMovementHelpText =
+            this.add.text(
+                790,
+                318,
+                tr('WASD 이동'),
+                {
+                    fontFamily:
+                        'monospace',
+                    fontSize: '11px',
+                    fontStyle: 'bold',
+                    color: '#6b5a48',
+                    align: 'center',
+                    backgroundColor:
+                        '#fff4d6aa',
+                    padding: {
+                        x: 7,
+                        y: 3,
+                    },
                 },
             )
                 .setOrigin(0.5)
@@ -4203,6 +4227,7 @@ export class GameScene extends Phaser.Scene {
             this.mapNextButton?.setVisible(false);
             this.paintDurationButtons.forEach((button) => button.setVisible(false));
             this.lobbyHintText?.setVisible(false);
+            this.lobbyMovementHelpText?.setVisible(false);
             this.lobbyPaintDurationLabel?.setVisible(false);
             return;
         }
@@ -4273,6 +4298,12 @@ export class GameScene extends Phaser.Scene {
                 isLobby &&
                 isHost,
             );
+
+        this.lobbyMovementHelpText
+            .setText(
+                tr('WASD 이동'),
+            )
+            .setVisible(isLobby);
 
         this.lobbyPaintDurationLabel
             .setText(
@@ -6794,6 +6825,13 @@ export class GameScene extends Phaser.Scene {
                 this.time.now +
                 remainingMs;
             return;
+        }
+
+        if (
+            phase === 'hunt' &&
+            this.activeStrokePoints.length > 0
+        ) {
+            this.finishActivePaintStroke();
         }
 
         if (phase === 'hunt') {
@@ -9428,6 +9466,44 @@ export class GameScene extends Phaser.Scene {
         renderTexture.render?.();
     }
 
+    private flushActivePaintStrokeChunk(
+        keepLastPoint = true,
+    ): void {
+        if (
+            !multiplayerClient.isConnected() ||
+            !this.activeStrokeTargetSessionId ||
+            this.activeStrokePoints.length === 0
+        ) {
+            return;
+        }
+
+        const pointsToSend = [
+            ...this.activeStrokePoints,
+        ];
+
+        multiplayerClient.sendPaintStroke({
+            targetSessionId:
+                this.activeStrokeTargetSessionId,
+            color: this.paintColor,
+            size: this.brushSize,
+            shape: this.brushShape,
+            points: pointsToSend,
+        });
+
+        if (
+            keepLastPoint &&
+            pointsToSend.length > 0
+        ) {
+            this.activeStrokePoints = [
+                pointsToSend[
+                    pointsToSend.length - 1
+                ],
+            ];
+        } else {
+            this.activeStrokePoints = [];
+        }
+    }
+
     private recordActivePaintPoint(
         textureX: number,
         textureY: number,
@@ -9478,6 +9554,15 @@ export class GameScene extends Phaser.Scene {
             x: nextX,
             y: nextY,
         });
+
+        if (
+            multiplayerClient.isConnected() &&
+            this.activeStrokePoints.length >= 24
+        ) {
+            this.flushActivePaintStrokeChunk(
+                true,
+            );
+        }
     }
 
     private interpolateActivePaintStroke(
@@ -9564,25 +9649,14 @@ export class GameScene extends Phaser.Scene {
 
     private finishActivePaintStroke(): void {
         if (
-            !multiplayerClient.isConnected() ||
-            !this.activeStrokeTargetSessionId ||
-            this.activeStrokePoints.length === 0
+            multiplayerClient.isConnected() &&
+            this.activeStrokeTargetSessionId &&
+            this.activeStrokePoints.length > 0
         ) {
-            this.activeStrokePoints = [];
-            this.activeStrokeTargetSessionId = '';
-            return;
+            this.flushActivePaintStrokeChunk(
+                false,
+            );
         }
-
-        multiplayerClient.sendPaintStroke({
-            targetSessionId:
-                this.activeStrokeTargetSessionId,
-            color: this.paintColor,
-            size: this.brushSize,
-            shape: this.brushShape,
-            points: [
-                ...this.activeStrokePoints,
-            ],
-        });
 
         this.activeStrokePoints = [];
         this.activeStrokeTargetSessionId = '';
