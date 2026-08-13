@@ -2231,7 +2231,7 @@ export class NetworkPlayerManager {
       this.scene.add.circle(
         0,
         -12,
-        12,
+        11,
         color,
       );
 
@@ -2239,8 +2239,8 @@ export class NetworkPlayerManager {
       this.scene.add.rectangle(
         0,
         7,
-        18,
-        24,
+        16,
+        22,
         color,
       );
 
@@ -2248,8 +2248,8 @@ export class NetworkPlayerManager {
       this.scene.add.rectangle(
         -12,
         6,
-        8,
-        18,
+        6,
+        16,
         color,
       )
         .setName(
@@ -2260,8 +2260,8 @@ export class NetworkPlayerManager {
       this.scene.add.rectangle(
         12,
         6,
-        8,
-        18,
+        6,
+        16,
         color,
       )
         .setName(
@@ -2272,8 +2272,8 @@ export class NetworkPlayerManager {
       this.scene.add.rectangle(
         -5,
         22,
-        8,
-        14,
+        6,
+        12,
         color,
       )
         .setName(
@@ -2284,8 +2284,8 @@ export class NetworkPlayerManager {
       this.scene.add.rectangle(
         5,
         22,
-        8,
-        14,
+        6,
+        12,
         color,
       )
         .setName(
@@ -2641,8 +2641,43 @@ export class NetworkPlayerManager {
         );
       }
 
-      view.walkBlend = 0;
-      view.container.setScale(1);
+      /*
+       * Keep the painted Hider as one rigid raster, but preserve a subtle
+       * walking feel through WHOLE-BODY squash/stretch.  Because the paint
+       * layer receives the same container scale, camouflage never detaches.
+       */
+      const targetBlend =
+        moving && !huntActive
+          ? 1
+          : 0;
+
+      view.walkBlend =
+        Phaser.Math.Linear(
+          view.walkBlend,
+          targetBlend,
+          moving ? 0.22 : 0.18,
+        );
+
+      const phase =
+        this.scene.time.now *
+        0.018;
+
+      const bounce =
+        Math.sin(phase) *
+        view.walkBlend;
+
+      const scaleX =
+        1 +
+        bounce * 0.018;
+
+      const scaleY =
+        1 -
+        bounce * 0.014;
+
+      view.container.setScale(
+        scaleX,
+        scaleY,
+      );
 
       view.leftArm
         ?.setRotation(0)
@@ -2673,8 +2708,8 @@ export class NetworkPlayerManager {
         );
 
       view.shadow?.setScale(
-        1,
-        1,
+        1 + Math.abs(bounce) * 0.03,
+        1 - Math.abs(bounce) * 0.02,
       );
 
       this.syncPaintLayerPosition(

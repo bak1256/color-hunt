@@ -959,6 +959,47 @@ private attachRoom(
       },
     );
 
+    room.onMessage<{
+      phase?: NetworkGamePhase;
+      phaseEndsAt?: number;
+    }>(
+      "phase_changed",
+      (payload) => {
+        const phase =
+          payload.phase;
+
+        if (
+          phase !== "lobby" &&
+          phase !== "countdown" &&
+          phase !== "paint" &&
+          phase !== "hunt" &&
+          phase !== "finished"
+        ) {
+          return;
+        }
+
+        const phaseEndsAt =
+          Number(
+            payload.phaseEndsAt ??
+            0,
+          );
+
+        this.phaseChangedHandlers
+          .forEach(
+            (handler) => {
+              handler(
+                phase,
+                Number.isFinite(
+                  phaseEndsAt,
+                )
+                  ? phaseEndsAt
+                  : 0,
+              );
+            },
+          );
+      },
+    );
+
     if (room.state) {
       callbacks.onChange(
         room.state,

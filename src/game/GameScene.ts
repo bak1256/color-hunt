@@ -236,6 +236,7 @@ export class GameScene extends Phaser.Scene {
     private brushSizeSliderFill?: Phaser.GameObjects.Rectangle;
     private brushSizeSliderKnob?: Phaser.GameObjects.Arc;
     private brushSizeSliderLabel?: Phaser.GameObjects.Text;
+    private brushSizeSliderDragging = false;
 
 
     /*
@@ -276,6 +277,7 @@ export class GameScene extends Phaser.Scene {
     private readonly gameplayCameraZoom = 1.65;
     private roundResultWinner: 'hunters' | 'hiders' | null = null;
     private roundResultMessage = '';
+    private lastPhaseRecoveryAt = 0;
     private gameplayUiSnapshots = new Map<
         Phaser.GameObjects.GameObject,
         {
@@ -7916,38 +7918,15 @@ export class GameScene extends Phaser.Scene {
             (
                 screenX: number,
             ): void => {
-                if (
-                    !this.brushSizeSliderTrack
-                ) {
-                    return;
-                }
-
-                /*
-                 * The paint HUD is re-scaled/repositioned when camera zoom
-                 * changes.  Therefore the original sliderMinX/sliderMaxX are
-                 * NOT necessarily the visible track coordinates.
-                 *
-                 * Read the track's current screen-space bounds every time.
-                 */
-                const bounds =
-                    this.brushSizeSliderTrack
-                        .getBounds();
-
-                const visibleMinX =
-                    bounds.left;
-                const visibleMaxX =
-                    bounds.right;
-
                 const ratio =
                     Phaser.Math.Clamp(
                         (
                             screenX -
-                            visibleMinX
+                            sliderMinX
                         ) /
-                        Math.max(
-                            1,
-                            visibleMaxX -
-                                visibleMinX,
+                        (
+                            sliderMaxX -
+                            sliderMinX
                         ),
                         0,
                         1,
@@ -8009,7 +7988,6 @@ export class GameScene extends Phaser.Scene {
                 .setVisible(false)
                 .setInteractive({
                     useHandCursor: true,
-                    draggable: true,
                 });
 
         this.brushSizeSliderLabel =
@@ -8031,14 +8009,43 @@ export class GameScene extends Phaser.Scene {
                 .setDepth(875)
                 .setVisible(false);
 
+        const beginSliderDrag =
+            (
+                pointer:
+                    Phaser.Input.Pointer,
+            ): void => {
+                pointer.event
+                    ?.stopPropagation?.();
+
+                this.brushSizeSliderDragging =
+                    true;
+
+                setBrushSizeFromSlider(
+                    pointer.x,
+                );
+            };
+
         this.brushSizeSliderTrack.on(
             'pointerdown',
+            beginSliderDrag,
+        );
+
+        this.brushSizeSliderKnob.on(
+            'pointerdown',
+            beginSliderDrag,
+        );
+
+        this.input.on(
+            Phaser.Input.Events.POINTER_MOVE,
             (
                 pointer:
                     Phaser.Input.Pointer,
             ) => {
-                pointer.event
-                    ?.stopPropagation?.();
+                if (
+                    !this.brushSizeSliderDragging
+                ) {
+                    return;
+                }
 
                 setBrushSizeFromSlider(
                     pointer.x,
@@ -8046,22 +8053,11 @@ export class GameScene extends Phaser.Scene {
             },
         );
 
-        this.input.setDraggable(
-            this.brushSizeSliderKnob,
-        );
-
-        this.brushSizeSliderKnob.on(
-            'drag',
-            (
-                pointer:
-                    Phaser.Input.Pointer,
-            ) => {
-                pointer.event
-                    ?.stopPropagation?.();
-
-                setBrushSizeFromSlider(
-                    pointer.x,
-                );
+        this.input.on(
+            Phaser.Input.Events.POINTER_UP,
+            () => {
+                this.brushSizeSliderDragging =
+                    false;
             },
         );
 
@@ -8858,15 +8854,6 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
-        const trackBounds =
-            this.brushSizeSliderTrack
-                .getBounds();
-
-        const minX =
-            trackBounds.left;
-        const maxX =
-            trackBounds.right;
-
         const ratio =
             Phaser.Math.Clamp(
                 (this.brushSize - 1) /
@@ -8875,65 +8862,68 @@ export class GameScene extends Phaser.Scene {
                 1,
             );
 
-        const screenX =
+        const desiredScreenX =
             Phaser.Math.Linear(
-                minX,
-                maxX,
+                320,
+                515,
                 ratio,
             );
 
-        /*
-         * Convert the desired visible screen coordinate back to the
-         * object's local/game X.  With scrollFactor=0 and HUD zoom scaling,
-         * simply assigning the old hardcoded x causes the knob to drift.
-         */
-        const currentBounds =
-            this.brushSizeSliderKnob
-                .getBounds();
-
-        const currentCenterX =
-            (
-                currentBounds.left +
-                currentBounds.right
-            ) / 2;
-
-        this.brushSizeSliderKnob.x +=
-            screenX -
-            currentCenterX;
-
-        const fillBounds =
-            this.brushSizeSliderFill
-                .getBounds();
-
-        const fillScaleX =
-            this.brushSizeSliderFill.scaleX ||
-            1;
-
-        this.brushSizeSliderFill
-            .setDisplaySize(
-                Math.max(
-                    0,
-                    screenX - minX,
-                ),
-                Math.max(
-                    1,
-                    fillBounds.height,
-                ),
+        const zoom =
+            Math.max(
+                0.01,
+                this.cameras.main.zoom,
             );
 
-        if (
-            !Number.isFinite(
-                this.brushSizeSliderFill
-                    .displayWidth,
+        const centerX =
+            this.gameWidth / 2;
+
+        const compensatedKnobX =
+            centerX +
+            (
+                desiredScreenX -
+                centerX
+            ) /
+            zoom;
+
+        this.brushSizeSliderKnob
+            .setX(
+                compensatedKnobX,
+            );
+
+        /*
+         * Fill uses the same fixed-HUD inverse zoom rule.
+         * Its final on-screen left edge remains at x=320 at every zoom.
+         */
+        const fillBaseWidth =
+            Math.max(
+                0,
+                desiredScreenX -
+                    320,
+            );
+
+        const compensatedFillX =
+            centerX +
+            (
+                320 -
+                centerX
+            ) /
+            zoom;
+
+        this.brushSizeSliderFill
+            .setPosition(
+                compensatedFillX,
+                this.brushSizeSliderFill.y,
             )
-        ) {
-            this.brushSizeSliderFill
-                .setScale(
-                    fillScaleX,
-                    this.brushSizeSliderFill
-                        .scaleY,
-                );
-        }
+            .setSize(
+                fillBaseWidth,
+                6,
+            )
+            .setScale(
+                1 / zoom,
+                1 / zoom,
+            );
+
         this.brushSizeSliderLabel
             .setText(
                 `${this.brushSize}px`,
@@ -11300,6 +11290,43 @@ export class GameScene extends Phaser.Scene {
         if (
             this.isMultiplayerSession()
         ) {
+            if (
+                remainingMilliseconds <= 0 &&
+                this.time.now -
+                    this.lastPhaseRecoveryAt >
+                    350
+            ) {
+                this.lastPhaseRecoveryAt =
+                    this.time.now;
+
+                const serverPhase =
+                    multiplayerClient
+                        .getPhase();
+
+                const serverEndsAt =
+                    multiplayerClient
+                        .getPhaseEndsAt();
+
+                /*
+                 * Schema callback can occasionally be missed/delayed in an
+                 * online tab.  Re-apply authoritative server phase instead
+                 * of leaving the UI frozen at PAINT 0 / TIME 0.
+                 */
+                if (
+                    serverPhase !==
+                    this.phase
+                ) {
+                    this.applyNetworkPhase(
+                        serverPhase,
+                        serverEndsAt,
+                    );
+                    return;
+                }
+
+                multiplayerClient
+                    .requestLobbySnapshot();
+            }
+
             if (
                 remainingMilliseconds <= 0 &&
                 this.phase === 'hunt'
