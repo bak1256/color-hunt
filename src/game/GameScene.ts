@@ -4014,13 +4014,28 @@ export class GameScene extends Phaser.Scene {
             )
             .setDepth(502);
 
+
+        const roomListHeader =
+            this.add.text(
+                102,
+                219,
+                `${tr('방 이름')}      ${tr('인원')}      ${tr('상태')}`,
+                {
+                    fontFamily:
+                        'Arial, sans-serif',
+                    fontSize: '9px',
+                    color: '#7f948a',
+                },
+            )
+                .setDepth(503);
+
         /*
          * Refresh belongs to the public-room header, not between unrelated
          * elements. Right-aligned with a compact refresh glyph.
          */
         const refreshButton =
             this.makeMenuButton(
-                538,
+                518,
                 176,
                 `↻ ${tr('새로고침')}`,
                 () => {
@@ -4030,8 +4045,8 @@ export class GameScene extends Phaser.Scene {
 
         refreshButton
             .setFixedSize(
-                112,
-                34,
+                96,
+                32,
             )
             .setAlign('center')
             .setOrigin(0.5)
@@ -4042,9 +4057,15 @@ export class GameScene extends Phaser.Scene {
             )
             .setPadding(
                 0,
-                4,
+                3,
                 0,
                 0,
+            )
+            .setBackgroundColor(
+                '#294f39',
+            )
+            .setColor(
+                '#f2f7f1',
             );
 
         const actionTitle = this.add
@@ -4267,6 +4288,7 @@ export class GameScene extends Phaser.Scene {
             actionCard,
             listTitle,
             roomDivider,
+            roomListHeader,
             refreshButton,
             actionTitle,
             publicCreate,
@@ -4297,13 +4319,13 @@ export class GameScene extends Phaser.Scene {
             showLoading
                 ? this.add
                     .text(
-                        94,
-                        232,
+                        102,
+                        236,
                         tr('방 목록을 불러오는 중...'),
                         {
-                            fontFamily: 'monospace',
-                            fontSize: '15px',
-                            color: '#765c49',
+                            fontFamily: 'Arial, sans-serif',
+                            fontSize: '13px',
+                            color: '#aebdb5',
                         },
                     )
                     .setDepth(503)
@@ -4358,13 +4380,13 @@ export class GameScene extends Phaser.Scene {
                 const emptyText =
                     this.add
                         .text(
-                            94,
-                            232,
+                            102,
+                            236,
                             tr('생성된 공개방이 없습니다.'),
                             {
-                                fontFamily: 'monospace',
-                                fontSize: '15px',
-                                color: '#765c49',
+                                fontFamily: 'Arial, sans-serif',
+                                fontSize: '13px',
+                                color: '#aebdb5',
                             },
                         )
                         .setDepth(503);
@@ -4397,7 +4419,7 @@ export class GameScene extends Phaser.Scene {
                             this.makeMenuButton(
                                 325,
                                 246 +
-                                    index * 46,
+                                    index * 48,
                                 `${roomTitle} · ${room.clients}/${room.maxClients} · ${trPhase(phase)}`,
                                 () => {
                                     /*
@@ -4412,13 +4434,32 @@ export class GameScene extends Phaser.Scene {
                             );
 
                         row
-                            .setFontSize(12)
+                            .setFontSize(
+                                getLanguage() === 'en'
+                                    ? 10
+                                    : 11,
+                            )
                             .setFixedSize(
-                                560,
-                                32,
+                                456,
+                                38,
                             )
                             .setAlign(
-                                'center',
+                                'left',
+                            )
+                            .setOrigin(
+                                0.5,
+                            )
+                            .setPadding(
+                                14,
+                                10,
+                                0,
+                                0,
+                            )
+                            .setBackgroundColor(
+                                '#182a33',
+                            )
+                            .setColor(
+                                '#eef4ef',
                             );
 
                         this.roomListObjects.push(
