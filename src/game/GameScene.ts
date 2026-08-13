@@ -12,6 +12,7 @@ import {
     type PublicRoomInfo,
 } from '../network/MultiplayerClient';
 import { NetworkPlayerManager } from '../multiplayer/NetworkPlayerManager';
+import { getLanguage, setLanguage, tr, trPhase, type GameLanguage } from '../i18n';
 
 type GamePhase =
     | 'lobby'
@@ -454,7 +455,7 @@ export class GameScene extends Phaser.Scene {
 
         this.multiplayerText
             .setText(
-                '방을 만드는 중...',
+                tr('방을 만드는 중...'),
             )
             .setVisible(true);
 
@@ -696,7 +697,7 @@ export class GameScene extends Phaser.Scene {
             this.showMainMenu();
 
             this.showStatus(
-                '방을 만들지 못했습니다.',
+                tr('방을 만들지 못했습니다.'),
             );
         }
     }
@@ -771,7 +772,7 @@ export class GameScene extends Phaser.Scene {
 
         this.multiplayerText
             .setText(
-                '방에 참가하는 중...',
+                tr('방에 참가하는 중...'),
             )
             .setVisible(true);
 
@@ -889,7 +890,7 @@ export class GameScene extends Phaser.Scene {
                         this.showMainMenu();
 
                         this.showStatus(
-                            '방에 참가할 수 없습니다. 이미 종료된 방일 수 있습니다.',
+                            tr('방에 참가할 수 없습니다. 이미 종료된 방일 수 있습니다.'),
                         );
 
                         void this.refreshPublicRoomList(
@@ -929,8 +930,8 @@ export class GameScene extends Phaser.Scene {
 
             this.showStatus(
                 pending.isPrivate
-                    ? '방 ID 또는 비밀번호를 확인하세요.'
-                    : '방에 참가할 수 없습니다. 이미 사라진 방일 수 있습니다.',
+                    ? tr('방 ID 또는 비밀번호를 확인하세요.')
+                    : tr('방에 참가할 수 없습니다. 이미 사라진 방일 수 있습니다.'),
             );
 
             if (!pending.isPrivate) {
@@ -1366,7 +1367,7 @@ export class GameScene extends Phaser.Scene {
             .text(
                 this.gameWidth - 16,
                 16,
-                'MULTI · CONNECTING...',
+                tr('MULTI · CONNECTING...'),
                 {
                     fontFamily: 'monospace',
                     fontSize: '13px',
@@ -1611,7 +1612,7 @@ export class GameScene extends Phaser.Scene {
                 (_message: string) => {
                     this.statusText
                         .setText(
-                            '헌터의 탄약이 모두 소진되었습니다. HIDER 승리!',
+                            tr('헌터의 탄약이 모두 소진되었습니다. HIDER 승리!'),
                         )
                         .setVisible(true)
                         .setAlpha(1);
@@ -1628,7 +1629,7 @@ export class GameScene extends Phaser.Scene {
                     },
                 ) => {
                     this.showStatus(
-                        `${payload.name} 님의 연결이 끊겼습니다.`,
+                        tr(`${payload.name} 님의 연결이 끊겼습니다.`),
                     );
                 },
             ),
@@ -1694,7 +1695,7 @@ export class GameScene extends Phaser.Scene {
 
                     if (wasMultiplayer) {
                         this.showStatus(
-                            '서버 연결이 끊겼습니다. 메인 화면으로 돌아갑니다.',
+                            tr('서버 연결이 끊겼습니다. 메인 화면으로 돌아갑니다.'),
                         );
 
                         this.time.delayedCall(
@@ -1799,7 +1800,7 @@ export class GameScene extends Phaser.Scene {
 
         if (!inviteUrl) {
             this.showStatus(
-                '초대 링크를 만들 수 없습니다.',
+                tr('초대 링크를 만들 수 없습니다.'),
             );
             return;
         }
@@ -1811,7 +1812,7 @@ export class GameScene extends Phaser.Scene {
                 );
 
             this.showStatus(
-                '초대 링크를 복사했습니다!',
+                tr('초대 링크를 복사했습니다!'),
             );
         } catch {
             this.openCopyLinkModal(
@@ -2005,7 +2006,7 @@ export class GameScene extends Phaser.Scene {
             document.createElement('button');
 
         cancel.type = 'button';
-        cancel.textContent = '취소';
+        cancel.textContent = tr('취소');
 
         const submit =
             document.createElement('button');
@@ -2168,14 +2169,14 @@ export class GameScene extends Phaser.Scene {
         }> = [
             {
                 key: 'playerName',
-                label: '닉네임',
+                label: tr('닉네임'),
                 value:
                     this.getSavedPlayerName(),
                 type: 'text',
             },
             {
                 key: 'roomTitle',
-                label: '방 이름',
+                label: tr('방 이름'),
                 value: 'Chameleon Room',
                 type: 'text',
             },
@@ -2184,7 +2185,7 @@ export class GameScene extends Phaser.Scene {
         if (isPrivate) {
             fields.push({
                 key: 'password',
-                label: '비밀번호',
+                label: tr('비밀번호'),
                 value: '',
                 type: 'password',
             });
@@ -2192,10 +2193,10 @@ export class GameScene extends Phaser.Scene {
 
         this.createMenuModal(
             isPrivate
-                ? '비공개방 만들기'
-                : '공개방 만들기',
+                ? tr('비공개방 만들기')
+                : tr('공개방 만들기'),
             fields,
-            '만들기',
+            tr('만들기'),
             (values) => {
                 void this.submitCreateRoom(
                     isPrivate,
@@ -2207,25 +2208,25 @@ export class GameScene extends Phaser.Scene {
 
     private openPrivateJoinModal(): void {
         this.createMenuModal(
-            '비공개방 참가',
+            tr('비공개방 참가'),
             [
                 {
                     key: 'roomId',
-                    label: '방 ID',
+                    label: tr('방 ID'),
                 },
                 {
                     key: 'password',
-                    label: '비밀번호',
+                    label: tr('비밀번호'),
                     type: 'password',
                 },
                 {
                     key: 'playerName',
-                    label: '닉네임',
+                    label: tr('닉네임'),
                     value:
                         this.getSavedPlayerName(),
                 },
             ],
-            '참가',
+            tr('참가'),
             (values) => {
                 void this.submitJoinRoom(
                     values.roomId,
@@ -2262,24 +2263,24 @@ export class GameScene extends Phaser.Scene {
         if (isPrivate) {
             fields.push({
                 key: 'password',
-                label: '비밀번호',
+                label: tr('비밀번호'),
                 type: 'password',
             });
         }
 
         fields.push({
             key: 'playerName',
-            label: '닉네임',
+            label: tr('닉네임'),
             value:
                 this.getSavedPlayerName(),
         });
 
         this.createMenuModal(
             fromInvite
-                ? '초대받은 방 참가'
-                : '게임방 참가',
+                ? tr('초대받은 방 참가')
+                : tr('게임방 참가'),
             fields,
-            '참가',
+            tr('참가'),
             (values) => {
                 void this.submitJoinRoom(
                     roomId,
@@ -2294,16 +2295,16 @@ export class GameScene extends Phaser.Scene {
         inviteUrl: string,
     ): void {
         this.createMenuModal(
-            '초대 링크',
+            tr('초대 링크'),
             [
                 {
                     key: 'inviteUrl',
                     label:
-                        '아래 링크를 복사하세요.',
+                        tr('아래 링크를 복사하세요.'),
                     value: inviteUrl,
                 },
             ],
-            '닫기',
+            tr('닫기'),
             () => {
                 this.closeMenuModal();
             },
@@ -2331,7 +2332,7 @@ export class GameScene extends Phaser.Scene {
         ) {
             this.setModalBusy(
                 false,
-                '닉네임과 방 이름을 입력하세요.',
+                tr('닉네임과 방 이름을 입력하세요.'),
             );
             return;
         }
@@ -2342,7 +2343,7 @@ export class GameScene extends Phaser.Scene {
         ) {
             this.setModalBusy(
                 false,
-                '비밀번호를 입력하세요.',
+                tr('비밀번호를 입력하세요.'),
             );
             return;
         }
@@ -2362,7 +2363,7 @@ export class GameScene extends Phaser.Scene {
 
         this.setModalBusy(
             true,
-            '방을 만드는 중...',
+            tr('방을 만드는 중...'),
         );
 
         /*
@@ -2401,7 +2402,7 @@ export class GameScene extends Phaser.Scene {
         if (!roomId || !playerName) {
             this.setModalBusy(
                 false,
-                '방 정보와 닉네임을 확인하세요.',
+                tr('방 정보와 닉네임을 확인하세요.'),
             );
             return;
         }
@@ -2412,7 +2413,7 @@ export class GameScene extends Phaser.Scene {
         ) {
             this.setModalBusy(
                 false,
-                '비밀번호를 입력하세요.',
+                tr('비밀번호를 입력하세요.'),
             );
             return;
         }
@@ -2432,7 +2433,7 @@ export class GameScene extends Phaser.Scene {
 
         this.setModalBusy(
             true,
-            '방을 확인하는 중...',
+            tr('방을 확인하는 중...'),
         );
 
         /*
@@ -2465,11 +2466,11 @@ export class GameScene extends Phaser.Scene {
                 if (!roomStillExists) {
                     this.setModalBusy(
                         false,
-                        '이미 사라졌거나 참가할 수 없는 방입니다.',
+                        tr('이미 사라졌거나 참가할 수 없는 방입니다.'),
                     );
 
                     this.showStatus(
-                        '방에 참가할 수 없습니다. 방 목록을 갱신했습니다.',
+                        tr('방에 참가할 수 없습니다. 방 목록을 갱신했습니다.'),
                     );
 
                     void this.refreshPublicRoomList(
@@ -2492,7 +2493,7 @@ export class GameScene extends Phaser.Scene {
 
         this.setModalBusy(
             true,
-            '방에 참가하는 중...',
+            tr('방에 참가하는 중...'),
         );
 
         /*
@@ -2786,7 +2787,7 @@ export class GameScene extends Phaser.Scene {
 
         /*
          * 방 생성/참가 직후 callback 순서에 의존하지 않습니다.
-         * room.state에 이미 존재하는 '내 플레이어'를 즉시 view로 보장합니다.
+         * room.state에 이미 존재하는 tr('내 플레이어')를 즉시 view로 보장합니다.
          * onAdd가 먼저 왔더라도 addPlayer()는 기존 view를 update만 하므로 안전합니다.
          */
         this.multiplayerSessionActive = true;
@@ -3023,26 +3024,43 @@ export class GameScene extends Phaser.Scene {
             )
             .setOrigin(0.5)
             .setDepth(502)
+            .setFixedSize(184, 46)
+            .setAlign('center')
             .setInteractive({
                 useHandCursor: true,
             });
+
+        const language =
+            getLanguage();
+
+        button.setFontSize(
+            language === 'en'
+                ? 13
+                : language === 'ja'
+                    ? 14
+                    : 15,
+        );
 
         button.on(
             'pointerdown',
             onClick,
         );
 
+        /*
+         * 번역 문자열이 길어도 버튼 자체 크기와 scale은 변하지 않습니다.
+         * hover에서는 alpha만 조정해 이웃 버튼과 겹치지 않게 합니다.
+         */
         button.on(
             'pointerover',
             () => {
-                button.setScale(1.05);
+                button.setAlpha(0.88);
             },
         );
 
         button.on(
             'pointerout',
             () => {
-                button.setScale(1);
+                button.setAlpha(1);
             },
         );
 
@@ -3140,7 +3158,7 @@ export class GameScene extends Phaser.Scene {
             .text(
                 this.gameWidth / 2,
                 124,
-                '위장하고, 숨고, 찾아내세요!',
+                tr('위장하고, 숨고, 찾아내세요!'),
                 {
                     fontFamily: 'monospace',
                     fontSize: '16px',
@@ -3150,11 +3168,91 @@ export class GameScene extends Phaser.Scene {
             .setOrigin(0.5)
             .setDepth(501);
 
+        const languageBar =
+            this.add.rectangle(
+                this.gameWidth / 2,
+                516,
+                430,
+                38,
+                0x172027,
+                0.88,
+            )
+                .setStrokeStyle(
+                    2,
+                    0x6f8f65,
+                    1,
+                )
+                .setDepth(504);
+
+        const languageLabels:
+            Array<[GameLanguage, string]> = [
+                ['ko', '한국어'],
+                ['ja', '日本語'],
+                ['en', 'English'],
+                ['zh', '中文'],
+            ];
+
+        const languageButtons =
+            languageLabels.map(
+                ([language, label], index) => {
+                    const selected =
+                        getLanguage() === language;
+
+                    const button =
+                        this.add.text(
+                            357 + index * 82,
+                            516,
+                            label,
+                            {
+                                fontFamily: 'monospace',
+                                fontSize: '13px',
+                                fontStyle:
+                                    selected
+                                        ? 'bold'
+                                        : 'normal',
+                                color:
+                                    selected
+                                        ? '#fffdf3'
+                                        : '#dbe7d6',
+                                backgroundColor:
+                                    selected
+                                        ? '#5c8f66'
+                                        : '#27352d',
+                                fixedWidth: 74,
+                                fixedHeight: 28,
+                                align: 'center',
+                                padding: {
+                                    x: 4,
+                                    y: 5,
+                                },
+                            },
+                        )
+                            .setOrigin(0.5)
+                            .setDepth(505)
+                            .setInteractive({
+                                useHandCursor: true,
+                            });
+
+                    button.on(
+                        'pointerdown',
+                        () => {
+                            setLanguage(
+                                language,
+                            );
+                            this.closeMenuModal();
+                            this.showMainMenu();
+                        },
+                    );
+
+                    return button;
+                },
+            );
+
         const publicCreate =
             this.makeMenuButton(
                 280,
-                178,
-                '공개방 만들기',
+                182,
+                tr('공개방 만들기'),
                 () => {
                     this.openCreateRoomModal(
                         false,
@@ -3165,8 +3263,8 @@ export class GameScene extends Phaser.Scene {
         const privateCreate =
             this.makeMenuButton(
                 480,
-                178,
-                '비공개방 만들기',
+                182,
+                tr('비공개방 만들기'),
                 () => {
                     this.openCreateRoomModal(
                         true,
@@ -3177,8 +3275,8 @@ export class GameScene extends Phaser.Scene {
         const privateJoin =
             this.makeMenuButton(
                 680,
-                178,
-                '비공개방 참가',
+                182,
+                tr('비공개방 참가'),
                 () => {
                     this.openPrivateJoinModal();
                 },
@@ -3188,7 +3286,7 @@ export class GameScene extends Phaser.Scene {
             .text(
                 175,
                 230,
-                '공개 게임방',
+                tr('공개 게임방'),
                 {
                     fontFamily: 'monospace',
                     fontSize: '20px',
@@ -3202,25 +3300,36 @@ export class GameScene extends Phaser.Scene {
             this.makeMenuButton(
                 760,
                 236,
-                '새로고침',
+                tr('새로고침'),
                 () => {
                     void this.refreshPublicRoomList(true);
                 },
             );
 
         refreshButton
-            .setFontSize(15)
+            .setFixedSize(
+                104,
+                34,
+            )
+            .setAlign('center')
+            .setFontSize(
+                getLanguage() === 'en'
+                    ? 12
+                    : 13,
+            )
             .setPadding(
-                14,
-                7,
-                14,
-                7,
+                6,
+                4,
+                6,
+                4,
             );
 
         this.mainMenuObjects.push(
             panel,
             title,
             subtitle,
+            languageBar,
+            ...languageButtons,
             publicCreate,
             privateCreate,
             privateJoin,
@@ -3246,7 +3355,7 @@ export class GameScene extends Phaser.Scene {
                     .text(
                         175,
                         275,
-                        '방 목록을 불러오는 중...',
+                        tr('방 목록을 불러오는 중...'),
                         {
                             fontFamily: 'monospace',
                             fontSize: '15px',
@@ -3299,7 +3408,7 @@ export class GameScene extends Phaser.Scene {
                         .text(
                             175,
                             275,
-                            '생성된 공개방이 없습니다.',
+                            tr('생성된 공개방이 없습니다.'),
                             {
                                 fontFamily: 'monospace',
                                 fontSize: '15px',
@@ -3337,7 +3446,7 @@ export class GameScene extends Phaser.Scene {
                                 this.gameWidth / 2,
                                 275 +
                                     index * 45,
-                                `${roomTitle} · ${room.clients}/${room.maxClients} · ${phase.toUpperCase()}`,
+                                `${roomTitle} · ${room.clients}/${room.maxClients} · ${trPhase(phase)}`,
                                 () => {
                                     /*
                                      * native prompt 제거 후 공개방 참가도
@@ -3379,7 +3488,7 @@ export class GameScene extends Phaser.Scene {
             }
 
             loading?.setText(
-                '방 목록을 불러오지 못했습니다.',
+                tr(tr('방 목록을 불러오지 못했습니다.')),
             );
         }
     }
@@ -3454,7 +3563,7 @@ export class GameScene extends Phaser.Scene {
             .text(
                 790,
                 440,
-                'START GAME',
+                tr('START GAME'),
                 {
                     fontFamily: 'monospace',
                     fontSize: '21px',
@@ -3505,7 +3614,7 @@ export class GameScene extends Phaser.Scene {
             this.makeMenuButton(
                 720,
                 390,
-                'HUNTER 지원',
+                tr('HUNTER 지원'),
                 () => {
                     const localPlayer =
                         multiplayerClient
@@ -3525,7 +3634,7 @@ export class GameScene extends Phaser.Scene {
             this.makeMenuButton(
                 860,
                 390,
-                '지원 취소',
+                tr('지원 취소'),
                 () => {
                     multiplayerClient
                         .sendHunterVolunteer(
@@ -3536,10 +3645,18 @@ export class GameScene extends Phaser.Scene {
                 .setDepth(402)
                 .setFontSize(17);
 
+        this.roleHunterButton
+            .setFixedSize(132, 46)
+            .setAlign('center');
+
+        this.roleHiderButton
+            .setFixedSize(132, 46)
+            .setAlign('center');
+
         /*
          * 역할 버튼은 서로 가까이 배치되어 있으므로
          * makeMenuButton의 기본 hover scale(1.05)을 사용하면
-         * 'HUNTER 지원 중'처럼 글자가 길어졌을 때 옆 버튼과 겹칩니다.
+         * tr('HUNTER 지원 중')처럼 글자가 길어졌을 때 옆 버튼과 겹칩니다.
          *
          * 기존 pointerover/pointerout listener를 제거하고,
          * 크기는 고정한 채 alpha만 바뀌도록 합니다.
@@ -3579,25 +3696,37 @@ export class GameScene extends Phaser.Scene {
             this.makeMenuButton(
                 720,
                 500,
-                '초대 링크 복사',
+                tr('초대 링크 복사'),
                 () => {
                     void this.copyInviteLink();
                 },
             )
                 .setDepth(402)
-                .setFontSize(13);
+                .setFixedSize(132, 40)
+                .setAlign('center')
+                .setFontSize(
+                    getLanguage() === 'en'
+                        ? 11
+                        : 12,
+                );
 
         this.leaveRoomButton =
             this.makeMenuButton(
                 860,
                 500,
-                '로비로 나가기',
+                tr('로비로 나가기'),
                 () => {
                     void this.leaveCurrentRoomToLobby();
                 },
             )
                 .setDepth(402)
-                .setFontSize(13);
+                .setFixedSize(132, 40)
+                .setAlign('center')
+                .setFontSize(
+                    getLanguage() === 'en'
+                        ? 11
+                        : 12,
+                );
 
         this.updateLobbyUi();
     }
@@ -3654,7 +3783,7 @@ export class GameScene extends Phaser.Scene {
             this.add.text(
                 205,
                 42,
-                'MAP  RANDOM',
+                tr('MAP  RANDOM'),
                 {
                     fontFamily:
                         'monospace',
@@ -3858,8 +3987,10 @@ export class GameScene extends Phaser.Scene {
 
         const label =
             selected === 'random'
-                ? 'MAP  RANDOM'
-                : `MAP  ${Math.max(1, index)} / 12`;
+                ? tr('MAP  RANDOM')
+                : tr(
+                    `MAP  ${Math.max(1, index)} / 12`,
+                );
 
         this.mapSelectorPanel
             .setVisible(visible);
@@ -3944,36 +4075,42 @@ export class GameScene extends Phaser.Scene {
 
         const lobbyInfo =
             !this.localNetworkPlayerReady
-                ? '플레이어 연결 중...'
+                ? tr('플레이어 연결 중...')
                 : [
-                    `ROOM  ${roomId}`,
-                    `TITLE  ${multiplayerClient.getRoom()?.state.roomTitle ?? '-'}`,
-                    `PLAYERS  ${this.networkPlayerCount} / 10`,
-                    `현재 역할  ${
-                        localPlayer?.role
-                            ?.toUpperCase() ??
-                        'HIDER'
-                    }`,
-                    `Hunter 지원  ${
-                        localPlayer
-                            ?.hunterVolunteer
-                            ? 'ON'
-                            : 'OFF'
-                    }`,
-                    `시작 시 Hunter 수  ${this.getRecommendedHunterCount(this.networkPlayerCount)}`,
-                    `MAP  ${
-                        multiplayerClient
-                            .getSelectedMap() ===
-                            'random'
-                            ? 'RANDOM'
-                            : multiplayerClient
-                                .getSelectedMap()
-                                .toUpperCase()
-                    }`,
+                    tr(tr(`ROOM  ${roomId}`)),
+                    tr(tr(`TITLE  ${multiplayerClient.getRoom()?.state.roomTitle ?? '-'}`)),
+                    tr(tr(`PLAYERS  ${this.networkPlayerCount} / 10`)),
+                    tr(
+                        `현재 역할  ${
+                            localPlayer?.role
+                                ?.toUpperCase() ??
+                            'HIDER'
+                        }`,
+                    ),
+                    tr(
+                        `Hunter 지원  ${
+                            localPlayer
+                                ?.hunterVolunteer
+                                ? 'ON'
+                                : 'OFF'
+                        }`,
+                    ),
+                    tr(tr(`시작 시 Hunter 수  ${this.getRecommendedHunterCount(this.networkPlayerCount)}`)),
+                    tr(
+                        `MAP  ${
+                            multiplayerClient
+                                .getSelectedMap() ===
+                                'random'
+                                ? 'RANDOM'
+                                : multiplayerClient
+                                    .getSelectedMap()
+                                    .toUpperCase()
+                        }`,
+                    ),
                     isHost
-                        ? '당신은 방장입니다.'
-                        : '방장이 시작하기를 기다리는 중...',
-                    'WASD로 대기실 캐릭터 이동',
+                        ? tr('당신은 방장입니다.')
+                        : tr('방장이 시작하기를 기다리는 중...'),
+                    tr('WASD로 대기실 캐릭터 이동'),
                 ].join('\n');
 
         const hasLobbyInfo =
@@ -3987,14 +4124,38 @@ export class GameScene extends Phaser.Scene {
             );
 
         this.inviteLinkButton
-            ?.setVisible(
+            ?.setText(
+                tr('초대 링크 복사'),
+            )
+            .setVisible(
                 isHost &&
                 roomId !== '-',
             );
 
         this.leaveRoomButton
-            ?.setVisible(
+            ?.setText(
+                tr('로비로 나가기'),
+            )
+            .setVisible(
                 roomId !== '-',
+            );
+
+        this.inviteLinkButton
+            ?.setFontSize(
+                getLanguage() === 'en'
+                    ? 10
+                    : getLanguage() === 'ja'
+                        ? 11
+                        : 12,
+            );
+
+        this.leaveRoomButton
+            ?.setFontSize(
+                getLanguage() === 'en'
+                    ? 10
+                    : getLanguage() === 'ja'
+                        ? 11
+                        : 12,
             );
 
         this.startGameButton
@@ -4006,11 +4167,18 @@ export class GameScene extends Phaser.Scene {
             );
 
         this.roleHunterButton
+            .setFontSize(
+                getLanguage() === 'en'
+                    ? 11
+                    : getLanguage() === 'ja'
+                        ? 13
+                        : 14,
+            )
             .setText(
                 localPlayer
                     ?.hunterVolunteer
-                    ? 'HUNTER 지원 중'
-                    : 'HUNTER 지원',
+                    ? tr('HUNTER 지원 중')
+                    : tr('HUNTER 지원'),
             )
             .setAlpha(
                 localPlayer
@@ -4020,6 +4188,14 @@ export class GameScene extends Phaser.Scene {
             );
 
         this.roleHiderButton
+            .setFontSize(
+                getLanguage() === 'en'
+                    ? 11
+                    : 14,
+            )
+            .setText(
+                tr('지원 취소'),
+            )
             .setAlpha(
                 localPlayer
                     ?.hunterVolunteer
@@ -4027,11 +4203,22 @@ export class GameScene extends Phaser.Scene {
                     : 0.55,
             );
 
-        this.startGameButton.setText(
-            this.networkPlayerCount >= 2
-                ? 'START GAME'
-                : ' FOR PLAYER',
-        );
+        this.startGameButton
+            .setFixedSize(
+                180,
+                48,
+            )
+            .setAlign('center')
+            .setFontSize(
+                getLanguage() === 'en'
+                    ? 14
+                    : 17,
+            )
+            .setText(
+                this.networkPlayerCount >= 2
+                    ? tr('START GAME')
+                    : tr('FOR PLAYER'),
+            );
     }
 
     private async leaveCurrentRoomToLobby(): Promise<void> {
@@ -4082,7 +4269,7 @@ export class GameScene extends Phaser.Scene {
         this.roomTransitionInProgress = false;
 
         this.showStatus(
-            '방에서 나왔습니다.',
+            tr('방에서 나왔습니다.'),
         );
     }
 
@@ -4193,10 +4380,10 @@ export class GameScene extends Phaser.Scene {
         if (isRoundEnd) {
             const victoryText =
                 this.roundResultWinner === 'hunters'
-                    ? 'HUNTER 승리!'
+                    ? tr('HUNTER 승리!')
                     : this.roundResultWinner === 'hiders'
-                        ? 'HIDER 승리!'
-                        : 'ROUND OVER';
+                        ? tr('HIDER 승리!')
+                        : tr('ROUND OVER');
 
             this.countdownPanel
                 .setFillStyle(0x000000, 0)
@@ -4223,7 +4410,7 @@ export class GameScene extends Phaser.Scene {
                     .setText(
                         [
                             victoryText,
-                            '게임 종료',
+                            tr('게임 종료'),
                             String(remaining),
                         ].join('\n'),
                     );
@@ -4554,7 +4741,7 @@ export class GameScene extends Phaser.Scene {
         this.hunterOverheatLabel
             .setText(
                 overheated
-                    ? 'OVERHEAT!'
+                    ? tr('OVERHEAT!')
                     : '',
             )
             .setVisible(
@@ -4673,7 +4860,7 @@ export class GameScene extends Phaser.Scene {
             this.add.text(
                 this.gameWidth - 18,
                 18,
-                'HIDE 0',
+                tr('HIDE 0'),
                 {
                     fontFamily: 'monospace',
                     fontSize: '14px',
@@ -4714,7 +4901,7 @@ export class GameScene extends Phaser.Scene {
             this.add.text(
                 this.gameWidth - 196,
                 this.gameHeight - 132,
-                'MINIMAP',
+                tr('MINIMAP'),
                 {
                     fontFamily: 'monospace',
                     fontSize: '11px',
@@ -5361,10 +5548,10 @@ export class GameScene extends Phaser.Scene {
                 )
                 .setText(
                     intensity > 0.78
-                        ? '♥ 위험!'
+                        ? tr('♥ 위험!')
                         : intensity > 0.42
-                            ? '♥ 두근두근'
-                            : '♥ 두근',
+                            ? tr('♥ 두근두근')
+                            : tr('♥ 두근'),
                 );
 
             if (
@@ -5424,8 +5611,8 @@ export class GameScene extends Phaser.Scene {
                 this.gameWidth - 18,
                 18,
                 this.bgmEnabled
-                    ? '♫ BGM ON'
-                    : '♫ BGM OFF',
+                    ? tr('♫ BGM ON')
+                    : tr('♫ BGM OFF'),
                 {
                     fontFamily: 'monospace',
                     fontSize: '15px',
@@ -5464,8 +5651,8 @@ export class GameScene extends Phaser.Scene {
 
                 this.bgmToggleButton.setText(
                     this.bgmEnabled
-                        ? '♫ BGM ON'
-                        : '♫ BGM OFF',
+                        ? tr('♫ BGM ON')
+                        : tr('♫ BGM OFF'),
                 );
 
                 this.syncPhaseMusic();
@@ -5649,7 +5836,10 @@ export class GameScene extends Phaser.Scene {
             .text(
                 this.gameWidth / 2,
                 72,
-                'HIDERS ARE PAINTING...\nHunter도 자신의 위장색을 칠해보세요.',
+                [
+                    tr('HIDERS ARE PAINTING...'),
+                    tr('Hunter도 자신의 위장색을 칠해보세요.'),
+                ].join('\n'),
                 {
                     fontFamily: 'monospace',
                     fontSize: '27px',
@@ -5776,7 +5966,7 @@ export class GameScene extends Phaser.Scene {
             .setVisible(false);
 
         this.guideText.setText(
-            '방장이 START GAME 버튼을 누르면 시작합니다.',
+            tr('방장이 START GAME 버튼을 누르면 시작합니다.'),
         );
 
         this.paintPreview.setVisible(false);
@@ -6194,8 +6384,8 @@ export class GameScene extends Phaser.Scene {
             const hiderWinText =
                 result.reason ===
                     'ammo_depleted'
-                    ? 'HIDER 승리! 헌터의 탄약이 모두 소진되어 패배했습니다.'
-                    : 'HIDER 승리! 은신 위치를 공개합니다.';
+                    ? tr('HIDER 승리! 헌터의 탄약이 모두 소진되어 패배했습니다.')
+                    : tr('HIDER 승리! 은신 위치를 공개합니다.');
 
             this.roundResultMessage =
                 hiderWinText;
@@ -6230,7 +6420,7 @@ export class GameScene extends Phaser.Scene {
                 .setVisible(false);
 
             this.roundResultMessage =
-                'HUNTER 승리!';
+                tr('HUNTER 승리!');
 
             this.guideText
                 .setPosition(
@@ -6528,8 +6718,8 @@ export class GameScene extends Phaser.Scene {
                         (
                             this.roundResultWinner ===
                                 'hunters'
-                                ? 'HUNTER 승리!'
-                                : 'HIDER 승리!'
+                                ? tr('HUNTER 승리!')
+                                : tr('HIDER 승리!')
                         ),
                 );
 
@@ -6558,10 +6748,10 @@ export class GameScene extends Phaser.Scene {
         this.multiplayerText
             .setText(
                 [
-                    'CHAMELEON HUNT ONLINE',
+                    tr('CHAMELEON HUNT ONLINE'),
                     `ROOM ${roomId ?? '-'}`,
-                    `PLAYERS ${this.networkPlayerCount} / 10`,
-                    `ROLE ${role}`,
+                    tr(`PLAYERS ${this.networkPlayerCount} / 10`),
+                    tr(`ROLE ${role}`),
                 ].join('\n'),
             )
             .setColor('#35634a');
@@ -6660,7 +6850,7 @@ export class GameScene extends Phaser.Scene {
         this.gun.setDepth(11);
 
         this.hunterLabel = this.add
-            .text(x, y - 49, 'HUNTER', {
+            .text(x, y - 49, tr('HUNTER'), {
                 fontFamily: 'Arial',
                 fontSize: '13px',
                 fontStyle: 'bold',
@@ -6857,7 +7047,7 @@ export class GameScene extends Phaser.Scene {
         const paintLayer = this.createPaintLayer(x, y);
 
         const label = this.add
-            .text(x, y - 43, `HIDER ${index + 1}`, {
+            .text(x, y - 43, tr(`HIDER ${index + 1}`), {
                 fontFamily: 'Arial',
                 fontSize: '14px',
                 fontStyle: 'bold',
@@ -7017,7 +7207,7 @@ export class GameScene extends Phaser.Scene {
         );
 
         this.showStatus(
-            `HIDER ${index + 1} 선택`,
+            tr(`HIDER ${index + 1} 선택`),
         );
     }
 
@@ -7336,7 +7526,7 @@ export class GameScene extends Phaser.Scene {
             .text(
                 20,
                 this.gameHeight - 83,
-                'COLOR PALETTE',
+                tr('COLOR PALETTE'),
                 {
                     fontFamily: 'monospace',
                     fontSize: '12px',
@@ -7420,15 +7610,15 @@ export class GameScene extends Phaser.Scene {
         }> = [
             {
                 shape: 'dotCircle',
-                label: '● DOT',
+                label: tr('● DOT'),
             },
             {
                 shape: 'circle',
-                label: '○ CIR',
+                label: tr('○ CIR'),
             },
             {
                 shape: 'square',
-                label: '■ SQR',
+                label: tr('■ SQR'),
             },
         ];
 
@@ -7501,7 +7691,7 @@ export class GameScene extends Phaser.Scene {
             .text(
                 18,
                 118,
-                'ZOOM 1.0x\n마우스 휠',
+                tr('ZOOM 1.0x\n마우스 휠'),
                 {
                     fontFamily: 'monospace',
                     fontSize: '12px',
@@ -7580,7 +7770,7 @@ export class GameScene extends Phaser.Scene {
             this.add.text(
                 panelX,
                 panelY - 67,
-                'CAMO SWATCH',
+                tr('CAMO SWATCH'),
                 {
                     fontFamily:
                         'monospace',
@@ -7598,7 +7788,7 @@ export class GameScene extends Phaser.Scene {
             this.add.text(
                 panelX,
                 panelY + 68,
-                '배경 대표색',
+                tr('배경 대표색'),
                 {
                     fontFamily:
                         'monospace',
@@ -8126,19 +8316,19 @@ export class GameScene extends Phaser.Scene {
 
         this.paintControlHelpText.setText(
             [
-                'PAINT CONTROLS',
-                '좌클릭  색칠',
+                tr('PAINT CONTROLS'),
+                tr('좌클릭  색칠'),
                 hunterPaint
-                    ? 'CAMO SWATCH  배경 대표색'
-                    : '우클릭  스포이드',
+                    ? tr('CAMO SWATCH  배경 대표색')
+                    : tr('우클릭  스포이드'),
                 hunterPaint
-                    ? '우클릭  숨은 배경 추출 불가'
+                    ? tr('우클릭  숨은 배경 추출 불가')
                     : '',
-                '휠      확대 / 축소',
-                'Ctrl+휠 브러시 크기',
-                '팔레트  브러시 모양',
-                'B       모양 전환',
-                `현재 ${this.getBrushShapeLabel()} · ${this.brushSize}`,
+                tr('휠      확대 / 축소'),
+                tr('Ctrl+휠 브러시 크기'),
+                tr('팔레트  브러시 모양'),
+                tr('B       모양 전환'),
+                tr(`현재 ${this.getBrushShapeLabel()} · ${this.brushSize}`),
             ]
                 .filter(Boolean)
                 .join('\n'),
@@ -8437,7 +8627,7 @@ export class GameScene extends Phaser.Scene {
                          * 추출하는 것을 금지합니다.
                          */
                         this.showStatus(
-                            '헌터는 숨겨진 배경을 스포이드할 수 없습니다. CAMO SWATCH를 사용하세요.',
+                            tr('헌터는 숨겨진 배경을 스포이드할 수 없습니다. CAMO SWATCH를 사용하세요.'),
                         );
 
                         return;
@@ -8621,9 +8811,9 @@ export class GameScene extends Phaser.Scene {
 
                 this.paintZoomText.setText(
                     [
-                        `ZOOM ${zoom.toFixed(2)}x`,
-                        `BRUSH ${this.brushSize}`,
-                        '휠: 확대/축소 · Ctrl+휠: 브러시 크기',
+                        tr(`ZOOM ${zoom.toFixed(2)}x`),
+                        tr(`BRUSH ${this.brushSize}`),
+                        tr('휠: 확대/축소 · Ctrl+휠: 브러시 크기'),
                     ].join('\n'),
                 );
 
@@ -8887,7 +9077,7 @@ export class GameScene extends Phaser.Scene {
 
         if (!sourceImage) {
             this.showStatus(
-                '배경 이미지를 읽을 수 없습니다',
+                tr('배경 이미지를 읽을 수 없습니다'),
             );
 
             return;
@@ -9002,7 +9192,7 @@ export class GameScene extends Phaser.Scene {
                 .toUpperCase();
 
         this.showStatus(
-            `색상 추출 #${hexColor}`,
+            tr(`색상 추출 #${hexColor}`),
         );
     }
 
@@ -9121,7 +9311,7 @@ export class GameScene extends Phaser.Scene {
         this.updatePaintControlHelp();
 
         this.showStatus(
-            `${this.getBrushShapeLabel()} 브러시`,
+            tr(`${this.getBrushShapeLabel()} 브러시`),
         );
     }
 
@@ -9130,17 +9320,17 @@ export class GameScene extends Phaser.Scene {
             this.brushShape ===
             'dotCircle'
         ) {
-            return 'DOT CIRCLE';
+            return tr('DOT CIRCLE');
         }
 
         if (
             this.brushShape ===
             'circle'
         ) {
-            return 'SMOOTH CIRCLE';
+            return tr('SMOOTH CIRCLE');
         }
 
-        return 'SQUARE DOT';
+        return tr('SQUARE DOT');
     }
 
     /*
@@ -9358,7 +9548,7 @@ export class GameScene extends Phaser.Scene {
             this.hunterReserve <= 0
         ) {
             this.showStatus(
-                '탄약 소진 · 남은 시간 동안 수색하세요',
+                tr('탄약 소진 · 남은 시간 동안 수색하세요'),
             );
             return;
         }
@@ -9371,21 +9561,21 @@ export class GameScene extends Phaser.Scene {
                 this.weaponOverheatedUntil
             ) {
                 this.showStatus(
-                    '샷건이 과열되었습니다',
+                    tr('샷건이 과열되었습니다'),
                 );
                 return;
             }
         } else {
             if (this.isReloading) {
                 this.showStatus(
-                    '재장전 중입니다',
+                    tr('재장전 중입니다'),
                 );
                 return;
             }
 
             if (this.ammo <= 0) {
                 this.showStatus(
-                    '탄약이 없습니다. R 버튼을 눌러서 장전하세요',
+                    tr('탄약이 없습니다. R 버튼을 눌러서 장전하세요'),
                 );
                 return;
             }
@@ -9492,7 +9682,7 @@ export class GameScene extends Phaser.Scene {
             this.ammo === 0
         ) {
             this.showStatus(
-                '탄약 소진! R 키로 재장전',
+                tr('탄약 소진! R 키로 재장전'),
             );
         }
 
@@ -9517,11 +9707,12 @@ export class GameScene extends Phaser.Scene {
                 multiplayerClient.getSessionId() &&
             shot.precisionReward > 0
         ) {
+            /*
+             * Precision 숫자 표시는 직관적이지 않아 UI에서 제거했습니다.
+             * 서버가 지급한 reserve 보상만 반영합니다.
+             */
             this.hunterReserve =
                 shot.reserve;
-            this.showStatus(
-                `PRECISION +${shot.precisionReward}`,
-            );
         }
 
         if (
@@ -9803,7 +9994,7 @@ export class GameScene extends Phaser.Scene {
         ];
 
         hider.label
-            .setText('FOUND!')
+            .setText(tr('FOUND!'))
             .setColor('#ff6b6b');
 
         this.tweens.add({
@@ -9834,7 +10025,7 @@ export class GameScene extends Phaser.Scene {
 
         if (this.isReloading) {
             this.showStatus(
-                '이미 재장전 중입니다',
+                tr('이미 재장전 중입니다'),
             );
 
             return;
@@ -9842,7 +10033,7 @@ export class GameScene extends Phaser.Scene {
 
         if (this.ammo === this.maxAmmo) {
             this.showStatus(
-                '탄약이 이미 가득합니다',
+                tr('탄약이 이미 가득합니다'),
             );
 
             return;
@@ -9852,7 +10043,7 @@ export class GameScene extends Phaser.Scene {
         this.canShoot = false;
 
         this.updateAmmoText();
-        this.showStatus('재장전 중...');
+        this.showStatus(tr('재장전 중...'));
 
         this.time.delayedCall(
             this.reloadDuration,
@@ -9867,7 +10058,7 @@ export class GameScene extends Phaser.Scene {
                 this.canShoot = true;
 
                 this.updateAmmoText();
-                this.showStatus('재장전 완료!');
+                this.showStatus(tr('재장전 완료!'));
             },
         );
     }
@@ -9956,7 +10147,7 @@ export class GameScene extends Phaser.Scene {
 
         if (!keyboard) {
             throw new Error(
-                'Keyboard input is unavailable.',
+                tr('Keyboard input is unavailable.'),
             );
         }
 
@@ -10128,7 +10319,7 @@ export class GameScene extends Phaser.Scene {
             this.add.text(
                 0,
                 27,
-                'HEAT',
+                tr('HEAT'),
                 {
                     fontFamily:
                         'monospace',
@@ -10263,7 +10454,7 @@ export class GameScene extends Phaser.Scene {
 
         if (this.isReloading) {
             this.ammoText.setText(
-                'RELOADING...',
+                tr('RELOADING...'),
             );
 
             this.ammoText.setColor('#ffdf70');
@@ -10284,7 +10475,7 @@ export class GameScene extends Phaser.Scene {
          * 탄환 아이콘만 표시합니다.
          */
         this.ammoText.setText(
-            `SHELLS ${loaded}${empty}`,
+            tr(`SHELLS ${loaded}${empty}`),
         );
 
         this.ammoText.setColor(
@@ -10303,7 +10494,7 @@ export class GameScene extends Phaser.Scene {
         }
 
         this.targetText.setText(
-            `HIDERS ${this.getAliveHiderCount()} / ${this.hiders.length}`,
+            tr(`HIDERS ${this.getAliveHiderCount()} / ${this.hiders.length}`),
         );
     }
 
@@ -10321,7 +10512,7 @@ export class GameScene extends Phaser.Scene {
             .toUpperCase();
 
         this.paintColorText.setText(
-            `COLOR #${hexColor}`,
+            tr(`COLOR #${hexColor}`),
         );
 
         this.paintColorText.setBackgroundColor(
@@ -10348,7 +10539,7 @@ export class GameScene extends Phaser.Scene {
             this.getBrushShapeLabel();
 
         this.brushSizeText.setText(
-            `BRUSH ${shapeText} ${this.brushSize}`,
+            tr(`BRUSH ${shapeText} ${this.brushSize}`),
         );
 
         this.updatePaintControlHelp();
@@ -10415,7 +10606,7 @@ export class GameScene extends Phaser.Scene {
                 this.timerText
                     .setVisible(true)
                     .setText(
-                        `PAINT ${remainingSeconds}`,
+                        tr(`PAINT ${remainingSeconds}`),
                     );
             }
         } else {
@@ -10423,7 +10614,7 @@ export class GameScene extends Phaser.Scene {
                 .setVisible(true)
                 .setDepth(3200)
                 .setText(
-                    `TIME ${remainingSeconds}`,
+                    tr(`TIME ${remainingSeconds}`),
                 );
         }
 
@@ -10442,9 +10633,9 @@ export class GameScene extends Phaser.Scene {
         ) {
             this.hunterBlindText.setText(
                 [
-                    'HIDERS ARE PAINTING...',
-                    'Hunter도 자신의 위장색을 칠해보세요.',
-                    `게임 시작까지 ${remainingSeconds}초`,
+                    tr('HIDERS ARE PAINTING...'),
+                    tr('Hunter도 자신의 위장색을 칠해보세요.'),
+                    tr(`게임 시작까지 ${remainingSeconds}초`),
                 ].join('\n'),
             );
         }
@@ -10461,7 +10652,7 @@ export class GameScene extends Phaser.Scene {
                  * 추가 사격/조준은 절대 허용하지 않습니다.
                  */
                 this.timerText
-                    .setText('TIME 0');
+                    .setText(tr('TIME 0'));
 
                 this.canShoot = false;
                 this.clearAllAimingVisuals();
@@ -10551,7 +10742,7 @@ export class GameScene extends Phaser.Scene {
         this.timerText.setVisible(true);
 
         this.guideText.setText(
-            '배경색을 골라 캐릭터를 위장하세요.',
+            tr('배경색을 골라 캐릭터를 위장하세요.'),
         );
 
         this.player.setVisible(false);
@@ -10616,7 +10807,7 @@ export class GameScene extends Phaser.Scene {
         this.updatePaintHud();
 
         this.showStatus(
-            `${this.paintDuration}초 안에 위장하세요`,
+            tr(`${this.paintDuration}초 안에 위장하세요`),
         );
 
         this.input.setDefaultCursor('crosshair');
@@ -10685,12 +10876,12 @@ export class GameScene extends Phaser.Scene {
 
             this.guideText.setText(
                 localRole === 'hunter'
-                    ? 'WASD 이동 · 마우스 조준 · 좌클릭 발사'
-                    : 'WASD 이동',
+                    ? tr('WASD 이동 · 마우스 조준 · 좌클릭 발사')
+                    : tr('WASD 이동'),
             );
         } else {
             this.guideText.setText(
-                'WASD 이동 · 마우스 조준 · 좌클릭 발사',
+                tr('WASD 이동 · 마우스 조준 · 좌클릭 발사'),
             );
         }
 
@@ -10758,7 +10949,7 @@ export class GameScene extends Phaser.Scene {
         this.updateTargetText();
 
         this.showStatus(
-            `${this.huntDuration}초 안에 하이더를 찾으세요`,
+            tr(`${this.huntDuration}초 안에 하이더를 찾으세요`),
         );
 
         this.input.setDefaultCursor('none');
@@ -10778,15 +10969,15 @@ export class GameScene extends Phaser.Scene {
         this.victorySound?.play();
 
         this.phaseText.setText(
-            '🏆 HUNTER VICTORY',
+            tr('🏆 HUNTER VICTORY'),
         );
 
         this.timerText
-            .setText('HUNTER WIN')
+            .setText(tr('HUNTER WIN'))
             .setColor('#ffdf70');
 
         this.guideText.setText(
-            '모든 하이더를 발견했습니다 · 자동으로 대기실로 이동',
+            tr('모든 하이더를 발견했습니다 · 자동으로 대기실로 이동'),
         );
 
         this.player.setVisible(false);
@@ -10798,7 +10989,7 @@ export class GameScene extends Phaser.Scene {
         this.crosshair.clear();
 
         this.showStatus(
-            '모든 하이더를 찾았습니다!',
+            tr('모든 하이더를 찾았습니다!'),
         );
 
         this.cameras.main.flash(
@@ -10827,15 +11018,15 @@ export class GameScene extends Phaser.Scene {
         this.victorySound?.play();
 
         this.phaseText.setText(
-            '🌿 HIDER VICTORY',
+            tr('🌿 HIDER VICTORY'),
         );
 
         this.timerText
-            .setText('HIDERS WIN')
+            .setText(tr('HIDERS WIN'))
             .setColor('#8cff9b');
 
         this.guideText.setText(
-            '시간 종료 · 자동으로 대기실로 이동',
+            tr('시간 종료 · 자동으로 대기실로 이동'),
         );
 
         this.player.setVisible(false);
@@ -10852,7 +11043,7 @@ export class GameScene extends Phaser.Scene {
             }
 
             hider.label
-                .setText('SURVIVED')
+                .setText(tr('SURVIVED'))
                 .setColor('#8cff9b')
                 .setVisible(true);
 

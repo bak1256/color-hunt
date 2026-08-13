@@ -168,7 +168,7 @@ export class NetworkPlayerManager {
            *   -> activeSessionIds가 비어 있음
            *   -> 자기 캐릭터 삭제
            *   -> ready=false
-           *   -> '플레이어 연결 중...' 무한
+           *   -> tr('플레이어 연결 중...') 무한
            *
            * 연결된 Room의 자기 sessionId는 Schema가 늦더라도 절대 여기서
            * 삭제하지 않습니다. 실제 disconnect 시에는 Manager 전체 정리

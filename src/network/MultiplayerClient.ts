@@ -1,3 +1,4 @@
+import { tr } from '../i18n';
 import {
   Callbacks,
   Client,
@@ -969,7 +970,7 @@ private attachRoom(
       (payload) => {
         const message =
           payload.message ??
-          "게임을 시작할 수 없습니다.";
+          tr('게임을 시작할 수 없습니다.');
 
         this.startGameErrorHandlers
           .forEach(
@@ -987,7 +988,7 @@ private attachRoom(
       (payload) => {
         const message =
           payload.message ??
-          "헌터의 총알이 모두 떨어졌습니다!";
+          tr('헌터의 총알이 모두 떨어졌습니다!');
 
         this.huntersOutOfAmmoHandlers
           .forEach(
@@ -1033,7 +1034,7 @@ private attachRoom(
       (payload) => {
         const message =
           payload.message ??
-          "게임을 계속할 수 없어 대기실로 돌아갑니다.";
+          tr('게임을 계속할 수 없어 대기실로 돌아갑니다.');
 
         this.roundAbortedHandlers
           .forEach(
