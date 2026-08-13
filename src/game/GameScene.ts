@@ -3873,10 +3873,6 @@ export class GameScene extends Phaser.Scene {
     }
 
     private showMainMenu(): void {
-        /*
-         * 이미 Room에 연결된 상태에서 늦은 비동기 콜백이 showMainMenu를
-         * 호출하더라도 Lobby를 덮어쓰지 않습니다.
-         */
         if (
             multiplayerClient.isConnected()
         ) {
@@ -3887,16 +3883,9 @@ export class GameScene extends Phaser.Scene {
         this.roomHandshakeCompletedId = '';
         this.localNetworkPlayerReady = false;
 
-        /*
-         * Language switching rebuilds the menu.  Room-list entries belong to
-         * the previous language too, so destroy them before issuing a new
-         * async room-list request.
-         */
         this.roomListRenderSerial += 1;
         this.roomListObjects.forEach(
-            (object) => {
-                object.destroy();
-            },
+            (object) => object.destroy(),
         );
         this.roomListObjects = [];
 
@@ -3915,69 +3904,298 @@ export class GameScene extends Phaser.Scene {
         this.roleHunterButton?.setVisible(false);
         this.roleHiderButton?.setVisible(false);
         this.inviteLinkButton?.setVisible(false);
-
         this.multiplayerText.setVisible(false);
 
+        /*
+         * v0.10.10.37 lobby
+         * Two-column card layout inspired by the clean mockup:
+         * rooms on the left, room actions on the right.
+         */
         const panel = this.add
             .rectangle(
                 this.gameWidth / 2,
-                this.gameHeight / 2,
-                720,
-                468,
-                0x111923,
+                290,
+                820,
+                446,
+                0x0b151d,
                 0.94,
             )
             .setStrokeStyle(
-                3,
-                0x8bb58f,
+                2,
+                0x557a61,
                 0.95,
             )
             .setDepth(500);
 
         const title = this.add
             .text(
-                this.gameWidth / 2,
-                78,
+                76,
+                82,
                 'CHAMELEON HUNT',
                 {
-                    fontFamily: 'monospace',
-                    fontSize: '38px',
+                    fontFamily:
+                        '"Arial Black", Arial, sans-serif',
+                    fontSize: '32px',
                     fontStyle: 'bold',
-                    color: '#f6f0df',
+                    color: '#f4f7f2',
                 },
             )
-            .setOrigin(0.5)
-            .setDepth(501);
+            .setDepth(502);
 
         const subtitle = this.add
             .text(
-                this.gameWidth / 2,
-                124,
+                78,
+                121,
                 tr('위장하고, 숨고, 찾아내세요!'),
                 {
-                    fontFamily: 'monospace',
-                    fontSize: '16px',
-                    color: '#b8c7b9',
+                    fontFamily:
+                        'Arial, sans-serif',
+                    fontSize: '13px',
+                    color: '#a7b8ae',
                 },
             )
-            .setOrigin(0.5)
+            .setDepth(502);
+
+        const roomCard = this.add
+            .rectangle(
+                325,
+                326,
+                510,
+                330,
+                0x111f28,
+                0.98,
+            )
+            .setStrokeStyle(
+                1,
+                0x355548,
+                1,
+            )
             .setDepth(501);
+
+        const actionCard = this.add
+            .rectangle(
+                725,
+                326,
+                254,
+                330,
+                0x111f28,
+                0.98,
+            )
+            .setStrokeStyle(
+                1,
+                0x355548,
+                1,
+            )
+            .setDepth(501);
+
+        const listTitle = this.add
+            .text(
+                94,
+                176,
+                tr('공개 게임방'),
+                {
+                    fontFamily:
+                        'Arial, sans-serif',
+                    fontSize: '20px',
+                    fontStyle: 'bold',
+                    color: '#f2f5ef',
+                },
+            )
+            .setDepth(503);
+
+        const roomDivider = this.add
+            .rectangle(
+                325,
+                211,
+                466,
+                1,
+                0x415a52,
+                0.9,
+            )
+            .setDepth(502);
+
+        /*
+         * Refresh belongs to the public-room header, not between unrelated
+         * elements. Right-aligned with a compact refresh glyph.
+         */
+        const refreshButton =
+            this.makeMenuButton(
+                516,
+                176,
+                `↻ ${tr('새로고침')}`,
+                () => {
+                    void this.refreshPublicRoomList(true);
+                },
+            );
+
+        refreshButton
+            .setFixedSize(
+                112,
+                34,
+            )
+            .setAlign('center')
+            .setOrigin(0.5)
+            .setFontSize(
+                getLanguage() === 'en'
+                    ? 10
+                    : 12,
+            )
+            .setPadding(
+                0,
+                4,
+                0,
+                0,
+            );
+
+        const actionTitle = this.add
+            .text(
+                622,
+                176,
+                tr('게임 시작하기'),
+                {
+                    fontFamily:
+                        'Arial, sans-serif',
+                    fontSize: '19px',
+                    fontStyle: 'bold',
+                    color: '#f2f5ef',
+                },
+            )
+            .setDepth(503);
+
+        const makeAction = (
+            y: number,
+            label: string,
+            color: string,
+            callback: () => void,
+        ): Phaser.GameObjects.Text => {
+            const button =
+                this.add.text(
+                    725,
+                    y,
+                    label,
+                    {
+                        fontFamily:
+                            'Arial, sans-serif',
+                        fontSize: '15px',
+                        fontStyle: 'bold',
+                        color: '#ffffff',
+                        backgroundColor:
+                            color,
+                        fixedWidth: 214,
+                        fixedHeight: 60,
+                        align: 'center',
+                        padding: {
+                            top: 20,
+                        },
+                    },
+                )
+                    .setOrigin(0.5)
+                    .setDepth(503)
+                    .setInteractive({
+                        useHandCursor: true,
+                    });
+
+            button.on(
+                'pointerover',
+                () =>
+                    button.setAlpha(0.84),
+            );
+            button.on(
+                'pointerout',
+                () =>
+                    button.setAlpha(1),
+            );
+            button.on(
+                'pointerdown',
+                callback,
+            );
+
+            return button;
+        };
+
+        const publicCreate =
+            makeAction(
+                246,
+                `＋  ${tr('공개방 만들기')}`,
+                '#2e6a40',
+                () => {
+                    this.openCreateRoomModal(
+                        false,
+                    );
+                },
+            );
+
+        const privateCreate =
+            makeAction(
+                320,
+                `▣  ${tr('비공개방 만들기')}`,
+                '#203b59',
+                () => {
+                    this.openCreateRoomModal(
+                        true,
+                    );
+                },
+            );
+
+        const privateJoin =
+            makeAction(
+                394,
+                `◎  ${tr('비공개방 참가')}`,
+                '#493170',
+                () => {
+                    this.openPrivateJoinModal();
+                },
+            );
+
+        const helpCard = this.add
+            .rectangle(
+                725,
+                470,
+                214,
+                70,
+                0x17252d,
+                1,
+            )
+            .setStrokeStyle(
+                1,
+                0x314850,
+                1,
+            )
+            .setDepth(502);
+
+        const helpText = this.add
+            .text(
+                632,
+                447,
+                `${tr('게임 설명')}\n${tr('위장하고, 숨고, 찾아내세요!')}`,
+                {
+                    fontFamily:
+                        'Arial, sans-serif',
+                    fontSize: '11px',
+                    color: '#bdc9c2',
+                    lineSpacing: 6,
+                    wordWrap: {
+                        width: 186,
+                    },
+                },
+            )
+            .setDepth(503);
 
         const languageBar =
             this.add.rectangle(
-                this.gameWidth / 2,
-                516,
-                430,
-                38,
-                0x172027,
-                0.88,
+                325,
+                503,
+                510,
+                42,
+                0x101b23,
+                1,
             )
-                .setStrokeStyle(
-                    2,
-                    0x6f8f65,
-                    1,
-                )
-                .setDepth(504);
+            .setStrokeStyle(
+                1,
+                0x355548,
+                1,
+            )
+            .setDepth(502);
 
         const languageLabels:
             Array<[GameLanguage, string]> = [
@@ -3995,35 +4213,35 @@ export class GameScene extends Phaser.Scene {
 
                     const button =
                         this.add.text(
-                            357 + index * 82,
-                            516,
+                            170 + index * 104,
+                            503,
                             label,
                             {
-                                fontFamily: 'monospace',
-                                fontSize: '13px',
+                                fontFamily:
+                                    'Arial, sans-serif',
+                                fontSize: '12px',
                                 fontStyle:
                                     selected
                                         ? 'bold'
                                         : 'normal',
                                 color:
                                     selected
-                                        ? '#fffdf3'
-                                        : '#dbe7d6',
+                                        ? '#ffffff'
+                                        : '#b7c5bd',
                                 backgroundColor:
                                     selected
-                                        ? '#5c8f66'
-                                        : '#27352d',
-                                fixedWidth: 74,
+                                        ? '#356447'
+                                        : '#17242c',
+                                fixedWidth: 88,
                                 fixedHeight: 28,
                                 align: 'center',
                                 padding: {
-                                    x: 4,
-                                    y: 5,
+                                    top: 7,
                                 },
                             },
                         )
                             .setOrigin(0.5)
-                            .setDepth(505)
+                            .setDepth(504)
                             .setInteractive({
                                 useHandCursor: true,
                             });
@@ -4031,9 +4249,7 @@ export class GameScene extends Phaser.Scene {
                     button.on(
                         'pointerdown',
                         () => {
-                            setLanguage(
-                                language,
-                            );
+                            setLanguage(language);
                             this.closeMenuModal();
                             this.showMainMenu();
                         },
@@ -4043,111 +4259,23 @@ export class GameScene extends Phaser.Scene {
                 },
             );
 
-        const publicCreate =
-            this.makeMenuButton(
-                280,
-                182,
-                tr('공개방 만들기'),
-                () => {
-                    this.openCreateRoomModal(
-                        false,
-                    );
-                },
-            );
-
-        const privateCreate =
-            this.makeMenuButton(
-                480,
-                182,
-                tr('비공개방 만들기'),
-                () => {
-                    this.openCreateRoomModal(
-                        true,
-                    );
-                },
-            );
-
-        const privateJoin =
-            this.makeMenuButton(
-                680,
-                182,
-                tr('비공개방 참가'),
-                () => {
-                    this.openPrivateJoinModal();
-                },
-            );
-
-        const roomListCard =
-            this.add.rectangle(
-                this.gameWidth / 2,
-                356,
-                620,
-                218,
-                0xf8efd7,
-                0.98,
-            )
-                .setStrokeStyle(
-                    2,
-                    0x78937b,
-                    0.9,
-                )
-                .setDepth(501);
-
-        const listTitle = this.add
-            .text(
-                185,
-                246,
-                tr('공개 게임방'),
-                {
-                    fontFamily: 'monospace',
-                    fontSize: '20px',
-                    fontStyle: 'bold',
-                    color: '#3f6148',
-                },
-            )
-            .setDepth(501);
-
-        const refreshButton =
-            this.makeMenuButton(
-                410,
-                246,
-                tr('새로고침'),
-                () => {
-                    void this.refreshPublicRoomList(true);
-                },
-            );
-
-        refreshButton
-            .setFixedSize(
-                82,
-                30,
-            )
-            .setAlign('center')
-            .setOrigin(0.5, 0.5)
-            .setFontSize(
-                getLanguage() === 'en'
-                    ? 10
-                    : 11,
-            )
-            .setPadding(
-                0,
-                2,
-                0,
-                0,
-            );
-
         this.mainMenuObjects.push(
             panel,
             title,
             subtitle,
-            languageBar,
-            ...languageButtons,
+            roomCard,
+            actionCard,
+            listTitle,
+            roomDivider,
+            refreshButton,
+            actionTitle,
             publicCreate,
             privateCreate,
             privateJoin,
-            roomListCard,
-            listTitle,
-            refreshButton,
+            helpCard,
+            helpText,
+            languageBar,
+            ...languageButtons,
         );
 
         void this.refreshPublicRoomList();
@@ -4169,8 +4297,8 @@ export class GameScene extends Phaser.Scene {
             showLoading
                 ? this.add
                     .text(
-                        175,
-                        275,
+                        94,
+                        232,
                         tr('방 목록을 불러오는 중...'),
                         {
                             fontFamily: 'monospace',
@@ -4230,8 +4358,8 @@ export class GameScene extends Phaser.Scene {
                 const emptyText =
                     this.add
                         .text(
-                            185,
-                            292,
+                            94,
+                            232,
                             tr('생성된 공개방이 없습니다.'),
                             {
                                 fontFamily: 'monospace',
@@ -4267,9 +4395,9 @@ export class GameScene extends Phaser.Scene {
 
                         const row =
                             this.makeMenuButton(
-                                this.gameWidth / 2,
-                                292 +
-                                    index * 38,
+                                325,
+                                246 +
+                                    index * 46,
                                 `${roomTitle} · ${room.clients}/${room.maxClients} · ${trPhase(phase)}`,
                                 () => {
                                     /*
@@ -4284,7 +4412,7 @@ export class GameScene extends Phaser.Scene {
                             );
 
                         row
-                            .setFontSize(13)
+                            .setFontSize(12)
                             .setFixedSize(
                                 560,
                                 32,
