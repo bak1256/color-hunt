@@ -1212,28 +1212,33 @@ export class NetworkPlayerManager {
       y >= 55 &&
       y <= 78;
 
+    /*
+     * Arms and legs overlap the torso by 1-2 pixels.
+     * This deliberately removes the unpaintable white seams that used to
+     * appear between body/arms and body/legs.
+     */
     const insideLeftArm =
       x >= 24 &&
-      x <= 29 &&
+      x <= 31 &&
       y >= 57 &&
       y <= 74;
 
     const insideRightArm =
-      x >= 50 &&
+      x >= 48 &&
       x <= 55 &&
       y >= 57 &&
       y <= 74;
 
     const insideLeftLeg =
-      x >= 32 &&
-      x <= 37 &&
-      y >= 77 &&
+      x >= 31 &&
+      x <= 38 &&
+      y >= 75 &&
       y <= 88;
 
     const insideRightLeg =
-      x >= 42 &&
-      x <= 47 &&
-      y >= 77 &&
+      x >= 41 &&
+      x <= 48 &&
+      y >= 75 &&
       y <= 88;
 
     return (
@@ -2241,9 +2246,9 @@ export class NetworkPlayerManager {
 
     const leftArm =
       this.scene.add.rectangle(
-        -13,
+        -12,
         6,
-        6,
+        8,
         18,
         color,
       )
@@ -2253,9 +2258,9 @@ export class NetworkPlayerManager {
 
     const rightArm =
       this.scene.add.rectangle(
-        13,
+        12,
         6,
-        6,
+        8,
         18,
         color,
       )
@@ -2266,9 +2271,9 @@ export class NetworkPlayerManager {
     const leftLeg =
       this.scene.add.rectangle(
         -5,
-        23,
-        6,
-        12,
+        22,
+        8,
+        14,
         color,
       )
         .setName(
@@ -2278,9 +2283,9 @@ export class NetworkPlayerManager {
     const rightLeg =
       this.scene.add.rectangle(
         5,
-        23,
-        6,
-        12,
+        22,
+        8,
+        14,
         color,
       )
         .setName(
@@ -2468,30 +2473,30 @@ export class NetworkPlayerManager {
     maskShape.fillRect(
       24,
       57,
-      6,
+      8,
       18,
     );
 
     maskShape.fillRect(
-      50,
+      48,
       57,
-      6,
+      8,
       18,
     );
 
     // legs: integer-aligned to prevent antialiased fringe pixels
     maskShape.fillRect(
-      32,
-      77,
-      6,
-      12,
+      31,
+      75,
+      8,
+      14,
     );
 
     maskShape.fillRect(
-      42,
-      77,
-      6,
-      12,
+      41,
+      75,
+      8,
+      14,
     );
 
     maskShape.setPosition(

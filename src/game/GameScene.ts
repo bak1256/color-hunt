@@ -7937,26 +7937,9 @@ export class GameScene extends Phaser.Scene {
                         20,
                     );
 
-                if (
-                    nextSize ===
-                    this.brushSize
-                ) {
-                    this.updateBrushSizeSliderUi();
-                    return;
-                }
-
-                this.brushSize =
-                    nextSize;
-
-                /*
-                 * Slider, actual stamp texture, pointer preview and HUD
-                 * must all update in the same frame.
-                 */
-                this.createBrushTexture(true);
-                this.updatePaintHud();
-                this.updatePaintPreviewImmediately();
-                this.updatePaintControlHelp();
-                this.updateBrushSizeSliderUi();
+                this.setBrushSize(
+                    nextSize,
+                );
             };
 
         this.brushSizeSliderTrack =
@@ -8818,6 +8801,30 @@ export class GameScene extends Phaser.Scene {
         );
     }
 
+    private setBrushSize(
+        requestedSize: number,
+    ): void {
+        const nextSize =
+            Phaser.Math.Clamp(
+                Math.round(requestedSize),
+                1,
+                20,
+            );
+
+        this.brushSize =
+            nextSize;
+
+        /*
+         * One authoritative update path for slider / Ctrl+wheel / keys.
+         * The slider knob can therefore never drift away from brushSize.
+         */
+        this.createBrushTexture(true);
+        this.updatePaintHud();
+        this.updatePaintPreviewImmediately();
+        this.updatePaintControlHelp();
+        this.updateBrushSizeSliderUi();
+    }
+
     private updateBrushSizeSliderUi(): void {
         if (
             !this.brushSizeSliderTrack ||
@@ -9264,18 +9271,10 @@ export class GameScene extends Phaser.Scene {
                             ? 1
                             : -1;
 
-                    this.brushSize =
-                        Phaser.Math.Clamp(
-                            this.brushSize +
-                                delta,
-                            1,
-                            20,
-                        );
-
-                    this.createBrushTexture();
-                    this.updatePaintHud();
-                    this.updatePaintPreviewImmediately();
-                    this.updatePaintControlHelp();
+                    this.setBrushSize(
+                        this.brushSize +
+                            delta,
+                    );
 
                     return;
                 }
@@ -9850,35 +9849,22 @@ export class GameScene extends Phaser.Scene {
             );
 
         if (increasePressed) {
-            this.brushSize =
-                Phaser.Math.Clamp(
-                    this.brushSize + 1,
-                    1,
-                    24,
-                );
-
+            this.setBrushSize(
+                this.brushSize + 1,
+            );
             brushSizeChanged = true;
         }
 
         if (decreasePressed) {
-            this.brushSize =
-                Phaser.Math.Clamp(
-                    this.brushSize - 1,
-                    1,
-                    24,
-                );
-
+            this.setBrushSize(
+                this.brushSize - 1,
+            );
             brushSizeChanged = true;
         }
 
         if (!brushSizeChanged) {
             return;
         }
-
-        this.createBrushTexture();
-        this.updatePaintHud();
-        this.updatePaintPreviewImmediately();
-        this.updatePaintControlHelp();
     }
 
     private toggleBrushShape(): void {
