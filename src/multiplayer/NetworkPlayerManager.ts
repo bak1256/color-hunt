@@ -35,6 +35,8 @@ type NetworkPlayerView = {
   walkBlend: number;
   movingUntil: number;
   nextFootstepAt: number;
+  huntFrozenX?: number;
+  huntFrozenY?: number;
   leftArm?: Phaser.GameObjects.Rectangle;
   rightArm?: Phaser.GameObjects.Rectangle;
   leftLeg?: Phaser.GameObjects.Rectangle;
@@ -327,6 +329,8 @@ export class NetworkPlayerManager {
       walkBlend: 0,
       movingUntil: 0,
       nextFootstepAt: 0,
+      huntFrozenX: undefined,
+      huntFrozenY: undefined,
       leftArm:
         container.getByName(
           "network-left-arm",
@@ -1254,28 +1258,28 @@ export class NetworkPlayerManager {
       localY <= 19;
 
     const insideLeftArm =
-      localX >= -16.5 &&
-      localX <= -9.5 &&
+      localX >= -16 &&
+      localX <= -10 &&
       localY >= -3 &&
       localY <= 15;
 
     const insideRightArm =
-      localX >= 9.5 &&
-      localX <= 16.5 &&
+      localX >= 10 &&
+      localX <= 16 &&
       localY >= -3 &&
       localY <= 15;
 
     const insideLeftLeg =
-      localX >= -8.5 &&
-      localX <= -1.5 &&
-      localY >= 16.5 &&
-      localY <= 29.5;
+      localX >= -8 &&
+      localX <= -2 &&
+      localY >= 17 &&
+      localY <= 29;
 
     const insideRightLeg =
-      localX >= 1.5 &&
-      localX <= 8.5 &&
-      localY >= 16.5 &&
-      localY <= 29.5;
+      localX >= 2 &&
+      localX <= 8 &&
+      localY >= 17 &&
+      localY <= 29;
 
     if (
       !insideHead &&
@@ -1641,8 +1645,36 @@ export class NetworkPlayerManager {
         view.movingUntil = 0;
         view.walkBlend = 0;
 
+        const frozenX =
+          Math.round(
+            view.container.x,
+          );
+        const frozenY =
+          Math.round(
+            view.container.y,
+          );
+
+        view.huntFrozenX =
+          frozenX;
+        view.huntFrozenY =
+          frozenY;
+        view.targetX =
+          frozenX;
+        view.targetY =
+          frozenY;
+
+        view.container.setPosition(
+          frozenX,
+          frozenY,
+        );
+
         this.resetWalkPoseImmediately(
           view,
+        );
+
+        this.syncPaintLayerPosition(
+          view,
+          true,
         );
       },
     );
@@ -1665,6 +1697,8 @@ export class NetworkPlayerManager {
 
     view.customizationMode = false;
     view.paintZoom = 1;
+    view.huntFrozenX = undefined;
+    view.huntFrozenY = undefined;
 
     this.localX = view.targetX;
     this.localY = view.targetY;
@@ -2255,33 +2289,37 @@ export class NetworkPlayerManager {
     );
 
     // arms: exact width 7 / height 18
+    /*
+     * Pixel camouflage must never create half-pixel fringe.
+     * Use integer-aligned, slightly inset silhouette cells.
+     */
     maskShape.fillRect(
-      23.5,
+      24,
       57,
-      7,
+      6,
       18,
     );
 
     maskShape.fillRect(
-      49.5,
+      50,
       57,
-      7,
+      6,
       18,
     );
 
-    // legs: exact width 7 / height 13
+    // legs: integer-aligned to prevent antialiased fringe pixels
     maskShape.fillRect(
-      31.5,
-      76.5,
-      7,
-      13,
+      32,
+      77,
+      6,
+      12,
     );
 
     maskShape.fillRect(
-      41.5,
-      76.5,
-      7,
-      13,
+      42,
+      77,
+      6,
+      12,
     );
 
     maskShape.setPosition(
@@ -2411,14 +2449,25 @@ export class NetworkPlayerManager {
       huntActive &&
       view.role === "hider"
     ) {
-      /*
-       * Hunt 중 Hider는 완전히 정적인 위장 오브젝트입니다.
-       * 네트워크의 미세한 좌표 변화 / movingUntil 잔여값 때문에
-       * walk animation이 한 프레임이라도 재생되면 paint mask가 흔들려
-       * Hunter에게 바로 들킬 수 있으므로 항상 neutral pose로 고정합니다.
-       */
+      if (
+        view.huntFrozenX !== undefined &&
+        view.huntFrozenY !== undefined
+      ) {
+        view.container.setPosition(
+          view.huntFrozenX,
+          view.huntFrozenY,
+        );
+      }
+
+      view.container.setScale(1);
+
       this.resetWalkPoseImmediately(
         view,
+      );
+
+      this.syncPaintLayerPosition(
+        view,
+        true,
       );
       return;
     }
@@ -2698,6 +2747,27 @@ export class NetworkPlayerManager {
     x: number,
     y: number,
   ): void {
+    const huntActive =
+      multiplayerClient.getRoom()
+        ?.state.phase === "hunt";
+
+    if (
+      huntActive &&
+      view.role === "hider" &&
+      view.huntFrozenX !== undefined &&
+      view.huntFrozenY !== undefined
+    ) {
+      view.container.setPosition(
+        view.huntFrozenX,
+        view.huntFrozenY,
+      );
+      this.syncPaintLayerPosition(
+        view,
+        true,
+      );
+      return;
+    }
+
     view.container.setPosition(x, y);
     this.syncPaintLayerPosition(view);
   }

@@ -3318,8 +3318,8 @@ export class GameScene extends Phaser.Scene {
 
         const refreshButton =
             this.makeMenuButton(
-                760,
-                236,
+                330,
+                232,
                 tr('새로고침'),
                 () => {
                     void this.refreshPublicRoomList(true);
@@ -3328,20 +3328,21 @@ export class GameScene extends Phaser.Scene {
 
         refreshButton
             .setFixedSize(
-                104,
-                34,
+                82,
+                28,
             )
             .setAlign('center')
+            .setOrigin(0.5)
             .setFontSize(
                 getLanguage() === 'en'
-                    ? 12
-                    : 13,
+                    ? 10
+                    : 11,
             )
             .setPadding(
-                6,
-                4,
-                6,
-                4,
+                0,
+                0,
+                0,
+                0,
             );
 
         this.mainMenuObjects.push(
@@ -3715,13 +3716,14 @@ export class GameScene extends Phaser.Scene {
         this.lobbyHintText =
             this.add.text(
                 790,
-                322,
+                318,
                 '',
                 {
                     fontFamily:
                         'monospace',
-                    fontSize: '11px',
-                    color: '#6b5a48',
+                    fontSize: '18px',
+                    fontStyle: 'bold',
+                    color: '#d13b32',
                     align: 'center',
                 },
             )
@@ -4214,10 +4216,13 @@ export class GameScene extends Phaser.Scene {
         this.lobbyHintText
             .setText(
                 isHost
-                    ? `${tr('당신은 방장입니다.')} · ${tr('WASD로 대기실 캐릭터 이동')}`
-                    : tr('방장이 시작하기를 기다리는 중...'),
+                    ? tr('방장')
+                    : '',
             )
-            .setVisible(isLobby);
+            .setVisible(
+                isLobby &&
+                isHost,
+            );
 
         this.lobbyPaintDurationLabel
             .setText(
@@ -7854,33 +7859,55 @@ export class GameScene extends Phaser.Scene {
             },
         );
 
-        const sliderMinX = 330;
-        const sliderMaxX = 520;
+        const sliderMinX = 320;
+        const sliderMaxX = 515;
         const sliderY =
             this.gameHeight - 38;
 
         const setBrushSizeFromSlider =
             (pointerX: number): void => {
-                const ratio =
+                const clampedX =
                     Phaser.Math.Clamp(
-                        (pointerX -
-                            sliderMinX) /
-                            (sliderMaxX -
-                                sliderMinX),
-                        0,
-                        1,
+                        pointerX,
+                        sliderMinX,
+                        sliderMaxX,
                     );
 
-                this.brushSize =
-                    Math.max(
-                        1,
+                const ratio =
+                    (clampedX -
+                        sliderMinX) /
+                    (sliderMaxX -
+                        sliderMinX);
+
+                const nextSize =
+                    Phaser.Math.Clamp(
                         Math.round(
                             1 +
                             ratio * 19,
                         ),
+                        1,
+                        20,
                     );
 
+                if (
+                    nextSize ===
+                    this.brushSize
+                ) {
+                    this.updateBrushSizeSliderUi();
+                    return;
+                }
+
+                this.brushSize =
+                    nextSize;
+
+                /*
+                 * Slider, actual stamp texture, pointer preview and HUD
+                 * must all update in the same frame.
+                 */
                 this.createBrushTexture(true);
+                this.updatePaintHud();
+                this.updatePaintPreviewImmediately();
+                this.updatePaintControlHelp();
                 this.updateBrushSizeSliderUi();
             };
 
@@ -7939,7 +7966,8 @@ export class GameScene extends Phaser.Scene {
 
         this.brushSizeSliderLabel =
             this.add.text(
-                425,
+                (sliderMinX +
+                    sliderMaxX) / 2,
                 sliderY - 18,
                 `${this.brushSize}px`,
                 {
@@ -7974,12 +8002,11 @@ export class GameScene extends Phaser.Scene {
         this.brushSizeSliderKnob.on(
             'drag',
             (
-                _pointer:
+                pointer:
                     Phaser.Input.Pointer,
-                dragX: number,
             ) => {
                 setBrushSizeFromSlider(
-                    dragX,
+                    pointer.x,
                 );
             },
         );
@@ -8753,8 +8780,8 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
-        const minX = 330;
-        const maxX = 520;
+        const minX = 320;
+        const maxX = 515;
         const ratio =
             Phaser.Math.Clamp(
                 (this.brushSize - 1) /

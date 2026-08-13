@@ -15,7 +15,7 @@ function App() {
       <PhaserGame />
 
       <footer className="game-footer">
-        <span>이동: WASD</span>
+        <span></span>
       </footer>
     </main>
   );
