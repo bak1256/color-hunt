@@ -1368,8 +1368,16 @@ export class NetworkPlayerManager {
           pixelX,
           pixelY,
           {
-            originX: 0.5,
-            originY: 0.5,
+            /*
+             * IMPORTANT:
+             * The white Hider base is generated as Canvas pixel cells
+             * [x,x+1) × [y,y+1). A 1x1 stamp with origin 0.5 is shifted
+             * by half a pixel and exposes a white fringe on the opposite
+             * edge. Use top-left origin so paint cell and body cell are
+             * exactly identical.
+             */
+            originX: 0,
+            originY: 0,
           },
         );
       }
