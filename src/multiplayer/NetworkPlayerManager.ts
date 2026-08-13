@@ -450,14 +450,26 @@ export class NetworkPlayerManager {
     view.targetX = player.x;
     view.targetY = player.y;
 
-    /*
-     * Lobby에서는 서버 spawn 좌표가 화면 표시의 유일한 기준입니다.
-     * 다른 참가자도 첫 WASD 입력 전부터 정확한 서버 좌표에 표시합니다.
-     */
     const roomPhase =
       multiplayerClient.getRoom()
         ?.state?.phase;
 
+    if (
+      roomPhase === "hunt" &&
+      view.role === "hider"
+    ) {
+      /*
+       * v0.10.10.32 and earlier could leave these populated and visually
+       * freeze remote Hiders.  Authoritative Hunt movement invalidates them.
+       */
+      view.huntFrozenX = undefined;
+      view.huntFrozenY = undefined;
+    }
+
+    /*
+     * Lobby에서는 서버 spawn 좌표가 화면 표시의 유일한 기준입니다.
+     * 다른 참가자도 첫 WASD 입력 전부터 정확한 서버 좌표에 표시합니다.
+     */
     if (
       roomPhase === "lobby" &&
       !view.customizationMode
@@ -928,6 +940,59 @@ export class NetworkPlayerManager {
         const huntActive =
           multiplayerClient.getRoom()
             ?.state.phase === "hunt";
+
+        /*
+         * HIT-POSITION SYNC:
+         * During Hunt, the server's Hider x/y is also the authoritative
+         * shotgun hit position.  Rendering a remote Hider behind that point
+         * via interpolation lets a Hunter shoot what they see but miss the
+         * server-side target.
+         *
+         * Therefore remote Hiders snap to each authoritative Hunt update.
+         * Between network updates they remain stable at the latest true
+         * position.  The walk animation is driven only when that position
+         * actually changes.
+         */
+        if (
+          huntActive &&
+          view.role === "hider"
+        ) {
+          const actuallyMoved =
+            distance > 0.35;
+
+          if (actuallyMoved) {
+            view.movingUntil =
+              this.scene.time.now + 120;
+
+            this.setViewPosition(
+              view,
+              view.targetX,
+              view.targetY,
+            );
+          } else {
+            /*
+             * Never animate an idle Hider merely because an old movingUntil
+             * timestamp is still alive.
+             */
+            view.movingUntil = 0;
+
+            if (distance > 0.01) {
+              this.setViewPosition(
+                view,
+                view.targetX,
+                view.targetY,
+              );
+            }
+          }
+
+          this.applyWalkMotion(
+            view,
+            actuallyMoved,
+            delta,
+          );
+
+          return;
+        }
 
         /*
          * Hider는 네트워크 좌표의 아주 작은 흔들림(패킷 보간/부동소수점)을
@@ -1842,30 +1907,35 @@ export class NetworkPlayerManager {
           return;
         }
 
+        /*
+         * Paint -> Hunt only stabilizes the VISUAL pose.
+         *
+         * Do not freeze world X/Y here.  The previous implementation stored
+         * huntFrozenX/Y and every later setViewPosition() snapped the Hider
+         * back to that starting point on Hunter clients, while the server
+         * continued accepting the Hider's real movement.
+         */
+        view.huntFrozenX = undefined;
+        view.huntFrozenY = undefined;
         view.movingUntil = 0;
         view.walkBlend = 0;
 
-        const frozenX =
+        /*
+         * Keep the latest authoritative target.  Only integer-snap the
+         * currently rendered pose once to remove Paint sub-pixel residue.
+         */
+        const stableX =
           Math.round(
             view.container.x,
           );
-        const frozenY =
+        const stableY =
           Math.round(
             view.container.y,
           );
 
-        view.huntFrozenX =
-          frozenX;
-        view.huntFrozenY =
-          frozenY;
-        view.targetX =
-          frozenX;
-        view.targetY =
-          frozenY;
-
         view.container.setPosition(
-          frozenX,
-          frozenY,
+          stableX,
+          stableY,
         );
 
         this.resetWalkPoseImmediately(
@@ -2807,17 +2877,6 @@ export class NetworkPlayerManager {
        * We animate only the parent scale, so camouflage and body receive the
        * exact same transform every frame and cannot separate.
        */
-      if (
-        huntActive &&
-        view.huntFrozenX !== undefined &&
-        view.huntFrozenY !== undefined
-      ) {
-        view.container.setPosition(
-          view.huntFrozenX,
-          view.huntFrozenY,
-        );
-      }
-
       const targetBlend =
         moving ? 1 : 0;
 
@@ -3159,29 +3218,21 @@ export class NetworkPlayerManager {
     x: number,
     y: number,
   ): void {
-    const huntActive =
-      multiplayerClient.getRoom()
-        ?.state.phase === "hunt";
+    /*
+     * Player render position is always the supplied movement position.
+     * Hunt no longer has a separate frozen coordinate system.
+     *
+     * The Paint RenderTexture is a child of the same player Container, so
+     * moving this Container automatically moves camouflage with the body.
+     */
+    view.container.setPosition(
+      x,
+      y,
+    );
 
-    if (
-      huntActive &&
-      view.role === "hider" &&
-      view.huntFrozenX !== undefined &&
-      view.huntFrozenY !== undefined
-    ) {
-      view.container.setPosition(
-        view.huntFrozenX,
-        view.huntFrozenY,
-      );
-      this.syncPaintLayerPosition(
-        view,
-        true,
-      );
-      return;
-    }
-
-    view.container.setPosition(x, y);
-    this.syncPaintLayerPosition(view);
+    this.syncPaintLayerPosition(
+      view,
+    );
   }
 
   private syncPaintLayerPosition(
