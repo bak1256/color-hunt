@@ -4020,7 +4020,7 @@ export class GameScene extends Phaser.Scene {
          */
         const refreshButton =
             this.makeMenuButton(
-                516,
+                538,
                 176,
                 `↻ ${tr('새로고침')}`,
                 () => {
@@ -4463,157 +4463,141 @@ export class GameScene extends Phaser.Scene {
     }
 
     private createLobbyUi(): void {
-        this.lobbyPanel = this.add
-            .rectangle(
-                808,
+        /*
+         * Waiting room: one clean right-side control dock.
+         * Every decorative rectangle stays below the text/buttons, so no
+         * panel can visually cover an interactive element.
+         */
+        this.lobbyPanel =
+            this.add.rectangle(
+                824,
                 286,
-                286,
+                260,
                 468,
-                0x111923,
-                0.94,
-            )
-            .setStrokeStyle(
-                3,
-                0x8bb58f,
-                0.95,
-            )
-            .setDepth(400);
-
-        this.lobbyInfoCard =
-            this.add.rectangle(
-                808,
-                158,
-                248,
-                102,
-                0xf8efd7,
-                0.98,
-            )
-                .setStrokeStyle(
-                    2,
-                    0x78937b,
-                    0.85,
-                )
-                .setDepth(401);
-
-        this.lobbyControlsCard =
-            this.add.rectangle(
-                808,
-                326,
-                248,
-                176,
-                0x1a2730,
+                0x0d1820,
                 0.96,
             )
                 .setStrokeStyle(
-                    1,
-                    0x6f8f65,
-                    0.8,
+                    2,
+                    0x5a8468,
+                    0.95,
                 )
-                .setDepth(401);
+                .setDepth(390);
 
-        this.lobbyFooterDivider =
-            this.add.rectangle(
-                808,
-                466,
-                238,
-                2,
-                0x8bb58f,
-                0.7,
-            )
-                .setDepth(401);
-
-        this.lobbyTitleText = this.add
-            .text(
-                808,
+        this.lobbyTitleText =
+            this.add.text(
+                824,
                 72,
                 'CHAMELEON HUNT',
                 {
-                    fontFamily: 'monospace',
-                    fontSize: '24px',
+                    fontFamily:
+                        '"Arial Black", Arial, sans-serif',
+                    fontSize: '22px',
                     fontStyle: 'bold',
-                    color: '#f6f0df',
+                    color: '#f5f6ef',
                 },
             )
-            .setOrigin(0.5)
-            .setDepth(401);
+                .setOrigin(0.5)
+                .setDepth(405);
 
-        this.lobbyInfoText = this.add
-            .text(
-                808,
-                121,
+        /*
+         * ROOM INFO CARD
+         */
+        this.lobbyInfoCard =
+            this.add.rectangle(
+                824,
+                158,
+                228,
+                112,
+                0xf5ecd4,
+                1,
+            )
+                .setStrokeStyle(
+                    1,
+                    0x78937b,
+                    0.95,
+                )
+                .setDepth(395);
+
+        this.lobbyInfoText =
+            this.add.text(
+                824,
+                113,
                 '',
                 {
-                    fontFamily: 'monospace',
-                    fontSize: '12px',
-                    color: '#4e4236',
-                    align: 'center',
+                    fontFamily:
+                        'Arial, sans-serif',
+                    fontSize: '11px',
+                    color: '#4b4137',
+                    align: 'left',
                     lineSpacing: 5,
+                    fixedWidth: 192,
                 },
             )
-            .setOrigin(0.5, 0)
-            .setDepth(401)
-            .setVisible(false);
+                .setOrigin(0.5, 0)
+                .setDepth(406)
+                .setVisible(false);
 
-        this.startGameButton = this.add
-            .text(
-                808,
-                414,
-                tr('START GAME'),
+        /*
+         * HOST / movement line.
+         */
+        this.lobbyHintText =
+            this.add.text(
+                824,
+                223,
+                '',
                 {
-                    fontFamily: 'monospace',
-                    fontSize: '21px',
+                    fontFamily:
+                        'Arial, sans-serif',
+                    fontSize: '15px',
                     fontStyle: 'bold',
-                    color: '#fffdf3',
-                    backgroundColor: '#5c8f66',
-                    padding: {
-                        x: 24,
-                        y: 12,
-                    },
+                    color: '#ef554c',
+                    align: 'center',
                 },
             )
-            .setOrigin(0.5)
-            .setFixedSize(
-                220,
-                46,
+                .setOrigin(0.5)
+                .setDepth(406);
+
+        this.lobbyMovementHelpText =
+            this.add.text(
+                824,
+                245,
+                tr('WASD 이동'),
+                {
+                    fontFamily:
+                        'Arial, sans-serif',
+                    fontSize: '10px',
+                    fontStyle: 'bold',
+                    color: '#b9c6bf',
+                    align: 'center',
+                },
             )
-            .setAlign('center')
-            .setDepth(402)
-            .setInteractive({
-                useHandCursor: true,
-            });
+                .setOrigin(0.5)
+                .setDepth(406);
 
-        this.startGameButton.on(
-            'pointerdown',
-            () => {
-                if (
-                    multiplayerClient.isHost() &&
-                    multiplayerClient.getPhase() ===
-                        'lobby'
-                ) {
-                    multiplayerClient.sendStartGame();
-                }
-            },
-        );
-
-        this.startGameButton.on(
-            'pointerover',
-            () => {
-                this.startGameButton.setAlpha(0.9);
-            },
-        );
-
-        this.startGameButton.on(
-            'pointerout',
-            () => {
-                this.startGameButton.setScale(1);
-                this.updateLobbyUi();
-            },
-        );
+        /*
+         * GAME SETTINGS CARD
+         */
+        this.lobbyControlsCard =
+            this.add.rectangle(
+                824,
+                342,
+                228,
+                174,
+                0x14242d,
+                0.98,
+            )
+                .setStrokeStyle(
+                    1,
+                    0x365348,
+                    0.95,
+                )
+                .setDepth(395);
 
         this.roleHunterButton =
             this.makeMenuButton(
-                744,
-                282,
+                770,
+                286,
                 tr('HUNTER 지원'),
                 () => {
                     const localPlayer =
@@ -4627,13 +4611,14 @@ export class GameScene extends Phaser.Scene {
                         );
                 },
             )
-                .setDepth(402)
-                .setFontSize(17);
+                .setDepth(406)
+                .setFixedSize(104, 36)
+                .setAlign('center');
 
         this.roleHiderButton =
             this.makeMenuButton(
-                872,
-                282,
+                878,
+                286,
                 tr('지원 취소'),
                 () => {
                     multiplayerClient
@@ -4642,25 +4627,10 @@ export class GameScene extends Phaser.Scene {
                         );
                 },
             )
-                .setDepth(402)
-                .setFontSize(17);
+                .setDepth(406)
+                .setFixedSize(104, 36)
+                .setAlign('center');
 
-        this.roleHunterButton
-            .setFixedSize(124, 40)
-            .setAlign('center');
-
-        this.roleHiderButton
-            .setFixedSize(124, 40)
-            .setAlign('center');
-
-        /*
-         * 역할 버튼은 서로 가까이 배치되어 있으므로
-         * makeMenuButton의 기본 hover scale(1.05)을 사용하면
-         * tr('HUNTER 지원 중')처럼 글자가 길어졌을 때 옆 버튼과 겹칩니다.
-         *
-         * 기존 pointerover/pointerout listener를 제거하고,
-         * 크기는 고정한 채 alpha만 바뀌도록 합니다.
-         */
         [
             this.roleHunterButton,
             this.roleHiderButton,
@@ -4671,7 +4641,6 @@ export class GameScene extends Phaser.Scene {
             button.removeAllListeners(
                 'pointerout',
             );
-
             button.setScale(1);
 
             button.on(
@@ -4684,69 +4653,26 @@ export class GameScene extends Phaser.Scene {
             button.on(
                 'pointerout',
                 () => {
-                    /*
-                     * 실제 ON/OFF alpha는 updateLobbyUi가 다시 계산합니다.
-                     */
                     this.updateLobbyUi();
                 },
             );
         });
 
-        this.lobbyHintText =
-            this.add.text(
-                808,
-                218,
-                '',
-                {
-                    fontFamily:
-                        'monospace',
-                    fontSize: '16px',
-                    fontStyle: 'bold',
-                    color: '#d13b32',
-                    align: 'center',
-                },
-            )
-                .setOrigin(0.5)
-                .setDepth(402);
-
-        this.lobbyMovementHelpText =
-            this.add.text(
-                808,
-                240,
-                tr('WASD 이동'),
-                {
-                    fontFamily:
-                        'monospace',
-                    fontSize: '11px',
-                    fontStyle: 'bold',
-                    color: '#6b5a48',
-                    align: 'center',
-                    backgroundColor:
-                        '#fff4d6aa',
-                    padding: {
-                        x: 7,
-                        y: 3,
-                    },
-                },
-            )
-                .setOrigin(0.5)
-                .setDepth(402);
-
         this.lobbyPaintDurationLabel =
             this.add.text(
-                808,
-                330,
+                824,
+                326,
                 tr('색칠 시간'),
                 {
                     fontFamily:
-                        'monospace',
-                    fontSize: '12px',
+                        'Arial, sans-serif',
+                    fontSize: '11px',
                     fontStyle: 'bold',
-                    color: '#5b4636',
+                    color: '#b9c6bf',
                 },
             )
                 .setOrigin(0.5)
-                .setDepth(402);
+                .setDepth(406);
 
         this.paintDurationButtons =
             [90_000, 120_000, 150_000]
@@ -4759,9 +4685,9 @@ export class GameScene extends Phaser.Scene {
                             durationMs / 1000;
 
                         return this.makeMenuButton(
-                            730 +
-                                index * 78,
-                            358,
+                            754 +
+                                index * 70,
+                            356,
                             `${seconds}s`,
                             () => {
                                 if (
@@ -4778,47 +4704,132 @@ export class GameScene extends Phaser.Scene {
                                 }
                             },
                         )
-                            .setDepth(402)
-                            .setFixedSize(68, 30)
+                            .setDepth(406)
+                            .setFixedSize(
+                                62,
+                                30,
+                            )
                             .setAlign('center')
-                            .setFontSize(12);
+                            .setFontSize(11);
                     },
                 );
 
+        /*
+         * START lives in its own row, never underneath another panel.
+         */
+        this.startGameButton =
+            this.add.text(
+                824,
+                408,
+                tr('START GAME'),
+                {
+                    fontFamily:
+                        'Arial, sans-serif',
+                    fontSize: '17px',
+                    fontStyle: 'bold',
+                    color: '#ffffff',
+                    backgroundColor:
+                        '#397d4b',
+                    fixedWidth: 214,
+                    fixedHeight: 42,
+                    align: 'center',
+                    padding: {
+                        top: 11,
+                    },
+                },
+            )
+                .setOrigin(0.5)
+                .setDepth(407)
+                .setInteractive({
+                    useHandCursor: true,
+                });
+
+        this.startGameButton.on(
+            'pointerdown',
+            () => {
+                if (
+                    multiplayerClient.isHost() &&
+                    multiplayerClient.getPhase() ===
+                        'lobby'
+                ) {
+                    multiplayerClient
+                        .sendStartGame();
+                }
+            },
+        );
+
+        this.startGameButton.on(
+            'pointerover',
+            () => {
+                this.startGameButton
+                    .setAlpha(0.9);
+            },
+        );
+
+        this.startGameButton.on(
+            'pointerout',
+            () => {
+                this.startGameButton
+                    .setScale(1);
+                this.updateLobbyUi();
+            },
+        );
+
+        /*
+         * Footer actions are separated by a divider rather than another
+         * opaque card over the buttons.
+         */
+        this.lobbyFooterDivider =
+            this.add.rectangle(
+                824,
+                453,
+                214,
+                1,
+                0x557a61,
+                0.9,
+            )
+                .setDepth(396);
+
         this.inviteLinkButton =
             this.makeMenuButton(
-                744,
-                492,
+                770,
+                486,
                 tr('초대 링크 복사'),
                 () => {
                     void this.copyInviteLink();
                 },
             )
-                .setDepth(402)
-                .setFixedSize(124, 32)
+                .setDepth(406)
+                .setFixedSize(
+                    104,
+                    34,
+                )
                 .setAlign('center')
                 .setFontSize(
                     getLanguage() === 'en'
-                        ? 11
-                        : 12,
+                        ? 9
+                        : 11,
                 );
 
         this.leaveRoomButton =
             this.makeMenuButton(
-                872,
-                492,
+                878,
+                486,
                 tr('로비로 나가기'),
                 () => {
                     void this.leaveCurrentRoomToLobby();
                 },
             )
-                .setDepth(402)
-                .setFixedSize(124, 32)
+                .setDepth(406)
+                .setFixedSize(
+                    104,
+                    34,
+                )
                 .setAlign('center')
                 .setFontSize(
                     getLanguage() === 'en'
-                        ? 11
-                        : 12,
+                        ? 9
+                        : 11,
                 );
 
         this.updateLobbyUi();
@@ -5310,10 +5321,10 @@ export class GameScene extends Phaser.Scene {
         this.roleHunterButton
             .setFontSize(
                 getLanguage() === 'en'
-                    ? 11
+                    ? 9
                     : getLanguage() === 'ja'
-                        ? 13
-                        : 14,
+                        ? 10
+                        : 11,
             )
             .setText(
                 localPlayer
@@ -5331,8 +5342,8 @@ export class GameScene extends Phaser.Scene {
         this.roleHiderButton
             .setFontSize(
                 getLanguage() === 'en'
-                    ? 11
-                    : 14,
+                    ? 9
+                    : 11,
             )
             .setText(
                 tr('지원 취소'),
@@ -5346,7 +5357,7 @@ export class GameScene extends Phaser.Scene {
 
         this.startGameButton
             .setFixedSize(
-                248,
+                214,
                 42,
             )
             .setAlign('center')
