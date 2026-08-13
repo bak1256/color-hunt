@@ -229,6 +229,8 @@ export class GameScene extends Phaser.Scene {
     private roleHiderButton!: Phaser.GameObjects.Text;
     private inviteLinkButton!: Phaser.GameObjects.Text;
     private leaveRoomButton!: Phaser.GameObjects.Text;
+    private lobbyHintText!: Phaser.GameObjects.Text;
+    private lobbyPaintDurationLabel!: Phaser.GameObjects.Text;
     private paintDurationButtons: Phaser.GameObjects.Text[] = [];
     private brushSizeSliderTrack?: Phaser.GameObjects.Rectangle;
     private brushSizeSliderFill?: Phaser.GameObjects.Rectangle;
@@ -242,7 +244,7 @@ export class GameScene extends Phaser.Scene {
     private readonly selectableMaps = [
         'random',
         ...Array.from(
-            { length: 12 },
+            { length: 11 },
             (_, index) =>
                 `map${index + 1}`,
         ),
@@ -3532,9 +3534,9 @@ export class GameScene extends Phaser.Scene {
         this.lobbyPanel = this.add
             .rectangle(
                 790,
-                290,
-                310,
-                480,
+                285,
+                320,
+                500,
                 0xfff4d6,
                 1,
             )
@@ -3548,7 +3550,7 @@ export class GameScene extends Phaser.Scene {
         this.lobbyTitleText = this.add
             .text(
                 790,
-                102,
+                82,
                 'CHAMELEON HUNT',
                 {
                     fontFamily: 'monospace',
@@ -3563,14 +3565,14 @@ export class GameScene extends Phaser.Scene {
         this.lobbyInfoText = this.add
             .text(
                 790,
-                145,
+                122,
                 '',
                 {
                     fontFamily: 'monospace',
-                    fontSize: '17px',
+                    fontSize: '15px',
                     color: '#5b4636',
                     align: 'center',
-                    lineSpacing: 8,
+                    lineSpacing: 5,
                 },
             )
             .setOrigin(0.5, 0)
@@ -3580,7 +3582,7 @@ export class GameScene extends Phaser.Scene {
         this.startGameButton = this.add
             .text(
                 790,
-                486,
+                458,
                 tr('START GAME'),
                 {
                     fontFamily: 'monospace',
@@ -3631,7 +3633,7 @@ export class GameScene extends Phaser.Scene {
         this.roleHunterButton =
             this.makeMenuButton(
                 720,
-                390,
+                350,
                 tr('HUNTER 지원'),
                 () => {
                     const localPlayer =
@@ -3651,7 +3653,7 @@ export class GameScene extends Phaser.Scene {
         this.roleHiderButton =
             this.makeMenuButton(
                 860,
-                390,
+                350,
                 tr('지원 취소'),
                 () => {
                     multiplayerClient
@@ -3710,6 +3712,38 @@ export class GameScene extends Phaser.Scene {
             );
         });
 
+        this.lobbyHintText =
+            this.add.text(
+                790,
+                322,
+                '',
+                {
+                    fontFamily:
+                        'monospace',
+                    fontSize: '11px',
+                    color: '#6b5a48',
+                    align: 'center',
+                },
+            )
+                .setOrigin(0.5)
+                .setDepth(402);
+
+        this.lobbyPaintDurationLabel =
+            this.add.text(
+                790,
+                388,
+                tr('색칠 시간'),
+                {
+                    fontFamily:
+                        'monospace',
+                    fontSize: '12px',
+                    fontStyle: 'bold',
+                    color: '#5b4636',
+                },
+            )
+                .setOrigin(0.5)
+                .setDepth(402);
+
         this.paintDurationButtons =
             [90_000, 120_000, 150_000]
                 .map(
@@ -3723,7 +3757,7 @@ export class GameScene extends Phaser.Scene {
                         return this.makeMenuButton(
                             708 +
                                 index * 82,
-                            442,
+                            412,
                             `${seconds}s`,
                             () => {
                                 if (
@@ -3750,14 +3784,14 @@ export class GameScene extends Phaser.Scene {
         this.inviteLinkButton =
             this.makeMenuButton(
                 720,
-                528,
+                507,
                 tr('초대 링크 복사'),
                 () => {
                     void this.copyInviteLink();
                 },
             )
                 .setDepth(402)
-                .setFixedSize(132, 40)
+                .setFixedSize(130, 34)
                 .setAlign('center')
                 .setFontSize(
                     getLanguage() === 'en'
@@ -3768,14 +3802,14 @@ export class GameScene extends Phaser.Scene {
         this.leaveRoomButton =
             this.makeMenuButton(
                 860,
-                528,
+                507,
                 tr('로비로 나가기'),
                 () => {
                     void this.leaveCurrentRoomToLobby();
                 },
             )
                 .setDepth(402)
-                .setFixedSize(132, 40)
+                .setFixedSize(130, 34)
                 .setAlign('center')
                 .setFontSize(
                     getLanguage() === 'en'
@@ -4116,6 +4150,8 @@ export class GameScene extends Phaser.Scene {
             this.mapPreviousButton?.setVisible(false);
             this.mapNextButton?.setVisible(false);
             this.paintDurationButtons.forEach((button) => button.setVisible(false));
+            this.lobbyHintText?.setVisible(false);
+            this.lobbyPaintDurationLabel?.setVisible(false);
             return;
         }
 
@@ -4163,17 +4199,6 @@ export class GameScene extends Phaser.Scene {
                                     .toUpperCase()
                         }`,
                     ),
-                    `${tr('색칠 시간')}  ${
-                        Math.round(
-                            multiplayerClient
-                                .getPaintDurationMs() /
-                            1000,
-                        )
-                    }s`,
-                    isHost
-                        ? tr('당신은 방장입니다.')
-                        : tr('방장이 시작하기를 기다리는 중...'),
-                    tr('WASD로 대기실 캐릭터 이동'),
                 ].join('\n');
 
         const hasLobbyInfo =
@@ -4185,6 +4210,26 @@ export class GameScene extends Phaser.Scene {
                 isLobby &&
                 hasLobbyInfo,
             );
+
+        this.lobbyHintText
+            .setText(
+                isHost
+                    ? `${tr('당신은 방장입니다.')} · ${tr('WASD로 대기실 캐릭터 이동')}`
+                    : tr('방장이 시작하기를 기다리는 중...'),
+            )
+            .setVisible(isLobby);
+
+        this.lobbyPaintDurationLabel
+            .setText(
+                `${tr('색칠 시간')} · ${
+                    Math.round(
+                        multiplayerClient
+                            .getPaintDurationMs() /
+                        1000,
+                    )
+                }s`,
+            )
+            .setVisible(isLobby);
 
         this.inviteLinkButton
             ?.setText(
@@ -4300,8 +4345,8 @@ export class GameScene extends Phaser.Scene {
 
         this.startGameButton
             .setFixedSize(
-                180,
-                48,
+                248,
+                42,
             )
             .setAlign('center')
             .setFontSize(
@@ -7809,8 +7854,8 @@ export class GameScene extends Phaser.Scene {
             },
         );
 
-        const sliderMinX = 250;
-        const sliderMaxX = 535;
+        const sliderMinX = 330;
+        const sliderMaxX = 520;
         const sliderY =
             this.gameHeight - 38;
 
@@ -7846,7 +7891,7 @@ export class GameScene extends Phaser.Scene {
                 sliderY,
                 sliderMaxX -
                     sliderMinX,
-                8,
+                6,
                 0x6b7280,
                 0.55,
             )
@@ -7862,7 +7907,7 @@ export class GameScene extends Phaser.Scene {
                 sliderMinX,
                 sliderY,
                 0,
-                8,
+                6,
                 0x4f8f67,
                 1,
             )
@@ -7875,7 +7920,7 @@ export class GameScene extends Phaser.Scene {
             this.add.circle(
                 sliderMinX,
                 sliderY,
-                8,
+                7,
                 0xf8fafc,
                 1,
             )
@@ -7894,9 +7939,9 @@ export class GameScene extends Phaser.Scene {
 
         this.brushSizeSliderLabel =
             this.add.text(
-                205,
-                sliderY,
-                `SIZE ${this.brushSize}`,
+                425,
+                sliderY - 18,
+                `${this.brushSize}px`,
                 {
                     fontFamily:
                         'monospace',
@@ -7922,6 +7967,10 @@ export class GameScene extends Phaser.Scene {
             },
         );
 
+        this.input.setDraggable(
+            this.brushSizeSliderKnob,
+        );
+
         this.brushSizeSliderKnob.on(
             'drag',
             (
@@ -7935,11 +7984,43 @@ export class GameScene extends Phaser.Scene {
             },
         );
 
+        const sliderMinLabel =
+            this.add.text(
+                sliderMinX - 18,
+                sliderY,
+                '1px',
+                {
+                    fontFamily: 'monospace',
+                    fontSize: '10px',
+                    color: '#5b4636',
+                },
+            )
+                .setOrigin(1, 0.5)
+                .setDepth(875)
+                .setVisible(false);
+
+        const sliderMaxLabel =
+            this.add.text(
+                sliderMaxX + 18,
+                sliderY,
+                '20px',
+                {
+                    fontFamily: 'monospace',
+                    fontSize: '10px',
+                    color: '#5b4636',
+                },
+            )
+                .setOrigin(0, 0.5)
+                .setDepth(875)
+                .setVisible(false);
+
         this.paletteObjects.push(
             this.brushSizeSliderTrack,
             this.brushSizeSliderFill,
             this.brushSizeSliderKnob,
             this.brushSizeSliderLabel,
+            sliderMinLabel,
+            sliderMaxLabel,
         );
 
         this.updateBrushSizeSliderUi();
@@ -8672,8 +8753,8 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
-        const minX = 250;
-        const maxX = 535;
+        const minX = 330;
+        const maxX = 520;
         const ratio =
             Phaser.Math.Clamp(
                 (this.brushSize - 1) /
@@ -8694,13 +8775,13 @@ export class GameScene extends Phaser.Scene {
                     0,
                     x - minX,
                 ),
-                8,
+                6,
             );
         this.brushSizeSliderKnob
             .setX(x);
         this.brushSizeSliderLabel
             .setText(
-                `SIZE ${this.brushSize}`,
+                `${this.brushSize}px`,
             );
     }
 
@@ -9039,9 +9120,8 @@ export class GameScene extends Phaser.Scene {
 
                     if (point) {
                         this.playPaintSound();
-                        this.recordActivePaintPoint(
-                            point.x,
-                            point.y,
+                        this.interpolateActivePaintStroke(
+                            point,
                         );
                     }
 
@@ -9108,7 +9188,7 @@ export class GameScene extends Phaser.Scene {
                             this.brushSize +
                                 delta,
                             1,
-                            24,
+                            20,
                         );
 
                     this.createBrushTexture();
@@ -9242,6 +9322,85 @@ export class GameScene extends Phaser.Scene {
                 120,
             ),
         });
+    }
+
+    private interpolateActivePaintStroke(
+        current:
+            NetworkPaintPoint,
+    ): void {
+        const previous =
+            this.activeStrokePoints[
+                this.activeStrokePoints.length - 1
+            ];
+
+        if (!previous) {
+            this.recordActivePaintPoint(
+                current.x,
+                current.y,
+            );
+            return;
+        }
+
+        const distance =
+            Phaser.Math.Distance.Between(
+                previous.x,
+                previous.y,
+                current.x,
+                current.y,
+            );
+
+        const spacing =
+            Math.max(
+                0.75,
+                Math.min(
+                    1.5,
+                    this.brushSize * 0.22,
+                ),
+            );
+
+        const steps =
+            Math.max(
+                1,
+                Math.ceil(
+                    distance /
+                    spacing,
+                ),
+            );
+
+        for (
+            let step = 1;
+            step <= steps;
+            step += 1
+        ) {
+            const t =
+                step / steps;
+
+            const x =
+                Phaser.Math.Linear(
+                    previous.x,
+                    current.x,
+                    t,
+                );
+
+            const y =
+                Phaser.Math.Linear(
+                    previous.y,
+                    current.y,
+                    t,
+                );
+
+            this.networkPlayerManager
+                .stampLocalPaintPoint(
+                    x,
+                    y,
+                    this.brushTextureKey,
+                );
+
+            this.recordActivePaintPoint(
+                x,
+                y,
+            );
+        }
     }
 
     private finishActivePaintStroke(): void {

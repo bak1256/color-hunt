@@ -1330,6 +1330,58 @@ export class NetworkPlayerManager {
     };
   }
 
+  stampLocalPaintPoint(
+    textureX: number,
+    textureY: number,
+    brushTextureKey: string,
+  ): void {
+    const sessionId =
+      multiplayerClient.getSessionId();
+
+    if (!sessionId) {
+      return;
+    }
+
+    const view =
+      this.players.get(sessionId);
+
+    if (
+      !view?.paintLayer ||
+      !view.alive
+    ) {
+      return;
+    }
+
+    const pixelX =
+      Phaser.Math.Clamp(
+        Math.round(textureX),
+        0,
+        80,
+      );
+
+    const pixelY =
+      Phaser.Math.Clamp(
+        Math.round(textureY),
+        0,
+        120,
+      );
+
+    view.paintLayer.texture.stamp(
+      brushTextureKey,
+      undefined,
+      pixelX,
+      pixelY,
+      {
+        originX: 0.5,
+        originY: 0.5,
+      },
+    );
+
+    this.renderPaintTexture(
+      view.paintLayer.texture,
+    );
+  }
+
   applyPaintStroke(
     stroke: NetworkPaintStroke,
     textureKey: string,
@@ -2357,9 +2409,14 @@ export class NetworkPlayerManager {
      */
     if (
       huntActive &&
-      view.role === "hider" &&
-      !moving
+      view.role === "hider"
     ) {
+      /*
+       * Hunt 중 Hider는 완전히 정적인 위장 오브젝트입니다.
+       * 네트워크의 미세한 좌표 변화 / movingUntil 잔여값 때문에
+       * walk animation이 한 프레임이라도 재생되면 paint mask가 흔들려
+       * Hunter에게 바로 들킬 수 있으므로 항상 neutral pose로 고정합니다.
+       */
       this.resetWalkPoseImmediately(
         view,
       );
@@ -2667,8 +2724,7 @@ export class NetworkPlayerManager {
       forcePixelSnap ||
       (
         huntActive &&
-        view.role === "hider" &&
-        view.walkBlend <= 0.001
+        view.role === "hider"
       );
 
     const rawPaintX =
