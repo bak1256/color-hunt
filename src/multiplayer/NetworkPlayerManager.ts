@@ -293,15 +293,8 @@ export class NetworkPlayerManager {
 
     const paintLayer =
       this.createPaintLayer(
-        player.x,
-        player.y,
+        container,
       );
-
-    paintLayer.texture.setDepth(
-      player.role === "hunter"
-        ? 162
-        : 122,
-    );
 
     this.players.set(sessionId, {
       sessionId,
@@ -505,12 +498,6 @@ export class NetworkPlayerManager {
           : 120,
       );
 
-      view.paintLayer?.texture.setDepth(
-        player.role === "hunter"
-          ? 162
-          : 122,
-      );
-
       view.aimGraphics?.setDepth(
         player.role === "hunter"
           ? 170
@@ -558,8 +545,7 @@ export class NetworkPlayerManager {
         this.scene.tweens.add({
           targets: [
             view.container,
-            view.paintLayer?.texture,
-          ].filter(Boolean),
+          ],
           scale: 1.18,
           duration: 130,
           yoyo: true,
@@ -2585,19 +2571,32 @@ export class NetworkPlayerManager {
   }
 
   private createPaintLayer(
-    centerX: number,
-    centerY: number,
+    container:
+      Phaser.GameObjects.Container,
   ): PaintLayer {
+    /*
+     * ROOT FIX:
+     * Paint is no longer an independent world-space GameObject.
+     * It is a CHILD of the exact player container it paints.
+     *
+     * Therefore:
+     *   player movement
+     *   camera zoom
+     *   network interpolation
+     *   integer snapping
+     * can never create a relative X/Y offset between body and paint.
+     */
     const texture =
       this.scene.add.renderTexture(
-        centerX - 40,
-        centerY - 60,
+        -40,
+        -60,
         80,
         120,
       );
 
-    texture.setOrigin(0, 0);
-    texture.setDepth(122);
+    texture
+      .setOrigin(0, 0)
+      .setScale(1);
 
     texture.texture.setFilter(
       Phaser.Textures.FilterMode.NEAREST,
@@ -2605,96 +2604,53 @@ export class NetworkPlayerManager {
 
     texture.clear();
 
+    /*
+     * Insert paint above the body but keep the gun/name readable.
+     */
+    container.add(
+      texture,
+    );
+
+    const gun =
+      container.getData(
+        "network-gun",
+      ) as
+        | Phaser.GameObjects.Container
+        | undefined;
+
+    const nameText =
+      container.getByName(
+        "network-player-name",
+      ) as
+        | Phaser.GameObjects.Text
+        | null;
+
+    if (gun) {
+      container.bringToTop(
+        gun,
+      );
+    }
+
+    if (nameText) {
+      container.bringToTop(
+        nameText,
+      );
+    }
+
+    /*
+     * Kept only for PaintLayer compatibility / cleanup.
+     * Pixel clipping is already performed by stampMaskedPaintBrush(),
+     * so this shape is never used to position or clip the texture.
+     */
     const maskShape =
       this.scene.add.graphics();
 
-    maskShape.fillStyle(0xffffff, 1);
-
-    /*
-     * visible character와 paint mask가 같은 치수를 사용하도록 통일.
-     *
-     * 캐릭터 local origin:
-     *   texture origin = (-40, -60)
-     *
-     * visible geometry:
-     *   head      circle(0, -12, 12)
-     *   body      rect(0, 7, 18, 24)
-     *   leftArm   rect(-13, 6, 6, 18)
-     *   rightArm  rect(13, 6, 6, 18)
-     *   leftLeg   rect(-5, 23, 6, 12)
-     *   rightLeg  rect(5, 23, 6, 12)
-     *
-     * 이전 mask의 팔/다리는 8px/14px로 실제 7px/13px 몸체와 달랐습니다.
-     */
-
-    // head: exact visible circle
-    maskShape.fillCircle(
-      40,
-      48,
-      12,
-    );
-
-    // body: x[-9,9], y[-5,19]
-    maskShape.fillRect(
-      31,
-      55,
-      18,
-      24,
-    );
-
-    // arms: exact width 7 / height 18
-    /*
-     * Pixel camouflage must never create half-pixel fringe.
-     * Use integer-aligned, slightly inset silhouette cells.
-     */
-    maskShape.fillRect(
-      24,
-      57,
-      8,
-      18,
-    );
-
-    maskShape.fillRect(
-      48,
-      57,
-      8,
-      18,
-    );
-
-    // legs: integer-aligned to prevent antialiased fringe pixels
-    maskShape.fillRect(
-      31,
-      75,
-      8,
-      14,
-    );
-
-    maskShape.fillRect(
-      41,
-      75,
-      8,
-      14,
-    );
-
-    maskShape.setPosition(
-      centerX - 40,
-      centerY - 60,
-    );
-
-    maskShape.setVisible(true);
-    maskShape.setAlpha(0);
-    maskShape.setDepth(-10);
+    maskShape
+      .setVisible(false)
+      .setAlpha(0);
 
     const mask =
       maskShape.createGeometryMask();
-
-    /*
-     * Do NOT apply the GeometryMask to the RenderTexture.
-     * stampMaskedPaintBrush() already rejects every pixel outside the exact
-     * integer silhouette.  A Graphics GeometryMask has anti-aliased circle
-     * edges and can clip one extra row/column, exposing white pixels.
-     */
-    texture.clearMask();
 
     return {
       texture,
@@ -3179,79 +3135,39 @@ export class NetworkPlayerManager {
 
   private syncPaintLayerPosition(
     view: NetworkPlayerView,
-    forcePixelSnap = false,
+    _forcePixelSnap = false,
   ): void {
     if (!view.paintLayer) {
       return;
     }
 
-    const scaleX =
-      view.container.scaleX || 1;
-
-    const scaleY =
-      view.container.scaleY || 1;
-
-    const shouldPixelSnap =
-      forcePixelSnap ||
-      (
-        view.role === "hider" &&
-        !view.customizationMode
-      );
-
-    const rawPaintX =
-      view.container.x -
-      40 * scaleX;
-
-    const rawPaintY =
-      view.container.y -
-      60 * scaleY;
-
     /*
-     * 숨은 Hider의 paint texture와 mask를 동일한 정수 픽셀 좌표에 고정합니다.
-     * 카메라 이동 시 texture/mask가 서로 다른 sub-pixel에서 샘플링되어
-     * 가장자리가 일렁이는 현상을 줄입니다.
+     * Paint texture is a player-container child now.
+     * NEVER convert world coordinates here.
+     * Its correct position is permanently (-40, -60) in player-local space.
      */
-    const paintX =
-      shouldPixelSnap
-        ? Math.round(rawPaintX)
-        : rawPaintX;
-
-    const paintY =
-      shouldPixelSnap
-        ? Math.round(rawPaintY)
-        : rawPaintY;
-
     view.paintLayer.texture
-      .setDepth(
-        view.customizationMode
-          ? 921
-          : view.role === "hunter"
-              ? 162
-              : 122,
+      .setPosition(
+        -40,
+        -60,
+      )
+      .setScale(
+        1,
+        1,
       )
       .setVisible(
         view.customizationMode
           ? true
-          : view.paintLayer.texture.visible,
-      )
-      .setPosition(
-        paintX,
-        paintY,
-      )
-      .setScale(
-        scaleX,
-        scaleY,
+          : view.paintLayer.texture
+              .visible,
       );
 
+    /*
+     * maskShape is no longer part of rendering; keep it detached and hidden.
+     */
     view.paintLayer.maskShape
-      .setPosition(
-        paintX,
-        paintY,
-      )
-      .setScale(
-        scaleX,
-        scaleY,
-      );
+      .setVisible(false)
+      .setScale(1);
   }
 
   private renderPaintTexture(
