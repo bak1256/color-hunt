@@ -194,6 +194,19 @@ export class NetworkPlayerManager {
       );
   }
 
+  private getLobbyDisplayX(
+    x: number,
+  ): number {
+    return Phaser.Math.Clamp(
+      x,
+      36,
+      Math.min(
+        610,
+        this.gameWidth * 0.64,
+      ),
+    );
+  }
+
   syncLobbyPositionsFromState(): void {
     const room =
       multiplayerClient.getRoom();
@@ -225,14 +238,19 @@ export class NetworkPlayerManager {
          */
         if (isLocal) {
           if (!this.localMovementInitialized) {
-            this.localX = player.x;
+            const lobbyX =
+              this.getLobbyDisplayX(
+                player.x,
+              );
+
+            this.localX = lobbyX;
             this.localY = player.y;
-            view.targetX = player.x;
+            view.targetX = lobbyX;
             view.targetY = player.y;
 
             this.setViewPosition(
               view,
-              player.x,
+              lobbyX,
               player.y,
             );
 
@@ -243,14 +261,19 @@ export class NetworkPlayerManager {
           return;
         }
 
-        view.targetX = player.x;
+        const lobbyX =
+          this.getLobbyDisplayX(
+            player.x,
+          );
+
+        view.targetX = lobbyX;
         view.targetY = player.y;
 
         const initialOffset =
           Phaser.Math.Distance.Between(
             view.container.x,
             view.container.y,
-            player.x,
+            lobbyX,
             player.y,
           );
 
@@ -260,7 +283,7 @@ export class NetworkPlayerManager {
         ) {
           this.setViewPosition(
             view,
-            player.x,
+            lobbyX,
             player.y,
           );
         }
@@ -474,12 +497,19 @@ export class NetworkPlayerManager {
       roomPhase === "lobby" &&
       !view.customizationMode
     ) {
+      const lobbyX =
+        this.getLobbyDisplayX(
+          player.x,
+        );
+
+      view.targetX = lobbyX;
+      view.targetY = player.y;
       if (isRemote) {
         /*
          * Remote lobby players receive authoritative targets and are
          * interpolated in update(). Avoid packet-by-packet hard snapping.
          */
-        view.targetX = player.x;
+        view.targetX = lobbyX;
         view.targetY = player.y;
       } else if (
         !this.localMovementInitialized
@@ -488,9 +518,9 @@ export class NetworkPlayerManager {
          * Initialize the local player once from the authoritative spawn.
          * After that, local WASD prediction owns the rendered position.
          */
-        this.localX = player.x;
+        this.localX = lobbyX;
         this.localY = player.y;
-        view.targetX = player.x;
+        view.targetX = lobbyX;
         view.targetY = player.y;
 
         this.setViewPosition(
@@ -776,11 +806,23 @@ export class NetworkPlayerManager {
     const distance =
       speed * (delta / 1000);
 
+    const roomPhase =
+      multiplayerClient.getRoom()
+        ?.state?.phase;
+
+    const maxMovementX =
+      roomPhase === "lobby"
+        ? Math.min(
+            610,
+            this.gameWidth * 0.64,
+          )
+        : this.gameWidth - 24;
+
     this.localX = Phaser.Math.Clamp(
       this.localX +
         direction.x * distance,
       24,
-      this.gameWidth - 24,
+      maxMovementX,
     );
 
     this.localY = Phaser.Math.Clamp(

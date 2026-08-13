@@ -228,7 +228,7 @@ export class GameScene extends Phaser.Scene {
          * and independently touchable during Paint.
          */
         const moveX = 82;
-        const moveY = 158;
+        const moveY = 275;
         const aimX =
             this.gameWidth - 170;
         const aimY =
@@ -485,6 +485,13 @@ export class GameScene extends Phaser.Scene {
 
                 if (
                     pointer.id ===
+                    this.mobileFirePointerId
+                ) {
+                    this.mobileFirePointerId = -1;
+                }
+
+                if (
+                    pointer.id ===
                     this.mobileAimPointerId
                 ) {
                     this.mobileAimPointerId = -1;
@@ -534,6 +541,9 @@ export class GameScene extends Phaser.Scene {
                 ) {
                     return;
                 }
+
+                this.mobileFirePointerId =
+                    pointer.id;
 
                 this.fireShotgun(
                     this.mobileAimAngle,
@@ -593,7 +603,7 @@ export class GameScene extends Phaser.Scene {
                 screenX,
                 screenY,
                 82,
-                158,
+                275,
             );
 
         if (
@@ -729,7 +739,7 @@ export class GameScene extends Phaser.Scene {
                 : this.gameWidth - 170;
         const baseY =
             kind === 'move'
-                ? 158
+                ? 275
                 : this.gameHeight - 92;
 
         const deltaX =
@@ -815,6 +825,8 @@ export class GameScene extends Phaser.Scene {
                     normalizedY,
                     normalizedX,
                 );
+            this.mobileAimHasDirection =
+                true;
         }
     }
 
@@ -1016,9 +1028,11 @@ export class GameScene extends Phaser.Scene {
     private mobileFireLabel?: Phaser.GameObjects.Text;
     private mobileMovePointerId = -1;
     private mobileAimPointerId = -1;
+    private mobileFirePointerId = -1;
     private mobileMoveX = 0;
     private mobileMoveY = 0;
     private mobileAimAngle = 0;
+    private mobileAimHasDirection = false;
     private readonly mobileJoystickRadius = 46;
     private mobileTouchPoints =
         new Map<number, Phaser.Math.Vector2>();
@@ -4293,28 +4307,28 @@ export class GameScene extends Phaser.Scene {
     private createLobbyUi(): void {
         this.lobbyPanel = this.add
             .rectangle(
-                790,
-                285,
-                320,
-                500,
+                808,
+                286,
+                286,
+                468,
                 0xfff4d6,
-                1,
+                0.96,
             )
             .setStrokeStyle(
-                4,
+                3,
                 0x6f8f65,
-                1,
+                0.95,
             )
             .setDepth(400);
 
         this.lobbyTitleText = this.add
             .text(
-                790,
-                82,
+                808,
+                72,
                 'CHAMELEON HUNT',
                 {
                     fontFamily: 'monospace',
-                    fontSize: '28px',
+                    fontSize: '24px',
                     fontStyle: 'bold',
                     color: '#476348',
                 },
@@ -4324,12 +4338,12 @@ export class GameScene extends Phaser.Scene {
 
         this.lobbyInfoText = this.add
             .text(
-                790,
-                122,
+                808,
+                112,
                 '',
                 {
                     fontFamily: 'monospace',
-                    fontSize: '15px',
+                    fontSize: '12px',
                     color: '#5b4636',
                     align: 'center',
                     lineSpacing: 5,
@@ -4341,8 +4355,8 @@ export class GameScene extends Phaser.Scene {
 
         this.startGameButton = this.add
             .text(
-                790,
-                458,
+                808,
+                430,
                 tr('START GAME'),
                 {
                     fontFamily: 'monospace',
@@ -4392,8 +4406,8 @@ export class GameScene extends Phaser.Scene {
 
         this.roleHunterButton =
             this.makeMenuButton(
-                720,
-                350,
+                742,
+                278,
                 tr('HUNTER 지원'),
                 () => {
                     const localPlayer =
@@ -4412,8 +4426,8 @@ export class GameScene extends Phaser.Scene {
 
         this.roleHiderButton =
             this.makeMenuButton(
-                860,
-                350,
+                874,
+                278,
                 tr('지원 취소'),
                 () => {
                     multiplayerClient
@@ -4474,13 +4488,13 @@ export class GameScene extends Phaser.Scene {
 
         this.lobbyHintText =
             this.add.text(
-                790,
-                288,
+                808,
+                226,
                 '',
                 {
                     fontFamily:
                         'monospace',
-                    fontSize: '18px',
+                    fontSize: '16px',
                     fontStyle: 'bold',
                     color: '#d13b32',
                     align: 'center',
@@ -4491,8 +4505,8 @@ export class GameScene extends Phaser.Scene {
 
         this.lobbyMovementHelpText =
             this.add.text(
-                790,
-                318,
+                808,
+                248,
                 tr('WASD 이동'),
                 {
                     fontFamily:
@@ -4514,8 +4528,8 @@ export class GameScene extends Phaser.Scene {
 
         this.lobbyPaintDurationLabel =
             this.add.text(
-                790,
-                388,
+                808,
+                326,
                 tr('색칠 시간'),
                 {
                     fontFamily:
@@ -4539,9 +4553,9 @@ export class GameScene extends Phaser.Scene {
                             durationMs / 1000;
 
                         return this.makeMenuButton(
-                            708 +
+                            726 +
                                 index * 82,
-                            412,
+                            352,
                             `${seconds}s`,
                             () => {
                                 if (
@@ -4567,8 +4581,8 @@ export class GameScene extends Phaser.Scene {
 
         this.inviteLinkButton =
             this.makeMenuButton(
-                720,
-                507,
+                742,
+                493,
                 tr('초대 링크 복사'),
                 () => {
                     void this.copyInviteLink();
@@ -4585,8 +4599,8 @@ export class GameScene extends Phaser.Scene {
 
         this.leaveRoomButton =
             this.makeMenuButton(
-                860,
-                507,
+                874,
+                493,
                 tr('로비로 나가기'),
                 () => {
                     void this.leaveCurrentRoomToLobby();
@@ -4958,22 +4972,6 @@ export class GameScene extends Phaser.Scene {
                     tr(tr(`TITLE  ${multiplayerClient.getRoom()?.state.roomTitle ?? '-'}`)),
                     tr(tr(`PLAYERS  ${this.networkPlayerCount} / 10`)),
                     tr(
-                        `현재 역할  ${
-                            localPlayer?.role
-                                ?.toUpperCase() ??
-                            'HIDER'
-                        }`,
-                    ),
-                    tr(
-                        `Hunter 지원  ${
-                            localPlayer
-                                ?.hunterVolunteer
-                                ? 'ON'
-                                : 'OFF'
-                        }`,
-                    ),
-                    tr(tr(`시작 시 Hunter 수  ${this.getRecommendedHunterCount(this.networkPlayerCount)}`)),
-                    tr(
                         `MAP  ${
                             multiplayerClient
                                 .getSelectedMap() ===
@@ -5205,20 +5203,6 @@ export class GameScene extends Phaser.Scene {
         this.showStatus(
             tr('방에서 나왔습니다.'),
         );
-    }
-
-    private getRecommendedHunterCount(
-        playerCount: number,
-    ): number {
-        if (playerCount >= 9) {
-            return 3;
-        }
-
-        if (playerCount >= 5) {
-            return 2;
-        }
-
-        return 1;
     }
 
     private createCountdownUi(): void {
@@ -6899,9 +6883,9 @@ export class GameScene extends Phaser.Scene {
             .setColor('#26352b')
             .setVisible(false);
 
-        this.guideText.setText(
-            tr('방장이 START GAME 버튼을 누르면 시작합니다.'),
-        );
+        this.guideText
+            .setText('')
+            .setVisible(false);
 
         this.paintPreview.setVisible(false);
         this.setPaintPaletteVisible(false);
@@ -10023,9 +10007,13 @@ export class GameScene extends Phaser.Scene {
 
                 if (
                     this.mobileControlsEnabled &&
-                    this.isMobileControlScreenPoint(
-                        pointer.x,
-                        pointer.y,
+                    (
+                        pointer.id ===
+                            this.mobileFirePointerId ||
+                        this.isMobileControlScreenPoint(
+                            pointer.x,
+                            pointer.y,
+                        )
                     )
                 ) {
                     return;
@@ -11028,7 +11016,9 @@ export class GameScene extends Phaser.Scene {
 
         const usingMobileAim =
             this.mobileControlsEnabled &&
-            this.mobileAimPointerId >= 0;
+            this.networkPlayerManager
+                .canLocalControlHunter() &&
+            this.mobileAimHasDirection;
 
         const angle =
             usingMobileAim
@@ -11276,11 +11266,18 @@ export class GameScene extends Phaser.Scene {
 
         const aimAngle =
             aimAngleOverride ??
-            Phaser.Math.Angle.Between(
-                origin.x,
-                origin.y,
-                pointer.worldX,
-                pointer.worldY,
+            (
+                this.mobileControlsEnabled &&
+                this.networkPlayerManager
+                    .canLocalControlHunter() &&
+                this.mobileAimHasDirection
+                    ? this.mobileAimAngle
+                    : Phaser.Math.Angle.Between(
+                        origin.x,
+                        origin.y,
+                        pointer.worldX,
+                        pointer.worldY,
+                    )
             );
 
         const muzzleDistance = 28;
