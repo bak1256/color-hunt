@@ -193,13 +193,22 @@ export type HuntersOutOfAmmoHandler = (
   message: string,
 ) => void;
 
+export type PlayerDisconnectedHandler = (
+  payload: {
+    sessionId: string;
+    name: string;
+  },
+) => void;
+
+export type RoundAbortedHandler = (
+  message: string,
+) => void;
+
 export class MultiplayerClient {
   private readonly client: Client;
   private readonly serverUrl: string;
   private room?: Room<NetworkGameState>;
-  private callbacks?: ReturnType<
-    typeof Callbacks.get
-  >;
+  private callbacks?: any;
 
   /*
    * 최초 Schema snapshot이 브라우저/타이밍에 따라 누락되는 경우를 위한
@@ -330,7 +339,7 @@ export class MultiplayerClient {
       if (!this.callbacks) {
         try {
           this.callbacks =
-            Callbacks.get(room);
+            Callbacks.get(room as any);
 
           this.registerRoomCallbacks(
             room,
@@ -457,7 +466,7 @@ export class MultiplayerClient {
       if (!this.callbacks) {
         try {
           this.callbacks =
-            Callbacks.get(room);
+            Callbacks.get(room as any);
 
           this.registerRoomCallbacks(
             room,
@@ -717,7 +726,7 @@ private attachRoom(
 
     this.room = room;
     this.callbacks =
-      Callbacks.get(room);
+      Callbacks.get(room as any);
 
     this.registerRoomCallbacks(
       room,
@@ -855,9 +864,7 @@ private attachRoom(
 
   private registerRoomCallbacks(
     room: Room<NetworkGameState>,
-    callbacks: ReturnType<
-      typeof Callbacks.get
-    >,
+    callbacks: any,
   ): void {
     callbacks.onAdd(
       "players",

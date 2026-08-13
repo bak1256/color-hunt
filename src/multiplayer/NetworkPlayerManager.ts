@@ -2,7 +2,6 @@ import Phaser from "phaser";
 
 import {
   multiplayerClient,
-  type NetworkBrushShape,
   type NetworkPaintPoint,
   type NetworkPaintStroke,
   type NetworkPlayerRole,
@@ -16,6 +15,7 @@ type PaintLayer = {
 };
 
 type NetworkPlayerView = {
+  sessionId: string;
   container: Phaser.GameObjects.Container;
   nameText: Phaser.GameObjects.Text;
   role: NetworkPlayerRole;
@@ -263,7 +263,6 @@ export class NetworkPlayerManager {
 
     const container = this.createPlayerContainer(
       player,
-      isLocal,
     );
 
     container.setPosition(
@@ -289,6 +288,7 @@ export class NetworkPlayerManager {
     );
 
     this.players.set(sessionId, {
+      sessionId,
       container,
       nameText,
       role: player.role,
@@ -1821,7 +1821,6 @@ export class NetworkPlayerManager {
 
   private createPlayerContainer(
     player: NetworkPlayerState,
-    isLocal: boolean,
   ): Phaser.GameObjects.Container {
     const container =
       this.scene.add.container(0, 0);
@@ -2585,55 +2584,6 @@ export class NetworkPlayerManager {
         scaleX,
         scaleY,
       );
-  }
-
-  private isInsideHiderShape(
-    x: number,
-    y: number,
-  ): boolean {
-    const inHead =
-      x * x +
-        (y + 12) * (y + 12) <=
-      12 * 12;
-
-    const inBody =
-      x >= -9 &&
-      x <= 9 &&
-      y >= -5 &&
-      y <= 19;
-
-    const inLeftArm =
-      x >= -16.5 &&
-      x <= -9.5 &&
-      y >= -3 &&
-      y <= 15;
-
-    const inRightArm =
-      x >= 9.5 &&
-      x <= 16.5 &&
-      y >= -3 &&
-      y <= 15;
-
-    const inLeftLeg =
-      x >= -8.5 &&
-      x <= -1.5 &&
-      y >= 16.5 &&
-      y <= 29.5;
-
-    const inRightLeg =
-      x >= 1.5 &&
-      x <= 8.5 &&
-      y >= 16.5 &&
-      y <= 29.5;
-
-    return (
-      inHead ||
-      inBody ||
-      inLeftArm ||
-      inRightArm ||
-      inLeftLeg ||
-      inRightLeg
-    );
   }
 
   private renderPaintTexture(

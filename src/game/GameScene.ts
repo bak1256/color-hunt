@@ -99,8 +99,6 @@ export class GameScene extends Phaser.Scene {
 
     private reloadKey!: Phaser.Input.Keyboard.Key;
 
-    private brushIncreaseKey!: Phaser.Input.Keyboard.Key;
-    private brushDecreaseKey!: Phaser.Input.Keyboard.Key;
     private brushPlusKey!: Phaser.Input.Keyboard.Key;
     private brushMinusKey!: Phaser.Input.Keyboard.Key;
     private brushNumpadPlusKey!: Phaser.Input.Keyboard.Key;
@@ -252,8 +250,6 @@ export class GameScene extends Phaser.Scene {
     private menuModalOverlay?: HTMLDivElement;
     private pendingInviteRoomId = '';
     private pendingInvitePrivate = false;
-    private inviteJoinInProgress = false;
-    private inviteJoinRoomId = '';
     private mainMenuObjects: Phaser.GameObjects.GameObject[] = [];
     private roomListObjects: Phaser.GameObjects.GameObject[] = [];
     private roomListRefreshEvent?: Phaser.Time.TimerEvent;
@@ -265,14 +261,11 @@ export class GameScene extends Phaser.Scene {
     private weaponHeatUpdatedAt = 0;
     private weaponOverheatedUntil = 0;
     private paintWorldZoom = 1;
-    private paintZoomAnchorX = 0;
-    private paintZoomAnchorY = 0;
     private lastHunterAimSentAt = 0;
     private readonly hunterAimSendInterval = 50;
     private readonly gameplayCameraZoom = 1.65;
     private roundResultWinner: 'hunters' | 'hiders' | null = null;
     private roundResultMessage = '';
-    private gameplayCameraActive = false;
     private gameplayUiSnapshots = new Map<
         Phaser.GameObjects.GameObject,
         {
@@ -291,14 +284,8 @@ export class GameScene extends Phaser.Scene {
             scaleY: number;
         }
     >();
-    private backgroundBaseX = 0;
-    private backgroundBaseY = 0;
-    private backgroundBaseScaleX = 1;
-    private backgroundBaseScaleY = 1;
     private networkPlayerCount = 0;
     private roomTransitionInProgress = false;
-    private roomTransitionSerial = 0;
-    private roomUiReadyId = '';
     private roomHandshakeSerial = 0;
     private roomHandshakeEvent?: Phaser.Time.TimerEvent;
     private roomHandshakeCompletedId = '';
@@ -337,8 +324,6 @@ export class GameScene extends Phaser.Scene {
      */
     private hunterReserve = 12;
     private hunterMaxReserve = 12;
-    private hunterPrecisionPoints = 0;
-    private hunterShotsFired = 0;
 
     constructor() {
         super('GameScene');
@@ -1239,9 +1224,6 @@ export class GameScene extends Phaser.Scene {
                 false;
             this.roomHandshakeCompletedId =
                 room.roomId;
-            this.roomUiReadyId =
-                room.roomId;
-
             try {
                 this.handleJoinedRoom(
                     room,
@@ -1254,9 +1236,6 @@ export class GameScene extends Phaser.Scene {
 
                 this.roomHandshakeCompletedId =
                     '';
-                this.roomUiReadyId =
-                    '';
-
                 this.time.delayedCall(
                     50,
                     hydrate,
@@ -1305,8 +1284,6 @@ export class GameScene extends Phaser.Scene {
              * 화면이 아직 Main Menu에 남아 있다면 과거 완료 플래그는 무효.
              */
             this.roomHandshakeCompletedId =
-                '';
-            this.roomUiReadyId =
                 '';
         }
 
@@ -1536,11 +1513,6 @@ export class GameScene extends Phaser.Scene {
                         state.reserve;
                     this.hunterMaxReserve =
                         state.maxReserve;
-                    this.hunterPrecisionPoints =
-                        state.precisionPoints;
-                    this.hunterShotsFired =
-                        state.shotsFired;
-
                     this.updateWeaponHeatHud();
                 },
             ),
@@ -1584,8 +1556,6 @@ export class GameScene extends Phaser.Scene {
                     this.weaponOverheatedUntil = 0;
                     this.hunterReserve = 12;
                     this.hunterMaxReserve = 12;
-                    this.hunterPrecisionPoints = 0;
-                    this.hunterShotsFired = 0;
                     this.clearStatus();
                 },
             ),
@@ -1872,7 +1842,6 @@ export class GameScene extends Phaser.Scene {
         this.pendingInviteRoomId = roomId;
         this.pendingInvitePrivate =
             params.get('private') === '1';
-        this.inviteJoinRoomId = roomId;
 
         this.openJoinRoomModal(
             roomId,
@@ -2413,105 +2382,6 @@ export class GameScene extends Phaser.Scene {
         );
     }
 
-    private forceJoinedLobbyPresentation(
-        room: NonNullable<
-            ReturnType<
-                typeof multiplayerClient.getRoom
-            >
-        >,
-    ): void {
-        if (
-            multiplayerClient.getRoom() !== room
-        ) {
-            return;
-        }
-
-        /*
-         * joinById()가 resolve된 순간 서버 참가 자체는 이미 성공했습니다.
-         * local PlayerState가 아직 한 tick 늦더라도 메인 메뉴에 계속 남겨
-         * "멈춘 것처럼" 보이게 하지 않습니다.
-         */
-        this.closeMenuModal();
-        this.stopRoomListAutoRefresh();
-        this.clearMainMenuObjects();
-
-        this.multiplayerSessionActive =
-            true;
-        this.roomTransitionInProgress =
-            false;
-        this.phase = 'lobby';
-
-        this.enterLobbyPhase();
-
-        this.lobbyPanel
-            .setVisible(true);
-
-        this.lobbyTitleText
-            .setVisible(true);
-
-        this.startGameButton
-            .setVisible(
-                multiplayerClient.isHost(),
-            );
-
-        const startedAt =
-            this.time.now;
-
-        const syncUntilReady = (): void => {
-            if (
-                multiplayerClient.getRoom() !==
-                    room ||
-                this.phase !== 'lobby'
-            ) {
-                return;
-            }
-
-            this.networkPlayerManager
-                .syncPlayersFromCurrentRoom();
-
-            this.networkPlayerManager
-                .syncLobbyPositionsFromState();
-
-            this.localNetworkPlayerReady =
-                this.ensureLocalNetworkPlayer(
-                    room,
-                );
-
-            this.updateLobbyUi();
-
-            if (
-                this.localNetworkPlayerReady
-            ) {
-                this.roomHandshakeCompletedId =
-                    room.roomId;
-                this.roomUiReadyId =
-                    room.roomId;
-                return;
-            }
-
-            /*
-             * 서버 Room은 성공했으므로 실패 팝업으로 돌아가지 않고,
-             * local state가 보일 때까지 짧게 계속 동기화합니다.
-             */
-            if (
-                this.time.now -
-                    startedAt <
-                5000
-            ) {
-                this.time.delayedCall(
-                    50,
-                    syncUntilReady,
-                );
-            } else {
-                this.time.delayedCall(
-                    250,
-                    syncUntilReady,
-                );
-            }
-        };
-
-        syncUntilReady();
-    }
 
     private async submitJoinRoom(
         roomIdValue: string,
@@ -2643,88 +2513,6 @@ export class GameScene extends Phaser.Scene {
     }
 
 
-    private forceInviteLobbyView(
-        room: NonNullable<
-            ReturnType<
-                typeof multiplayerClient.getRoom
-            >
-        >,
-        transitionSerial: number,
-    ): void {
-        /*
-         * 초대 링크는 페이지 최초 진입 직후 main menu refresh가 아직
-         * 비동기로 끝나는 중일 수 있습니다.
-         *
-         * 네트워크 연결/플레이어 생성은 다시 하지 않고,
-         * 메인 메뉴 오브젝트를 제거하고 Lobby visibility만 확정합니다.
-         */
-        const applyLobbyView = (): void => {
-            if (
-                transitionSerial !==
-                    this.roomTransitionSerial ||
-                multiplayerClient.getRoom() !==
-                    room
-            ) {
-                return;
-            }
-
-            this.clearMainMenuObjects();
-
-            this.phase = 'lobby';
-
-            this.lobbyPanel
-                .setVisible(true);
-
-            this.lobbyTitleText
-                .setVisible(true);
-
-            this.startGameButton
-                .setVisible(
-                    multiplayerClient.isHost(),
-                );
-
-            this.updateLobbyUi();
-
-            this.localNetworkPlayerReady =
-                this.ensureLocalNetworkPlayer(
-                    room,
-                );
-
-            this.roomTransitionInProgress =
-                false;
-            this.inviteJoinInProgress =
-                false;
-
-            /*
-             * URL query를 제거해 새로고침 시 같은 초대 참가 모달이
-             * 다시 뜨는 것도 방지합니다.
-             */
-            const cleanUrl =
-                new URL(
-                    window.location.href,
-                );
-
-            cleanUrl.search = '';
-            cleanUrl.hash = '';
-
-            window.history.replaceState(
-                {},
-                '',
-                cleanUrl.toString(),
-            );
-        };
-
-        applyLobbyView();
-
-        /*
-         * room list fetch/showMainMenu의 늦은 결과가 다시 덮어쓸 수 있는
-         * 짧은 구간을 한 번 더 방어합니다.
-         */
-        this.time.delayedCall(
-            250,
-            applyLobbyView,
-        );
-    }
 
     private completeConnectedRoomHandshake(
         room: NonNullable<
@@ -2749,9 +2537,6 @@ export class GameScene extends Phaser.Scene {
         ) {
             return;
         }
-
-        const localSessionId =
-            room.sessionId;
 
         const localReady =
             this.ensureLocalNetworkPlayer(
@@ -2789,8 +2574,6 @@ export class GameScene extends Phaser.Scene {
              */
             this.roomHandshakeCompletedId =
                 room.roomId;
-            this.roomUiReadyId =
-                room.roomId;
             this.multiplayerSessionActive =
                 true;
             this.localNetworkPlayerReady =
@@ -2813,8 +2596,6 @@ export class GameScene extends Phaser.Scene {
              * 실패를 완료 상태로 잠그지 않고 다음 update/handshake에서 다시 시도.
              */
             this.roomHandshakeCompletedId =
-                '';
-            this.roomUiReadyId =
                 '';
             this.multiplayerSessionActive =
                 false;
@@ -2942,94 +2723,6 @@ export class GameScene extends Phaser.Scene {
         }
     }
 
-    private finishRoomTransition(
-        room: NonNullable<
-            ReturnType<
-                typeof multiplayerClient.getRoom
-            >
-        >,
-        transitionSerial =
-            this.roomTransitionSerial,
-    ): void {
-        if (
-            transitionSerial !==
-                this.roomTransitionSerial ||
-            multiplayerClient.getRoom() !==
-                room
-        ) {
-            return;
-        }
-
-        if (
-            this.roomUiReadyId ===
-            room.roomId
-        ) {
-            this.roomTransitionInProgress =
-                false;
-            this.closeMenuModal();
-            return;
-        }
-
-        this.roomUiReadyId =
-            room.roomId;
-
-        /*
-         * 같은 Room의 UI 전환은 정확히 한 번만 수행합니다.
-         */
-        this.roomTransitionInProgress =
-            false;
-
-        try {
-            this.handleJoinedRoom(
-                room,
-            );
-        } catch (error) {
-            console.error(
-                '로비 UI 전환 복구:',
-                error,
-            );
-
-            this.clearMainMenuObjects();
-            this.enterLobbyPhase();
-
-            this.lobbyPanel
-                .setVisible(true);
-
-            this.lobbyTitleText
-                .setVisible(true);
-
-            this.updateLobbyUi();
-        }
-
-        /*
-         * 네트워크 연결은 성공했지만 같은 frame의 UI destroy/show 순서로
-         * 로비 카드가 가려지는 환경을 위해 시각 상태만 한 번 확인합니다.
-         * 네트워크 초기화나 player add를 다시 실행하지 않습니다.
-         */
-        this.time.delayedCall(
-            100,
-            () => {
-                if (
-                    transitionSerial !==
-                        this.roomTransitionSerial ||
-                    multiplayerClient
-                        .getRoom() !== room
-                ) {
-                    return;
-                }
-
-                this.clearMainMenuObjects();
-
-                this.lobbyPanel
-                    .setVisible(true);
-
-                this.lobbyTitleText
-                    .setVisible(true);
-
-                this.updateLobbyUi();
-            },
-        );
-    }
 
     private ensureLocalNetworkPlayer(
         room: NonNullable<
@@ -3077,18 +2770,6 @@ export class GameScene extends Phaser.Scene {
         return false;
     }
 
-    private handleJoinedRoomSafely(
-        room: NonNullable<
-            ReturnType<
-                typeof multiplayerClient.getRoom
-            >
-        >,
-    ): void {
-        this.finishRoomTransition(
-            room,
-            this.roomTransitionSerial,
-        );
-    }
 
     private handleJoinedRoom(
         room: NonNullable<
@@ -3225,10 +2906,6 @@ export class GameScene extends Phaser.Scene {
         ) {
             return;
         }
-
-        const localSessionId =
-            multiplayerClient
-                .getSessionId() ?? '';
 
         const room =
             multiplayerClient
@@ -3411,7 +3088,6 @@ export class GameScene extends Phaser.Scene {
         }
 
         this.multiplayerSessionActive = false;
-        this.roomUiReadyId = '';
         this.roomHandshakeCompletedId = '';
         this.localNetworkPlayerReady = false;
         this.clearMainMenuObjects();
@@ -4155,11 +3831,6 @@ export class GameScene extends Phaser.Scene {
          * 텍스처마다 원본 크기가 다를 수 있으므로 새 display scale을
          * paint zoom의 기준값으로 다시 저장합니다.
          */
-        this.backgroundBaseScaleX =
-            this.backgroundImage.scaleX;
-
-        this.backgroundBaseScaleY =
-            this.backgroundImage.scaleY;
     }
 
     private updateMapSelectorUi(): void {
@@ -4384,7 +4055,6 @@ export class GameScene extends Phaser.Scene {
         this.multiplayerSessionActive = false;
         this.localNetworkPlayerReady = false;
         this.roomHandshakeCompletedId = '';
-        this.roomUiReadyId = '';
         this.networkPlayerCount = 0;
 
         /*
@@ -4407,12 +4077,6 @@ export class GameScene extends Phaser.Scene {
                 this.gameWidth,
                 this.gameHeight,
             );
-
-        this.backgroundBaseScaleX =
-            this.backgroundImage.scaleX;
-        this.backgroundBaseScaleY =
-            this.backgroundImage.scaleY;
-
         this.showMainMenu();
 
         this.roomTransitionInProgress = false;
@@ -5959,13 +5623,11 @@ export class GameScene extends Phaser.Scene {
         /*
          * Hunter가 가까울수록 심장 소리가 조금 더 크고 선명하게 들립니다.
          */
-        this.heartbeatSound.setVolume(
-            Phaser.Math.Linear(
+        (this.heartbeatSound as unknown as { setVolume: (value: number) => void }).setVolume(Phaser.Math.Linear(
                 0.20,
                 0.58,
                 intensity,
-            ),
-        );
+            ));
 
         this.heartbeatSound.play();
     }
@@ -6429,10 +6091,6 @@ export class GameScene extends Phaser.Scene {
         this.applyFixedHudForZoom(
             this.gameplayCameraZoom,
         );
-
-        this.gameplayCameraActive =
-            true;
-
         this.ensureGameplayCameraFollow();
     }
 
@@ -6481,9 +6139,6 @@ export class GameScene extends Phaser.Scene {
                 target.x,
                 target.y,
             );
-
-        this.gameplayCameraActive =
-            true;
     }
 
     private resetGameplayCamera(): void {
@@ -6498,7 +6153,6 @@ export class GameScene extends Phaser.Scene {
         this.restoreFixedHud();
 
         this.gameplayUiSnapshots.clear();
-        this.gameplayCameraActive = false;
     }
 
     private clearAllAimingVisuals(): void {
@@ -6934,23 +6588,11 @@ export class GameScene extends Phaser.Scene {
         this.backgroundImage.setDepth(-20);
         this.currentBackgroundTextureKey =
             'forest-background';
-
-        this.backgroundBaseX =
-            this.backgroundImage.x;
-
-        this.backgroundBaseY =
-            this.backgroundImage.y;
-
         /*
          * setDisplaySize()가 적용한 실제 이미지 기본 scale을 저장합니다.
          * 첫 휠 입력에서 scale을 1.25로 덮어쓰면 원본 이미지 크기에 따라
          * 화면이 튀므로 반드시 기본 scale × Paint zoom을 사용합니다.
          */
-        this.backgroundBaseScaleX =
-            this.backgroundImage.scaleX;
-
-        this.backgroundBaseScaleY =
-            this.backgroundImage.scaleY;
     }
 
     /*
@@ -7614,12 +7256,6 @@ export class GameScene extends Phaser.Scene {
 
         this.paintWorldZoom =
             nextZoom;
-
-        this.paintZoomAnchorX =
-            localPosition.x;
-        this.paintZoomAnchorY =
-            localPosition.y;
-
         const camera =
             this.cameras.main;
 
@@ -7645,9 +7281,6 @@ export class GameScene extends Phaser.Scene {
 
     private resetPaintWorldZoom(): void {
         this.paintWorldZoom = 1;
-        this.paintZoomAnchorX = 0;
-        this.paintZoomAnchorY = 0;
-
         const camera =
             this.cameras.main;
 
@@ -9886,9 +9519,6 @@ export class GameScene extends Phaser.Scene {
         ) {
             this.hunterReserve =
                 shot.reserve;
-            this.hunterPrecisionPoints =
-                shot.precisionPoints;
-
             this.showStatus(
                 `PRECISION +${shot.precisionReward}`,
             );
@@ -10352,15 +9982,6 @@ export class GameScene extends Phaser.Scene {
         this.reloadKey = keyboard.addKey(
             Phaser.Input.Keyboard.KeyCodes.R,
         );
-
-        this.brushIncreaseKey = keyboard.addKey(
-            Phaser.Input.Keyboard.KeyCodes.UP,
-        );
-
-        this.brushDecreaseKey = keyboard.addKey(
-            Phaser.Input.Keyboard.KeyCodes.DOWN,
-        );
-
         this.brushPlusKey = keyboard.addKey(
             Phaser.Input.Keyboard.KeyCodes.PLUS,
         );
@@ -10909,10 +10530,6 @@ export class GameScene extends Phaser.Scene {
                     .getLocalPlayerPosition();
 
             if (localPosition) {
-                this.paintZoomAnchorX =
-                    localPosition.x;
-                this.paintZoomAnchorY =
-                    localPosition.y;
             }
         }
 
@@ -11050,8 +10667,6 @@ export class GameScene extends Phaser.Scene {
         this.ammo = this.maxAmmo;
         this.hunterReserve = 12;
         this.hunterMaxReserve = 12;
-        this.hunterPrecisionPoints = 0;
-        this.hunterShotsFired = 0;
         this.canShoot = true;
         this.isReloading = false;
         this.isPainting = false;
@@ -11265,22 +10880,6 @@ export class GameScene extends Phaser.Scene {
         this.input.setDefaultCursor('default');
     }
 
-    private destroyHiders(): void {
-        this.hiders.forEach((hider) => {
-            this.getAllPartObjects(hider).forEach(
-                (object) => {
-                    object.destroy();
-                },
-            );
-
-            hider.label.destroy();
-            hider.paintTexture.destroy();
-            hider.paintMask.destroy();
-            hider.paintMaskShape.destroy();
-        });
-
-        this.hiders = [];
-    }
 
     private setHiderVisible(
         hider: Hider,
