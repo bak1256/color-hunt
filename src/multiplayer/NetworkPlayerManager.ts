@@ -521,6 +521,11 @@ export class NetworkPlayerManager {
         player.role === "hunter",
       );
 
+      this.updateRoleBodyVisibility(
+        view.container,
+        player.role,
+      );
+
       view.nameText.setText(
         `${player.name}\n${player.role.toUpperCase()}`,
       );
@@ -2199,6 +2204,139 @@ export class NetworkPlayerManager {
     );
   }
 
+  private ensurePixelHiderBodyTexture(): string {
+    const textureKey =
+      "network-hider-pixel-body";
+
+    if (
+      this.scene.textures.exists(
+        textureKey,
+      )
+    ) {
+      return textureKey;
+    }
+
+    /*
+     * The old Hider base used Phaser Circle/Rectangle objects.
+     * Their anti-aliased edges do not line up exactly with the integer
+     * paint raster, which is why a white 1px fringe could reappear.
+     *
+     * Build the WHITE base from the exact same pixel predicate used by
+     * painting.  Base silhouette and painted silhouette are now literally
+     * the same pixels.
+     */
+    const canvasTexture =
+      this.scene.textures.createCanvas(
+        textureKey,
+        80,
+        120,
+      );
+
+    if (!canvasTexture) {
+      throw new Error(
+        "Failed to create Hider pixel body texture",
+      );
+    }
+
+    const context =
+      canvasTexture.getContext();
+
+    context.clearRect(
+      0,
+      0,
+      80,
+      120,
+    );
+
+    context.fillStyle =
+      "#f5eee2";
+
+    for (
+      let y = 0;
+      y < 120;
+      y += 1
+    ) {
+      for (
+        let x = 0;
+        x < 80;
+        x += 1
+      ) {
+        if (
+          !this.isPaintPixelInsideCharacter(
+            x,
+            y,
+          )
+        ) {
+          continue;
+        }
+
+        context.fillRect(
+          x,
+          y,
+          1,
+          1,
+        );
+      }
+    }
+
+    canvasTexture.refresh();
+
+    this.scene.textures
+      .get(textureKey)
+      .setFilter(
+        Phaser.Textures
+          .FilterMode.NEAREST,
+      );
+
+    return textureKey;
+  }
+
+  private updateRoleBodyVisibility(
+    container:
+      Phaser.GameObjects.Container,
+    role: NetworkPlayerRole,
+  ): void {
+    const isHunter =
+      role === "hunter";
+
+    const hiderBody =
+      container.getByName(
+        "network-hider-pixel-body",
+      ) as
+        | Phaser.GameObjects.Image
+        | null;
+
+    hiderBody?.setVisible(
+      !isHunter,
+    );
+
+    [
+      "network-player-head",
+      "network-player-body",
+      "network-left-arm",
+      "network-right-arm",
+      "network-left-leg",
+      "network-right-leg",
+    ].forEach(
+      (name) => {
+        const part =
+          container.getByName(
+            name,
+          ) as
+            | Phaser.GameObjects.GameObject
+            | null;
+
+        (
+          part as
+            | Phaser.GameObjects.Shape
+            | null
+        )?.setVisible(
+          isHunter,
+        );
+      },
+    );
+  }
+
   private createPlayerContainer(
     player: NetworkPlayerState,
   ): Phaser.GameObjects.Container {
@@ -2227,69 +2365,107 @@ export class NetworkPlayerManager {
     const color =
       this.getRoleColor(player.role);
 
+    const hiderPixelBody =
+      this.scene.add.image(
+        -40,
+        -60,
+        this.ensurePixelHiderBodyTexture(),
+      )
+        .setOrigin(0, 0)
+        .setName(
+          "network-hider-pixel-body",
+        )
+        .setVisible(
+          player.role === "hider",
+        );
+
     const head =
       this.scene.add.circle(
         0,
         -12,
-        11,
+        12,
         color,
-      );
+      )
+        .setName(
+          "network-player-head",
+        )
+        .setVisible(
+          player.role === "hunter",
+        );
 
     const body =
       this.scene.add.rectangle(
         0,
         7,
-        16,
-        22,
+        18,
+        24,
         color,
-      );
+      )
+        .setName(
+          "network-player-body",
+        )
+        .setVisible(
+          player.role === "hunter",
+        );
 
     const leftArm =
       this.scene.add.rectangle(
         -12,
         6,
-        6,
-        16,
+        8,
+        18,
         color,
       )
         .setName(
           "network-left-arm",
+        )
+        .setVisible(
+          player.role === "hunter",
         );
 
     const rightArm =
       this.scene.add.rectangle(
         12,
         6,
-        6,
-        16,
+        8,
+        18,
         color,
       )
         .setName(
           "network-right-arm",
+        )
+        .setVisible(
+          player.role === "hunter",
         );
 
     const leftLeg =
       this.scene.add.rectangle(
         -5,
         22,
-        6,
-        12,
+        8,
+        14,
         color,
       )
         .setName(
           "network-left-leg",
+        )
+        .setVisible(
+          player.role === "hunter",
         );
 
     const rightLeg =
       this.scene.add.rectangle(
         5,
         22,
-        6,
-        12,
+        8,
+        14,
         color,
       )
         .setName(
           "network-right-leg",
+        )
+        .setVisible(
+          player.role === "hunter",
         );
 
     /*
@@ -2389,6 +2565,7 @@ export class NetworkPlayerManager {
 
     container.add([
       shadow,
+      hiderPixelBody,
       head,
       body,
       leftArm,
@@ -2511,7 +2688,13 @@ export class NetworkPlayerManager {
     const mask =
       maskShape.createGeometryMask();
 
-    texture.setMask(mask);
+    /*
+     * Do NOT apply the GeometryMask to the RenderTexture.
+     * stampMaskedPaintBrush() already rejects every pixel outside the exact
+     * integer silhouette.  A Graphics GeometryMask has anti-aliased circle
+     * edges and can clip one extra row/column, exposing white pixels.
+     */
+    texture.clearMask();
 
     return {
       texture,
@@ -2630,6 +2813,11 @@ export class NetworkPlayerManager {
      * Hunter animation remains unchanged.
      */
     if (view.role === "hider") {
+      /*
+       * Priority: camouflage alignment.
+       * Hiders have NO walk animation, no squash/stretch, and no independent
+       * limb motion.  The container and paint raster stay at scale 1.
+       */
       if (
         huntActive &&
         view.huntFrozenX !== undefined &&
@@ -2641,42 +2829,11 @@ export class NetworkPlayerManager {
         );
       }
 
-      /*
-       * Keep the painted Hider as one rigid raster, but preserve a subtle
-       * walking feel through WHOLE-BODY squash/stretch.  Because the paint
-       * layer receives the same container scale, camouflage never detaches.
-       */
-      const targetBlend =
-        moving && !huntActive
-          ? 1
-          : 0;
-
-      view.walkBlend =
-        Phaser.Math.Linear(
-          view.walkBlend,
-          targetBlend,
-          moving ? 0.22 : 0.18,
-        );
-
-      const phase =
-        this.scene.time.now *
-        0.018;
-
-      const bounce =
-        Math.sin(phase) *
-        view.walkBlend;
-
-      const scaleX =
-        1 +
-        bounce * 0.018;
-
-      const scaleY =
-        1 -
-        bounce * 0.014;
+      view.walkBlend = 0;
 
       view.container.setScale(
-        scaleX,
-        scaleY,
+        1,
+        1,
       );
 
       view.leftArm
@@ -2708,14 +2865,15 @@ export class NetworkPlayerManager {
         );
 
       view.shadow?.setScale(
-        1 + Math.abs(bounce) * 0.03,
-        1 - Math.abs(bounce) * 0.02,
+        1,
+        1,
       );
 
       this.syncPaintLayerPosition(
         view,
         huntActive,
       );
+
       return;
     }
 

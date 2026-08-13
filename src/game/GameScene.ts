@@ -7622,6 +7622,9 @@ export class GameScene extends Phaser.Scene {
     private adjustPaintWorldZoom(
         wheelDeltaY: number,
     ): number {
+        this.brushSizeSliderDragging =
+            false;
+
         if (this.phase !== 'paint') {
             return this.paintWorldZoom;
         }
@@ -8854,6 +8857,9 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
+        const minX = 320;
+        const maxX = 515;
+
         const ratio =
             Phaser.Math.Clamp(
                 (this.brushSize - 1) /
@@ -8862,72 +8868,74 @@ export class GameScene extends Phaser.Scene {
                 1,
             );
 
-        const desiredScreenX =
+        const baseKnobX =
             Phaser.Math.Linear(
-                320,
-                515,
+                minX,
+                maxX,
                 ratio,
             );
 
-        const zoom =
+        const fillWidth =
             Math.max(
-                0.01,
-                this.cameras.main.zoom,
-            );
-
-        const centerX =
-            this.gameWidth / 2;
-
-        const compensatedKnobX =
-            centerX +
-            (
-                desiredScreenX -
-                centerX
-            ) /
-            zoom;
-
-        this.brushSizeSliderKnob
-            .setX(
-                compensatedKnobX,
+                0,
+                baseKnobX -
+                    minX,
             );
 
         /*
-         * Fill uses the same fixed-HUD inverse zoom rule.
-         * Its final on-screen left edge remains at x=320 at every zoom.
+         * fixedHudBaseTransforms is the single source of truth for screen HUD.
+         * Update the UNZOOMED base positions, then apply camera compensation
+         * exactly once.  This avoids the old double compensation that made
+         * the knob drift while zoomed.
          */
-        const fillBaseWidth =
-            Math.max(
-                0,
-                desiredScreenX -
-                    320,
-            );
+        const knobBase =
+            this.fixedHudBaseTransforms
+                .get(
+                    this.brushSizeSliderKnob,
+                );
 
-        const compensatedFillX =
-            centerX +
-            (
-                320 -
-                centerX
-            ) /
-            zoom;
+        if (knobBase) {
+            knobBase.x =
+                baseKnobX;
+        } else {
+            this.brushSizeSliderKnob
+                .setX(
+                    baseKnobX,
+                );
+        }
+
+        const fillBase =
+            this.fixedHudBaseTransforms
+                .get(
+                    this.brushSizeSliderFill,
+                );
+
+        if (fillBase) {
+            fillBase.x =
+                minX;
+        }
 
         this.brushSizeSliderFill
-            .setPosition(
-                compensatedFillX,
-                this.brushSizeSliderFill.y,
-            )
             .setSize(
-                fillBaseWidth,
+                fillWidth,
                 6,
-            )
-            .setScale(
-                1 / zoom,
-                1 / zoom,
             );
 
         this.brushSizeSliderLabel
             .setText(
                 `${this.brushSize}px`,
             );
+
+        if (
+            this.fixedHudBaseTransforms
+                .has(
+                    this.brushSizeSliderKnob,
+                )
+        ) {
+            this.applyFixedHudForZoom(
+                this.cameras.main.zoom,
+            );
+        }
     }
 
     private highlightBrushShape(
