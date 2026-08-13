@@ -2,6 +2,7 @@ import Phaser from "phaser";
 
 import {
   multiplayerClient,
+  type NetworkBrushShape,
   type NetworkPaintPoint,
   type NetworkPaintStroke,
   type NetworkPlayerRole,
@@ -1179,10 +1180,217 @@ export class NetworkPlayerManager {
     );
   }
 
+  private isPaintPixelInsideCharacter(
+    textureX: number,
+    textureY: number,
+  ): boolean {
+    const x =
+      Math.round(textureX);
+    const y =
+      Math.round(textureY);
+
+    /*
+     * This is the ONE authoritative paint silhouette used by local paint,
+     * remote replay and every brush size.
+     *
+     * Texture origin is character local (-40, -60).
+     * All boundaries are integer pixels to avoid antialiased fringe.
+     */
+    const headDx =
+      x - 40;
+    const headDy =
+      y - 48;
+
+    const insideHead =
+      headDx * headDx +
+        headDy * headDy <=
+      12 * 12;
+
+    const insideBody =
+      x >= 31 &&
+      x <= 48 &&
+      y >= 55 &&
+      y <= 78;
+
+    const insideLeftArm =
+      x >= 24 &&
+      x <= 29 &&
+      y >= 57 &&
+      y <= 74;
+
+    const insideRightArm =
+      x >= 50 &&
+      x <= 55 &&
+      y >= 57 &&
+      y <= 74;
+
+    const insideLeftLeg =
+      x >= 32 &&
+      x <= 37 &&
+      y >= 77 &&
+      y <= 88;
+
+    const insideRightLeg =
+      x >= 42 &&
+      x <= 47 &&
+      y >= 77 &&
+      y <= 88;
+
+    return (
+      insideHead ||
+      insideBody ||
+      insideLeftArm ||
+      insideRightArm ||
+      insideLeftLeg ||
+      insideRightLeg
+    );
+  }
+
+  private ensurePaintPixelTexture(
+    color: number,
+  ): string {
+    const textureKey =
+      `paint-pixel-${color
+        .toString(16)
+        .padStart(6, "0")}`;
+
+    if (
+      this.scene.textures.exists(
+        textureKey,
+      )
+    ) {
+      return textureKey;
+    }
+
+    const graphics =
+      this.scene.add.graphics();
+
+    graphics.fillStyle(
+      color,
+      1,
+    );
+
+    graphics.fillRect(
+      0,
+      0,
+      1,
+      1,
+    );
+
+    graphics.generateTexture(
+      textureKey,
+      1,
+      1,
+    );
+
+    this.scene.textures
+      .get(textureKey)
+      .setFilter(
+        Phaser.Textures
+          .FilterMode.NEAREST,
+      );
+
+    graphics.destroy();
+
+    return textureKey;
+  }
+
+  private stampMaskedPaintBrush(
+    view: NetworkPlayerView,
+    centerX: number,
+    centerY: number,
+    color: number,
+    size: number,
+    shape: NetworkBrushShape,
+  ): void {
+    if (!view.paintLayer) {
+      return;
+    }
+
+    const pixelTexture =
+      this.ensurePaintPixelTexture(
+        color,
+      );
+
+    const radius =
+      size <= 1
+        ? 0
+        : Math.max(
+            1,
+            Math.round(size),
+          );
+
+    for (
+      let offsetY = -radius;
+      offsetY <= radius;
+      offsetY += 1
+    ) {
+      for (
+        let offsetX = -radius;
+        offsetX <= radius;
+        offsetX += 1
+      ) {
+        if (radius > 0) {
+          const insideBrush =
+            shape === "square"
+              ? true
+              : (
+                  offsetX * offsetX +
+                  offsetY * offsetY <=
+                  radius * radius
+                );
+
+          if (!insideBrush) {
+            continue;
+          }
+        }
+
+        const pixelX =
+          Math.round(
+            centerX +
+            offsetX,
+          );
+
+        const pixelY =
+          Math.round(
+            centerY +
+            offsetY,
+          );
+
+        if (
+          !this.isPaintPixelInsideCharacter(
+            pixelX,
+            pixelY,
+          )
+        ) {
+          continue;
+        }
+
+        view.paintLayer.texture.stamp(
+          pixelTexture,
+          undefined,
+          pixelX,
+          pixelY,
+          {
+            originX: 0.5,
+            originY: 0.5,
+          },
+        );
+      }
+    }
+
+    this.renderPaintTexture(
+      view.paintLayer.texture,
+    );
+  }
+
   paintLocalPlayer(
     worldX: number,
     worldY: number,
-    brushTextureKey: string,
+    _brushTextureKey: string,
+    color: number,
+    size: number,
+    shape: NetworkBrushShape,
   ): NetworkPaintPoint | null {
     const sessionId =
       multiplayerClient.getSessionId();
@@ -1285,19 +1493,13 @@ export class NetworkPlayerManager {
         .setDepth(921);
     }
 
-    view.paintLayer.texture.stamp(
-      brushTextureKey,
-      undefined,
+    this.stampMaskedPaintBrush(
+      view,
       textureX,
       textureY,
-      {
-        originX: 0.5,
-        originY: 0.5,
-      },
-    );
-
-    this.renderPaintTexture(
-      view.paintLayer.texture,
+      color,
+      size,
+      shape,
     );
 
     return {
@@ -1309,7 +1511,10 @@ export class NetworkPlayerManager {
   stampLocalPaintPoint(
     textureX: number,
     textureY: number,
-    brushTextureKey: string,
+    _brushTextureKey: string,
+    color: number,
+    size: number,
+    shape: NetworkBrushShape,
   ): void {
     const sessionId =
       multiplayerClient.getSessionId();
@@ -1342,25 +1547,19 @@ export class NetworkPlayerManager {
         120,
       );
 
-    view.paintLayer.texture.stamp(
-      brushTextureKey,
-      undefined,
+    this.stampMaskedPaintBrush(
+      view,
       pixelX,
       pixelY,
-      {
-        originX: 0.5,
-        originY: 0.5,
-      },
-    );
-
-    this.renderPaintTexture(
-      view.paintLayer.texture,
+      color,
+      size,
+      shape,
     );
   }
 
   applyPaintStroke(
     stroke: NetworkPaintStroke,
-    textureKey: string,
+    _textureKey: string,
   ): void {
     const view =
       this.players.get(
@@ -1394,21 +1593,15 @@ export class NetworkPlayerManager {
         return;
       }
 
-      view.paintLayer!.texture.stamp(
-        textureKey,
-        undefined,
+      this.stampMaskedPaintBrush(
+        view,
         pixelX,
         pixelY,
-        {
-          originX: 0.5,
-          originY: 0.5,
-        },
+        stroke.color,
+        stroke.size,
+        stroke.shape,
       );
     });
-
-    this.renderPaintTexture(
-      view.paintLayer.texture,
-    );
 
     this.syncPaintLayerPosition(
       view,
@@ -2307,7 +2500,7 @@ export class NetworkPlayerManager {
     );
 
     maskShape.setVisible(true);
-    maskShape.setAlpha(0.001);
+    maskShape.setAlpha(0);
     maskShape.setDepth(-10);
 
     const mask =

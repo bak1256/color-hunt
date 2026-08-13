@@ -261,6 +261,7 @@ export class GameScene extends Phaser.Scene {
     private pendingInvitePrivate = false;
     private mainMenuObjects: Phaser.GameObjects.GameObject[] = [];
     private roomListObjects: Phaser.GameObjects.GameObject[] = [];
+    private roomListRenderSerial = 0;
     private roomListRefreshEvent?: Phaser.Time.TimerEvent;
     private hunterBlindPanel!: Phaser.GameObjects.Rectangle;
     private hunterBlindText!: Phaser.GameObjects.Text;
@@ -1660,19 +1661,41 @@ export class GameScene extends Phaser.Scene {
                 (
                     message: string,
                 ) => {
-                    this.showStatus(
-                        message,
-                    );
-
-                    this.multiplayerSessionActive =
-                        true;
-
-                    this.enterLobbyPhase();
-
+                    /*
+                     * A stale round_aborted packet must not throw a Hunter out
+                     * of the Paint screen.  Re-check authoritative room phase
+                     * after a short tick; only a real server lobby transition
+                     * is allowed to rebuild the lobby UI.
+                     */
                     this.time.delayedCall(
-                        1800,
+                        250,
                         () => {
-                            this.clearStatus();
+                            const serverPhase =
+                                multiplayerClient
+                                    .getPhase();
+
+                            if (
+                                serverPhase !==
+                                'lobby'
+                            ) {
+                                return;
+                            }
+
+                            this.showStatus(
+                                message,
+                            );
+
+                            this.multiplayerSessionActive =
+                                true;
+
+                            this.enterLobbyPhase();
+
+                            this.time.delayedCall(
+                                1800,
+                                () => {
+                                    this.clearStatus();
+                                },
+                            );
                         },
                     );
                 },
@@ -3128,6 +3151,20 @@ export class GameScene extends Phaser.Scene {
         this.multiplayerSessionActive = false;
         this.roomHandshakeCompletedId = '';
         this.localNetworkPlayerReady = false;
+
+        /*
+         * Language switching rebuilds the menu.  Room-list entries belong to
+         * the previous language too, so destroy them before issuing a new
+         * async room-list request.
+         */
+        this.roomListRenderSerial += 1;
+        this.roomListObjects.forEach(
+            (object) => {
+                object.destroy();
+            },
+        );
+        this.roomListObjects = [];
+
         this.clearMainMenuObjects();
         this.startRoomListAutoRefresh();
         this.enterLobbyPhase();
@@ -3318,8 +3355,8 @@ export class GameScene extends Phaser.Scene {
 
         const refreshButton =
             this.makeMenuButton(
-                330,
-                232,
+                390,
+                231,
                 tr('새로고침'),
                 () => {
                     void this.refreshPublicRoomList(true);
@@ -3328,8 +3365,8 @@ export class GameScene extends Phaser.Scene {
 
         refreshButton
             .setFixedSize(
-                82,
-                28,
+                78,
+                26,
             )
             .setAlign('center')
             .setOrigin(0.5)
@@ -3362,6 +3399,9 @@ export class GameScene extends Phaser.Scene {
     }
 
     private async refreshPublicRoomList(showLoading = true): Promise<void> {
+        const renderSerial =
+            ++this.roomListRenderSerial;
+
         this.roomListObjects.forEach(
             (object) => {
                 object.destroy();
@@ -3402,6 +3442,14 @@ export class GameScene extends Phaser.Scene {
                         room.metadata
                             ?.isPrivate !== true,
                 );
+
+            if (
+                renderSerial !==
+                this.roomListRenderSerial
+            ) {
+                loading?.destroy();
+                return;
+            }
 
             /*
              * 초대 링크/직접 참가 중 room list 요청이 늦게 끝나더라도
@@ -9083,6 +9131,9 @@ export class GameScene extends Phaser.Scene {
                                 pointer.worldX,
                                 pointer.worldY,
                                 this.brushTextureKey,
+                                this.paintColor,
+                                this.brushSize,
+                                this.brushShape,
                             );
 
                     if (!point) {
@@ -9143,6 +9194,9 @@ export class GameScene extends Phaser.Scene {
                                 pointer.worldX,
                                 pointer.worldY,
                                 this.brushTextureKey,
+                                this.paintColor,
+                                this.brushSize,
+                                this.brushShape,
                             );
 
                     if (point) {
@@ -9426,6 +9480,9 @@ export class GameScene extends Phaser.Scene {
                     x,
                     y,
                     this.brushTextureKey,
+                    this.paintColor,
+                    this.brushSize,
+                    this.brushShape,
                 );
 
             this.recordActivePaintPoint(
