@@ -8699,6 +8699,25 @@ export class GameScene extends Phaser.Scene {
                 pointer:
                     Phaser.Input.Pointer,
             ) => {
+                /*
+                 * Consume the button press only.
+                 * Do NOT arm/sample on pointerdown because the Scene-level
+                 * pointerdown handler runs during the same physical touch.
+                 */
+                pointer.event
+                    ?.stopPropagation?.();
+
+                this.finishActivePaintStroke();
+                this.isPainting = false;
+            },
+        );
+
+        this.eyedropperButton.on(
+            'pointerup',
+            (
+                pointer:
+                    Phaser.Input.Pointer,
+            ) => {
                 pointer.event
                     ?.stopPropagation?.();
 
@@ -8716,10 +8735,13 @@ export class GameScene extends Phaser.Scene {
                     return;
                 }
 
-                this.finishActivePaintStroke();
-                this.isPainting = false;
+                /*
+                 * The button press is now fully over. Arm the NEXT
+                 * background click/touch, never this UI press itself.
+                 */
                 this.eyedropperArmed =
                     !this.eyedropperArmed;
+
                 this.updateEyedropperButtonUi();
 
                 if (this.eyedropperArmed) {
@@ -9979,7 +10001,26 @@ export class GameScene extends Phaser.Scene {
     private createPointerControls(): void {
         this.input.on(
             Phaser.Input.Events.POINTER_DOWN,
-            (pointer: Phaser.Input.Pointer) => {
+            (
+                pointer: Phaser.Input.Pointer,
+                currentlyOver:
+                    Phaser.GameObjects.GameObject[],
+            ) => {
+                /*
+                 * UI presses are not gameplay/background presses.
+                 * This is especially important for the eyedropper button:
+                 * pressing the button must arm the tool, not sample the
+                 * background underneath the button.
+                 */
+                if (
+                    this.eyedropperButton &&
+                    currentlyOver.includes(
+                        this.eyedropperButton,
+                    )
+                ) {
+                    return;
+                }
+
                 if (
                     this.mobileControlsEnabled &&
                     this.isMobileControlScreenPoint(
@@ -10010,6 +10051,23 @@ export class GameScene extends Phaser.Scene {
                 }
 
                 if (this.eyedropperArmed) {
+                    /*
+                     * Ignore every paint/palette UI object while the tool is
+                     * armed.  The user must tap/click the actual game world.
+                     */
+                    const pressedPaintUi =
+                        currentlyOver.some(
+                            (object) =>
+                                this.paletteObjects
+                                    .includes(object) ||
+                                this.hunterCamoPaletteObjects
+                                    .includes(object),
+                        );
+
+                    if (pressedPaintUi) {
+                        return;
+                    }
+
                     this.finishActivePaintStroke();
                     this.isPainting = false;
                     this.activeStrokePoints = [];
@@ -10033,6 +10091,11 @@ export class GameScene extends Phaser.Scene {
                         pointer.worldX,
                         pointer.worldY,
                     );
+
+                    /*
+                     * One-shot behavior: after successfully sampling,
+                     * automatically return to normal brush mode.
+                     */
                     this.eyedropperArmed = false;
                     this.updateEyedropperButtonUi();
                     return;
