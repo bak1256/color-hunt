@@ -934,6 +934,8 @@ export class GameScene extends Phaser.Scene {
 
     private inviteJoinTriggered = false;
     private menuModalOverlay?: HTMLDivElement;
+    private menuOperationSerial = 0;
+    private menuOperationCancelled = false;
     private pendingInviteRoomId = '';
     private pendingInvitePrivate = false;
     private mainMenuObjects: Phaser.GameObjects.GameObject[] = [];
@@ -1164,6 +1166,7 @@ export class GameScene extends Phaser.Scene {
     private async createFromCleanBoot(
         pending:
             PendingReloadCreate,
+        operationSerial?: number,
     ): Promise<void> {
         /*
          * 최초 서버 기동 후 create에서 PlayerState callback이 늦는 문제를
@@ -1196,6 +1199,40 @@ export class GameScene extends Phaser.Scene {
                         password:
                             pending.password,
                     });
+
+            if (
+                operationSerial !== undefined &&
+                (
+                    this.menuOperationCancelled ||
+                    operationSerial !==
+                        this.menuOperationSerial
+                )
+            ) {
+                /*
+                 * User pressed Cancel while create() was in flight.
+                 * Never enter the room. Leaving immediately also lets the
+                 * server dispose an otherwise orphaned just-created room.
+                 */
+                await multiplayerClient.disconnect();
+
+                this.multiplayerSessionActive =
+                    false;
+                this.localNetworkPlayerReady =
+                    false;
+                this.roomTransitionInProgress =
+                    false;
+
+                this.networkPlayerManager
+                    .clearAllPlayers();
+
+                this.showMainMenu();
+                return;
+            }
+
+            this.menuOperationCancelled =
+                false;
+
+            this.closeMenuModal();
 
             this.multiplayerSessionActive =
                 true;
@@ -2614,6 +2651,45 @@ export class GameScene extends Phaser.Scene {
     private closeMenuModal(): void {
         this.menuModalOverlay?.remove();
         this.menuModalOverlay = undefined;
+
+        /*
+         * Do not re-enable Phaser in the same browser pointer event that
+         * closed/submitted the DOM modal. Otherwise the pointer-up can fall
+         * through to the game canvas and activate the button underneath.
+         */
+        window.setTimeout(
+            () => {
+                if (!this.menuModalOverlay) {
+                    this.input.enabled = true;
+                }
+            },
+            120,
+        );
+    }
+
+    private cancelPendingMenuOperation(): void {
+        /*
+         * Invalidate the currently running create/join operation.  Colyseus
+         * create() itself is not abortable, so if it resolves after cancel,
+         * the completion path detects this serial mismatch and disconnects
+         * immediately instead of entering the newly-created room.
+         */
+        this.menuOperationCancelled = true;
+        this.menuOperationSerial += 1;
+        this.roomTransitionInProgress = false;
+
+        this.multiplayerText
+            .setText('')
+            .setVisible(false);
+
+        this.closeMenuModal();
+
+        if (
+            this.pendingInviteRoomId
+        ) {
+            this.inviteJoinTriggered =
+                false;
+        }
     }
 
     private createMenuModal(
@@ -2632,6 +2708,12 @@ export class GameScene extends Phaser.Scene {
     ): void {
         this.closeMenuModal();
 
+        /*
+         * Modal is a true input modal: while it exists, the Phaser scene
+         * underneath is completely non-interactive.
+         */
+        this.input.enabled = false;
+
         const overlay =
             document.createElement('div');
 
@@ -2646,6 +2728,26 @@ export class GameScene extends Phaser.Scene {
                 justifyContent: 'center',
                 background:
                     'rgba(8, 15, 22, 0.68)',
+                pointerEvents: 'auto',
+                touchAction: 'none',
+            },
+        );
+
+        [
+            'pointerdown',
+            'pointerup',
+            'click',
+            'touchstart',
+            'touchend',
+        ].forEach(
+            (eventName) => {
+                overlay.addEventListener(
+                    eventName,
+                    (event) => {
+                        event.stopPropagation();
+                    },
+                    true,
+                );
             },
         );
 
@@ -2801,15 +2903,12 @@ export class GameScene extends Phaser.Scene {
         submit.style.color =
             '#fffdf3';
 
-        cancel.onclick = () => {
-            this.closeMenuModal();
-
-            if (
-                this.pendingInviteRoomId
-            ) {
-                this.inviteJoinTriggered =
-                    false;
-            }
+        cancel.onclick = (
+            event,
+        ) => {
+            event.preventDefault();
+            event.stopPropagation();
+            this.cancelPendingMenuOperation();
         };
 
         buttons.append(
@@ -2827,6 +2926,7 @@ export class GameScene extends Phaser.Scene {
             'submit',
             (event) => {
                 event.preventDefault();
+                event.stopPropagation();
 
                 const values:
                     Record<string, string> =
@@ -2873,17 +2973,35 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
-        const controls =
+        const inputs =
             form.querySelectorAll<
-                HTMLInputElement |
-                HTMLButtonElement
+                HTMLInputElement
             >(
-                'input, button',
+                'input',
             );
 
-        controls.forEach(
-            (control) => {
-                control.disabled = busy;
+        inputs.forEach(
+            (input) => {
+                input.disabled = busy;
+            },
+        );
+
+        const buttons =
+            form.querySelectorAll<
+                HTMLButtonElement
+            >(
+                'button',
+            );
+
+        buttons.forEach(
+            (button) => {
+                /*
+                 * Cancel must remain usable even while create/join is
+                 * waiting on the network.
+                 */
+                button.disabled =
+                    busy &&
+                    button.type === 'submit';
             },
         );
 
@@ -3121,6 +3239,12 @@ export class GameScene extends Phaser.Scene {
                 isPrivate,
             };
 
+        const operationSerial =
+            ++this.menuOperationSerial;
+
+        this.menuOperationCancelled =
+            false;
+
         this.setModalBusy(
             true,
             tr('방을 만드는 중...'),
@@ -3140,6 +3264,7 @@ export class GameScene extends Phaser.Scene {
 
         await this.createFromCleanBoot(
             pending,
+            operationSerial,
         );
     }
 
