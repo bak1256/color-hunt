@@ -1041,6 +1041,14 @@ export class GameScene extends Phaser.Scene {
     private mobilePinchDistance = 0;
     private eyedropperArmed = false;
     private eyedropperButton?: Phaser.GameObjects.Text;
+    private eyedropperPointerId = -1;
+    private eyedropperMagnifier?: Phaser.GameObjects.Image;
+    private eyedropperMagnifierSwatch?: Phaser.GameObjects.Rectangle;
+    private readonly eyedropperMagnifierTextureKey =
+        'eyedropper-mobile-magnifier';
+    private lobbyInfoCard!: Phaser.GameObjects.Rectangle;
+    private lobbyControlsCard!: Phaser.GameObjects.Rectangle;
+    private lobbyFooterDivider!: Phaser.GameObjects.Rectangle;
 
     constructor() {
         super('GameScene');
@@ -3898,6 +3906,9 @@ export class GameScene extends Phaser.Scene {
         this.updateLobbyUi();
 
         this.lobbyPanel.setVisible(false);
+        this.lobbyInfoCard?.setVisible(false);
+        this.lobbyControlsCard?.setVisible(false);
+        this.lobbyFooterDivider?.setVisible(false);
         this.lobbyTitleText.setVisible(false);
         this.lobbyInfoText.setVisible(false);
         this.startGameButton.setVisible(false);
@@ -3911,15 +3922,15 @@ export class GameScene extends Phaser.Scene {
             .rectangle(
                 this.gameWidth / 2,
                 this.gameHeight / 2,
-                700,
-                460,
-                0xfff4d6,
-                0.97,
+                720,
+                468,
+                0x111923,
+                0.94,
             )
             .setStrokeStyle(
-                5,
-                0x6f8f65,
-                1,
+                3,
+                0x8bb58f,
+                0.95,
             )
             .setDepth(500);
 
@@ -3932,7 +3943,7 @@ export class GameScene extends Phaser.Scene {
                     fontFamily: 'monospace',
                     fontSize: '38px',
                     fontStyle: 'bold',
-                    color: '#476348',
+                    color: '#f6f0df',
                 },
             )
             .setOrigin(0.5)
@@ -3946,7 +3957,7 @@ export class GameScene extends Phaser.Scene {
                 {
                     fontFamily: 'monospace',
                     fontSize: '16px',
-                    color: '#765c49',
+                    color: '#b8c7b9',
                 },
             )
             .setOrigin(0.5)
@@ -4066,24 +4077,40 @@ export class GameScene extends Phaser.Scene {
                 },
             );
 
+        const roomListCard =
+            this.add.rectangle(
+                this.gameWidth / 2,
+                356,
+                620,
+                218,
+                0xf8efd7,
+                0.98,
+            )
+                .setStrokeStyle(
+                    2,
+                    0x78937b,
+                    0.9,
+                )
+                .setDepth(501);
+
         const listTitle = this.add
             .text(
-                175,
-                230,
+                185,
+                246,
                 tr('공개 게임방'),
                 {
                     fontFamily: 'monospace',
                     fontSize: '20px',
                     fontStyle: 'bold',
-                    color: '#476348',
+                    color: '#3f6148',
                 },
             )
             .setDepth(501);
 
         const refreshButton =
             this.makeMenuButton(
-                405,
-                230,
+                410,
+                246,
                 tr('새로고침'),
                 () => {
                     void this.refreshPublicRoomList(true);
@@ -4118,6 +4145,7 @@ export class GameScene extends Phaser.Scene {
             publicCreate,
             privateCreate,
             privateJoin,
+            roomListCard,
             listTitle,
             refreshButton,
         );
@@ -4202,8 +4230,8 @@ export class GameScene extends Phaser.Scene {
                 const emptyText =
                     this.add
                         .text(
-                            175,
-                            275,
+                            185,
+                            292,
                             tr('생성된 공개방이 없습니다.'),
                             {
                                 fontFamily: 'monospace',
@@ -4221,7 +4249,7 @@ export class GameScene extends Phaser.Scene {
             }
 
             rooms
-                .slice(0, 6)
+                .slice(0, 5)
                 .forEach(
                     (
                         room: PublicRoomInfo,
@@ -4240,8 +4268,8 @@ export class GameScene extends Phaser.Scene {
                         const row =
                             this.makeMenuButton(
                                 this.gameWidth / 2,
-                                275 +
-                                    index * 45,
+                                292 +
+                                    index * 38,
                                 `${roomTitle} · ${room.clients}/${room.maxClients} · ${trPhase(phase)}`,
                                 () => {
                                     /*
@@ -4256,10 +4284,10 @@ export class GameScene extends Phaser.Scene {
                             );
 
                         row
-                            .setFontSize(15)
+                            .setFontSize(13)
                             .setFixedSize(
-                                580,
-                                36,
+                                560,
+                                32,
                             )
                             .setAlign(
                                 'center',
@@ -4313,15 +4341,58 @@ export class GameScene extends Phaser.Scene {
                 286,
                 286,
                 468,
-                0xfff4d6,
-                0.96,
+                0x111923,
+                0.94,
             )
             .setStrokeStyle(
                 3,
-                0x6f8f65,
+                0x8bb58f,
                 0.95,
             )
             .setDepth(400);
+
+        this.lobbyInfoCard =
+            this.add.rectangle(
+                808,
+                158,
+                248,
+                102,
+                0xf8efd7,
+                0.98,
+            )
+                .setStrokeStyle(
+                    2,
+                    0x78937b,
+                    0.85,
+                )
+                .setDepth(401);
+
+        this.lobbyControlsCard =
+            this.add.rectangle(
+                808,
+                326,
+                248,
+                176,
+                0x1a2730,
+                0.96,
+            )
+                .setStrokeStyle(
+                    1,
+                    0x6f8f65,
+                    0.8,
+                )
+                .setDepth(401);
+
+        this.lobbyFooterDivider =
+            this.add.rectangle(
+                808,
+                466,
+                238,
+                2,
+                0x8bb58f,
+                0.7,
+            )
+                .setDepth(401);
 
         this.lobbyTitleText = this.add
             .text(
@@ -4332,7 +4403,7 @@ export class GameScene extends Phaser.Scene {
                     fontFamily: 'monospace',
                     fontSize: '24px',
                     fontStyle: 'bold',
-                    color: '#476348',
+                    color: '#f6f0df',
                 },
             )
             .setOrigin(0.5)
@@ -4341,12 +4412,12 @@ export class GameScene extends Phaser.Scene {
         this.lobbyInfoText = this.add
             .text(
                 808,
-                112,
+                121,
                 '',
                 {
                     fontFamily: 'monospace',
                     fontSize: '12px',
-                    color: '#5b4636',
+                    color: '#4e4236',
                     align: 'center',
                     lineSpacing: 5,
                 },
@@ -4358,7 +4429,7 @@ export class GameScene extends Phaser.Scene {
         this.startGameButton = this.add
             .text(
                 808,
-                430,
+                414,
                 tr('START GAME'),
                 {
                     fontFamily: 'monospace',
@@ -4373,6 +4444,11 @@ export class GameScene extends Phaser.Scene {
                 },
             )
             .setOrigin(0.5)
+            .setFixedSize(
+                220,
+                46,
+            )
+            .setAlign('center')
             .setDepth(402)
             .setInteractive({
                 useHandCursor: true,
@@ -4408,8 +4484,8 @@ export class GameScene extends Phaser.Scene {
 
         this.roleHunterButton =
             this.makeMenuButton(
-                742,
-                278,
+                744,
+                282,
                 tr('HUNTER 지원'),
                 () => {
                     const localPlayer =
@@ -4428,8 +4504,8 @@ export class GameScene extends Phaser.Scene {
 
         this.roleHiderButton =
             this.makeMenuButton(
-                874,
-                278,
+                872,
+                282,
                 tr('지원 취소'),
                 () => {
                     multiplayerClient
@@ -4442,11 +4518,11 @@ export class GameScene extends Phaser.Scene {
                 .setFontSize(17);
 
         this.roleHunterButton
-            .setFixedSize(132, 46)
+            .setFixedSize(124, 40)
             .setAlign('center');
 
         this.roleHiderButton
-            .setFixedSize(132, 46)
+            .setFixedSize(124, 40)
             .setAlign('center');
 
         /*
@@ -4491,7 +4567,7 @@ export class GameScene extends Phaser.Scene {
         this.lobbyHintText =
             this.add.text(
                 808,
-                226,
+                218,
                 '',
                 {
                     fontFamily:
@@ -4508,7 +4584,7 @@ export class GameScene extends Phaser.Scene {
         this.lobbyMovementHelpText =
             this.add.text(
                 808,
-                248,
+                240,
                 tr('WASD 이동'),
                 {
                     fontFamily:
@@ -4531,7 +4607,7 @@ export class GameScene extends Phaser.Scene {
         this.lobbyPaintDurationLabel =
             this.add.text(
                 808,
-                326,
+                330,
                 tr('색칠 시간'),
                 {
                     fontFamily:
@@ -4555,9 +4631,9 @@ export class GameScene extends Phaser.Scene {
                             durationMs / 1000;
 
                         return this.makeMenuButton(
-                            726 +
-                                index * 82,
-                            352,
+                            730 +
+                                index * 78,
+                            358,
                             `${seconds}s`,
                             () => {
                                 if (
@@ -4575,7 +4651,7 @@ export class GameScene extends Phaser.Scene {
                             },
                         )
                             .setDepth(402)
-                            .setFixedSize(72, 32)
+                            .setFixedSize(68, 30)
                             .setAlign('center')
                             .setFontSize(12);
                     },
@@ -4583,15 +4659,15 @@ export class GameScene extends Phaser.Scene {
 
         this.inviteLinkButton =
             this.makeMenuButton(
-                742,
-                493,
+                744,
+                492,
                 tr('초대 링크 복사'),
                 () => {
                     void this.copyInviteLink();
                 },
             )
                 .setDepth(402)
-                .setFixedSize(130, 34)
+                .setFixedSize(124, 32)
                 .setAlign('center')
                 .setFontSize(
                     getLanguage() === 'en'
@@ -4601,15 +4677,15 @@ export class GameScene extends Phaser.Scene {
 
         this.leaveRoomButton =
             this.makeMenuButton(
-                874,
-                493,
+                872,
+                492,
                 tr('로비로 나가기'),
                 () => {
                     void this.leaveCurrentRoomToLobby();
                 },
             )
                 .setDepth(402)
-                .setFixedSize(130, 34)
+                .setFixedSize(124, 32)
                 .setAlign('center')
                 .setFontSize(
                     getLanguage() === 'en'
@@ -4930,6 +5006,9 @@ export class GameScene extends Phaser.Scene {
         }
 
         this.lobbyPanel.setVisible(isLobby);
+        this.lobbyInfoCard?.setVisible(isLobby);
+        this.lobbyControlsCard?.setVisible(isLobby);
+        this.lobbyFooterDivider?.setVisible(isLobby);
         this.lobbyTitleText.setVisible(isLobby);
         this.updateMapSelectorUi();
         this.roleHunterButton.setVisible(isLobby);
@@ -8630,6 +8709,7 @@ export class GameScene extends Phaser.Scene {
                     () => {
                         this.eyedropperArmed =
                             false;
+                        this.hideEyedropperMagnifier();
                         this.brushShape =
                             option.shape;
 
@@ -8732,9 +8812,14 @@ export class GameScene extends Phaser.Scene {
                 this.updateEyedropperButtonUi();
 
                 if (this.eyedropperArmed) {
+                    this.hideEyedropperMagnifier();
                     this.showStatus(
-                        tr('스포이드: 배경에서 원하는 색을 터치하세요'),
+                        this.mobileControlsEnabled
+                            ? tr('스포이드: 배경을 누른 채 움직이고 손을 떼면 색상이 선택됩니다')
+                            : tr('스포이드: 배경에서 원하는 색을 클릭하세요'),
                     );
+                } else {
+                    this.hideEyedropperMagnifier();
                 }
             },
         );
@@ -10078,17 +10163,34 @@ export class GameScene extends Phaser.Scene {
                         return;
                     }
 
+                    if (
+                        this.mobileControlsEnabled
+                    ) {
+                        /*
+                         * Mobile: this touch only STARTS precision sampling.
+                         * Drag updates the loupe; pointer-up confirms.
+                         */
+                        this.eyedropperPointerId =
+                            pointer.id;
+
+                        this.updateEyedropperMagnifier(
+                            pointer,
+                        );
+
+                        return;
+                    }
+
+                    /*
+                     * PC keeps the fast one-click workflow.
+                     */
                     this.pickColorFromBackground(
                         pointer.worldX,
                         pointer.worldY,
                     );
 
-                    /*
-                     * One-shot behavior: after successfully sampling,
-                     * automatically return to normal brush mode.
-                     */
                     this.eyedropperArmed = false;
                     this.updateEyedropperButtonUi();
+                    this.hideEyedropperMagnifier();
                     return;
                 }
 
@@ -10187,6 +10289,17 @@ export class GameScene extends Phaser.Scene {
             Phaser.Input.Events.POINTER_MOVE,
             (pointer: Phaser.Input.Pointer) => {
                 if (
+                    this.eyedropperArmed &&
+                    pointer.id ===
+                        this.eyedropperPointerId
+                ) {
+                    this.updateEyedropperMagnifier(
+                        pointer,
+                    );
+                    return;
+                }
+
+                if (
                     pointer.id ===
                         this.mobileMovePointerId ||
                     pointer.id ===
@@ -10246,7 +10359,30 @@ export class GameScene extends Phaser.Scene {
 
         this.input.on(
             Phaser.Input.Events.POINTER_UP,
-            () => {
+            (
+                pointer:
+                    Phaser.Input.Pointer,
+            ) => {
+                if (
+                    this.eyedropperArmed &&
+                    pointer.id ===
+                        this.eyedropperPointerId
+                ) {
+                    this.pickColorFromBackground(
+                        pointer.worldX,
+                        pointer.worldY,
+                    );
+
+                    this.eyedropperArmed =
+                        false;
+                    this.updateEyedropperButtonUi();
+                    this.hideEyedropperMagnifier();
+
+                    this.isPainting = false;
+                    this.finishActivePaintStroke();
+                    return;
+                }
+
                 this.isPainting = false;
                 this.finishActivePaintStroke();
             },
@@ -10709,6 +10845,360 @@ export class GameScene extends Phaser.Scene {
             );
 
         graphics.destroy();
+    }
+
+    private ensureEyedropperMagnifier(): void {
+        if (
+            this.eyedropperMagnifier &&
+            this.eyedropperMagnifierSwatch
+        ) {
+            return;
+        }
+
+        if (
+            !this.textures.exists(
+                this.eyedropperMagnifierTextureKey,
+            )
+        ) {
+            const canvasTexture =
+                this.textures.createCanvas(
+                    this.eyedropperMagnifierTextureKey,
+                    112,
+                    112,
+                );
+
+            if (!canvasTexture) {
+                return;
+            }
+
+            canvasTexture.refresh();
+
+            this.textures
+                .get(
+                    this.eyedropperMagnifierTextureKey,
+                )
+                .setFilter(
+                    Phaser.Textures.FilterMode.NEAREST,
+                );
+        }
+
+        this.eyedropperMagnifier =
+            this.add.image(
+                this.gameWidth / 2,
+                this.gameHeight / 2,
+                this.eyedropperMagnifierTextureKey,
+            )
+                .setScrollFactor(0)
+                .setDepth(9100)
+                .setVisible(false);
+
+        this.eyedropperMagnifierSwatch =
+            this.add.rectangle(
+                this.gameWidth / 2,
+                this.gameHeight / 2 + 64,
+                42,
+                14,
+                0xffffff,
+                1,
+            )
+                .setStrokeStyle(
+                    2,
+                    0xffffff,
+                    0.95,
+                )
+                .setScrollFactor(0)
+                .setDepth(9101)
+                .setVisible(false);
+    }
+
+    private hideEyedropperMagnifier(): void {
+        this.eyedropperPointerId = -1;
+
+        this.eyedropperMagnifier
+            ?.setVisible(false);
+
+        this.eyedropperMagnifierSwatch
+            ?.setVisible(false);
+    }
+
+    private updateEyedropperMagnifier(
+        pointer: Phaser.Input.Pointer,
+    ): void {
+        this.ensureEyedropperMagnifier();
+
+        if (!this.eyedropperMagnifier) {
+            return;
+        }
+
+        const sourceImage =
+            this.textures
+                .get(
+                    this.currentBackgroundTextureKey,
+                )
+                .getSourceImage() as
+                    HTMLImageElement;
+
+        if (!sourceImage) {
+            return;
+        }
+
+        const bounds =
+            this.backgroundImage.getBounds();
+
+        const normalizedX =
+            Phaser.Math.Clamp(
+                (
+                    pointer.worldX -
+                    bounds.left
+                ) /
+                bounds.width,
+                0,
+                1,
+            );
+
+        const normalizedY =
+            Phaser.Math.Clamp(
+                (
+                    pointer.worldY -
+                    bounds.top
+                ) /
+                bounds.height,
+                0,
+                1,
+            );
+
+        const imageX =
+            Phaser.Math.Clamp(
+                Math.floor(
+                    normalizedX *
+                    sourceImage.width,
+                ),
+                0,
+                sourceImage.width - 1,
+            );
+
+        const imageY =
+            Phaser.Math.Clamp(
+                Math.floor(
+                    normalizedY *
+                    sourceImage.height,
+                ),
+                0,
+                sourceImage.height - 1,
+            );
+
+        const sampleSize = 15;
+        const half =
+            Math.floor(
+                sampleSize / 2,
+            );
+
+        const sourceX =
+            Phaser.Math.Clamp(
+                imageX - half,
+                0,
+                Math.max(
+                    0,
+                    sourceImage.width -
+                    sampleSize,
+                ),
+            );
+
+        const sourceY =
+            Phaser.Math.Clamp(
+                imageY - half,
+                0,
+                Math.max(
+                    0,
+                    sourceImage.height -
+                    sampleSize,
+                ),
+            );
+
+        const texture =
+            this.textures.get(
+                this.eyedropperMagnifierTextureKey,
+            );
+
+        const canvas =
+            texture.getSourceImage() as
+                HTMLCanvasElement;
+
+        const context =
+            canvas.getContext('2d');
+
+        if (!context) {
+            return;
+        }
+
+        context.clearRect(
+            0,
+            0,
+            112,
+            112,
+        );
+
+        /*
+         * Circular 7.5x pixel loupe. The browser may smooth normal canvas
+         * scaling, so explicitly disable it for true pixel targeting.
+         */
+        context.save();
+        context.beginPath();
+        context.arc(
+            56,
+            56,
+            50,
+            0,
+            Math.PI * 2,
+        );
+        context.clip();
+        context.imageSmoothingEnabled =
+            false;
+        context.drawImage(
+            sourceImage,
+            sourceX,
+            sourceY,
+            sampleSize,
+            sampleSize,
+            6,
+            6,
+            100,
+            100,
+        );
+        context.restore();
+
+        context.beginPath();
+        context.arc(
+            56,
+            56,
+            50,
+            0,
+            Math.PI * 2,
+        );
+        context.lineWidth = 5;
+        context.strokeStyle =
+            '#fffdf3';
+        context.stroke();
+
+        /*
+         * Exact selected pixel is always the center crosshair.
+         */
+        context.strokeStyle =
+            '#172027';
+        context.lineWidth = 2;
+        context.beginPath();
+        context.moveTo(
+            44,
+            56,
+        );
+        context.lineTo(
+            68,
+            56,
+        );
+        context.moveTo(
+            56,
+            44,
+        );
+        context.lineTo(
+            56,
+            68,
+        );
+        context.stroke();
+
+        const pixelCanvas =
+            document.createElement(
+                'canvas',
+            );
+
+        pixelCanvas.width = 1;
+        pixelCanvas.height = 1;
+
+        const pixelContext =
+            pixelCanvas.getContext('2d');
+
+        let candidateColor =
+            0xffffff;
+
+        if (pixelContext) {
+            pixelContext.drawImage(
+                sourceImage,
+                imageX,
+                imageY,
+                1,
+                1,
+                0,
+                0,
+                1,
+                1,
+            );
+
+            const pixel =
+                pixelContext.getImageData(
+                    0,
+                    0,
+                    1,
+                    1,
+                ).data;
+
+            candidateColor =
+                Phaser.Display.Color
+                    .GetColor(
+                        pixel[0],
+                        pixel[1],
+                        pixel[2],
+                    );
+        }
+
+        (
+            texture as unknown as
+                {
+                    refresh?: () => void;
+                }
+        ).refresh?.();
+
+        const screenX =
+            Phaser.Math.Clamp(
+                pointer.x,
+                70,
+                this.gameWidth - 70,
+            );
+
+        /*
+         * Prefer above the finger. Near the top edge, flip below.
+         */
+        const preferredY =
+            pointer.y > 145
+                ? pointer.y - 92
+                : pointer.y + 92;
+
+        const screenY =
+            Phaser.Math.Clamp(
+                preferredY,
+                70,
+                this.gameHeight - 82,
+            );
+
+        this.setFixedHudScreenPosition(
+            this.eyedropperMagnifier,
+            screenX,
+            screenY,
+        );
+
+        this.setFixedHudScreenPosition(
+            this.eyedropperMagnifierSwatch!,
+            screenX,
+            screenY + 62,
+        );
+
+        this.eyedropperMagnifier
+            .setVisible(true);
+
+        this.eyedropperMagnifierSwatch
+            ?.setFillStyle(
+                candidateColor,
+                1,
+            )
+            .setVisible(true);
     }
 
     private pickColorFromBackground(
