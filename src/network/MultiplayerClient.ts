@@ -112,6 +112,7 @@ export type NetworkLobbySnapshot = {
   hostId: string;
   selectedMap?: string;
   activeMap?: string;
+  paintDurationMs?: number;
   players: Array<
     NetworkPlayerState & {
       sessionId: string;
@@ -224,6 +225,7 @@ export class MultiplayerClient {
   private snapshotHostId = "";
   private snapshotSelectedMap = "random";
   private snapshotActiveMap = "forest";
+  private snapshotPaintDurationMs = 120_000;
 
   /*
    * create()가 성공한 순간의 sessionId를 기억합니다.
@@ -557,6 +559,18 @@ export class MultiplayerClient {
         this.room?.state?.activeMap ??
         "forest",
       );
+
+    const durationMs =
+      Number(
+        snapshot.paintDurationMs ??
+        this.snapshotPaintDurationMs,
+      );
+
+    this.snapshotPaintDurationMs =
+      [90_000, 120_000, 150_000]
+        .includes(durationMs)
+        ? durationMs
+        : 120_000;
 
     const incomingIds =
       new Set<string>();
@@ -1226,6 +1240,26 @@ private attachRoom(
         map,
       },
     );
+  }
+
+  sendPaintDurationSelection(
+    durationMs: number,
+  ): void {
+    if (
+      ![90_000, 120_000, 150_000]
+        .includes(durationMs)
+    ) {
+      return;
+    }
+
+    this.room?.send(
+      "select_paint_duration",
+      { durationMs },
+    );
+  }
+
+  getPaintDurationMs(): number {
+    return this.snapshotPaintDurationMs;
   }
 
   sendStartGame(): void {

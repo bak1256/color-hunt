@@ -1241,16 +1241,49 @@ export class NetworkPlayerManager {
      *
      * 가장자리 색칠 편의성을 잃지 않도록 3~4px 정도의 작은 여유만 둡니다.
      */
-    const paintBodyMinX = -20;
-    const paintBodyMaxX = 20;
-    const paintBodyMinY = -28;
-    const paintBodyMaxY = 34;
+    const insideHead =
+      localX * localX +
+        (localY + 12) *
+          (localY + 12) <=
+      12 * 12;
+
+    const insideBody =
+      localX >= -9 &&
+      localX <= 9 &&
+      localY >= -5 &&
+      localY <= 19;
+
+    const insideLeftArm =
+      localX >= -16.5 &&
+      localX <= -9.5 &&
+      localY >= -3 &&
+      localY <= 15;
+
+    const insideRightArm =
+      localX >= 9.5 &&
+      localX <= 16.5 &&
+      localY >= -3 &&
+      localY <= 15;
+
+    const insideLeftLeg =
+      localX >= -8.5 &&
+      localX <= -1.5 &&
+      localY >= 16.5 &&
+      localY <= 29.5;
+
+    const insideRightLeg =
+      localX >= 1.5 &&
+      localX <= 8.5 &&
+      localY >= 16.5 &&
+      localY <= 29.5;
 
     if (
-      localX < paintBodyMinX ||
-      localX > paintBodyMaxX ||
-      localY < paintBodyMinY ||
-      localY > paintBodyMaxY
+      !insideHead &&
+      !insideBody &&
+      !insideLeftArm &&
+      !insideRightArm &&
+      !insideLeftLeg &&
+      !insideRightLeg
     ) {
       return null;
     }
@@ -1541,6 +1574,26 @@ export class NetworkPlayerManager {
     }
 
     this.syncPaintLayerPosition(view);
+  }
+
+  stabilizeHidersForHunt(): void {
+    this.players.forEach(
+      (view) => {
+        if (
+          view.role !== "hider" ||
+          !view.alive
+        ) {
+          return;
+        }
+
+        view.movingUntil = 0;
+        view.walkBlend = 0;
+
+        this.resetWalkPoseImmediately(
+          view,
+        );
+      },
+    );
   }
 
   normalizeLocalPlayerForGameplay(): void {
@@ -2204,6 +2257,30 @@ export class NetworkPlayerManager {
     view: NetworkPlayerView,
   ): void {
     view.walkBlend = 0;
+
+    if (
+      multiplayerClient.getRoom()
+        ?.state.phase === "hunt" &&
+      view.role === "hider"
+    ) {
+      const snappedX =
+        Math.round(view.container.x);
+      const snappedY =
+        Math.round(view.container.y);
+
+      view.container.setPosition(
+        snappedX,
+        snappedY,
+      );
+
+      if (
+        view.sessionId ===
+        multiplayerClient.getSessionId()
+      ) {
+        this.localX = snappedX;
+        this.localY = snappedY;
+      }
+    }
 
     view.container.setScale(
       1,

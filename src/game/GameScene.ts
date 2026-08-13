@@ -182,7 +182,7 @@ export class GameScene extends Phaser.Scene {
     /*
      * Timer
      */
-    private readonly paintDuration = 45;
+    private paintDuration = 120;
     private readonly huntDuration = 30;
 
     private phaseEndTime = 0;
@@ -229,6 +229,12 @@ export class GameScene extends Phaser.Scene {
     private roleHiderButton!: Phaser.GameObjects.Text;
     private inviteLinkButton!: Phaser.GameObjects.Text;
     private leaveRoomButton!: Phaser.GameObjects.Text;
+    private paintDurationButtons: Phaser.GameObjects.Text[] = [];
+    private brushSizeSliderTrack?: Phaser.GameObjects.Rectangle;
+    private brushSizeSliderFill?: Phaser.GameObjects.Rectangle;
+    private brushSizeSliderKnob?: Phaser.GameObjects.Arc;
+    private brushSizeSliderLabel?: Phaser.GameObjects.Text;
+
 
     /*
      * Map selection
@@ -369,7 +375,7 @@ export class GameScene extends Phaser.Scene {
 
         for (
             let index = 1;
-            index <= 12;
+            index <= 11;
             index += 1
         ) {
             this.load.image(
@@ -1304,6 +1310,18 @@ export class GameScene extends Phaser.Scene {
         this.repairConnectedRoomUiIfNeeded();
         this.syncMapBackground();
         this.updateMapSelectorUi();
+
+        if (
+            this.phase === 'lobby' &&
+            multiplayerClient.isConnected()
+        ) {
+            /*
+             * Paint time / host / volunteer changes can arrive through
+             * lobby_snapshot rather than a Schema onChange callback.
+             * Keep the lightweight lobby panel in sync every frame.
+             */
+            this.updateLobbyUi();
+        }
 
         if (this.isMultiplayerSession()) {
             this.hideLegacySinglePlayerActors();
@@ -3562,7 +3580,7 @@ export class GameScene extends Phaser.Scene {
         this.startGameButton = this.add
             .text(
                 790,
-                440,
+                486,
                 tr('START GAME'),
                 {
                     fontFamily: 'monospace',
@@ -3692,10 +3710,47 @@ export class GameScene extends Phaser.Scene {
             );
         });
 
+        this.paintDurationButtons =
+            [90_000, 120_000, 150_000]
+                .map(
+                    (
+                        durationMs,
+                        index,
+                    ) => {
+                        const seconds =
+                            durationMs / 1000;
+
+                        return this.makeMenuButton(
+                            708 +
+                                index * 82,
+                            442,
+                            `${seconds}s`,
+                            () => {
+                                if (
+                                    multiplayerClient
+                                        .isHost() &&
+                                    multiplayerClient
+                                        .getPhase() ===
+                                        'lobby'
+                                ) {
+                                    multiplayerClient
+                                        .sendPaintDurationSelection(
+                                            durationMs,
+                                        );
+                                }
+                            },
+                        )
+                            .setDepth(402)
+                            .setFixedSize(72, 32)
+                            .setAlign('center')
+                            .setFontSize(12);
+                    },
+                );
+
         this.inviteLinkButton =
             this.makeMenuButton(
                 720,
-                500,
+                528,
                 tr('초대 링크 복사'),
                 () => {
                     void this.copyInviteLink();
@@ -3713,7 +3768,7 @@ export class GameScene extends Phaser.Scene {
         this.leaveRoomButton =
             this.makeMenuButton(
                 860,
-                500,
+                528,
                 tr('로비로 나가기'),
                 () => {
                     void this.leaveCurrentRoomToLobby();
@@ -3989,7 +4044,7 @@ export class GameScene extends Phaser.Scene {
             selected === 'random'
                 ? tr('MAP  RANDOM')
                 : tr(
-                    `MAP  ${Math.max(1, index)} / 12`,
+                    `MAP  ${Math.max(1, index)} / 11`,
                 );
 
         this.mapSelectorPanel
@@ -4060,6 +4115,7 @@ export class GameScene extends Phaser.Scene {
             this.mapSelectorLabel?.setVisible(false);
             this.mapPreviousButton?.setVisible(false);
             this.mapNextButton?.setVisible(false);
+            this.paintDurationButtons.forEach((button) => button.setVisible(false));
             return;
         }
 
@@ -4107,6 +4163,13 @@ export class GameScene extends Phaser.Scene {
                                     .toUpperCase()
                         }`,
                     ),
+                    `${tr('색칠 시간')}  ${
+                        Math.round(
+                            multiplayerClient
+                                .getPaintDurationMs() /
+                            1000,
+                        )
+                    }s`,
                     isHost
                         ? tr('당신은 방장입니다.')
                         : tr('방장이 시작하기를 기다리는 중...'),
@@ -4156,6 +4219,38 @@ export class GameScene extends Phaser.Scene {
                     : getLanguage() === 'ja'
                         ? 11
                         : 12,
+            );
+
+        const selectedPaintDuration =
+            multiplayerClient
+                .getPaintDurationMs();
+
+        this.paintDurationButtons
+            .forEach(
+                (button, index) => {
+                    const option =
+                        [90_000, 120_000, 150_000][index];
+
+                    button
+                        .setVisible(isLobby)
+                        .setAlpha(
+                            option ===
+                                selectedPaintDuration
+                                ? 1
+                                : isHost
+                                    ? 0.58
+                                    : 0.25,
+                        );
+
+                    if (isHost) {
+                        button.setInteractive({
+                            useHandCursor:
+                                true,
+                        });
+                    } else {
+                        button.disableInteractive();
+                    }
+                },
             );
 
         this.startGameButton
@@ -6615,6 +6710,14 @@ export class GameScene extends Phaser.Scene {
             this.networkPlayerManager
                 .normalizeLocalPlayerForGameplay();
 
+            /*
+             * Paint -> Hunt 전환 프레임에서 이전 걷기 pose/sub-pixel 좌표가
+             * 남아 있으면 픽셀 위장이 몸체와 어긋나 보입니다.
+             * 모든 Hider를 즉시 neutral pose + 동일 픽셀 기준으로 고정합니다.
+             */
+            this.networkPlayerManager
+                .stabilizeHidersForHunt();
+
             this.resetPaintWorldZoom();
 
             this.networkPlayerManager
@@ -7507,10 +7610,10 @@ export class GameScene extends Phaser.Scene {
 
         const panel = this.add
             .rectangle(
-                260,
-                this.gameHeight - 52,
-                500,
-                86,
+                285,
+                this.gameHeight - 64,
+                550,
+                110,
                 0xfff4d6,
                 0.93,
             )
@@ -7604,21 +7707,42 @@ export class GameScene extends Phaser.Scene {
             },
         );
 
+        const brushShapeTitle =
+            this.add.text(
+                395,
+                this.gameHeight - 104,
+                tr('브러시 모양'),
+                {
+                    fontFamily:
+                        'monospace',
+                    fontSize: '11px',
+                    fontStyle: 'bold',
+                    color: '#5b4636',
+                },
+            )
+                .setOrigin(0.5)
+                .setDepth(872)
+                .setVisible(false);
+
+        this.paletteObjects.push(
+            brushShapeTitle,
+        );
+
         const brushShapeOptions: Array<{
             shape: BrushShape;
             label: string;
         }> = [
             {
                 shape: 'dotCircle',
-                label: tr('● DOT'),
+                label: `▦ ${tr('픽셀')}`,
             },
             {
                 shape: 'circle',
-                label: tr('○ CIR'),
+                label: `● ${tr('원형')}`,
             },
             {
                 shape: 'square',
-                label: tr('■ SQR'),
+                label: `■ ${tr('사각형')}`,
             },
         ];
 
@@ -7630,10 +7754,10 @@ export class GameScene extends Phaser.Scene {
                 const button =
                     this.add
                         .text(
-                            330 +
-                                index * 62,
+                            315 +
+                                index * 80,
                             this.gameHeight -
-                                58,
+                                78,
                             option.label,
                             {
                                 fontFamily:
@@ -7650,6 +7774,8 @@ export class GameScene extends Phaser.Scene {
                             },
                         )
                         .setOrigin(0.5)
+                        .setFixedSize(72, 28)
+                        .setAlign('center')
                         .setDepth(873)
                         .setVisible(false)
                         .setInteractive({
@@ -7683,6 +7809,141 @@ export class GameScene extends Phaser.Scene {
             },
         );
 
+        const sliderMinX = 250;
+        const sliderMaxX = 535;
+        const sliderY =
+            this.gameHeight - 38;
+
+        const setBrushSizeFromSlider =
+            (pointerX: number): void => {
+                const ratio =
+                    Phaser.Math.Clamp(
+                        (pointerX -
+                            sliderMinX) /
+                            (sliderMaxX -
+                                sliderMinX),
+                        0,
+                        1,
+                    );
+
+                this.brushSize =
+                    Math.max(
+                        1,
+                        Math.round(
+                            1 +
+                            ratio * 19,
+                        ),
+                    );
+
+                this.createBrushTexture(true);
+                this.updateBrushSizeSliderUi();
+            };
+
+        this.brushSizeSliderTrack =
+            this.add.rectangle(
+                (sliderMinX +
+                    sliderMaxX) / 2,
+                sliderY,
+                sliderMaxX -
+                    sliderMinX,
+                8,
+                0x6b7280,
+                0.55,
+            )
+                .setScrollFactor(0)
+                .setDepth(873)
+                .setVisible(false)
+                .setInteractive({
+                    useHandCursor: true,
+                });
+
+        this.brushSizeSliderFill =
+            this.add.rectangle(
+                sliderMinX,
+                sliderY,
+                0,
+                8,
+                0x4f8f67,
+                1,
+            )
+                .setOrigin(0, 0.5)
+                .setScrollFactor(0)
+                .setDepth(874)
+                .setVisible(false);
+
+        this.brushSizeSliderKnob =
+            this.add.circle(
+                sliderMinX,
+                sliderY,
+                8,
+                0xf8fafc,
+                1,
+            )
+                .setStrokeStyle(
+                    2,
+                    0x334155,
+                    1,
+                )
+                .setScrollFactor(0)
+                .setDepth(875)
+                .setVisible(false)
+                .setInteractive({
+                    useHandCursor: true,
+                    draggable: true,
+                });
+
+        this.brushSizeSliderLabel =
+            this.add.text(
+                205,
+                sliderY,
+                `SIZE ${this.brushSize}`,
+                {
+                    fontFamily:
+                        'monospace',
+                    fontSize: '11px',
+                    fontStyle: 'bold',
+                    color: '#5b4636',
+                },
+            )
+                .setOrigin(0.5)
+                .setScrollFactor(0)
+                .setDepth(875)
+                .setVisible(false);
+
+        this.brushSizeSliderTrack.on(
+            'pointerdown',
+            (
+                pointer:
+                    Phaser.Input.Pointer,
+            ) => {
+                setBrushSizeFromSlider(
+                    pointer.x,
+                );
+            },
+        );
+
+        this.brushSizeSliderKnob.on(
+            'drag',
+            (
+                _pointer:
+                    Phaser.Input.Pointer,
+                dragX: number,
+            ) => {
+                setBrushSizeFromSlider(
+                    dragX,
+                );
+            },
+        );
+
+        this.paletteObjects.push(
+            this.brushSizeSliderTrack,
+            this.brushSizeSliderFill,
+            this.brushSizeSliderKnob,
+            this.brushSizeSliderLabel,
+        );
+
+        this.updateBrushSizeSliderUi();
+
         this.highlightBrushShape(
             this.brushShape,
         );
@@ -7713,7 +7974,7 @@ export class GameScene extends Phaser.Scene {
             this.add
                 .text(
                     this.gameWidth - 18,
-                    this.gameHeight - 18,
+                    this.gameHeight - 108,
                     '',
                     {
                         fontFamily:
@@ -7743,17 +8004,16 @@ export class GameScene extends Phaser.Scene {
          * 기본 Hunter Paint 배율(1.05)에서도 오른쪽이 잘리지 않도록
          * 화면 가장자리에서 충분히 안쪽으로 배치합니다.
          */
-        const panelX =
-            this.gameWidth - 125;
-
-        const panelY = 170;
+        const panelX = 755;
+        const panelY =
+            this.gameHeight - 52;
 
         const panel =
             this.add.rectangle(
                 panelX,
                 panelY,
-                144,
-                160,
+                390,
+                86,
                 0xfff4d6,
                 0.95,
             )
@@ -7768,8 +8028,8 @@ export class GameScene extends Phaser.Scene {
 
         const title =
             this.add.text(
-                panelX,
-                panelY - 67,
+                575,
+                panelY - 31,
                 tr('CAMO SWATCH'),
                 {
                     fontFamily:
@@ -7779,15 +8039,15 @@ export class GameScene extends Phaser.Scene {
                     color: '#5b4636',
                 },
             )
-                .setOrigin(0.5)
+                .setOrigin(0, 0.5)
                 .setScrollFactor(0)
                 .setDepth(881)
                 .setVisible(false);
 
         const hint =
             this.add.text(
-                panelX,
-                panelY + 68,
+                925,
+                panelY - 31,
                 tr('배경 대표색'),
                 {
                     fontFamily:
@@ -7813,25 +8073,25 @@ export class GameScene extends Phaser.Scene {
          */
         for (
             let index = 0;
-            index < 12;
+            index < 11;
             index += 1
         ) {
             const column =
-                index % 4;
+                index % 6;
 
             const row =
                 Math.floor(
-                    index / 4,
+                    index / 6,
                 );
 
             const swatch =
                 this.add.rectangle(
-                    panelX - 51 +
-                        column * 34,
-                    panelY - 36 +
-                        row * 34,
-                    28,
-                    28,
+                    590 +
+                        column * 36,
+                    panelY - 4 +
+                        row * 29,
+                    26,
+                    24,
                     0x6f8f65,
                     1,
                 )
@@ -8402,6 +8662,48 @@ export class GameScene extends Phaser.Scene {
         );
     }
 
+    private updateBrushSizeSliderUi(): void {
+        if (
+            !this.brushSizeSliderTrack ||
+            !this.brushSizeSliderFill ||
+            !this.brushSizeSliderKnob ||
+            !this.brushSizeSliderLabel
+        ) {
+            return;
+        }
+
+        const minX = 250;
+        const maxX = 535;
+        const ratio =
+            Phaser.Math.Clamp(
+                (this.brushSize - 1) /
+                    19,
+                0,
+                1,
+            );
+        const x =
+            Phaser.Math.Linear(
+                minX,
+                maxX,
+                ratio,
+            );
+
+        this.brushSizeSliderFill
+            .setSize(
+                Math.max(
+                    0,
+                    x - minX,
+                ),
+                8,
+            );
+        this.brushSizeSliderKnob
+            .setX(x);
+        this.brushSizeSliderLabel
+            .setText(
+                `SIZE ${this.brushSize}`,
+            );
+    }
+
     private highlightBrushShape(
         selectedShape: BrushShape,
     ): void {
@@ -8494,6 +8796,25 @@ export class GameScene extends Phaser.Scene {
             0x111827,
             0.95,
         );
+
+        if (this.brushSize === 1) {
+            const pixelScale =
+                multiplayerClient.isConnected() &&
+                this.phase === 'paint' &&
+                this.networkPlayerManager
+                    .canLocalControlHunter()
+                    ? this.networkPlayerManager
+                        .getLocalPlayerVisualScale()
+                    : 1;
+
+            this.paintPreview.fillRect(
+                -pixelScale / 2,
+                -pixelScale / 2,
+                pixelScale,
+                pixelScale,
+            );
+            return;
+        }
 
         if (
             this.brushShape ===
@@ -8985,6 +9306,35 @@ export class GameScene extends Phaser.Scene {
                 textureKey,
             )
         ) {
+            return;
+        }
+
+        if (size === 1) {
+            const graphics =
+                this.add.graphics();
+
+            graphics.fillStyle(
+                color,
+                1,
+            );
+            graphics.fillRect(
+                0,
+                0,
+                1,
+                1,
+            );
+            graphics.generateTexture(
+                textureKey,
+                1,
+                1,
+            );
+            this.textures
+                .get(textureKey)
+                .setFilter(
+                    Phaser.Textures
+                        .FilterMode.NEAREST,
+                );
+            graphics.destroy();
             return;
         }
 
@@ -10685,6 +11035,17 @@ export class GameScene extends Phaser.Scene {
 
     private enterPaintPhase(): void {
         this.phase = 'paint';
+
+        if (
+            this.isMultiplayerSession()
+        ) {
+            this.paintDuration =
+                Math.round(
+                    multiplayerClient
+                        .getPaintDurationMs() /
+                    1000,
+                );
+        }
         this.syncPhaseMusic();
         this.hidePoints = 0;
         this.nextHeartbeatAt = 0;
@@ -11124,6 +11485,35 @@ export class GameScene extends Phaser.Scene {
             this.textures.remove(
                 this.brushTextureKey,
             );
+        }
+
+        if (this.brushSize === 1) {
+            const graphics =
+                this.add.graphics();
+
+            graphics.fillStyle(
+                this.paintColor,
+                1,
+            );
+            graphics.fillRect(
+                0,
+                0,
+                1,
+                1,
+            );
+            graphics.generateTexture(
+                this.brushTextureKey,
+                1,
+                1,
+            );
+            this.textures
+                .get(this.brushTextureKey)
+                .setFilter(
+                    Phaser.Textures
+                        .FilterMode.NEAREST,
+                );
+            graphics.destroy();
+            return;
         }
 
         const radius =
