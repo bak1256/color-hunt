@@ -2198,9 +2198,13 @@ export class NetworkPlayerManager {
     );
   }
 
-  private ensurePixelHiderBodyTexture(): string {
+  private ensurePixelBodyTexture(
+    role: NetworkPlayerRole,
+  ): string {
     const textureKey =
-      "network-hider-pixel-body";
+      role === "hunter"
+        ? "network-hunter-pixel-body"
+        : "network-hider-pixel-body";
 
     if (
       this.scene.textures.exists(
@@ -2211,13 +2215,10 @@ export class NetworkPlayerManager {
     }
 
     /*
-     * The old Hider base used Phaser Circle/Rectangle objects.
-     * Their anti-aliased edges do not line up exactly with the integer
-     * paint raster, which is why a white 1px fringe could reappear.
-     *
-     * Build the WHITE base from the exact same pixel predicate used by
-     * painting.  Base silhouette and painted silhouette are now literally
-     * the same pixels.
+     * One authoritative raster silhouette for BOTH roles.
+     * The visible base body and the paint predicate are generated from
+     * exactly the same integer cells, so a fully painted Hunter/Hider can
+     * never expose an antialiased Phaser Circle/Rectangle fringe.
      */
     const canvasTexture =
       this.scene.textures.createCanvas(
@@ -2228,7 +2229,7 @@ export class NetworkPlayerManager {
 
     if (!canvasTexture) {
       throw new Error(
-        "Failed to create Hider pixel body texture",
+        "Failed to create pixel body texture",
       );
     }
 
@@ -2243,7 +2244,9 @@ export class NetworkPlayerManager {
     );
 
     context.fillStyle =
-      "#f5eee2";
+      role === "hunter"
+        ? "#5f91c9"
+        : "#f5eee2";
 
     for (
       let y = 0;
@@ -2285,6 +2288,7 @@ export class NetworkPlayerManager {
     return textureKey;
   }
 
+
   private updateRoleBodyVisibility(
     container:
       Phaser.GameObjects.Container,
@@ -2300,10 +2304,26 @@ export class NetworkPlayerManager {
         | Phaser.GameObjects.Image
         | null;
 
+    const hunterBody =
+      container.getByName(
+        "network-hunter-pixel-body",
+      ) as
+        | Phaser.GameObjects.Image
+        | null;
+
     hiderBody?.setVisible(
       !isHunter,
     );
 
+    hunterBody?.setVisible(
+      isHunter,
+    );
+
+    /*
+     * Legacy Phaser primitives are retained only as animation/reference
+     * objects. They are never rendered because their anti-aliased edges do
+     * not match the integer paint raster.
+     */
     [
       "network-player-head",
       "network-player-body",
@@ -2317,19 +2337,14 @@ export class NetworkPlayerManager {
           container.getByName(
             name,
           ) as
-            | Phaser.GameObjects.GameObject
+            | Phaser.GameObjects.Shape
             | null;
 
-        (
-          part as
-            | Phaser.GameObjects.Shape
-            | null
-        )?.setVisible(
-          isHunter,
-        );
+        part?.setVisible(false);
       },
     );
   }
+
 
   private createPlayerContainer(
     player: NetworkPlayerState,
@@ -2363,7 +2378,9 @@ export class NetworkPlayerManager {
       this.scene.add.image(
         -40,
         -60,
-        this.ensurePixelHiderBodyTexture(),
+        this.ensurePixelBodyTexture(
+          "hider",
+        ),
       )
         .setOrigin(0, 0)
         .setName(
@@ -2372,6 +2389,20 @@ export class NetworkPlayerManager {
         .setVisible(
           player.role === "hider",
         );
+
+    const hunterPixelBody =
+      this.scene.add.image(
+        -40,
+        -60,
+        this.ensurePixelBodyTexture(
+          "hunter",
+        ),
+      )
+        .setOrigin(0, 0)
+        .setName(
+          "network-hunter-pixel-body",
+        )
+        .setVisible(false);
 
     const head =
       this.scene.add.circle(
@@ -2383,9 +2414,7 @@ export class NetworkPlayerManager {
         .setName(
           "network-player-head",
         )
-        .setVisible(
-          player.role === "hunter",
-        );
+        .setVisible(false);
 
     const body =
       this.scene.add.rectangle(
@@ -2398,9 +2427,7 @@ export class NetworkPlayerManager {
         .setName(
           "network-player-body",
         )
-        .setVisible(
-          player.role === "hunter",
-        );
+        .setVisible(false);
 
     const leftArm =
       this.scene.add.rectangle(
@@ -2413,9 +2440,7 @@ export class NetworkPlayerManager {
         .setName(
           "network-left-arm",
         )
-        .setVisible(
-          player.role === "hunter",
-        );
+        .setVisible(false);
 
     const rightArm =
       this.scene.add.rectangle(
@@ -2428,9 +2453,7 @@ export class NetworkPlayerManager {
         .setName(
           "network-right-arm",
         )
-        .setVisible(
-          player.role === "hunter",
-        );
+        .setVisible(false);
 
     const leftLeg =
       this.scene.add.rectangle(
@@ -2443,9 +2466,7 @@ export class NetworkPlayerManager {
         .setName(
           "network-left-leg",
         )
-        .setVisible(
-          player.role === "hunter",
-        );
+        .setVisible(false);
 
     const rightLeg =
       this.scene.add.rectangle(
@@ -2458,9 +2479,7 @@ export class NetworkPlayerManager {
         .setName(
           "network-right-leg",
         )
-        .setVisible(
-          player.role === "hunter",
-        );
+        .setVisible(false);
 
     /*
      * 캐릭터 외곽선 제거.
@@ -2472,27 +2491,6 @@ export class NetworkPlayerManager {
      * 이제 실제 몸체 fill 영역 = 색칠 가능한 실루엣입니다.
      */
 
-    if (player.role === "hunter") {
-      const hat =
-        this.scene.add.rectangle(
-          0,
-          -24,
-          26,
-          7,
-          0x4675a8,
-        );
-
-      const brim =
-        this.scene.add.rectangle(
-          6,
-          -20,
-          23,
-          5,
-          0x355f8c,
-        );
-
-      container.add([hat, brim]);
-    }
 
     const nameText = this.scene.add
       .text(
@@ -2560,6 +2558,7 @@ export class NetworkPlayerManager {
     container.add([
       shadow,
       hiderPixelBody,
+      hunterPixelBody,
       head,
       body,
       leftArm,
@@ -2778,9 +2777,11 @@ export class NetworkPlayerManager {
      */
     if (view.role === "hider") {
       /*
-       * Priority: camouflage alignment.
-       * Hiders have NO walk animation, no squash/stretch, and no independent
-       * limb motion.  The container and paint raster stay at scale 1.
+       * SAFE HIDER WALK ANIMATION:
+       * Never move head/arms/legs independently. The visible pixel body and
+       * paint RenderTexture are siblings inside the SAME player container.
+       * We animate only the parent scale, so camouflage and body receive the
+       * exact same transform every frame and cannot separate.
        */
       if (
         huntActive &&
@@ -2793,45 +2794,63 @@ export class NetworkPlayerManager {
         );
       }
 
-      view.walkBlend = 0;
+      const targetBlend =
+        moving ? 1 : 0;
 
+      view.walkBlend =
+        Phaser.Math.Linear(
+          view.walkBlend,
+          targetBlend,
+          moving ? 0.22 : 0.14,
+        );
+
+      if (moving) {
+        view.walkPhase +=
+          delta * 0.014;
+      }
+
+      const stride =
+        Math.sin(
+          view.walkPhase,
+        ) * view.walkBlend;
+
+      /*
+       * Subtle pixel-character bounce/squash.
+       * No Y position offset is used: only the shared parent transform.
+       */
       view.container.setScale(
-        1,
-        1,
+        1 + Math.abs(stride) * 0.018,
+        1 - Math.abs(stride) * 0.014,
       );
-
-      view.leftArm
-        ?.setRotation(0)
-        .setPosition(
-          -12,
-          6,
-        );
-
-      view.rightArm
-        ?.setRotation(0)
-        .setPosition(
-          12,
-          6,
-        );
-
-      view.leftLeg
-        ?.setRotation(0)
-        .setPosition(
-          -5,
-          22,
-        );
-
-      view.rightLeg
-        ?.setRotation(0)
-        .setPosition(
-          5,
-          22,
-        );
 
       view.shadow?.setScale(
-        1,
-        1,
+        1 + Math.abs(stride) * 0.08,
+        1 - Math.abs(stride) * 0.04,
       );
+
+      if (
+        moving &&
+        view.walkBlend > 0.22 &&
+        this.scene.time.now >=
+          view.nextFootstepAt
+      ) {
+        view.nextFootstepAt =
+          this.scene.time.now + 330;
+
+        const isLocal =
+          view.sessionId ===
+          multiplayerClient.getSessionId();
+
+        this.scene.sound.play(
+          "footstep",
+          {
+            volume:
+              isLocal
+                ? 0.16
+                : 0.055,
+          },
+        );
+      }
 
       this.syncPaintLayerPosition(
         view,
