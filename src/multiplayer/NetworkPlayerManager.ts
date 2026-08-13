@@ -211,24 +211,37 @@ export class NetworkPlayerManager {
           return;
         }
 
-        view.targetX = player.x;
-        view.targetY = player.y;
-
-        this.setViewPosition(
-          view,
-          player.x,
-          player.y,
-        );
-
-        if (
+        const isLocal =
           sessionId ===
-          multiplayerClient.getSessionId()
-        ) {
-          this.localX = player.x;
-          this.localY = player.y;
-          this.localMovementInitialized = true;
+          multiplayerClient.getSessionId();
+
+        /*
+         * Online lobby:
+         * the local player is client-predicted. Do not snap it back to an
+         * older server echo packet on every state synchronization.
+         */
+        if (isLocal) {
+          if (!this.localMovementInitialized) {
+            this.localX = player.x;
+            this.localY = player.y;
+            view.targetX = player.x;
+            view.targetY = player.y;
+
+            this.setViewPosition(
+              view,
+              player.x,
+              player.y,
+            );
+
+            this.localMovementInitialized = true;
+          }
+
+          view.spawnSynced = true;
+          return;
         }
 
+        view.targetX = player.x;
+        view.targetY = player.y;
         view.spawnSynced = true;
       },
     );
@@ -431,25 +444,31 @@ export class NetworkPlayerManager {
       roomPhase === "lobby" &&
       !view.customizationMode
     ) {
-      /*
-       * Lobby에서는 렌더 좌표, target 좌표, 이동 기준 좌표를
-       * 모두 서버 좌표 하나로 고정합니다.
-       */
-      view.targetX = player.x;
-      view.targetY = player.y;
-
-      this.setViewPosition(
-        view,
-        player.x,
-        player.y,
-      );
-
-      if (
-        sessionId ===
-        multiplayerClient.getSessionId()
+      if (isRemote) {
+        /*
+         * Remote lobby players receive authoritative targets and are
+         * interpolated in update(). Avoid packet-by-packet hard snapping.
+         */
+        view.targetX = player.x;
+        view.targetY = player.y;
+      } else if (
+        !this.localMovementInitialized
       ) {
+        /*
+         * Initialize the local player once from the authoritative spawn.
+         * After that, local WASD prediction owns the rendered position.
+         */
         this.localX = player.x;
         this.localY = player.y;
+        view.targetX = player.x;
+        view.targetY = player.y;
+
+        this.setViewPosition(
+          view,
+          player.x,
+          player.y,
+        );
+
         this.localMovementInitialized = true;
       }
 
@@ -544,6 +563,14 @@ export class NetworkPlayerManager {
       multiplayerClient.getSessionId() &&
       !view.customizationMode
     ) {
+      /*
+       * Lobby movement uses local prediction. The server still receives
+       * coordinates, but its delayed echo must never rewind the local avatar.
+       */
+      if (roomPhase === "lobby") {
+        return;
+      }
+
       const now =
         this.scene.time.now;
 
@@ -814,14 +841,51 @@ export class NetworkPlayerManager {
 
           if (distance > 0.4) {
             view.movingUntil =
-              this.scene.time.now + 140;
+              this.scene.time.now + 180;
           }
 
-          this.setViewPosition(
-            view,
-            view.targetX,
-            view.targetY,
-          );
+          if (
+            distance > 100 ||
+            !Number.isFinite(view.container.x) ||
+            !Number.isFinite(view.container.y)
+          ) {
+            this.setViewPosition(
+              view,
+              view.targetX,
+              view.targetY,
+            );
+          } else if (distance > 0.15) {
+            /*
+             * Smooth remote players between network packets.
+             * Frame-rate independent damping keeps motion stable online.
+             */
+            const smoothing =
+              1 -
+              Math.pow(
+                0.001,
+                delta / 1000,
+              );
+
+            this.setViewPosition(
+              view,
+              Phaser.Math.Linear(
+                view.container.x,
+                view.targetX,
+                smoothing,
+              ),
+              Phaser.Math.Linear(
+                view.container.y,
+                view.targetY,
+                smoothing,
+              ),
+            );
+          } else {
+            this.setViewPosition(
+              view,
+              view.targetX,
+              view.targetY,
+            );
+          }
 
           this.applyWalkMotion(
             view,
