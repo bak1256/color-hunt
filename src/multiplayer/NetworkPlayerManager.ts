@@ -78,9 +78,9 @@ export class NetworkPlayerManager {
   private lastLocalMoveInputAt = 0;
   private localWasMoving = false;
   private lastAuthoritativeSyncAt = 0;
-  private readonly authoritativeSyncIntervalMs = 16;
-  private readonly localMoveReconcileGraceMs = 90;
-  private readonly localHardCorrectionDistance = 18;
+  private readonly authoritativeSyncIntervalMs = 33;
+  private readonly localMoveReconcileGraceMs = 180;
+  private readonly localHardCorrectionDistance = 32;
 
   constructor(
     scene: Phaser.Scene,
@@ -787,11 +787,32 @@ export class NetworkPlayerManager {
      * This guarantees the Hunter's rendered Hider position follows the
      * same x/y the server uses for shotgun hit detection.
      */
+    const localSessionId =
+      multiplayerClient.getSessionId();
+
     room.state.players?.forEach?.(
       (
         player: NetworkPlayerState,
         sessionId: string,
       ) => {
+        /*
+         * HOTFIX:
+         * Local movement is client-predicted. Re-applying the server echo
+         * every frame makes localX/container and authoritative x/y fight
+         * each other, producing severe camera/avatar jitter.
+         *
+         * Keep frame-scale authority sync ONLY for remote players.
+         * The local player is reconciled by the normal player-state update
+         * path plus the final move packet sent when input stops.
+         */
+        if (
+          localSessionId &&
+          sessionId ===
+            localSessionId
+        ) {
+          return;
+        }
+
         if (
           this.players.has(
             sessionId,
@@ -1089,7 +1110,7 @@ export class NetworkPlayerManager {
           view.role === "hider"
         ) {
           const actuallyMoved =
-            distance > 0.10;
+            distance > 0.75;
 
           /*
            * Server x/y is shotgun authority. Never render a Hunt Hider at an

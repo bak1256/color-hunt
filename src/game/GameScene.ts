@@ -12877,76 +12877,199 @@ export class GameScene extends Phaser.Scene {
                 this.networkPlayerManager
                     ?.getLocalPaintVisual?.();
 
-            if (paintVisual) {
-            const worldPerSourceX =
-                bounds.width /
-                sourceImage.width;
+            if (
+                paintVisual &&
+                this.networkPlayerManager
+                    ?.isLocalHider?.()
+            ) {
+                const worldPerSourceX =
+                    bounds.width /
+                    sourceImage.width;
 
-            const worldPerSourceY =
-                bounds.height /
-                sourceImage.height;
+                const worldPerSourceY =
+                    bounds.height /
+                    sourceImage.height;
 
-            const patchWorldLeft =
-                bounds.left +
-                sourceX *
-                    worldPerSourceX;
+                const patchWorldLeft =
+                    bounds.left +
+                    sourceX *
+                        worldPerSourceX;
 
-            const patchWorldTop =
-                bounds.top +
-                sourceY *
-                    worldPerSourceY;
+                const patchWorldTop =
+                    bounds.top +
+                    sourceY *
+                        worldPerSourceY;
 
-            const paintWorldLeft =
-                paintVisual.x -
-                40 *
+                const paintWorldLeft =
+                    paintVisual.x -
+                    40 *
+                        paintVisual.scaleX;
+
+                const paintWorldTop =
+                    paintVisual.y -
+                    60 *
+                        paintVisual.scaleY;
+
+                const paintWorldWidth =
+                    80 *
                     paintVisual.scaleX;
 
-            const paintWorldTop =
-                paintVisual.y -
-                60 *
+                const paintWorldHeight =
+                    120 *
                     paintVisual.scaleY;
 
-            const paintWorldWidth =
-                80 *
-                paintVisual.scaleX;
+                const destX =
+                    (
+                        paintWorldLeft -
+                        patchWorldLeft
+                    ) /
+                    worldPerSourceX;
 
-            const paintWorldHeight =
-                120 *
-                paintVisual.scaleY;
+                const destY =
+                    (
+                        paintWorldTop -
+                        patchWorldTop
+                    ) /
+                    worldPerSourceY;
 
-            const destX =
-                (
-                    paintWorldLeft -
-                    patchWorldLeft
-                ) /
-                worldPerSourceX;
+                const destWidth =
+                    paintWorldWidth /
+                    worldPerSourceX;
 
-            const destY =
-                (
-                    paintWorldTop -
-                    patchWorldTop
-                ) /
-                worldPerSourceY;
+                const destHeight =
+                    paintWorldHeight /
+                    worldPerSourceY;
 
-            const destWidth =
-                paintWorldWidth /
-                worldPerSourceX;
+                /*
+                 * The Paint RenderTexture is transparent wherever the Hider
+                 * has not painted yet. Drawing only that texture makes the
+                 * unpainted body disappear into the background inside the
+                 * mobile loupe.
+                 *
+                 * Build the exact same 80x120 pixel silhouette used by the
+                 * real character paint mask, fill it with the Hider's white
+                 * base, then composite the actual paint layer on top.
+                 */
+                const bodyCanvas =
+                    document.createElement(
+                        'canvas',
+                    );
 
-            const destHeight =
-                paintWorldHeight /
-                worldPerSourceY;
+                bodyCanvas.width = 80;
+                bodyCanvas.height = 120;
 
-            sceneContext.drawImage(
-                paintVisual.source,
-                0,
-                0,
-                80,
-                120,
-                destX,
-                destY,
-                destWidth,
-                destHeight,
-            );
+                const bodyContext =
+                    bodyCanvas.getContext(
+                        '2d',
+                    );
+
+                if (bodyContext) {
+                    bodyContext.imageSmoothingEnabled =
+                        false;
+
+                    bodyContext.fillStyle =
+                        '#f5eee2';
+
+                    for (
+                        let bodyY = 0;
+                        bodyY < 120;
+                        bodyY += 1
+                    ) {
+                        for (
+                            let bodyX = 0;
+                            bodyX < 80;
+                            bodyX += 1
+                        ) {
+                            const headDx =
+                                bodyX - 40;
+
+                            const headDy =
+                                bodyY - 48;
+
+                            const insideHead =
+                                headDx *
+                                    headDx +
+                                    headDy *
+                                    headDy <=
+                                12 * 12;
+
+                            const insideBody =
+                                bodyX >= 31 &&
+                                bodyX <= 48 &&
+                                bodyY >= 55 &&
+                                bodyY <= 78;
+
+                            const insideLeftArm =
+                                bodyX >= 24 &&
+                                bodyX <= 31 &&
+                                bodyY >= 57 &&
+                                bodyY <= 74;
+
+                            const insideRightArm =
+                                bodyX >= 48 &&
+                                bodyX <= 55 &&
+                                bodyY >= 57 &&
+                                bodyY <= 74;
+
+                            const insideLeftLeg =
+                                bodyX >= 31 &&
+                                bodyX <= 38 &&
+                                bodyY >= 75 &&
+                                bodyY <= 88;
+
+                            const insideRightLeg =
+                                bodyX >= 41 &&
+                                bodyX <= 48 &&
+                                bodyY >= 75 &&
+                                bodyY <= 88;
+
+                            if (
+                                insideHead ||
+                                insideBody ||
+                                insideLeftArm ||
+                                insideRightArm ||
+                                insideLeftLeg ||
+                                insideRightLeg
+                            ) {
+                                bodyContext.fillRect(
+                                    bodyX,
+                                    bodyY,
+                                    1,
+                                    1,
+                                );
+                            }
+                        }
+                    }
+
+                    /*
+                     * Actual painted pixels sit above the white body base.
+                     * This makes the loupe show:
+                     *   background -> body edge -> current camouflage paint.
+                     */
+                    bodyContext.drawImage(
+                        paintVisual.source,
+                        0,
+                        0,
+                        80,
+                        120,
+                        0,
+                        0,
+                        80,
+                        120,
+                    );
+
+                    sceneContext.drawImage(
+                        bodyCanvas,
+                        0,
+                        0,
+                        80,
+                        120,
+                        destX,
+                        destY,
+                        destWidth,
+                        destHeight,
+                    );
+                }
             }
         } catch (error) {
             /*
