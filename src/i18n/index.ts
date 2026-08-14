@@ -5,6 +5,8 @@ const STORAGE_KEY = 'chameleon-hunt-language';
 type Dict = Record<string, string>;
 
 const ja: Dict = {
+  "TAB · 시야 전환":"TAB · 視点切替",
+
   "Shift+드래그  직선 그리기":"Shift+ドラッグ  直線を描く",
   "Ctrl+Z  한 단계 되돌리기":"Ctrl+Z  1段階元に戻す",
   "기본 색상 팔레트":"基本カラーパレット",
@@ -65,6 +67,8 @@ const ja: Dict = {
 };
 
 const en: Dict = {
+  "TAB · 시야 전환":"TAB · Switch View",
+
   "Shift+드래그  직선 그리기":"Shift+Drag  Draw straight line",
   "Ctrl+Z  한 단계 되돌리기":"Ctrl+Z  Undo one stroke",
   "기본 색상 팔레트":"Standard color palette",
@@ -114,6 +118,8 @@ const en: Dict = {
 };
 
 const zh: Dict = {
+  "TAB · 시야 전환":"TAB · 切换视角",
+
   "Shift+드래그  직선 그리기":"Shift+拖动  绘制直线",
   "Ctrl+Z  한 단계 되돌리기":"Ctrl+Z  撤销一步",
   "기본 색상 팔레트":"基础颜色调色板",
@@ -160,6 +166,8 @@ const zh: Dict = {
 };
 
 const ko: Dict = {
+  "TAB · 시야 전환":"TAB · 시야 전환",
+
   "Shift+드래그  직선 그리기":"Shift+드래그  직선 그리기",
   "Ctrl+Z  한 단계 되돌리기":"Ctrl+Z  한 단계 되돌리기",
   "기본 색상 팔레트":"기본 색상 팔레트",

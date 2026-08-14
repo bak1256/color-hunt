@@ -240,6 +240,80 @@ export class GameScene extends Phaser.Scene {
     private paintControlHelpText!: Phaser.GameObjects.Text;
 
     private createMobileControls(): void {
+        /*
+         * Spectator control exists on BOTH desktop and mobile.
+         * Desktop keeps TAB as a shortcut but also gets a visible button.
+         */
+        this.spectatorButton =
+            this.add.text(
+                this.gameWidth - 148,
+                76,
+                this.mobileControlsEnabled
+                    ? tr('시야 전환')
+                    : tr('TAB · 시야 전환'),
+                {
+                    fontFamily:
+                        'monospace',
+                    fontSize: '10px',
+                    fontStyle: 'bold',
+                    color: '#ffffff',
+                    backgroundColor:
+                        '#416b8b',
+                    fixedWidth: 122,
+                    fixedHeight: 30,
+                    align: 'center',
+                    padding: {
+                        top: 7,
+                    },
+                },
+            )
+                .setOrigin(0.5)
+                .setScrollFactor(0)
+                .setDepth(6003)
+                .setVisible(false)
+                .setInteractive({
+                    useHandCursor: true,
+                });
+
+        this.spectatorButton.on(
+            'pointerdown',
+            (
+                pointer:
+                    Phaser.Input.Pointer,
+            ) => {
+                pointer.event
+                    ?.stopPropagation?.();
+
+                this.cycleSpectatorView();
+            },
+        );
+
+        this.spectatorStatusText =
+            this.add.text(
+                this.gameWidth - 148,
+                111,
+                '',
+                {
+                    fontFamily:
+                        'monospace',
+                    fontSize: '10px',
+                    fontStyle: 'bold',
+                    color: '#28445a',
+                    backgroundColor:
+                        'rgba(236, 247, 255, 0.92)',
+                    fixedWidth: 160,
+                    fixedHeight: 26,
+                    align: 'center',
+                    padding: {
+                        top: 6,
+                    },
+                },
+            )
+                .setOrigin(0.5)
+                .setScrollFactor(0)
+                .setDepth(6003)
+                .setVisible(false);
+
         if (!this.mobileControlsEnabled) {
             return;
         }
@@ -353,48 +427,6 @@ export class GameScene extends Phaser.Scene {
                 .setDepth(6001)
                 .setVisible(false);
 
-
-        this.spectatorButton =
-            this.add.text(
-                this.gameWidth - 118,
-                82,
-                tr('시야 전환'),
-                {
-                    fontFamily:
-                        'monospace',
-                    fontSize: '11px',
-                    fontStyle: 'bold',
-                    color: '#ffffff',
-                    backgroundColor:
-                        '#416b8b',
-                    fixedWidth: 104,
-                    fixedHeight: 32,
-                    align: 'center',
-                    padding: {
-                        top: 8,
-                    },
-                },
-            )
-                .setOrigin(0.5)
-                .setScrollFactor(0)
-                .setDepth(6003)
-                .setVisible(false)
-                .setInteractive({
-                    useHandCursor: true,
-                });
-
-        this.spectatorButton.on(
-            'pointerdown',
-            (
-                pointer:
-                    Phaser.Input.Pointer,
-            ) => {
-                pointer.event
-                    ?.stopPropagation?.();
-
-                this.cycleSpectatorView();
-            },
-        );
 
         /*
          * Enough pointers for move + aim + fire / pinch gestures.
@@ -898,6 +930,58 @@ export class GameScene extends Phaser.Scene {
     }
 
     private updateMobileControlVisibility(): void {
+        const inRoomForSpectator =
+            multiplayerClient.isConnected();
+
+        const roleForSpectator =
+            multiplayerClient
+                .getLocalPlayer()
+                ?.role;
+
+        const showSpectatorButton =
+            inRoomForSpectator &&
+            this.phase === 'hunt' &&
+            roleForSpectator === 'hider';
+
+        this.spectatorButton
+            ?.setText(
+                this.mobileControlsEnabled
+                    ? tr('시야 전환')
+                    : tr('TAB · 시야 전환'),
+            )
+            .setVisible(
+                showSpectatorButton,
+            );
+
+        this.spectatorStatusText
+            ?.setVisible(
+                showSpectatorButton &&
+                Boolean(
+                    this.spectatorSessionId,
+                ),
+            );
+
+        if (
+            showSpectatorButton &&
+            this.spectatorButton
+        ) {
+            this.setFixedHudScreenPosition(
+                this.spectatorButton,
+                this.gameWidth - 148,
+                76,
+            );
+
+            if (
+                this.spectatorStatusText
+            ) {
+                this.setFixedHudScreenPosition(
+                    this.spectatorStatusText,
+                    this.gameWidth - 148,
+                    111,
+                );
+            }
+        }
+
         if (!this.mobileControlsEnabled) {
             return;
         }
@@ -936,35 +1020,6 @@ export class GameScene extends Phaser.Scene {
             ?.setVisible(showHunterCombat);
         this.mobileFireLabel
             ?.setVisible(showHunterCombat);
-
-        const showSpectatorButton =
-            inRoom &&
-            this.phase === 'hunt' &&
-            localRole === 'hider';
-
-        this.spectatorButton
-            ?.setText(
-                tr('시야 전환'),
-            )
-            .setVisible(
-                showSpectatorButton,
-            );
-
-        if (
-            showSpectatorButton &&
-            this.spectatorButton
-        ) {
-            /*
-             * Keep this button at a real screen coordinate even while Hunt
-             * camera zoom is 1.65. This was why it could disappear offscreen
-             * on mobile despite visible=true.
-             */
-            this.setFixedHudScreenPosition(
-                this.spectatorButton,
-                this.gameWidth - 128,
-                96,
-            );
-        }
 
         if (!canMove) {
             this.mobileMovePointerId = -1;
@@ -1084,10 +1139,12 @@ export class GameScene extends Phaser.Scene {
     private straightLineStart?: NetworkPaintPoint;
     private straightLineStartWorld?: Phaser.Math.Vector2;
     private straightLinePreview?: Phaser.GameObjects.Graphics;
+    private straightLineModeActive = false;
     private undoPaintButton?: Phaser.GameObjects.Text;
     private mobilePaintPrecisionRing?: Phaser.GameObjects.Arc;
     private mobilePaintPrecisionCrosshair?: Phaser.GameObjects.Graphics;
     private spectatorButton?: Phaser.GameObjects.Text;
+    private spectatorStatusText?: Phaser.GameObjects.Text;
     private spectatorSessionId = '';
     private spectatorCycleIndex = -1;
     private hunterFocusAngle = 0;
@@ -2212,6 +2269,27 @@ export class GameScene extends Phaser.Scene {
             if (!multiplayerClient.isConnected()) {
                 this.updateSelectedHiderMovement(delta);
             }
+
+            if (
+                this.isPainting &&
+                this.straightLineStart &&
+                this.shiftPaintKey?.isDown
+            ) {
+                this.straightLineModeActive =
+                    true;
+
+                this.updateStraightLinePreview(
+                    this.input.activePointer,
+                );
+            } else if (
+                this.isPainting &&
+                this.straightLineModeActive
+            ) {
+                this.updateStraightLinePreview(
+                    this.input.activePointer,
+                );
+            }
+
             this.updateBrushSizeInput();
 
             if (
@@ -6420,6 +6498,9 @@ export class GameScene extends Phaser.Scene {
         this.spectatorButton
             ?.setVisible(false);
 
+        this.spectatorStatusText
+            ?.setVisible(false);
+
         this.hiderVisionOverlays.forEach(
             (overlay) => {
                 overlay.setVisible(false);
@@ -6754,59 +6835,60 @@ export class GameScene extends Phaser.Scene {
             );
 
         /*
-         * Hunter vision is a directional fan starting at the body.
-         * This gives the shotgun a deliberate "flashlight / field of focus"
-         * feel instead of a circular hole floating in front of the Hunter.
+         * True circular sector:
+         * - two straight rays begin at the Hunter body
+         * - the far edge is a rounded circular arc
+         *
+         * This reads visually as a flashlight / fan instead of a triangle.
          */
         const range =
             285 / zoom;
 
         const halfAngle =
             Phaser.Math.DegToRad(
-                34,
+                36,
             );
 
-        const leftPoint =
-            new Phaser.Math.Vector2(
-                center.x +
-                    Math.cos(
-                        angle -
-                            halfAngle,
-                    ) *
-                        range,
-                center.y +
-                    Math.sin(
-                        angle -
-                            halfAngle,
-                    ) *
-                        range,
-            );
+        const arcSteps = 18;
 
-        const rightPoint =
-            new Phaser.Math.Vector2(
-                center.x +
-                    Math.cos(
-                        angle +
-                            halfAngle,
-                    ) *
-                        range,
-                center.y +
-                    Math.sin(
-                        angle +
-                            halfAngle,
-                    ) *
-                        range,
-            );
+        const sector:
+            Phaser.Math.Vector2[] = [
+                center.clone(),
+            ];
 
-        /*
-         * Darken everything outside the triangle by horizontal scan-lines.
-         * This avoids browser-specific inverted GeometryMask artifacts.
-         */
-        const triangle = [
-            center,
-            leftPoint,
-            rightPoint,
-        ];
+        for (
+            let index = 0;
+            index <= arcSteps;
+            index += 1
+        ) {
+            const t =
+                index /
+                arcSteps;
+
+            const arcAngle =
+                Phaser.Math.Linear(
+                    angle -
+                        halfAngle,
+                    angle +
+                        halfAngle,
+                    t,
+                );
+
+            sector.push(
+                new Phaser.Math.Vector2(
+                    center.x +
+                        Math.cos(
+                            arcAngle,
+                        ) *
+                            range,
+                    center.y +
+                        Math.sin(
+                            arcAngle,
+                        ) *
+                            range,
+                ),
+            );
+        }
 
         const margin =
             Math.max(
@@ -6887,17 +6969,18 @@ export class GameScene extends Phaser.Scene {
 
             for (
                 let index = 0;
-                index < 3;
+                index <
+                sector.length;
                 index += 1
             ) {
                 const x =
                     edgeIntersectionX(
-                        triangle[index],
-                        triangle[
+                        sector[index],
+                        sector[
                             (
                                 index + 1
                             ) %
-                                3
+                                sector.length
                         ],
                         y,
                     );
@@ -6963,77 +7046,123 @@ export class GameScene extends Phaser.Scene {
         }
 
         /*
-         * Soft layered fan edges. The inner cone is clearest; the edges get
-         * progressively hazier so peripheral searching feels defocused.
+         * Soft side rays + rounded far arc create a more polished
+         * flashlight edge without making the visible area perfectly crisp.
          */
         for (
             let layer = 0;
-            layer < 7;
+            layer < 6;
             layer += 1
         ) {
-            const spread =
-                halfAngle +
-                Phaser.Math.DegToRad(
-                    layer * 1.8,
-                );
+            const alpha =
+                0.11 +
+                layer *
+                    0.025;
 
-            const layerRange =
+            const expandedRange =
                 range +
                 layer *
-                    (5 / zoom);
+                    (4 / zoom);
 
-            const leftX =
-                center.x +
-                Math.cos(
-                    angle -
-                        spread,
-                ) *
-                    layerRange;
-
-            const leftY =
-                center.y +
-                Math.sin(
-                    angle -
-                        spread,
-                ) *
-                    layerRange;
-
-            const rightX =
-                center.x +
-                Math.cos(
-                    angle +
-                        spread,
-                ) *
-                    layerRange;
-
-            const rightY =
-                center.y +
-                Math.sin(
-                    angle +
-                        spread,
-                ) *
-                    layerRange;
-
-            graphics
-                .lineStyle(
-                    3 / zoom,
-                    0x243746,
-                    0.10 +
-                        layer *
-                            0.025,
-                )
-                .lineBetween(
-                    center.x,
-                    center.y,
-                    leftX,
-                    leftY,
-                )
-                .lineBetween(
-                    center.x,
-                    center.y,
-                    rightX,
-                    rightY,
+            const expandedHalf =
+                halfAngle +
+                Phaser.Math.DegToRad(
+                    layer * 1.3,
                 );
+
+            graphics.lineStyle(
+                3 / zoom,
+                0x243746,
+                alpha,
+            );
+
+            graphics.lineBetween(
+                center.x,
+                center.y,
+                center.x +
+                    Math.cos(
+                        angle -
+                            expandedHalf,
+                    ) *
+                        expandedRange,
+                center.y +
+                    Math.sin(
+                        angle -
+                            expandedHalf,
+                    ) *
+                        expandedRange,
+            );
+
+            graphics.lineBetween(
+                center.x,
+                center.y,
+                center.x +
+                    Math.cos(
+                        angle +
+                            expandedHalf,
+                    ) *
+                        expandedRange,
+                center.y +
+                    Math.sin(
+                        angle +
+                            expandedHalf,
+                    ) *
+                        expandedRange,
+            );
+
+            const arcPoints:
+                Phaser.Math.Vector2[] = [];
+
+            for (
+                let index = 0;
+                index <= 16;
+                index += 1
+            ) {
+                const t =
+                    index / 16;
+
+                const arcAngle =
+                    Phaser.Math.Linear(
+                        angle -
+                            expandedHalf,
+                        angle +
+                            expandedHalf,
+                        t,
+                    );
+
+                arcPoints.push(
+                    new Phaser.Math.Vector2(
+                        center.x +
+                            Math.cos(
+                                arcAngle,
+                            ) *
+                                expandedRange,
+                        center.y +
+                            Math.sin(
+                                arcAngle,
+                            ) *
+                                expandedRange,
+                    ),
+                );
+            }
+
+            for (
+                let index = 1;
+                index <
+                arcPoints.length;
+                index += 1
+            ) {
+                graphics.lineBetween(
+                    arcPoints[
+                        index - 1
+                    ].x,
+                    arcPoints[
+                        index - 1
+                    ].y,
+                    arcPoints[index].x,
+                    arcPoints[index].y,
+                );
+            }
         }
     }
 
@@ -7460,18 +7589,18 @@ export class GameScene extends Phaser.Scene {
     private createBgmToggleButton(): void {
         this.bgmToggleButton = this.add
             .text(
-                this.gameWidth - 18,
-                18,
+                this.gameWidth - 14,
+                14,
                 this.bgmEnabled
                     ? tr('♫ BGM ON')
                     : tr('♫ BGM OFF'),
                 {
                     fontFamily: 'monospace',
-                    fontSize: '15px',
+                    fontSize: '13px',
                     fontStyle: 'bold',
                     color: '#ffffff',
                     backgroundColor: '#20262bcc',
-                    padding: { x: 10, y: 7 },
+                    padding: { x: 8, y: 6 },
                 },
             )
             .setOrigin(1, 0)
@@ -8195,9 +8324,11 @@ export class GameScene extends Phaser.Scene {
             ];
 
         if (!this.spectatorSessionId) {
-            this.showStatus(
-                tr('시야: 내 캐릭터'),
-            );
+            this.spectatorStatusText
+                ?.setText(
+                    tr('시야: 내 캐릭터'),
+                )
+                .setVisible(true);
             return;
         }
 
@@ -8208,16 +8339,18 @@ export class GameScene extends Phaser.Scene {
                     this.spectatorSessionId,
             );
 
-        this.showStatus(
-            selected
-                ? `${tr('시야 전환')}: ${
-                    selected.role ===
-                        'hunter'
-                        ? 'HUNTER'
-                        : 'HIDER'
-                } · ${selected.name}`
-                : tr('시야 전환'),
-        );
+        this.spectatorStatusText
+            ?.setText(
+                selected
+                    ? `${
+                        selected.role ===
+                            'hunter'
+                            ? 'HUNTER'
+                            : 'HIDER'
+                    } · ${selected.name}`
+                    : tr('시야: 내 캐릭터'),
+            )
+            .setVisible(true);
     }
 
     private getActiveHuntViewTarget():
@@ -9479,9 +9612,9 @@ export class GameScene extends Phaser.Scene {
 
         const panel = this.add
             .rectangle(
-                305,
+                320,
                 this.gameHeight - 64,
-                590,
+                620,
                 110,
                 0xfff4d6,
                 0.93,
@@ -9552,15 +9685,41 @@ export class GameScene extends Phaser.Scene {
 
                 swatch.on(
                     'pointerdown',
-                    () => {
-                        this.paintColor =
-                            color;
+                    (
+                        pointer:
+                            Phaser.Input.Pointer,
+                    ) => {
+                        pointer.event
+                            ?.stopPropagation?.();
 
-                        this.createBrushTexture();
+                        /*
+                         * Role palettes can recolor this same swatch after it
+                         * was created. Always read the CURRENT data value.
+                         * The old closure captured the original color and made
+                         * Hider swatch visuals disagree with actual paint.
+                         */
+                        const currentColor =
+                            swatch.getData(
+                                'paletteColor',
+                            );
+
+                        if (
+                            typeof currentColor !==
+                            'number'
+                        ) {
+                            return;
+                        }
+
+                        this.paintColor =
+                            currentColor;
+
+                        this.createBrushTexture(
+                            true,
+                        );
                         this.updatePaintHud();
                         this.updatePaintPreviewImmediately();
                         this.highlightPaletteColor(
-                            color,
+                            currentColor,
                         );
                     },
                 );
@@ -9778,8 +9937,8 @@ export class GameScene extends Phaser.Scene {
 
         this.undoPaintButton =
             this.add.text(
-                548,
-                this.gameHeight - 104,
+                555,
+                this.gameHeight - 78,
                 `↶ ${tr('되돌리기')}`,
                 {
                     fontFamily:
@@ -9789,11 +9948,11 @@ export class GameScene extends Phaser.Scene {
                     color: '#26352b',
                     backgroundColor:
                         '#f2e6c8',
-                    fixedWidth: 88,
-                    fixedHeight: 24,
+                    fixedWidth: 76,
+                    fixedHeight: 28,
                     align: 'center',
                     padding: {
-                        top: 5,
+                        top: 7,
                     },
                 },
             )
@@ -11299,7 +11458,7 @@ export class GameScene extends Phaser.Scene {
         if (
             !this.straightLinePreview ||
             !this.straightLineStartWorld ||
-            !this.shiftPaintKey?.isDown ||
+            !this.straightLineModeActive ||
             !this.isPainting ||
             this.phase !== 'paint'
         ) {
@@ -11586,21 +11745,26 @@ export class GameScene extends Phaser.Scene {
                         point,
                     ];
 
-                    this.straightLineStart =
-                        this.shiftPaintKey?.isDown
-                            ? {
-                                x: point.x,
-                                y: point.y,
-                            }
-                            : undefined;
+                    /*
+                     * Always remember the stroke origin. Shift may be pressed
+                     * before OR after pointer-down; preview should still work.
+                     */
+                    this.straightLineStart = {
+                        x: point.x,
+                        y: point.y,
+                    };
 
                     this.straightLineStartWorld =
-                        this.shiftPaintKey?.isDown
-                            ? new Phaser.Math.Vector2(
-                                paintTarget.x,
-                                paintTarget.y,
-                            )
-                            : undefined;
+                        new Phaser.Math.Vector2(
+                            paintTarget.x,
+                            paintTarget.y,
+                        );
+
+                    this.straightLineModeActive =
+                        Boolean(
+                            this.shiftPaintKey
+                                ?.isDown,
+                        );
 
                     this.updateStraightLinePreview(
                         pointer,
@@ -11679,9 +11843,25 @@ export class GameScene extends Phaser.Scene {
                         this.shiftPaintKey?.isDown &&
                         this.straightLineStart
                     ) {
+                        this.straightLineModeActive =
+                            true;
+
                         /*
                          * Live visual preview. No permanent paint is stamped
                          * until release, so the player can aim the line.
+                         */
+                        this.updateStraightLinePreview(
+                            pointer,
+                        );
+                        return;
+                    }
+
+                    if (
+                        this.straightLineModeActive
+                    ) {
+                        /*
+                         * Once a stroke entered line mode, keep previewing
+                         * until release even if Shift is released first.
                          */
                         this.updateStraightLinePreview(
                             pointer,
@@ -11760,7 +11940,8 @@ export class GameScene extends Phaser.Scene {
                     this.phase === 'paint' &&
                     this.isMultiplayerSession() &&
                     this.isPainting &&
-                    this.straightLineStart
+                    this.straightLineStart &&
+                    this.straightLineModeActive
                 ) {
                     const target =
                         this.getPaintInputWorldPoint(
@@ -11794,6 +11975,8 @@ export class GameScene extends Phaser.Scene {
                     undefined;
                 this.straightLineStartWorld =
                     undefined;
+                this.straightLineModeActive =
+                    false;
                 this.clearStraightLinePreview();
 
                 this.hideMobilePaintPrecisionGuide();
@@ -12181,6 +12364,8 @@ export class GameScene extends Phaser.Scene {
         this.straightLineStart = undefined;
         this.straightLineStartWorld =
             undefined;
+        this.straightLineModeActive =
+            false;
         this.clearStraightLinePreview();
     }
 
@@ -12633,8 +12818,123 @@ export class GameScene extends Phaser.Scene {
         );
 
         /*
-         * Circular 7.5x pixel loupe. The browser may smooth normal canvas
-         * scaling, so explicitly disable it for true pixel targeting.
+         * Build a 15x15 representation of what is ACTUALLY visible:
+         * background + the local player's current painted RenderTexture.
+         * The old loupe sampled only the raw background image, so already
+         * painted pixels vanished inside the mobile magnifier.
+         */
+        const sceneSample =
+            document.createElement(
+                'canvas',
+            );
+
+        sceneSample.width =
+            sampleSize;
+        sceneSample.height =
+            sampleSize;
+
+        const sceneContext =
+            sceneSample.getContext(
+                '2d',
+            );
+
+        if (!sceneContext) {
+            return;
+        }
+
+        sceneContext.imageSmoothingEnabled =
+            false;
+
+        sceneContext.drawImage(
+            sourceImage,
+            sourceX,
+            sourceY,
+            sampleSize,
+            sampleSize,
+            0,
+            0,
+            sampleSize,
+            sampleSize,
+        );
+
+        const paintVisual =
+            this.networkPlayerManager
+                ?.getLocalPaintVisual?.();
+
+        if (paintVisual) {
+            const worldPerSourceX =
+                bounds.width /
+                sourceImage.width;
+
+            const worldPerSourceY =
+                bounds.height /
+                sourceImage.height;
+
+            const patchWorldLeft =
+                bounds.left +
+                sourceX *
+                    worldPerSourceX;
+
+            const patchWorldTop =
+                bounds.top +
+                sourceY *
+                    worldPerSourceY;
+
+            const paintWorldLeft =
+                paintVisual.x -
+                40 *
+                    paintVisual.scaleX;
+
+            const paintWorldTop =
+                paintVisual.y -
+                60 *
+                    paintVisual.scaleY;
+
+            const paintWorldWidth =
+                80 *
+                paintVisual.scaleX;
+
+            const paintWorldHeight =
+                120 *
+                paintVisual.scaleY;
+
+            const destX =
+                (
+                    paintWorldLeft -
+                    patchWorldLeft
+                ) /
+                worldPerSourceX;
+
+            const destY =
+                (
+                    paintWorldTop -
+                    patchWorldTop
+                ) /
+                worldPerSourceY;
+
+            const destWidth =
+                paintWorldWidth /
+                worldPerSourceX;
+
+            const destHeight =
+                paintWorldHeight /
+                worldPerSourceY;
+
+            sceneContext.drawImage(
+                paintVisual.source,
+                0,
+                0,
+                80,
+                120,
+                destX,
+                destY,
+                destWidth,
+                destHeight,
+            );
+        }
+
+        /*
+         * Circular pixel loupe.
          */
         context.save();
         context.beginPath();
@@ -12649,9 +12949,9 @@ export class GameScene extends Phaser.Scene {
         context.imageSmoothingEnabled =
             false;
         context.drawImage(
-            sourceImage,
-            sourceX,
-            sourceY,
+            sceneSample,
+            0,
+            0,
             sampleSize,
             sampleSize,
             6,
@@ -12699,49 +12999,24 @@ export class GameScene extends Phaser.Scene {
         );
         context.stroke();
 
-        const pixelCanvas =
-            document.createElement(
-                'canvas',
-            );
-
-        pixelCanvas.width = 1;
-        pixelCanvas.height = 1;
-
-        const pixelContext =
-            pixelCanvas.getContext('2d');
-
         let candidateColor =
             0xffffff;
 
-        if (pixelContext) {
-            pixelContext.drawImage(
-                sourceImage,
-                imageX,
-                imageY,
+        const centerPixel =
+            sceneContext.getImageData(
+                half,
+                half,
                 1,
                 1,
-                0,
-                0,
-                1,
-                1,
-            );
+            ).data;
 
-            const pixel =
-                pixelContext.getImageData(
-                    0,
-                    0,
-                    1,
-                    1,
-                ).data;
-
-            candidateColor =
-                Phaser.Display.Color
-                    .GetColor(
-                        pixel[0],
-                        pixel[1],
-                        pixel[2],
-                    );
-        }
+        candidateColor =
+            Phaser.Display.Color
+                .GetColor(
+                    centerPixel[0],
+                    centerPixel[1],
+                    centerPixel[2],
+                );
 
         (
             texture as unknown as
@@ -14493,6 +14768,8 @@ export class GameScene extends Phaser.Scene {
         this.straightLineStart = undefined;
         this.straightLineStartWorld =
             undefined;
+        this.straightLineModeActive =
+            false;
         this.clearStraightLinePreview();
         this.phase = 'paint';
 

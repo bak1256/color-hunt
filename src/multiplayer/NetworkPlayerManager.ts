@@ -1329,6 +1329,53 @@ export class NetworkPlayerManager {
     );
   }
 
+  getLocalPaintVisual():
+    | {
+        source:
+          HTMLCanvasElement |
+          HTMLImageElement;
+        x: number;
+        y: number;
+        scaleX: number;
+        scaleY: number;
+      }
+    | null {
+    const sessionId =
+      multiplayerClient.getSessionId();
+
+    if (!sessionId) {
+      return null;
+    }
+
+    const view =
+      this.players.get(sessionId);
+
+    if (!view?.paintLayer) {
+      return null;
+    }
+
+    const source =
+      view.paintLayer.texture
+        .texture
+        .getSourceImage() as
+          | HTMLCanvasElement
+          | HTMLImageElement;
+
+    if (!source) {
+      return null;
+    }
+
+    return {
+      source,
+      x: view.container.x,
+      y: view.container.y,
+      scaleX:
+        view.container.scaleX || 1,
+      scaleY:
+        view.container.scaleY || 1,
+    };
+  }
+
   getLocalPlayerVisualScale(): number {
     const sessionId =
       multiplayerClient.getSessionId();
