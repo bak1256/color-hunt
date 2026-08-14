@@ -1251,6 +1251,54 @@ export class NetworkPlayerManager {
     return positions;
   }
 
+  getPlayerContainer(
+    sessionId: string,
+  ): Phaser.GameObjects.Container | null {
+    return (
+      this.players.get(sessionId)
+        ?.container ?? null
+    );
+  }
+
+  getPlayerAimAngle(
+    sessionId: string,
+  ): number {
+    const view =
+      this.players.get(sessionId);
+
+    return (
+      view?.gun?.rotation ??
+      view?.aimGraphics?.rotation ??
+      0
+    );
+  }
+
+  getSpectatablePlayers(): Array<{
+    sessionId: string;
+    name: string;
+    role: NetworkPlayerRole;
+    alive: boolean;
+    x: number;
+    y: number;
+  }> {
+    return [...this.players.entries()]
+      .filter(
+        ([, view]) => view.alive,
+      )
+      .map(
+        ([sessionId, view]) => ({
+          sessionId,
+          name:
+            view.nameText.text ||
+            "Player",
+          role: view.role,
+          alive: view.alive,
+          x: view.container.x,
+          y: view.container.y,
+        }),
+      );
+  }
+
   getLocalPlayerPosition():
     | Phaser.Math.Vector2
     | null {

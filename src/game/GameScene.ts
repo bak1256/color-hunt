@@ -105,6 +105,10 @@ export class GameScene extends Phaser.Scene {
     private brushNumpadPlusKey!: Phaser.Input.Keyboard.Key;
     private brushNumpadMinusKey!: Phaser.Input.Keyboard.Key;
     private brushShapeKey!: Phaser.Input.Keyboard.Key;
+    private spectatorKey!: Phaser.Input.Keyboard.Key;
+    private undoPaintKey!: Phaser.Input.Keyboard.Key;
+    private shiftPaintKey!: Phaser.Input.Keyboard.Key;
+    private controlPaintKey!: Phaser.Input.Keyboard.Key;
 
     /*
      * Hiders
@@ -330,6 +334,49 @@ export class GameScene extends Phaser.Scene {
                 .setScrollFactor(0)
                 .setDepth(6001)
                 .setVisible(false);
+
+
+        this.spectatorButton =
+            this.add.text(
+                this.gameWidth - 118,
+                82,
+                tr('시야 전환'),
+                {
+                    fontFamily:
+                        'monospace',
+                    fontSize: '11px',
+                    fontStyle: 'bold',
+                    color: '#ffffff',
+                    backgroundColor:
+                        '#416b8b',
+                    fixedWidth: 104,
+                    fixedHeight: 32,
+                    align: 'center',
+                    padding: {
+                        top: 8,
+                    },
+                },
+            )
+                .setOrigin(0.5)
+                .setScrollFactor(0)
+                .setDepth(6003)
+                .setVisible(false)
+                .setInteractive({
+                    useHandCursor: true,
+                });
+
+        this.spectatorButton.on(
+            'pointerdown',
+            (
+                pointer:
+                    Phaser.Input.Pointer,
+            ) => {
+                pointer.event
+                    ?.stopPropagation?.();
+
+                this.cycleSpectatorView();
+            },
+        );
 
         /*
          * Enough pointers for move + aim + fire / pinch gestures.
@@ -872,6 +919,19 @@ export class GameScene extends Phaser.Scene {
         this.mobileFireLabel
             ?.setVisible(showHunterCombat);
 
+        const showSpectatorButton =
+            inRoom &&
+            this.phase === 'hunt' &&
+            localRole === 'hider';
+
+        this.spectatorButton
+            ?.setText(
+                tr('시야 전환'),
+            )
+            .setVisible(
+                showSpectatorButton,
+            );
+
         if (!canMove) {
             this.mobileMovePointerId = -1;
             this.mobileMoveX = 0;
@@ -985,6 +1045,16 @@ export class GameScene extends Phaser.Scene {
     private networkPlayerManager!: NetworkPlayerManager;
     private activeStrokePoints: NetworkPaintPoint[] = [];
     private activeStrokeTargetSessionId = '';
+    private currentStrokeHistoryPoints: NetworkPaintPoint[] = [];
+    private localPaintHistory: NetworkPaintStroke[] = [];
+    private straightLineStart?: NetworkPaintPoint;
+    private undoPaintButton?: Phaser.GameObjects.Text;
+    private mobilePaintPrecisionRing?: Phaser.GameObjects.Arc;
+    private mobilePaintPrecisionCrosshair?: Phaser.GameObjects.Graphics;
+    private spectatorButton?: Phaser.GameObjects.Text;
+    private spectatorSessionId = '';
+    private spectatorCycleIndex = -1;
+    private hunterFocusAngle = 0;
     private readonly remoteBrushTexturePrefix =
         'remote-paint-brush';
 
@@ -2115,12 +2185,30 @@ export class GameScene extends Phaser.Scene {
             ) {
                 this.toggleBrushShape();
             }
+
+            if (
+                this.controlPaintKey.isDown &&
+                Phaser.Input.Keyboard.JustDown(
+                    this.undoPaintKey,
+                )
+            ) {
+                this.undoLastPaintStroke();
+            }
         }
 
         if (this.phase === 'hunt') {
             if (!multiplayerClient.isConnected()) {
                 this.updateHunterMovement(delta);
             }
+
+            if (
+                Phaser.Input.Keyboard.JustDown(
+                    this.spectatorKey,
+                )
+            ) {
+                this.cycleSpectatorView();
+            }
+
             this.updateAim();
 
             if (
@@ -6293,6 +6381,9 @@ export class GameScene extends Phaser.Scene {
     }
 
     private hideHuntTensionUi(): void {
+        this.spectatorButton
+            ?.setVisible(false);
+
         this.hiderVisionOverlays.forEach(
             (overlay) => {
                 overlay.setVisible(false);
@@ -6608,6 +6699,144 @@ export class GameScene extends Phaser.Scene {
         }
     }
 
+    private drawHunterFocusVision(
+        center:
+            Phaser.Math.Vector2,
+        angle: number,
+    ): void {
+        const graphics =
+            this.hiderVisionGraphics;
+
+        graphics
+            .clear()
+            .setVisible(true);
+
+        const zoom =
+            Math.max(
+                0.01,
+                this.cameras.main.zoom,
+            );
+
+        /*
+         * Focus area sits slightly in front of the Hunter, centered on the
+         * shotgun aim direction. Everything outside is dark and visually
+         * noisy, so scanning without deliberate aim is much harder.
+         */
+        const focusDistance =
+            82 / zoom;
+
+        const radius =
+            122 / zoom;
+
+        const focusX =
+            center.x +
+            Math.cos(angle) *
+                focusDistance;
+
+        const focusY =
+            center.y +
+            Math.sin(angle) *
+                focusDistance;
+
+        const margin =
+            Math.max(
+                this.gameWidth,
+                this.gameHeight,
+            );
+
+        const step =
+            Math.max(
+                2,
+                3 / zoom,
+            );
+
+        graphics.fillStyle(
+            0x071019,
+            0.69,
+        );
+
+        for (
+            let y = -margin;
+            y <
+            this.gameHeight + margin;
+            y += step
+        ) {
+            const dy =
+                y - focusY;
+
+            if (
+                Math.abs(dy) >
+                radius
+            ) {
+                graphics.fillRect(
+                    -margin,
+                    y,
+                    this.gameWidth +
+                        margin * 2,
+                    step + 1,
+                );
+                continue;
+            }
+
+            const halfWidth =
+                Math.sqrt(
+                    Math.max(
+                        0,
+                        radius *
+                            radius -
+                        dy * dy,
+                    ),
+                );
+
+            graphics.fillRect(
+                -margin,
+                y,
+                focusX -
+                    halfWidth +
+                    margin,
+                step + 1,
+            );
+
+            graphics.fillRect(
+                focusX +
+                    halfWidth,
+                y,
+                this.gameWidth +
+                    margin -
+                    (
+                        focusX +
+                        halfWidth
+                    ),
+                step + 1,
+            );
+        }
+
+        /*
+         * Soft/muddy peripheral edge: several translucent rings create a
+         * defocused transition rather than a perfectly crisp spotlight.
+         */
+        for (
+            let index = 0;
+            index < 12;
+            index += 1
+        ) {
+            graphics
+                .lineStyle(
+                    4 / zoom,
+                    0x253746,
+                    0.035 +
+                        index * 0.012,
+                )
+                .strokeCircle(
+                    focusX,
+                    focusY,
+                    radius +
+                        index *
+                            (3 / zoom),
+                );
+        }
+    }
+
     private updateHuntTension(
         delta: number,
     ): void {
@@ -6624,9 +6853,16 @@ export class GameScene extends Phaser.Scene {
                 .getLocalRole();
 
         if (localRole === 'hunter') {
-            this.hiderVisionGraphics
-                .clear()
-                .setVisible(false);
+            const hunterPosition =
+                this.networkPlayerManager
+                    .getLocalPlayerPosition();
+
+            if (hunterPosition) {
+                this.drawHunterFocusVision(
+                    hunterPosition,
+                    this.hunterFocusAngle,
+                );
+            }
 
             this.heartbeatDangerOverlay
                 .setVisible(false)
@@ -6672,9 +6908,64 @@ export class GameScene extends Phaser.Scene {
         this.hunterMinimapMarker
             .setVisible(false);
 
+        const spectatedPlayer =
+            this.spectatorSessionId
+                ? this.networkPlayerManager
+                    .getSpectatablePlayers()
+                    .find(
+                        (player) =>
+                            player.sessionId ===
+                            this.spectatorSessionId,
+                    )
+                : undefined;
+
+        if (
+            spectatedPlayer?.role ===
+            'hunter'
+        ) {
+            const hunterViewPosition =
+                new Phaser.Math.Vector2(
+                    spectatedPlayer.x,
+                    spectatedPlayer.y,
+                );
+
+            this.drawHunterFocusVision(
+                hunterViewPosition,
+                this.networkPlayerManager
+                    .getPlayerAimAngle(
+                        spectatedPlayer.sessionId,
+                    ),
+            );
+
+            this.hidePointText
+                .setVisible(false);
+
+            this.heartbeatDangerOverlay
+                .setVisible(false)
+                .setAlpha(0);
+
+            this.heartbeatBorders.forEach(
+                (border) => {
+                    border
+                        .setVisible(false)
+                        .setAlpha(0);
+                },
+            );
+
+            this.heartbeatText
+                .setVisible(false);
+
+            return;
+        }
+
         const localPosition =
-            this.networkPlayerManager
-                .getLocalPlayerPosition();
+            spectatedPlayer
+                ? new Phaser.Math.Vector2(
+                    spectatedPlayer.x,
+                    spectatedPlayer.y,
+                )
+                : this.networkPlayerManager
+                    .getLocalPlayerPosition();
 
         this.hidePointText
             .setVisible(true)
@@ -7631,8 +7922,7 @@ export class GameScene extends Phaser.Scene {
         }
 
         const target =
-            this.networkPlayerManager
-                .getLocalPlayerContainer();
+            this.getActiveHuntViewTarget();
 
         if (!target) {
             return;
@@ -7651,6 +7941,105 @@ export class GameScene extends Phaser.Scene {
         this.ensureGameplayCameraFollow();
     }
 
+    private cycleSpectatorView(): void {
+        if (
+            this.phase !== 'hunt' ||
+            !this.isMultiplayerSession() ||
+            !this.networkPlayerManager
+                .isLocalHider()
+        ) {
+            return;
+        }
+
+        const localSessionId =
+            multiplayerClient
+                .getSessionId();
+
+        const players =
+            this.networkPlayerManager
+                .getSpectatablePlayers();
+
+        const ordered =
+            players.filter(
+                (player) =>
+                    player.sessionId !==
+                    localSessionId,
+            );
+
+        /*
+         * Final slot is always SELF so TAB can return to normal play.
+         */
+        const cycle = [
+            ...ordered.map(
+                (player) =>
+                    player.sessionId,
+            ),
+            '',
+        ];
+
+        if (cycle.length === 0) {
+            this.spectatorSessionId = '';
+            return;
+        }
+
+        this.spectatorCycleIndex =
+            (
+                this.spectatorCycleIndex +
+                1
+            ) %
+            cycle.length;
+
+        this.spectatorSessionId =
+            cycle[
+                this.spectatorCycleIndex
+            ];
+
+        if (!this.spectatorSessionId) {
+            this.showStatus(
+                tr('시야: 내 캐릭터'),
+            );
+            return;
+        }
+
+        const selected =
+            players.find(
+                (player) =>
+                    player.sessionId ===
+                    this.spectatorSessionId,
+            );
+
+        this.showStatus(
+            selected
+                ? `${tr('시야 전환')}: ${
+                    selected.role ===
+                        'hunter'
+                        ? 'HUNTER'
+                        : 'HIDER'
+                } · ${selected.name}`
+                : tr('시야 전환'),
+        );
+    }
+
+    private getActiveHuntViewTarget():
+        Phaser.GameObjects.Container | null {
+        if (this.spectatorSessionId) {
+            const spectated =
+                this.networkPlayerManager
+                    .getPlayerContainer(
+                        this.spectatorSessionId,
+                    );
+
+            if (spectated) {
+                return spectated;
+            }
+
+            this.spectatorSessionId = '';
+        }
+
+        return this.networkPlayerManager
+            .getLocalPlayerContainer();
+    }
+
     private ensureGameplayCameraFollow(): void {
         if (
             this.phase !== 'hunt' ||
@@ -7660,8 +8049,7 @@ export class GameScene extends Phaser.Scene {
         }
 
         const target =
-            this.networkPlayerManager
-                .getLocalPlayerContainer();
+            this.getActiveHuntViewTarget();
 
         if (!target) {
             return;
@@ -7828,6 +8216,9 @@ export class GameScene extends Phaser.Scene {
             remainingMs;
 
         if (phase === 'lobby') {
+            this.spectatorSessionId = '';
+            this.spectatorCycleIndex = -1;
+
             this.roundResultWinner = null;
             this.roundResultMessage = '';
 
@@ -7876,6 +8267,9 @@ export class GameScene extends Phaser.Scene {
         }
 
         if (phase === 'paint') {
+            this.spectatorSessionId = '';
+            this.spectatorCycleIndex = -1;
+
             this.clearStatus();
 
             this.phaseText
@@ -8892,9 +9286,9 @@ export class GameScene extends Phaser.Scene {
 
         const panel = this.add
             .rectangle(
-                285,
+                305,
                 this.gameHeight - 64,
-                550,
+                590,
                 110,
                 0xfff4d6,
                 0.93,
@@ -9187,6 +9581,51 @@ export class GameScene extends Phaser.Scene {
 
         this.paletteObjects.push(
             this.eyedropperButton,
+        );
+
+        this.undoPaintButton =
+            this.add.text(
+                535,
+                this.gameHeight - 78,
+                `↶ ${tr('되돌리기')}`,
+                {
+                    fontFamily:
+                        'monospace',
+                    fontSize: '9px',
+                    fontStyle: 'bold',
+                    color: '#26352b',
+                    backgroundColor:
+                        '#f2e6c8',
+                    fixedWidth: 82,
+                    fixedHeight: 28,
+                    align: 'center',
+                    padding: {
+                        top: 7,
+                    },
+                },
+            )
+                .setOrigin(0.5)
+                .setDepth(873)
+                .setVisible(false)
+                .setInteractive({
+                    useHandCursor: true,
+                });
+
+        this.undoPaintButton.on(
+            'pointerdown',
+            (
+                pointer:
+                    Phaser.Input.Pointer,
+            ) => {
+                pointer.event
+                    ?.stopPropagation?.();
+
+                this.undoLastPaintStroke();
+            },
+        );
+
+        this.paletteObjects.push(
+            this.undoPaintButton,
         );
 
         const sliderMinX = 320;
@@ -10431,6 +10870,129 @@ export class GameScene extends Phaser.Scene {
         );
     }
 
+    private getPaintInputWorldPoint(
+        pointer: Phaser.Input.Pointer,
+    ): Phaser.Math.Vector2 {
+        if (!this.mobileControlsEnabled) {
+            return new Phaser.Math.Vector2(
+                pointer.worldX,
+                pointer.worldY,
+            );
+        }
+
+        /*
+         * Put the actual brush target above the finger so the finger never
+         * covers the pixel being painted. Screen offset is converted back
+         * through the current camera zoom.
+         */
+        const zoom =
+            Math.max(
+                0.01,
+                this.cameras.main.zoom,
+            );
+
+        return new Phaser.Math.Vector2(
+            pointer.worldX,
+            pointer.worldY -
+                58 / zoom,
+        );
+    }
+
+    private ensureMobilePaintPrecisionGuide(): void {
+        if (
+            this.mobilePaintPrecisionRing &&
+            this.mobilePaintPrecisionCrosshair
+        ) {
+            return;
+        }
+
+        this.mobilePaintPrecisionRing =
+            this.add.circle(
+                0,
+                0,
+                25,
+                0xffffff,
+                0.08,
+            )
+                .setStrokeStyle(
+                    3,
+                    0x172027,
+                    0.78,
+                )
+                .setDepth(6500)
+                .setVisible(false);
+
+        this.mobilePaintPrecisionCrosshair =
+            this.add.graphics()
+                .setDepth(6501)
+                .setVisible(false);
+    }
+
+    private updateMobilePaintPrecisionGuide(
+        pointer: Phaser.Input.Pointer,
+    ): void {
+        if (
+            !this.mobileControlsEnabled ||
+            this.phase !== 'paint'
+        ) {
+            return;
+        }
+
+        this.ensureMobilePaintPrecisionGuide();
+
+        const target =
+            this.getPaintInputWorldPoint(
+                pointer,
+            );
+
+        this.mobilePaintPrecisionRing
+            ?.setPosition(
+                target.x,
+                target.y,
+            )
+            .setRadius(
+                Math.max(
+                    12,
+                    this.brushSize * 2.4,
+                ),
+            )
+            .setVisible(true);
+
+        this.mobilePaintPrecisionCrosshair
+            ?.clear()
+            .lineStyle(
+                2 /
+                    Math.max(
+                        0.01,
+                        this.cameras.main.zoom,
+                    ),
+                0x172027,
+                0.9,
+            )
+            .lineBetween(
+                target.x - 10,
+                target.y,
+                target.x + 10,
+                target.y,
+            )
+            .lineBetween(
+                target.x,
+                target.y - 10,
+                target.x,
+                target.y + 10,
+            )
+            .setVisible(true);
+    }
+
+    private hideMobilePaintPrecisionGuide(): void {
+        this.mobilePaintPrecisionRing
+            ?.setVisible(false);
+
+        this.mobilePaintPrecisionCrosshair
+            ?.clear()
+            .setVisible(false);
+    }
+
     private createPointerControls(): void {
         this.input.on(
             Phaser.Input.Events.POINTER_DOWN,
@@ -10599,11 +11161,20 @@ export class GameScene extends Phaser.Scene {
                 if (
                     this.isMultiplayerSession()
                 ) {
+                    const paintTarget =
+                        this.getPaintInputWorldPoint(
+                            pointer,
+                        );
+
+                    this.updateMobilePaintPrecisionGuide(
+                        pointer,
+                    );
+
                     const point =
                         this.networkPlayerManager
                             .paintLocalPlayer(
-                                pointer.worldX,
-                                pointer.worldY,
+                                paintTarget.x,
+                                paintTarget.y,
                                 this.brushTextureKey,
                                 this.paintColor,
                                 this.brushSize,
@@ -10622,6 +11193,17 @@ export class GameScene extends Phaser.Scene {
                     this.activeStrokePoints = [
                         point,
                     ];
+                    this.currentStrokeHistoryPoints = [
+                        point,
+                    ];
+
+                    this.straightLineStart =
+                        this.shiftPaintKey?.isDown
+                            ? {
+                                x: point.x,
+                                y: point.y,
+                            }
+                            : undefined;
 
                     return;
                 }
@@ -10661,6 +11243,16 @@ export class GameScene extends Phaser.Scene {
                 }
 
                 if (
+                    this.mobileControlsEnabled &&
+                    this.phase === 'paint' &&
+                    pointer.isDown
+                ) {
+                    this.updateMobilePaintPrecisionGuide(
+                        pointer,
+                    );
+                }
+
+                if (
                     pointer.id ===
                         this.mobileMovePointerId ||
                     pointer.id ===
@@ -10682,11 +11274,26 @@ export class GameScene extends Phaser.Scene {
                 if (
                     this.isMultiplayerSession()
                 ) {
+                    if (
+                        this.shiftPaintKey?.isDown &&
+                        this.straightLineStart
+                    ) {
+                        /*
+                         * Shift+drag only previews the endpoint. The actual
+                         * continuous straight stroke is committed on release.
+                         */
+                        return;
+                    }
+
                     const point =
                         this.networkPlayerManager
                             .paintLocalPlayer(
-                                pointer.worldX,
-                                pointer.worldY,
+                                this.getPaintInputWorldPoint(
+                                    pointer,
+                                ).x,
+                                this.getPaintInputWorldPoint(
+                                    pointer,
+                                ).y,
                                 this.brushTextureKey,
                                 this.paintColor,
                                 this.brushSize,
@@ -10738,11 +11345,51 @@ export class GameScene extends Phaser.Scene {
                         false;
                     this.updateEyedropperButtonUi();
                     this.hideEyedropperMagnifier();
+                    this.hideMobilePaintPrecisionGuide();
 
                     this.isPainting = false;
                     this.finishActivePaintStroke();
                     return;
                 }
+
+                if (
+                    this.phase === 'paint' &&
+                    this.isMultiplayerSession() &&
+                    this.isPainting &&
+                    this.straightLineStart
+                ) {
+                    const target =
+                        this.getPaintInputWorldPoint(
+                            pointer,
+                        );
+
+                    const endPoint =
+                        this.networkPlayerManager
+                            .paintLocalPlayer(
+                                target.x,
+                                target.y,
+                                this.brushTextureKey,
+                                this.paintColor,
+                                this.brushSize,
+                                this.brushShape,
+                            );
+
+                    if (endPoint) {
+                        /*
+                         * Reuse the existing interpolation routine so Shift
+                         * produces the same gap-free raster line locally and
+                         * over the network.
+                         */
+                        this.interpolateActivePaintStroke(
+                            endPoint,
+                        );
+                    }
+                }
+
+                this.straightLineStart =
+                    undefined;
+
+                this.hideMobilePaintPrecisionGuide();
 
                 this.isPainting = false;
                 this.finishActivePaintStroke();
@@ -10951,10 +11598,33 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
-        this.activeStrokePoints.push({
+        const recordedPoint = {
             x: nextX,
             y: nextY,
-        });
+        };
+
+        this.activeStrokePoints.push(
+            recordedPoint,
+        );
+
+        const previousHistoryPoint =
+            this.currentStrokeHistoryPoints[
+                this.currentStrokeHistoryPoints.length - 1
+            ];
+
+        if (
+            !previousHistoryPoint ||
+            Math.round(
+                previousHistoryPoint.x,
+            ) !== nextX ||
+            Math.round(
+                previousHistoryPoint.y,
+            ) !== nextY
+        ) {
+            this.currentStrokeHistoryPoints.push(
+                recordedPoint,
+            );
+        }
 
         if (
             multiplayerClient.isConnected() &&
@@ -11049,9 +11719,12 @@ export class GameScene extends Phaser.Scene {
     }
 
     private finishActivePaintStroke(): void {
+        const completedTarget =
+            this.activeStrokeTargetSessionId;
+
         if (
             multiplayerClient.isConnected() &&
-            this.activeStrokeTargetSessionId &&
+            completedTarget &&
             this.activeStrokePoints.length > 0
         ) {
             this.flushActivePaintStrokeChunk(
@@ -11059,8 +11732,132 @@ export class GameScene extends Phaser.Scene {
             );
         }
 
+        if (
+            completedTarget &&
+            this.currentStrokeHistoryPoints.length >
+                0
+        ) {
+            this.localPaintHistory.push({
+                targetSessionId:
+                    completedTarget,
+                color:
+                    this.paintColor,
+                size:
+                    this.brushSize,
+                shape:
+                    this.brushShape,
+                points:
+                    this.currentStrokeHistoryPoints
+                        .map(
+                            (point) => ({
+                                x: point.x,
+                                y: point.y,
+                            }),
+                        ),
+            });
+
+            /*
+             * Keep enough useful undo depth without allowing an endless
+             * memory history on long paint sessions.
+             */
+            if (
+                this.localPaintHistory.length >
+                40
+            ) {
+                this.localPaintHistory.shift();
+            }
+        }
+
         this.activeStrokePoints = [];
+        this.currentStrokeHistoryPoints = [];
         this.activeStrokeTargetSessionId = '';
+        this.straightLineStart = undefined;
+    }
+
+    private undoLastPaintStroke(): void {
+        if (
+            this.phase !== 'paint' ||
+            !this.isMultiplayerSession() ||
+            this.localPaintHistory.length === 0
+        ) {
+            return;
+        }
+
+        this.finishActivePaintStroke();
+        this.localPaintHistory.pop();
+
+        const sessionId =
+            multiplayerClient.getSessionId();
+
+        if (!sessionId) {
+            return;
+        }
+
+        /*
+         * Existing paint protocol is enough for synchronized undo:
+         * first repaint the complete masked body with its base color, then
+         * replay every retained local stroke. Remote clients see exactly the
+         * same result without a new server message type.
+         */
+        const resetStroke:
+            NetworkPaintStroke = {
+                targetSessionId:
+                    sessionId,
+                color:
+                    0xf5eee2,
+                size:
+                    64,
+                shape:
+                    'square',
+                points: [
+                    {
+                        x: 40,
+                        y: 60,
+                    },
+                ],
+            };
+
+        this.networkPlayerManager
+            .stampLocalPaintPoint(
+                40,
+                60,
+                this.brushTextureKey,
+                resetStroke.color,
+                resetStroke.size,
+                resetStroke.shape,
+            );
+
+        multiplayerClient
+            .sendPaintStroke(
+                resetStroke,
+            );
+
+        this.localPaintHistory.forEach(
+            (stroke) => {
+                stroke.points.forEach(
+                    (point) => {
+                        this.networkPlayerManager
+                            .stampLocalPaintPoint(
+                                point.x,
+                                point.y,
+                                this.brushTextureKey,
+                                stroke.color,
+                                stroke.size,
+                                stroke.shape,
+                            );
+                    },
+                );
+
+                multiplayerClient
+                    .sendPaintStroke(
+                        stroke,
+                    );
+            },
+        );
+
+        this.showStatus(
+            tr('한 단계 되돌렸습니다.'),
+        );
     }
 
     private applyRemotePaintStroke(
@@ -11883,6 +12680,9 @@ export class GameScene extends Phaser.Scene {
                     pointer.worldX,
                     pointer.worldY,
                 );
+
+        this.hunterFocusAngle =
+            angle;
 
         this.gun.setRotation(angle);
 
@@ -12707,8 +13507,25 @@ export class GameScene extends Phaser.Scene {
             Phaser.Input.Keyboard.KeyCodes.B,
         );
 
+        this.spectatorKey = keyboard.addKey(
+            Phaser.Input.Keyboard.KeyCodes.TAB,
+        );
+
+        this.undoPaintKey = keyboard.addKey(
+            Phaser.Input.Keyboard.KeyCodes.Z,
+        );
+
+        this.shiftPaintKey = keyboard.addKey(
+            Phaser.Input.Keyboard.KeyCodes.SHIFT,
+        );
+
+        this.controlPaintKey = keyboard.addKey(
+            Phaser.Input.Keyboard.KeyCodes.CTRL,
+        );
+
         keyboard.addCapture([
             Phaser.Input.Keyboard.KeyCodes.TAB,
+            Phaser.Input.Keyboard.KeyCodes.Z,
             Phaser.Input.Keyboard.KeyCodes.SPACE,
             Phaser.Input.Keyboard.KeyCodes.UP,
             Phaser.Input.Keyboard.KeyCodes.DOWN,
@@ -13235,6 +14052,9 @@ export class GameScene extends Phaser.Scene {
     }
 
     private enterPaintPhase(): void {
+        this.localPaintHistory = [];
+        this.currentStrokeHistoryPoints = [];
+        this.straightLineStart = undefined;
         this.phase = 'paint';
 
         if (
@@ -13376,6 +14196,11 @@ export class GameScene extends Phaser.Scene {
     }
 
     private startHunt(): void {
+        this.hideMobilePaintPrecisionGuide();
+
+        this.spectatorSessionId = '';
+        this.spectatorCycleIndex = -1;
+
         if (
             this.isMultiplayerSession()
         ) {
