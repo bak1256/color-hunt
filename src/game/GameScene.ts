@@ -9872,14 +9872,24 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
-        if (
-            phase === 'hunt' &&
-            this.activeStrokePoints.length > 0
-        ) {
-            this.finishActivePaintStroke();
-        }
-
         if (phase === 'hunt') {
+            /*
+             * HOTFIX: Hunt can begin before the painter's final pointer-up.
+             * Finish the last stroke first, then rebroadcast the Hider's
+             * complete authoritative paint history. Hunter clients therefore
+             * enter Hunt with the exact final camouflage the Hider sees.
+             */
+            this.finishActivePaintStroke();
+            this.isPainting = false;
+
+            if (
+                this.networkPlayerManager
+                    .isLocalHider() &&
+                this.localPaintHistory.length > 0
+            ) {
+                this.rebuildLocalPaintFromHistory();
+            }
+
             this.clearStatus();
 
 

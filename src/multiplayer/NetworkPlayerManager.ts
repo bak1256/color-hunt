@@ -2039,20 +2039,12 @@ export class NetworkPlayerManager {
       const pixelY =
         Math.round(point.y);
 
-      const localX =
-        pixelX - 40;
-      const localY =
-        pixelY - 60;
-
-      if (
-        localX < -18 ||
-        localX > 18 ||
-        localY < -26 ||
-        localY > 31
-      ) {
-        return;
-      }
-
+      /*
+       * Do not reject remote brush centers with a smaller bounding box.
+       * The exact character geometry mask below is already authoritative.
+       * Keeping an extra remote-only center filter can make edge paint
+       * visible to the Hider but missing on the Hunter.
+       */
       this.stampMaskedPaintBrush(
         view,
         pixelX,
