@@ -2241,6 +2241,9 @@ export class GameScene extends Phaser.Scene {
              * Keep the lightweight lobby panel in sync every frame.
              */
             this.updateLobbyUi();
+
+            this.networkPlayerManager
+                ?.forceLobbyPositionsFromState();
         }
 
         if (this.isMultiplayerSession()) {
@@ -3917,6 +3920,32 @@ export class GameScene extends Phaser.Scene {
 
             this.lobbyTitleText
                 .setVisible(true);
+
+            this.networkPlayerManager
+                .forceLobbyPositionsFromState();
+
+            [80, 220, 520].forEach(
+                (delay) => {
+                    this.time.delayedCall(
+                        delay,
+                        () => {
+                            if (
+                                this.phase ===
+                                    'lobby' &&
+                                multiplayerClient
+                                    .getRoom() ===
+                                    room
+                            ) {
+                                this.networkPlayerManager
+                                    .syncPlayersFromCurrentRoom();
+
+                                this.networkPlayerManager
+                                    .forceLobbyPositionsFromState();
+                            }
+                        },
+                    );
+                },
+            );
         }
 
         this.hideLegacySinglePlayerActors();
@@ -12872,16 +12901,23 @@ export class GameScene extends Phaser.Scene {
             sampleSize,
         );
 
-        try {
-            const paintVisual =
+        /*
+         * Always draw the Hider base silhouette first. This must NOT depend
+         * on RenderTexture readback, which can fail on mobile/WebGL.
+         */
+        if (
+            this.networkPlayerManager
+                ?.isLocalHider?.()
+        ) {
+            const localPosition =
                 this.networkPlayerManager
-                    ?.getLocalPaintVisual?.();
+                    .getLocalPlayerPosition();
 
-            if (
-                paintVisual &&
+            const localScale =
                 this.networkPlayerManager
-                    ?.isLocalHider?.()
-            ) {
+                    .getLocalPlayerVisualScale();
+
+            if (localPosition) {
                 const worldPerSourceX =
                     bounds.width /
                     sourceImage.width;
@@ -12900,56 +12936,44 @@ export class GameScene extends Phaser.Scene {
                     sourceY *
                         worldPerSourceY;
 
-                const paintWorldLeft =
-                    paintVisual.x -
+                const bodyWorldLeft =
+                    localPosition.x -
                     40 *
-                        paintVisual.scaleX;
+                        localScale;
 
-                const paintWorldTop =
-                    paintVisual.y -
+                const bodyWorldTop =
+                    localPosition.y -
                     60 *
-                        paintVisual.scaleY;
-
-                const paintWorldWidth =
-                    80 *
-                    paintVisual.scaleX;
-
-                const paintWorldHeight =
-                    120 *
-                    paintVisual.scaleY;
+                        localScale;
 
                 const destX =
                     (
-                        paintWorldLeft -
+                        bodyWorldLeft -
                         patchWorldLeft
                     ) /
                     worldPerSourceX;
 
                 const destY =
                     (
-                        paintWorldTop -
+                        bodyWorldTop -
                         patchWorldTop
                     ) /
                     worldPerSourceY;
 
                 const destWidth =
-                    paintWorldWidth /
+                    (
+                        80 *
+                        localScale
+                    ) /
                     worldPerSourceX;
 
                 const destHeight =
-                    paintWorldHeight /
+                    (
+                        120 *
+                        localScale
+                    ) /
                     worldPerSourceY;
 
-                /*
-                 * The Paint RenderTexture is transparent wherever the Hider
-                 * has not painted yet. Drawing only that texture makes the
-                 * unpainted body disappear into the background inside the
-                 * mobile loupe.
-                 *
-                 * Build the exact same 80x120 pixel silhouette used by the
-                 * real character paint mask, fill it with the Hider's white
-                 * base, then composite the actual paint layer on top.
-                 */
                 const bodyCanvas =
                     document.createElement(
                         'canvas',
@@ -12966,7 +12990,6 @@ export class GameScene extends Phaser.Scene {
                 if (bodyContext) {
                     bodyContext.imageSmoothingEnabled =
                         false;
-
                     bodyContext.fillStyle =
                         '#f5eee2';
 
@@ -12982,15 +13005,12 @@ export class GameScene extends Phaser.Scene {
                         ) {
                             const headDx =
                                 bodyX - 40;
-
                             const headDy =
                                 bodyY - 48;
 
                             const insideHead =
-                                headDx *
-                                    headDx +
-                                    headDy *
-                                    headDy <=
+                                headDx * headDx +
+                                    headDy * headDy <=
                                 12 * 12;
 
                             const insideBody =
@@ -13041,22 +13061,30 @@ export class GameScene extends Phaser.Scene {
                         }
                     }
 
-                    /*
-                     * Actual painted pixels sit above the white body base.
-                     * This makes the loupe show:
-                     *   background -> body edge -> current camouflage paint.
-                     */
-                    bodyContext.drawImage(
-                        paintVisual.source,
-                        0,
-                        0,
-                        80,
-                        120,
-                        0,
-                        0,
-                        80,
-                        120,
-                    );
+                    try {
+                        const paintVisual =
+                            this.networkPlayerManager
+                                ?.getLocalPaintVisual?.();
+
+                        if (paintVisual?.source) {
+                            bodyContext.drawImage(
+                                paintVisual.source,
+                                0,
+                                0,
+                                80,
+                                120,
+                                0,
+                                0,
+                                80,
+                                120,
+                            );
+                        }
+                    } catch (error) {
+                        console.warn(
+                            '[Chameleon Hunt] eyedropper paint layer skipped; body silhouette preserved',
+                            error,
+                        );
+                    }
 
                     sceneContext.drawImage(
                         bodyCanvas,
@@ -13071,15 +13099,6 @@ export class GameScene extends Phaser.Scene {
                     );
                 }
             }
-        } catch (error) {
-            /*
-             * Loupe overlay is optional. A browser/RenderTexture readback
-             * failure must never disable the actual eyedropper workflow.
-             */
-            console.warn(
-                '[Chameleon Hunt] eyedropper paint overlay skipped',
-                error,
-            );
         }
 
         /*

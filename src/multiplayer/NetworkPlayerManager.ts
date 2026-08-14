@@ -65,6 +65,7 @@ export class NetworkPlayerManager {
    * WASD 입력 순간 점프하지 않게 합니다.
    */
   private localMovementInitialized = false;
+  private localLobbyInputStarted = false;
 
   private readonly hiderMoveSpeed = 180;
   private readonly hunterMoveSpeed = 125;
@@ -103,6 +104,7 @@ export class NetworkPlayerManager {
 
     this.players.clear();
     this.localMovementInitialized = false;
+    this.localLobbyInputStarted = false;
     this.localX = 480;
     this.localY = 270;
     this.lastLocalMoveInputAt = 0;
@@ -212,6 +214,71 @@ export class NetworkPlayerManager {
     );
   }
 
+  forceLobbyPositionsFromState(): void {
+    const room =
+      multiplayerClient.getRoom();
+
+    if (
+      !room ||
+      room.state?.phase !== "lobby"
+    ) {
+      return;
+    }
+
+    room.state.players?.forEach?.(
+      (
+        player: NetworkPlayerState,
+        sessionId: string,
+      ) => {
+        const view =
+          this.players.get(
+            sessionId,
+          );
+
+        if (!view) {
+          this.addPlayer(
+            sessionId,
+            player,
+          );
+          return;
+        }
+
+        const lobbyX =
+          this.getLobbyDisplayX(
+            player.x,
+          );
+
+        const isLocal =
+          sessionId ===
+          multiplayerClient
+            .getSessionId();
+
+        if (
+          !isLocal ||
+          !this.localLobbyInputStarted
+        ) {
+          view.targetX = lobbyX;
+          view.targetY = player.y;
+
+          this.setViewPosition(
+            view,
+            lobbyX,
+            player.y,
+          );
+
+          if (isLocal) {
+            this.localX = lobbyX;
+            this.localY = player.y;
+            this.localMovementInitialized =
+              true;
+          }
+        }
+
+        view.spawnSynced = true;
+      },
+    );
+  }
+
   syncLobbyPositionsFromState(): void {
     const room =
       multiplayerClient.getRoom();
@@ -242,12 +309,14 @@ export class NetworkPlayerManager {
          * older server echo packet on every state synchronization.
          */
         if (isLocal) {
-          if (!this.localMovementInitialized) {
-            const lobbyX =
-              this.getLobbyDisplayX(
-                player.x,
-              );
+          const lobbyX =
+            this.getLobbyDisplayX(
+              player.x,
+            );
 
+          if (
+            !this.localLobbyInputStarted
+          ) {
             this.localX = lobbyX;
             this.localY = player.y;
             view.targetX = lobbyX;
@@ -439,6 +508,13 @@ export class NetworkPlayerManager {
       this.localX = initialX;
       this.localY = player.y;
       this.localMovementInitialized = true;
+
+      if (
+        roomPhase === "lobby"
+      ) {
+        this.localLobbyInputStarted =
+          false;
+      }
     }
   }
 
@@ -904,6 +980,14 @@ export class NetworkPlayerManager {
       view.targetX = view.container.x;
       view.targetY = view.container.y;
       this.localMovementInitialized = true;
+    }
+
+    if (
+      multiplayerClient.getRoom()
+        ?.state?.phase === "lobby"
+    ) {
+      this.localLobbyInputStarted =
+        true;
     }
 
     direction.normalize();
