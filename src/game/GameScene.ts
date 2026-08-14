@@ -107,6 +107,7 @@ export class GameScene extends Phaser.Scene {
     private brushShapeKey!: Phaser.Input.Keyboard.Key;
     private spectatorKey!: Phaser.Input.Keyboard.Key;
     private undoPaintKey!: Phaser.Input.Keyboard.Key;
+    private redoPaintKey!: Phaser.Input.Keyboard.Key;
     private shiftPaintKey!: Phaser.Input.Keyboard.Key;
     private controlPaintKey!: Phaser.Input.Keyboard.Key;
 
@@ -779,6 +780,17 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
+        /*
+         * Two-finger zoom is never paint. Cancel a first-finger preview
+         * before the pinch starts so zooming cannot accidentally draw.
+         */
+        if (
+            this.mobilePendingPaintPointerId >= 0
+        ) {
+            this.clearMobilePendingPaint();
+            this.isPainting = false;
+        }
+
         const distance =
             Phaser.Math.Distance.Between(
                 points[0].x,
@@ -1136,11 +1148,13 @@ export class GameScene extends Phaser.Scene {
     private activeStrokeTargetSessionId = '';
     private currentStrokeHistoryPoints: NetworkPaintPoint[] = [];
     private localPaintHistory: NetworkPaintStroke[] = [];
+    private redoPaintHistory: NetworkPaintStroke[] = [];
     private straightLineStart?: NetworkPaintPoint;
     private straightLineStartWorld?: Phaser.Math.Vector2;
     private straightLinePreview?: Phaser.GameObjects.Graphics;
     private straightLineModeActive = false;
     private undoPaintButton?: Phaser.GameObjects.Text;
+    private redoPaintButton?: Phaser.GameObjects.Text;
     private mobilePaintPrecisionRing?: Phaser.GameObjects.Arc;
     private mobilePaintPrecisionCrosshair?: Phaser.GameObjects.Graphics;
     private spectatorButton?: Phaser.GameObjects.Text;
@@ -1204,6 +1218,9 @@ export class GameScene extends Phaser.Scene {
     private mobileTouchPoints =
         new Map<number, Phaser.Math.Vector2>();
     private mobilePinchDistance = 0;
+    private mobilePendingPaintPointerId = -1;
+    private mobilePendingPaintStartScreen?: Phaser.Math.Vector2;
+    private mobilePendingPaintStartWorld?: Phaser.Math.Vector2;
     private eyedropperArmed = false;
     private eyedropperButton?: Phaser.GameObjects.Text;
     private eyedropperPointerId = -1;
@@ -2310,6 +2327,15 @@ export class GameScene extends Phaser.Scene {
                 )
             ) {
                 this.undoLastPaintStroke();
+            }
+
+            if (
+                this.controlPaintKey.isDown &&
+                Phaser.Input.Keyboard.JustDown(
+                    this.redoPaintKey,
+                )
+            ) {
+                this.redoLastPaintStroke();
             }
         }
 
@@ -9654,9 +9680,9 @@ export class GameScene extends Phaser.Scene {
 
         const panel = this.add
             .rectangle(
-                320,
+                345,
                 this.gameHeight - 64,
-                620,
+                670,
                 110,
                 0xfff4d6,
                 0.93,
@@ -10032,6 +10058,72 @@ export class GameScene extends Phaser.Scene {
 
         this.paletteObjects.push(
             this.undoPaintButton,
+        );
+
+        this.redoPaintButton =
+            this.add.text(
+                635,
+                this.gameHeight - 78,
+                `↷ ${tr('다시 실행')}`,
+                {
+                    fontFamily:
+                        'monospace',
+                    fontSize: '9px',
+                    fontStyle: 'bold',
+                    color: '#26352b',
+                    backgroundColor:
+                        '#dfeeda',
+                    fixedWidth: 76,
+                    fixedHeight: 28,
+                    align: 'center',
+                    padding: {
+                        top: 7,
+                    },
+                },
+            )
+                .setOrigin(0.5)
+                .setDepth(873)
+                .setVisible(false)
+                .setInteractive({
+                    useHandCursor: true,
+                });
+
+        this.redoPaintButton.on(
+            'pointerdown',
+            (
+                pointer:
+                    Phaser.Input.Pointer,
+            ) => {
+                pointer.event
+                    ?.preventDefault?.();
+                pointer.event
+                    ?.stopPropagation?.();
+
+                this.isPainting = false;
+                this.finishActivePaintStroke();
+                this.clearStraightLinePreview();
+
+                this.redoLastPaintStroke();
+            },
+        );
+
+        this.redoPaintButton.on(
+            'pointerup',
+            (
+                pointer:
+                    Phaser.Input.Pointer,
+            ) => {
+                pointer.event
+                    ?.preventDefault?.();
+                pointer.event
+                    ?.stopPropagation?.();
+
+                this.isPainting = false;
+            },
+        );
+
+        this.paletteObjects.push(
+            this.redoPaintButton,
         );
 
         const sliderMinX = 320;
@@ -10967,7 +11059,11 @@ export class GameScene extends Phaser.Scene {
                 tr('휠      확대 / 축소'),
                 tr('Ctrl+휠 브러시 크기'),
                 tr('Shift+드래그  직선 그리기'),
+                this.mobileControlsEnabled
+                    ? tr('터치  미리보기 · 움직이면 색칠')
+                    : '',
                 tr('Ctrl+Z  한 단계 되돌리기'),
+                tr('Ctrl+Y  한 단계 다시 실행'),
                 tr('팔레트  브러시 모양'),
                 tr('B       모양 전환'),
                 tr(`현재 ${this.getBrushShapeLabel()} · ${this.brushSize}`),
@@ -11490,6 +11586,177 @@ export class GameScene extends Phaser.Scene {
             .setVisible(false);
     }
 
+    private showMobilePendingPaintPreview(
+        pointer: Phaser.Input.Pointer,
+    ): void {
+        const target =
+            this.getPaintInputWorldPoint(
+                pointer,
+            );
+
+        this.updateMobilePaintPrecisionGuide(
+            pointer,
+        );
+
+        this.paintPreview
+            .setPosition(
+                target.x,
+                target.y,
+            );
+
+        this.redrawPaintPreview();
+
+        /*
+         * Tap shows the exact color + footprint that WOULD be painted,
+         * but does not modify the character yet.
+         */
+        this.paintPreview
+            .setAlpha(0.72)
+            .setVisible(true);
+    }
+
+    private clearMobilePendingPaint(
+        hidePreview = true,
+    ): void {
+        this.mobilePendingPaintPointerId =
+            -1;
+
+        this.mobilePendingPaintStartScreen =
+            undefined;
+
+        this.mobilePendingPaintStartWorld =
+            undefined;
+
+        if (hidePreview) {
+            this.paintPreview
+                ?.setAlpha(1)
+                .setVisible(false);
+
+            this.hideMobilePaintPrecisionGuide();
+        }
+    }
+
+    private beginMobilePaintAfterDrag(
+        pointer: Phaser.Input.Pointer,
+    ): boolean {
+        if (
+            this.mobilePendingPaintPointerId < 0 ||
+            pointer.id !==
+                this.mobilePendingPaintPointerId ||
+            !this.mobilePendingPaintStartScreen ||
+            !this.mobilePendingPaintStartWorld ||
+            !pointer.isDown ||
+            this.phase !== 'paint' ||
+            !this.isMultiplayerSession()
+        ) {
+            return false;
+        }
+
+        const movedScreenPixels =
+            Phaser.Math.Distance.Between(
+                this.mobilePendingPaintStartScreen.x,
+                this.mobilePendingPaintStartScreen.y,
+                pointer.x,
+                pointer.y,
+            );
+
+        /*
+         * A pure tap is preview-only.
+         * The first real movement (>= 1 screen pixel) commits painting.
+         */
+        if (movedScreenPixels < 1) {
+            this.showMobilePendingPaintPreview(
+                pointer,
+            );
+            return true;
+        }
+
+        const startTarget =
+            this.mobilePendingPaintStartWorld.clone();
+
+        const currentTarget =
+            this.getPaintInputWorldPoint(
+                pointer,
+            );
+
+        this.paintPreview
+            .setAlpha(1);
+
+        const startPoint =
+            this.networkPlayerManager
+                .paintLocalPlayer(
+                    startTarget.x,
+                    startTarget.y,
+                    this.brushTextureKey,
+                    this.paintColor,
+                    this.brushSize,
+                    this.brushShape,
+                );
+
+        if (!startPoint) {
+            this.clearMobilePendingPaint(
+                false,
+            );
+            return true;
+        }
+
+        this.playPaintSound();
+        this.isPainting = true;
+        this.activeStrokeTargetSessionId =
+            multiplayerClient
+                .getSessionId() ?? '';
+
+        this.activeStrokePoints = [
+            startPoint,
+        ];
+
+        this.currentStrokeHistoryPoints = [
+            startPoint,
+        ];
+
+        this.straightLineStart = {
+            x: startPoint.x,
+            y: startPoint.y,
+        };
+
+        this.straightLineStartWorld =
+            startTarget.clone();
+
+        this.straightLineModeActive =
+            false;
+
+        /*
+         * Immediately continue from the preview point to the first moved
+         * point, so enabling the 1px threshold does not create a gap.
+         */
+        const currentPoint =
+            this.networkPlayerManager
+                .paintLocalPlayer(
+                    currentTarget.x,
+                    currentTarget.y,
+                    this.brushTextureKey,
+                    this.paintColor,
+                    this.brushSize,
+                    this.brushShape,
+                );
+
+        if (currentPoint) {
+            this.interpolateActivePaintStroke(
+                currentPoint,
+            );
+        }
+
+        this.clearMobilePendingPaint(
+            false,
+        );
+
+        this.updateMobilePaintPrecisionGuide(
+            pointer,
+        );
+
+        return true;
+    }
+
     private updateStraightLinePreview(
         pointer: Phaser.Input.Pointer,
     ): void {
@@ -11571,6 +11838,8 @@ export class GameScene extends Phaser.Scene {
                     this.eyedropperButton ||
                 object ===
                     this.undoPaintButton ||
+                object ===
+                    this.redoPaintButton ||
                 object ===
                     this.spectatorButton ||
                 object ===
@@ -11758,6 +12027,36 @@ export class GameScene extends Phaser.Scene {
                             pointer,
                         );
 
+                    if (
+                        this.mobileControlsEnabled
+                    ) {
+                        /*
+                         * Mobile safety mode:
+                         * first touch only previews. Painting begins after
+                         * the finger moves at least one screen pixel.
+                         */
+                        this.finishActivePaintStroke();
+                        this.isPainting = false;
+
+                        this.mobilePendingPaintPointerId =
+                            pointer.id;
+
+                        this.mobilePendingPaintStartScreen =
+                            new Phaser.Math.Vector2(
+                                pointer.x,
+                                pointer.y,
+                            );
+
+                        this.mobilePendingPaintStartWorld =
+                            paintTarget.clone();
+
+                        this.showMobilePendingPaintPreview(
+                            pointer,
+                        );
+
+                        return;
+                    }
+
                     this.updateMobilePaintPrecisionGuide(
                         pointer,
                     );
@@ -11859,6 +12158,32 @@ export class GameScene extends Phaser.Scene {
                     this.updateMobilePaintPrecisionGuide(
                         pointer,
                     );
+                }
+
+                if (
+                    this.mobileControlsEnabled &&
+                    pointer.id ===
+                        this.mobilePendingPaintPointerId
+                ) {
+                    const handledPending =
+                        this.beginMobilePaintAfterDrag(
+                            pointer,
+                        );
+
+                    if (
+                        handledPending &&
+                        !this.isPainting
+                    ) {
+                        return;
+                    }
+
+                    /*
+                     * If painting just started in this move event, it already
+                     * painted/interpolated to the current point above.
+                     */
+                    if (handledPending) {
+                        return;
+                    }
                 }
 
                 if (
@@ -11981,6 +12306,20 @@ export class GameScene extends Phaser.Scene {
                 }
 
                 if (
+                    this.mobileControlsEnabled &&
+                    pointer.id ===
+                        this.mobilePendingPaintPointerId
+                ) {
+                    /*
+                     * Finger lifted before crossing the 1px threshold:
+                     * preview disappears and absolutely no paint is applied.
+                     */
+                    this.clearMobilePendingPaint();
+                    this.isPainting = false;
+                    return;
+                }
+
+                if (
                     this.phase === 'paint' &&
                     this.isMultiplayerSession() &&
                     this.isPainting &&
@@ -12027,6 +12366,22 @@ export class GameScene extends Phaser.Scene {
 
                 this.isPainting = false;
                 this.finishActivePaintStroke();
+            },
+        );
+
+        this.input.on(
+            Phaser.Input.Events.POINTER_UP_OUTSIDE,
+            (
+                pointer:
+                    Phaser.Input.Pointer,
+            ) => {
+                if (
+                    pointer.id ===
+                        this.mobilePendingPaintPointerId
+                ) {
+                    this.clearMobilePendingPaint();
+                    this.isPainting = false;
+                }
             },
         );
 
@@ -12391,6 +12746,13 @@ export class GameScene extends Phaser.Scene {
             });
 
             /*
+             * Standard Undo/Redo behavior:
+             * once the player draws something new after Undo, the old Redo
+             * branch is no longer valid.
+             */
+            this.redoPaintHistory = [];
+
+            /*
              * Keep enough useful undo depth without allowing an endless
              * memory history on long paint sessions.
              */
@@ -12413,28 +12775,7 @@ export class GameScene extends Phaser.Scene {
         this.clearStraightLinePreview();
     }
 
-    private undoLastPaintStroke(): void {
-        if (
-            this.phase !== 'paint' ||
-            !this.isMultiplayerSession()
-        ) {
-            return;
-        }
-
-        /*
-         * If Undo was pressed while a stroke was active, finish it first.
-         * That active stroke becomes the step that is removed below.
-         */
-        this.finishActivePaintStroke();
-
-        if (
-            this.localPaintHistory.length === 0
-        ) {
-            return;
-        }
-
-        this.localPaintHistory.pop();
-
+    private rebuildLocalPaintFromHistory(): void {
         const sessionId =
             multiplayerClient.getSessionId();
 
@@ -12443,18 +12784,11 @@ export class GameScene extends Phaser.Scene {
         }
 
         /*
-         * IMPORTANT:
-         * The server validates normal brush sizes (1..20). The old Undo sent
-         * one 64px brush, so remote clients could reject/ignore that reset
-         * while the local client still appeared correct.
+         * Network-synchronized repaint:
+         * 1) cover the full authoritative silhouette with legal white stamps
+         * 2) replay every currently active stroke in original order
          *
-         * Two legal 20px square stamps cover the complete authoritative
-         * 80x120 character silhouette:
-         *   upper: head + torso/arms
-         *   lower: torso + legs
-         *
-         * Colyseus preserves message order, therefore every remote client
-         * receives: WHITE RESET -> retained strokes replay.
+         * Every client receives the same ordered paint_stroke messages.
          */
         const resetStroke:
             NetworkPaintStroke = {
@@ -12519,9 +12853,82 @@ export class GameScene extends Phaser.Scene {
                     );
             },
         );
+    }
+
+    private undoLastPaintStroke(): void {
+        if (
+            this.phase !== 'paint' ||
+            !this.isMultiplayerSession()
+        ) {
+            return;
+        }
+
+        this.finishActivePaintStroke();
+
+        const removedStroke =
+            this.localPaintHistory.pop();
+
+        if (!removedStroke) {
+            return;
+        }
+
+        /*
+         * Undo moves the stroke to the Redo stack rather than discarding it.
+         */
+        this.redoPaintHistory.push(
+            removedStroke,
+        );
+
+        if (
+            this.redoPaintHistory.length >
+            40
+        ) {
+            this.redoPaintHistory.shift();
+        }
+
+        this.rebuildLocalPaintFromHistory();
 
         this.showStatus(
             tr('한 단계 되돌렸습니다.'),
+        );
+    }
+
+    private redoLastPaintStroke(): void {
+        if (
+            this.phase !== 'paint' ||
+            !this.isMultiplayerSession()
+        ) {
+            return;
+        }
+
+        this.finishActivePaintStroke();
+
+        const restoredStroke =
+            this.redoPaintHistory.pop();
+
+        if (!restoredStroke) {
+            return;
+        }
+
+        this.localPaintHistory.push(
+            restoredStroke,
+        );
+
+        if (
+            this.localPaintHistory.length >
+            40
+        ) {
+            this.localPaintHistory.shift();
+        }
+
+        /*
+         * Rebuild and broadcast the same complete paint state used by Undo,
+         * so Redo is visible on every connected player's screen as well.
+         */
+        this.rebuildLocalPaintFromHistory();
+
+        this.showStatus(
+            tr('한 단계 다시 실행했습니다.'),
         );
     }
 
@@ -13061,30 +13468,180 @@ export class GameScene extends Phaser.Scene {
                         }
                     }
 
-                    try {
-                        const paintVisual =
-                            this.networkPlayerManager
-                                ?.getLocalPaintVisual?.();
+                    /*
+                     * Reconstruct the current camouflage directly from the
+                     * authoritative local stroke history.
+                     *
+                     * This is intentionally independent from Phaser/WebGL
+                     * RenderTexture readback, which is unreliable on several
+                     * mobile browsers. Undo/Redo already mutate this same
+                     * localPaintHistory, so the loupe automatically shows the
+                     * exact current painted state.
+                     */
+                    bodyContext.save();
+                    bodyContext.globalCompositeOperation =
+                        'source-atop';
 
-                        if (paintVisual?.source) {
-                            bodyContext.drawImage(
-                                paintVisual.source,
+                    const drawHistoryPoint = (
+                        stroke:
+                            NetworkPaintStroke,
+                        point:
+                            NetworkPaintPoint,
+                    ): void => {
+                        const radius =
+                            Math.max(
+                                1,
+                                Math.round(
+                                    stroke.size,
+                                ),
+                            );
+
+                        bodyContext.fillStyle =
+                            `#${stroke.color
+                                .toString(16)
+                                .padStart(6, '0')}`;
+
+                        if (
+                            stroke.size === 1
+                        ) {
+                            bodyContext.fillRect(
+                                Math.round(
+                                    point.x,
+                                ),
+                                Math.round(
+                                    point.y,
+                                ),
+                                1,
+                                1,
+                            );
+                            return;
+                        }
+
+                        if (
+                            stroke.shape ===
+                            'square'
+                        ) {
+                            bodyContext.fillRect(
+                                Math.round(
+                                    point.x,
+                                ) - radius,
+                                Math.round(
+                                    point.y,
+                                ) - radius,
+                                radius * 2 + 1,
+                                radius * 2 + 1,
+                            );
+                            return;
+                        }
+
+                        if (
+                            stroke.shape ===
+                            'circle'
+                        ) {
+                            bodyContext.beginPath();
+                            bodyContext.arc(
+                                point.x,
+                                point.y,
+                                radius,
                                 0,
-                                0,
-                                80,
-                                120,
-                                0,
-                                0,
-                                80,
-                                120,
+                                Math.PI * 2,
+                            );
+                            bodyContext.fill();
+                            return;
+                        }
+
+                        /*
+                         * DOT CIRCLE keeps the same pixel-circle geometry
+                         * used by the actual brush.
+                         */
+                        for (
+                            let offsetY =
+                                -radius;
+                            offsetY <=
+                                radius;
+                            offsetY += 1
+                        ) {
+                            const halfWidth =
+                                Math.floor(
+                                    Math.sqrt(
+                                        Math.max(
+                                            0,
+                                            radius *
+                                                radius -
+                                            offsetY *
+                                                offsetY,
+                                        ),
+                                    ),
+                                );
+
+                            bodyContext.fillRect(
+                                Math.round(
+                                    point.x,
+                                ) -
+                                    halfWidth,
+                                Math.round(
+                                    point.y,
+                                ) +
+                                    offsetY,
+                                halfWidth * 2 +
+                                    1,
+                                1,
                             );
                         }
-                    } catch (error) {
-                        console.warn(
-                            '[Chameleon Hunt] eyedropper paint layer skipped; body silhouette preserved',
-                            error,
+                    };
+
+                    this.localPaintHistory
+                        .forEach(
+                            (stroke) => {
+                                stroke.points
+                                    .forEach(
+                                        (point) => {
+                                            drawHistoryPoint(
+                                                stroke,
+                                                point,
+                                            );
+                                        },
+                                    );
+                            },
                         );
+
+                    /*
+                     * Normally eyedropper arming finishes the active stroke,
+                     * but include it defensively so the loupe never lags one
+                     * gesture behind.
+                     */
+                    if (
+                        this.currentStrokeHistoryPoints
+                            .length > 0
+                    ) {
+                        const activeStroke:
+                            NetworkPaintStroke = {
+                                targetSessionId:
+                                    multiplayerClient
+                                        .getSessionId() ??
+                                    '',
+                                color:
+                                    this.paintColor,
+                                size:
+                                    this.brushSize,
+                                shape:
+                                    this.brushShape,
+                                points:
+                                    this.currentStrokeHistoryPoints,
+                            };
+
+                        activeStroke.points
+                            .forEach(
+                                (point) => {
+                                    drawHistoryPoint(
+                                        activeStroke,
+                                        point,
+                                    );
+                                },
+                            );
                     }
+
+                    bodyContext.restore();
 
                     sceneContext.drawImage(
                         bodyCanvas,
@@ -14394,6 +14951,10 @@ export class GameScene extends Phaser.Scene {
             Phaser.Input.Keyboard.KeyCodes.Z,
         );
 
+        this.redoPaintKey = keyboard.addKey(
+            Phaser.Input.Keyboard.KeyCodes.Y,
+        );
+
         this.shiftPaintKey = keyboard.addKey(
             Phaser.Input.Keyboard.KeyCodes.SHIFT,
         );
@@ -14405,6 +14966,7 @@ export class GameScene extends Phaser.Scene {
         keyboard.addCapture([
             Phaser.Input.Keyboard.KeyCodes.TAB,
             Phaser.Input.Keyboard.KeyCodes.Z,
+            Phaser.Input.Keyboard.KeyCodes.Y,
             Phaser.Input.Keyboard.KeyCodes.SPACE,
             Phaser.Input.Keyboard.KeyCodes.UP,
             Phaser.Input.Keyboard.KeyCodes.DOWN,
@@ -14932,7 +15494,9 @@ export class GameScene extends Phaser.Scene {
 
     private enterPaintPhase(): void {
         this.localPaintHistory = [];
+        this.redoPaintHistory = [];
         this.currentStrokeHistoryPoints = [];
+        this.clearMobilePendingPaint();
         this.straightLineStart = undefined;
         this.straightLineStartWorld =
             undefined;

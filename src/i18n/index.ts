@@ -5,6 +5,12 @@ const STORAGE_KEY = 'chameleon-hunt-language';
 type Dict = Record<string, string>;
 
 const ja: Dict = {
+  "터치  미리보기 · 움직이면 색칠":"タッチ  プレビュー · 動かすと塗る",
+
+  "다시 실행":"やり直す",
+  "한 단계 다시 실행했습니다.":"1つやり直しました。",
+  "Ctrl+Y  한 단계 다시 실행":"Ctrl+Y  1段階やり直す",
+
   "헌터는 스포이드를 사용할 수 없습니다.":"HUNTERはスポイトを使用できません。",
 
   "TAB · 시야 전환":"TAB · 視点切替",
@@ -69,6 +75,12 @@ const ja: Dict = {
 };
 
 const en: Dict = {
+  "터치  미리보기 · 움직이면 색칠":"Touch  Preview · Move to paint",
+
+  "다시 실행":"Redo",
+  "한 단계 다시 실행했습니다.":"Redid one paint stroke.",
+  "Ctrl+Y  한 단계 다시 실행":"Ctrl+Y  Redo one stroke",
+
   "헌터는 스포이드를 사용할 수 없습니다.":"Hunters cannot use the eyedropper.",
 
   "TAB · 시야 전환":"TAB · Switch View",
@@ -122,6 +134,12 @@ const en: Dict = {
 };
 
 const zh: Dict = {
+  "터치  미리보기 · 움직이면 색칠":"触摸  预览 · 移动后涂色",
+
+  "다시 실행":"重做",
+  "한 단계 다시 실행했습니다.":"已重做一步涂色。",
+  "Ctrl+Y  한 단계 다시 실행":"Ctrl+Y  重做一步",
+
   "헌터는 스포이드를 사용할 수 없습니다.":"猎人无法使用吸管工具。",
 
   "TAB · 시야 전환":"TAB · 切换视角",
@@ -172,6 +190,12 @@ const zh: Dict = {
 };
 
 const ko: Dict = {
+  "터치  미리보기 · 움직이면 색칠":"터치  미리보기 · 움직이면 색칠",
+
+  "다시 실행":"다시 실행",
+  "한 단계 다시 실행했습니다.":"한 단계 다시 실행했습니다.",
+  "Ctrl+Y  한 단계 다시 실행":"Ctrl+Y  한 단계 다시 실행",
+
   "헌터는 스포이드를 사용할 수 없습니다.":"헌터는 스포이드를 사용할 수 없습니다.",
 
   "TAB · 시야 전환":"TAB · 시야 전환",
