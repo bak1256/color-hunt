@@ -3996,6 +3996,14 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
+        /*
+         * Critical gameplay invariant:
+         * the visual remote position must be the current server Schema
+         * position before rendering/movement interpolation this frame.
+         */
+        this.networkPlayerManager
+            .syncAuthoritativePositionsNow();
+
         const room =
             multiplayerClient
                 .getRoom();
@@ -7868,6 +7876,11 @@ export class GameScene extends Phaser.Scene {
         this.paintPreview.setDepth(
             visible ? 970 : 200,
         );
+
+        this.straightLinePreview
+            ?.setDepth(
+                visible ? 975 : 205,
+            );
     }
 
     private clearStatus(): void {
@@ -9873,27 +9886,14 @@ export class GameScene extends Phaser.Scene {
                 pointer:
                     Phaser.Input.Pointer,
             ) => {
-                /*
-                 * Consume the button press only.
-                 * Do NOT arm/sample on pointerdown because the Scene-level
-                 * pointerdown handler runs during the same physical touch.
-                 */
+                pointer.event
+                    ?.preventDefault?.();
                 pointer.event
                     ?.stopPropagation?.();
 
                 this.finishActivePaintStroke();
                 this.isPainting = false;
-            },
-        );
-
-        this.eyedropperButton.on(
-            'pointerup',
-            (
-                pointer:
-                    Phaser.Input.Pointer,
-            ) => {
-                pointer.event
-                    ?.stopPropagation?.();
+                this.eyedropperPointerId = -1;
 
                 const localIsHunter =
                     this.isMultiplayerSession() &&
@@ -9901,32 +9901,36 @@ export class GameScene extends Phaser.Scene {
                         .canLocalControlHunter();
 
                 if (localIsHunter) {
-                    this.eyedropperArmed = false;
+                    this.eyedropperArmed =
+                        false;
+                    this.hideEyedropperMagnifier();
                     this.showStatus(
-                        tr('헌터는 숨겨진 배경을 스포이드할 수 없습니다. CAMO SWATCH를 사용하세요.'),
+                        tr('헌터는 스포이드를 사용할 수 없습니다.'),
                     );
                     this.updateEyedropperButtonUi();
                     return;
                 }
 
                 /*
-                 * The button press is now fully over. Arm the NEXT
-                 * background click/touch, never this UI press itself.
+                 * Arm on pointer DOWN. Mobile browsers can lose the object's
+                 * pointerup after touch movement, which previously left this
+                 * button apparently dead.
+                 *
+                 * Scene-level pointerdown sees this as UI and returns, so
+                 * arming here cannot accidentally sample the button itself.
                  */
                 this.eyedropperArmed =
                     !this.eyedropperArmed;
 
                 this.updateEyedropperButtonUi();
+                this.hideEyedropperMagnifier();
 
                 if (this.eyedropperArmed) {
-                    this.hideEyedropperMagnifier();
                     this.showStatus(
                         this.mobileControlsEnabled
                             ? tr('스포이드: 배경을 누른 채 움직이고 손을 떼면 색상이 선택됩니다')
                             : tr('스포이드: 배경에서 원하는 색을 클릭하세요'),
                     );
-                } else {
-                    this.hideEyedropperMagnifier();
                 }
             },
         );
@@ -11169,7 +11173,12 @@ export class GameScene extends Phaser.Scene {
 
         this.straightLinePreview =
             this.add.graphics()
-                .setDepth(205)
+                /*
+                 * Hunter customization uses player depth ~920 and paint
+                 * texture depth ~921. Keep the line preview above both so
+                 * Shift straight-line guidance is visible for Hunter too.
+                 */
+                .setDepth(975)
                 .setVisible(false);
 
         this.createBrushTexture();
@@ -11484,7 +11493,10 @@ export class GameScene extends Phaser.Scene {
             .lineStyle(
                 previewWidth,
                 this.paintColor,
-                0.48,
+                this.networkPlayerManager
+                    ?.canLocalControlHunter?.()
+                    ? 0.68
+                    : 0.48,
             )
             .lineBetween(
                 this.straightLineStartWorld.x,
@@ -11493,9 +11505,12 @@ export class GameScene extends Phaser.Scene {
                 target.y,
             )
             .lineStyle(
-                1.5,
+                this.networkPlayerManager
+                    ?.canLocalControlHunter?.()
+                    ? 2.5
+                    : 1.5,
                 0x172027,
-                0.78,
+                0.88,
             )
             .lineBetween(
                 this.straightLineStartWorld.x,
@@ -12857,11 +12872,12 @@ export class GameScene extends Phaser.Scene {
             sampleSize,
         );
 
-        const paintVisual =
-            this.networkPlayerManager
-                ?.getLocalPaintVisual?.();
+        try {
+            const paintVisual =
+                this.networkPlayerManager
+                    ?.getLocalPaintVisual?.();
 
-        if (paintVisual) {
+            if (paintVisual) {
             const worldPerSourceX =
                 bounds.width /
                 sourceImage.width;
@@ -12930,6 +12946,16 @@ export class GameScene extends Phaser.Scene {
                 destY,
                 destWidth,
                 destHeight,
+            );
+            }
+        } catch (error) {
+            /*
+             * Loupe overlay is optional. A browser/RenderTexture readback
+             * failure must never disable the actual eyedropper workflow.
+             */
+            console.warn(
+                '[Chameleon Hunt] eyedropper paint overlay skipped',
+                error,
             );
         }
 

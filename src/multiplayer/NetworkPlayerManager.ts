@@ -68,7 +68,7 @@ export class NetworkPlayerManager {
 
   private readonly hiderMoveSpeed = 180;
   private readonly hunterMoveSpeed = 125;
-  private readonly sendInterval = 50;
+  private readonly sendInterval = 33;
   private lastSendTime = 0;
 
   /*
@@ -76,8 +76,11 @@ export class NetworkPlayerManager {
    * 되감지 않도록 입력 직후 짧은 reconciliation grace를 둡니다.
    */
   private lastLocalMoveInputAt = 0;
-  private readonly localMoveReconcileGraceMs = 180;
-  private readonly localHardCorrectionDistance = 32;
+  private localWasMoving = false;
+  private lastAuthoritativeSyncAt = 0;
+  private readonly authoritativeSyncIntervalMs = 16;
+  private readonly localMoveReconcileGraceMs = 90;
+  private readonly localHardCorrectionDistance = 18;
 
   constructor(
     scene: Phaser.Scene,
@@ -103,6 +106,8 @@ export class NetworkPlayerManager {
     this.localX = 480;
     this.localY = 270;
     this.lastLocalMoveInputAt = 0;
+    this.localWasMoving = false;
+    this.lastAuthoritativeSyncAt = 0;
   }
 
   syncPlayersFromCurrentRoom(): void {
@@ -324,8 +329,19 @@ export class NetworkPlayerManager {
       player,
     );
 
+    const roomPhase =
+      multiplayerClient.getRoom()
+        ?.state?.phase;
+
+    const initialX =
+      roomPhase === "lobby"
+        ? this.getLobbyDisplayX(
+            player.x,
+          )
+        : player.x;
+
     container.setPosition(
-      player.x,
+      initialX,
       player.y,
     );
 
@@ -404,12 +420,14 @@ export class NetworkPlayerManager {
        * 생성 직후 서버 좌표를 컨테이너와 페인트 레이어에
        * 즉시 동일하게 적용합니다.
        */
-      createdView.targetX = player.x;
-      createdView.targetY = player.y;
+      createdView.targetX =
+        initialX;
+      createdView.targetY =
+        player.y;
 
       this.setViewPosition(
         createdView,
-        player.x,
+        initialX,
         player.y,
       );
     }
@@ -418,7 +436,7 @@ export class NetworkPlayerManager {
       /*
        * 화면에 보이는 초기 위치와 이동 기준을 서버 spawn 좌표로 통일합니다.
        */
-      this.localX = player.x;
+      this.localX = initialX;
       this.localY = player.y;
       this.localMovementInitialized = true;
     }
@@ -525,7 +543,7 @@ export class NetworkPlayerManager {
 
         this.setViewPosition(
           view,
-          player.x,
+          lobbyX,
           player.y,
         );
 
@@ -741,6 +759,58 @@ export class NetworkPlayerManager {
     this.players.delete(sessionId);
   }
 
+  syncAuthoritativePositionsNow(): void {
+    const room =
+      multiplayerClient.getRoom();
+
+    if (!room) {
+      return;
+    }
+
+    const now =
+      this.scene.time.now;
+
+    if (
+      now -
+        this.lastAuthoritativeSyncAt <
+      this.authoritativeSyncIntervalMs
+    ) {
+      return;
+    }
+
+    this.lastAuthoritativeSyncAt =
+      now;
+
+    /*
+     * Do not rely only on Colyseus player onChange callbacks.
+     * Read the current authoritative Schema every frame-scale tick.
+     * This guarantees the Hunter's rendered Hider position follows the
+     * same x/y the server uses for shotgun hit detection.
+     */
+    room.state.players?.forEach?.(
+      (
+        player: NetworkPlayerState,
+        sessionId: string,
+      ) => {
+        if (
+          this.players.has(
+            sessionId,
+          )
+        ) {
+          this.updatePlayer(
+            sessionId,
+            player,
+          );
+        } else {
+          this.addPlayer(
+            sessionId,
+            player,
+          );
+        }
+      },
+    );
+  }
+
   moveLocalPlayer(
     directionX: number,
     directionY: number,
@@ -770,8 +840,27 @@ export class NetworkPlayerManager {
       );
 
     if (direction.lengthSq() === 0) {
+      if (this.localWasMoving) {
+        /*
+         * A movement burst may end between sendInterval ticks. Send the
+         * final rendered coordinate immediately so the server hit position
+         * and every remote Hunter settle on exactly the same point.
+         */
+        multiplayerClient.sendMove(
+          this.localX,
+          this.localY,
+        );
+
+        this.lastSendTime =
+          this.scene.time.now;
+        this.localWasMoving =
+          false;
+      }
+
       return;
     }
+
+    this.localWasMoving = true;
 
     view.movingUntil =
       this.scene.time.now + 120;
@@ -1000,32 +1089,22 @@ export class NetworkPlayerManager {
           view.role === "hider"
         ) {
           const actuallyMoved =
-            distance > 0.35;
+            distance > 0.10;
 
-          if (actuallyMoved) {
-            view.movingUntil =
-              this.scene.time.now + 120;
+          /*
+           * Server x/y is shotgun authority. Never render a Hunt Hider at an
+           * interpolated/old coordinate, even for a single frame.
+           */
+          this.setViewPosition(
+            view,
+            view.targetX,
+            view.targetY,
+          );
 
-            this.setViewPosition(
-              view,
-              view.targetX,
-              view.targetY,
-            );
-          } else {
-            /*
-             * Never animate an idle Hider merely because an old movingUntil
-             * timestamp is still alive.
-             */
-            view.movingUntil = 0;
-
-            if (distance > 0.01) {
-              this.setViewPosition(
-                view,
-                view.targetX,
-                view.targetY,
-              );
-            }
-          }
+          view.movingUntil =
+            actuallyMoved
+              ? this.scene.time.now + 100
+              : 0;
 
           this.applyWalkMotion(
             view,

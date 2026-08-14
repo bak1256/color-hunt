@@ -5,6 +5,8 @@ const STORAGE_KEY = 'chameleon-hunt-language';
 type Dict = Record<string, string>;
 
 const ja: Dict = {
+  "헌터는 스포이드를 사용할 수 없습니다.":"HUNTERはスポイトを使用できません。",
+
   "TAB · 시야 전환":"TAB · 視点切替",
 
   "Shift+드래그  직선 그리기":"Shift+ドラッグ  直線を描く",
@@ -67,6 +69,8 @@ const ja: Dict = {
 };
 
 const en: Dict = {
+  "헌터는 스포이드를 사용할 수 없습니다.":"Hunters cannot use the eyedropper.",
+
   "TAB · 시야 전환":"TAB · Switch View",
 
   "Shift+드래그  직선 그리기":"Shift+Drag  Draw straight line",
@@ -118,6 +122,8 @@ const en: Dict = {
 };
 
 const zh: Dict = {
+  "헌터는 스포이드를 사용할 수 없습니다.":"猎人无法使用吸管工具。",
+
   "TAB · 시야 전환":"TAB · 切换视角",
 
   "Shift+드래그  직선 그리기":"Shift+拖动  绘制直线",
@@ -166,6 +172,8 @@ const zh: Dict = {
 };
 
 const ko: Dict = {
+  "헌터는 스포이드를 사용할 수 없습니다.":"헌터는 스포이드를 사용할 수 없습니다.",
+
   "TAB · 시야 전환":"TAB · 시야 전환",
 
   "Shift+드래그  직선 그리기":"Shift+드래그  직선 그리기",
