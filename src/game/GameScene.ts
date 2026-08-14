@@ -11391,22 +11391,45 @@ export class GameScene extends Phaser.Scene {
             this.brushShape ===
             'circle'
         ) {
+            const pixelScale =
+                multiplayerClient.isConnected() &&
+                this.phase === 'paint'
+                    ? this.networkPlayerManager
+                        .getLocalPlayerVisualScale()
+                    : 1;
+
+            const visibleRadius =
+                previewSize +
+                pixelScale * 0.5;
+
             this.paintPreview.fillCircle(
                 0,
                 0,
-                previewSize,
+                visibleRadius,
             );
             this.paintPreview.strokeCircle(
                 0,
                 0,
-                previewSize,
+                visibleRadius,
             );
             return;
         }
 
-        const diameter =
-            previewSize * 2;
+        const pixelScale =
+            multiplayerClient.isConnected() &&
+            this.phase === 'paint'
+                ? this.networkPlayerManager
+                    .getLocalPlayerVisualScale()
+                : 1;
 
+        const diameter =
+            previewSize * 2 +
+            pixelScale;
+
+        /*
+         * Actual square brush stamps integer cells from -radius..+radius,
+         * i.e. 2*radius+1 pixels. Match that footprint exactly.
+         */
         this.paintPreview.fillRect(
             -previewSize,
             -previewSize,
@@ -11491,6 +11514,81 @@ export class GameScene extends Phaser.Scene {
         );
     }
 
+    private getPaintPreviewWorldPoint(
+        pointer: Phaser.Input.Pointer,
+    ): Phaser.Math.Vector2 {
+        const target =
+            this.getPaintInputWorldPoint(
+                pointer,
+            );
+
+        if (
+            !this.isMultiplayerSession() ||
+            !this.networkPlayerManager
+        ) {
+            return target;
+        }
+
+        const container =
+            this.networkPlayerManager
+                .getLocalPlayerContainer();
+
+        if (!container) {
+            return target;
+        }
+
+        const scaleX =
+            container.scaleX || 1;
+
+        const scaleY =
+            container.scaleY || 1;
+
+        /*
+         * paintLocalPlayer() converts world -> character-local -> texture
+         * and rounds to an integer texture pixel before stamping.
+         *
+         * Do that exact same conversion here, then convert the snapped pixel
+         * back to world space. The visible brush therefore sits on the exact
+         * center of the pixels that will actually be painted.
+         */
+        const localX =
+            (
+                target.x -
+                container.x
+            ) /
+            scaleX;
+
+        const localY =
+            (
+                target.y -
+                container.y
+            ) /
+            scaleY;
+
+        const textureX =
+            Math.round(
+                localX + 40,
+            );
+
+        const textureY =
+            Math.round(
+                localY + 60,
+            );
+
+        return new Phaser.Math.Vector2(
+            container.x +
+                (
+                    textureX - 40
+                ) *
+                    scaleX,
+            container.y +
+                (
+                    textureY - 60
+                ) *
+                    scaleY,
+        );
+    }
+
     private ensureMobilePaintPrecisionGuide(): void {
         if (
             this.mobilePaintPrecisionRing &&
@@ -11534,7 +11632,7 @@ export class GameScene extends Phaser.Scene {
         this.ensureMobilePaintPrecisionGuide();
 
         const target =
-            this.getPaintInputWorldPoint(
+            this.getPaintPreviewWorldPoint(
                 pointer,
             );
 
@@ -11590,7 +11688,7 @@ export class GameScene extends Phaser.Scene {
         pointer: Phaser.Input.Pointer,
     ): void {
         const target =
-            this.getPaintInputWorldPoint(
+            this.getPaintPreviewWorldPoint(
                 pointer,
             );
 
@@ -11680,7 +11778,15 @@ export class GameScene extends Phaser.Scene {
             );
 
         this.paintPreview
-            .setAlpha(1);
+            .setAlpha(1)
+            .setPosition(
+                this.getPaintPreviewWorldPoint(
+                    pointer,
+                ).x,
+                this.getPaintPreviewWorldPoint(
+                    pointer,
+                ).y,
+            );
 
         const startPoint =
             this.networkPlayerManager
@@ -13934,13 +14040,30 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
+        const previewPoint =
+            this.mobileControlsEnabled
+                ? this.getPaintPreviewWorldPoint(
+                    pointer,
+                )
+                : new Phaser.Math.Vector2(
+                    pointer.worldX,
+                    pointer.worldY,
+                );
+
         this.paintPreview.setPosition(
-            pointer.worldX,
-            pointer.worldY,
+            previewPoint.x,
+            previewPoint.y,
         );
 
         this.redrawPaintPreview();
-        this.paintPreview.setVisible(true);
+        this.paintPreview
+            .setAlpha(
+                this.mobilePendingPaintPointerId >=
+                        0
+                    ? 0.72
+                    : 1,
+            )
+            .setVisible(true);
     }
 
     private updatePaintPreviewImmediately(): void {
@@ -13953,9 +14076,19 @@ export class GameScene extends Phaser.Scene {
 
         const pointer = this.input.activePointer;
 
+        const previewPoint =
+            this.mobileControlsEnabled
+                ? this.getPaintPreviewWorldPoint(
+                    pointer,
+                )
+                : new Phaser.Math.Vector2(
+                    pointer.worldX,
+                    pointer.worldY,
+                );
+
         this.paintPreview.setPosition(
-            pointer.worldX,
-            pointer.worldY,
+            previewPoint.x,
+            previewPoint.y,
         );
 
         this.redrawPaintPreview();
