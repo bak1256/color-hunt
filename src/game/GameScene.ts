@@ -4727,7 +4727,7 @@ export class GameScene extends Phaser.Scene {
             }
 
             loading?.setText(
-                tr(tr('방 목록을 불러오지 못했습니다.')),
+                tr('방 목록을 불러오지 못했습니다.'),
             );
         }
     }
@@ -9829,7 +9829,7 @@ export class GameScene extends Phaser.Scene {
             .text(
                 18,
                 118,
-                tr('ZOOM 1.0x\n마우스 휠'),
+                `ZOOM 1.0x\n${tr('마우스 휠')}`,
                 {
                     fontFamily: 'monospace',
                     fontSize: '12px',
