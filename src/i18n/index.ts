@@ -5,6 +5,8 @@ const STORAGE_KEY = 'chameleon-hunt-language';
 type Dict = Record<string, string>;
 
 const ja: Dict = {
+  "사냥 시간":"ハント時間",
+
   "내 캐릭터 꾸미기":"マイキャラを描く",
   "여기서 그린 모습은 대기실의 모든 플레이어에게 보입니다.":"ここで描いた見た目は待機室の全プレイヤーに表示されます。",
   "초기화":"リセット",
@@ -81,6 +83,8 @@ const ja: Dict = {
 };
 
 const en: Dict = {
+  "사냥 시간":"Hunt Time",
+
   "내 캐릭터 꾸미기":"Customize Character",
   "여기서 그린 모습은 대기실의 모든 플레이어에게 보입니다.":"Your drawing will be visible to everyone in the waiting room.",
   "초기화":"Reset",
@@ -146,6 +150,8 @@ const en: Dict = {
 };
 
 const zh: Dict = {
+  "사냥 시간":"狩猎时间",
+
   "내 캐릭터 꾸미기":"自定义角色",
   "여기서 그린 모습은 대기실의 모든 플레이어에게 보입니다.":"你在这里绘制的外观会显示给等待室中的所有玩家。",
   "초기화":"重置",
@@ -208,6 +214,8 @@ const zh: Dict = {
 };
 
 const ko: Dict = {
+  "사냥 시간":"사냥 시간",
+
   "내 캐릭터 꾸미기":"내 캐릭터 꾸미기",
   "여기서 그린 모습은 대기실의 모든 플레이어에게 보입니다.":"여기서 그린 모습은 대기실의 모든 플레이어에게 보입니다.",
   "초기화":"초기화",

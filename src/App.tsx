@@ -7,7 +7,7 @@ function App() {
       <header className="game-header">
         <div>
           <p className="eyebrow">2D camouflage shooter</p>
-          <h1>CHAMELEON HUNT</h1>
+          <h1>COLOR HUNT</h1>
         </div>
 
       </header>

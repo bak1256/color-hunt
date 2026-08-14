@@ -122,6 +122,7 @@ export type NetworkLobbySnapshot = {
   selectedMap?: string;
   activeMap?: string;
   paintDurationMs?: number;
+  huntDurationMs?: number;
   players: Array<
     NetworkPlayerState & {
       sessionId: string;
@@ -235,6 +236,7 @@ export class MultiplayerClient {
   private snapshotSelectedMap = "random";
   private snapshotActiveMap = "forest";
   private snapshotPaintDurationMs = 120_000;
+  private snapshotHuntDurationMs = 80_000;
 
   /*
    * create()가 성공한 순간의 sessionId를 기억합니다.
@@ -584,6 +586,18 @@ export class MultiplayerClient {
         ? durationMs
         : 120_000;
 
+    const huntDurationMs =
+      Number(
+        snapshot.huntDurationMs ??
+        this.snapshotHuntDurationMs,
+      );
+
+    this.snapshotHuntDurationMs =
+      [80_000, 100_000, 120_000]
+        .includes(huntDurationMs)
+        ? huntDurationMs
+        : 80_000;
+
     const incomingIds =
       new Set<string>();
 
@@ -750,6 +764,8 @@ private attachRoom(
     this.snapshotHostId = "";
     this.snapshotSelectedMap = "random";
     this.snapshotActiveMap = "forest";
+    this.snapshotPaintDurationMs = 120_000;
+    this.snapshotHuntDurationMs = 80_000;
 
     this.room = room;
     this.callbacks =
@@ -1350,6 +1366,26 @@ private attachRoom(
 
   getPaintDurationMs(): number {
     return this.snapshotPaintDurationMs;
+  }
+
+  sendHuntDurationSelection(
+    durationMs: number,
+  ): void {
+    if (
+      ![80_000, 100_000, 120_000]
+        .includes(durationMs)
+    ) {
+      return;
+    }
+
+    this.room?.send(
+      "select_hunt_duration",
+      { durationMs },
+    );
+  }
+
+  getHuntDurationMs(): number {
+    return this.snapshotHuntDurationMs;
   }
 
   sendStartGame(): void {

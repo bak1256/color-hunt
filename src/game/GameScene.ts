@@ -207,7 +207,7 @@ export class GameScene extends Phaser.Scene {
      * Timer
      */
     private paintDuration = 120;
-    private readonly huntDuration = 30;
+    private huntDuration = 80;
 
     private phaseEndTime = 0;
 
@@ -1079,6 +1079,8 @@ export class GameScene extends Phaser.Scene {
     private lobbyMovementHelpText!: Phaser.GameObjects.Text;
     private lobbyPaintDurationLabel!: Phaser.GameObjects.Text;
     private paintDurationButtons: Phaser.GameObjects.Text[] = [];
+    private lobbyHuntDurationLabel!: Phaser.GameObjects.Text;
+    private huntDurationButtons: Phaser.GameObjects.Text[] = [];
     private brushSizeSliderTrack?: Phaser.GameObjects.Rectangle;
     private brushSizeSliderFill?: Phaser.GameObjects.Rectangle;
     private brushSizeSliderKnob?: Phaser.GameObjects.Arc;
@@ -4372,8 +4374,15 @@ export class GameScene extends Phaser.Scene {
         this.lobbyHintText?.setVisible(false);
         this.lobbyMovementHelpText?.setVisible(false);
         this.lobbyPaintDurationLabel?.setVisible(false);
+        this.lobbyHuntDurationLabel?.setVisible(false);
 
         this.paintDurationButtons
+            .forEach(
+                (button) =>
+                    button.setVisible(false),
+            );
+
+        this.huntDurationButtons
             .forEach(
                 (button) =>
                     button.setVisible(false),
@@ -5371,25 +5380,10 @@ export class GameScene extends Phaser.Scene {
             )
             .setDepth(500);
 
-        const title = this.add
-            .text(
-                76,
-                82,
-                'CHAMELEON HUNT',
-                {
-                    fontFamily:
-                        '"Arial Black", Arial, sans-serif',
-                    fontSize: '32px',
-                    fontStyle: 'bold',
-                    color: '#2f6b45',
-                },
-            )
-            .setDepth(502);
-
         const subtitle = this.add
             .text(
                 78,
-                121,
+                92,
                 tr('위장하고, 숨고, 찾아내세요!'),
                 {
                     fontFamily:
@@ -5766,7 +5760,6 @@ export class GameScene extends Phaser.Scene {
 
         this.mainMenuObjects.push(
             panel,
-            title,
             subtitle,
             roomCard,
             actionCard,
@@ -6011,7 +6004,7 @@ export class GameScene extends Phaser.Scene {
                 .setDepth(390);
 
         /*
-         * The page already has the large CHAMELEON HUNT header.
+         * The page already has the large COLOR HUNT header.
          * Keep this object only for compatibility, but never render a second
          * title inside the waiting-room panel.
          */
@@ -6192,14 +6185,14 @@ export class GameScene extends Phaser.Scene {
         this.lobbyPaintDurationLabel =
             this.add.text(
                 824,
-                326,
+                314,
                 tr('색칠 시간'),
                 {
                     fontFamily:
                         'Arial, sans-serif',
-                    fontSize: '11px',
+                    fontSize: '10px',
                     fontStyle: 'bold',
-                    color: '#b9c6bf',
+                    color: '#8da096',
                 },
             )
                 .setOrigin(0.5)
@@ -6218,7 +6211,7 @@ export class GameScene extends Phaser.Scene {
                         return this.makeMenuButton(
                             754 +
                                 index * 70,
-                            360,
+                            338,
                             `${seconds}s`,
                             () => {
                                 if (
@@ -6238,10 +6231,66 @@ export class GameScene extends Phaser.Scene {
                             .setDepth(406)
                             .setFixedSize(
                                 62,
-                                30,
+                                26,
                             )
                             .setAlign('center')
-                            .setFontSize(11);
+                            .setFontSize(10);
+                    },
+                );
+
+        this.lobbyHuntDurationLabel =
+            this.add.text(
+                824,
+                366,
+                tr('사냥 시간'),
+                {
+                    fontFamily:
+                        'Arial, sans-serif',
+                    fontSize: '10px',
+                    fontStyle: 'bold',
+                    color: '#8da096',
+                },
+            )
+                .setOrigin(0.5)
+                .setDepth(406);
+
+        this.huntDurationButtons =
+            [80_000, 100_000, 120_000]
+                .map(
+                    (
+                        durationMs,
+                        index,
+                    ) => {
+                        const seconds =
+                            durationMs / 1000;
+
+                        return this.makeMenuButton(
+                            754 +
+                                index * 70,
+                            390,
+                            `${seconds}s`,
+                            () => {
+                                if (
+                                    multiplayerClient
+                                        .isHost() &&
+                                    multiplayerClient
+                                        .getPhase() ===
+                                        'lobby'
+                                ) {
+                                    multiplayerClient
+                                        .sendHuntDurationSelection(
+                                            durationMs,
+                                        );
+                                }
+                            },
+                        )
+                            .setDepth(406)
+                            .setFixedSize(
+                                62,
+                                26,
+                            )
+                            .setAlign('center')
+                            .setFontSize(10);
                     },
                 );
 
@@ -6251,7 +6300,7 @@ export class GameScene extends Phaser.Scene {
         this.startGameButton =
             this.add.text(
                 824,
-                414,
+                434,
                 tr('START GAME'),
                 {
                     fontFamily:
@@ -6313,7 +6362,7 @@ export class GameScene extends Phaser.Scene {
         this.lobbyFooterDivider =
             this.add.rectangle(
                 824,
-                462,
+                474,
                 214,
                 1,
                 0xb7cf9f,
@@ -6324,7 +6373,7 @@ export class GameScene extends Phaser.Scene {
         this.inviteLinkButton =
             this.makeMenuButton(
                 768,
-                492,
+                500,
                 tr('초대 링크 복사'),
                 () => {
                     void this.copyInviteLink();
@@ -6351,7 +6400,7 @@ export class GameScene extends Phaser.Scene {
         this.leaveRoomButton =
             this.makeMenuButton(
                 880,
-                492,
+                500,
                 tr('로비로 나가기'),
                 () => {
                     void this.leaveCurrentRoomToLobby();
@@ -6717,9 +6766,11 @@ export class GameScene extends Phaser.Scene {
             this.mapPreviousButton?.setVisible(false);
             this.mapNextButton?.setVisible(false);
             this.paintDurationButtons.forEach((button) => button.setVisible(false));
+            this.huntDurationButtons.forEach((button) => button.setVisible(false));
             this.lobbyHintText?.setVisible(false);
             this.lobbyMovementHelpText?.setVisible(false);
             this.lobbyPaintDurationLabel?.setVisible(false);
+            this.lobbyHuntDurationLabel?.setVisible(false);
             return;
         }
 
@@ -6792,6 +6843,18 @@ export class GameScene extends Phaser.Scene {
             )
             .setVisible(isLobby);
 
+        this.lobbyHuntDurationLabel
+            .setText(
+                `${tr('사냥 시간')} · ${
+                    Math.round(
+                        multiplayerClient
+                            .getHuntDurationMs() /
+                        1000,
+                    )
+                }s`,
+            )
+            .setVisible(isLobby);
+
         this.inviteLinkButton
             ?.setText(
                 tr('초대 링크 복사'),
@@ -6842,6 +6905,38 @@ export class GameScene extends Phaser.Scene {
                         .setAlpha(
                             option ===
                                 selectedPaintDuration
+                                ? 1
+                                : isHost
+                                    ? 0.58
+                                    : 0.25,
+                        );
+
+                    if (isHost) {
+                        button.setInteractive({
+                            useHandCursor:
+                                true,
+                        });
+                    } else {
+                        button.disableInteractive();
+                    }
+                },
+            );
+
+        const selectedHuntDuration =
+            multiplayerClient
+                .getHuntDurationMs();
+
+        this.huntDurationButtons
+            .forEach(
+                (button, index) => {
+                    const option =
+                        [80_000, 100_000, 120_000][index];
+
+                    button
+                        .setVisible(isLobby)
+                        .setAlpha(
+                            option ===
+                                selectedHuntDuration
                                 ? 1
                                 : isHost
                                     ? 0.58
@@ -9065,7 +9160,7 @@ export class GameScene extends Phaser.Scene {
         this.phaseEndTime = 0;
 
         /*
-         * Lobby 상단 CHAMELEON HUNT · LOBBY 배너는 사용하지 않습니다.
+         * Lobby 상단 COLOR HUNT · LOBBY 배너는 사용하지 않습니다.
          */
         this.phaseText
             .setText('')
@@ -10044,7 +10139,6 @@ export class GameScene extends Phaser.Scene {
         this.multiplayerText
             .setText(
                 [
-                    tr('CHAMELEON HUNT ONLINE'),
                     `ROOM ${roomId ?? '-'}`,
                     tr(`PLAYERS ${this.networkPlayerCount} / 10`),
                     tr(`ROLE ${role}`),
@@ -16903,6 +16997,17 @@ export class GameScene extends Phaser.Scene {
 
     private startHunt(): void {
         this.hideMobilePaintPrecisionGuide();
+
+        if (
+            this.isMultiplayerSession()
+        ) {
+            this.huntDuration =
+                Math.round(
+                    multiplayerClient
+                        .getHuntDurationMs() /
+                    1000,
+                );
+        }
 
         this.spectatorSessionId = '';
         this.spectatorCycleIndex = -1;
