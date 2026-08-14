@@ -3107,7 +3107,7 @@ export class GameScene extends Phaser.Scene {
                     label.style,
                     {
                         display: 'block',
-                        marginTop: '12px',
+                        marginTop: '6px',
                         marginBottom: '6px',
                         fontSize: '14px',
                         fontWeight: '700',
@@ -4575,10 +4575,12 @@ export class GameScene extends Phaser.Scene {
                 width:
                     'min(520px, calc(100vw - 24px))',
                 boxSizing: 'border-box',
-                padding: '18px',
+                padding: '10px 12px',
                 border:
-                    '4px solid #75a66e',
-                borderRadius: '14px',
+                    '3px solid #75a66e',
+                borderRadius: '12px',
+                maxHeight: 'calc(100dvh - 12px)',
+                overflowY: 'auto',
                 background: '#fff9e8',
                 boxShadow:
                     '0 20px 60px rgba(0,0,0,.38)',
@@ -4598,9 +4600,9 @@ export class GameScene extends Phaser.Scene {
         Object.assign(
             title.style,
             {
-                fontSize: '22px',
+                fontSize: '18px',
                 fontWeight: '800',
-                marginBottom: '4px',
+                marginBottom: '2px',
             },
         );
 
@@ -4613,9 +4615,10 @@ export class GameScene extends Phaser.Scene {
         Object.assign(
             hint.style,
             {
-                fontSize: '12px',
+                fontSize: '10px',
+                lineHeight: '12px',
                 color: '#71806b',
-                marginBottom: '12px',
+                marginBottom: '6px',
             },
         );
 
@@ -4628,10 +4631,11 @@ export class GameScene extends Phaser.Scene {
         Object.assign(
             canvas.style,
             {
-                width: '240px',
-                height: '360px',
-                maxHeight: '52vh',
-                objectFit: 'contain',
+                width: 'min(180px, 31vh)',
+                height: 'min(270px, 46vh)',
+                maxWidth: '180px',
+                maxHeight: '270px',
+                objectFit: 'fill',
                 imageRendering: 'pixelated',
                 background: '#dfeadd',
                 border: '3px solid #6f8f65',
@@ -4877,8 +4881,8 @@ export class GameScene extends Phaser.Scene {
                 Object.assign(
                     swatch.style,
                     {
-                        width: '30px',
-                        height: '30px',
+                        width: '24px',
+                        height: '24px',
                         padding: '0',
                         border:
                             '2px solid #53695a',
@@ -5076,7 +5080,8 @@ export class GameScene extends Phaser.Scene {
                 display: 'flex',
                 gap: '8px',
                 justifyContent: 'center',
-                marginTop: '12px',
+                marginTop: '6px',
+                flexWrap: 'wrap',
             },
         );
 
@@ -5096,15 +5101,16 @@ export class GameScene extends Phaser.Scene {
             Object.assign(
                 button.style,
                 {
-                    minWidth: '92px',
-                    minHeight: '38px',
+                    minWidth: '76px',
+                    minHeight: '30px',
                     border: '0',
                     borderRadius: '8px',
                     background,
                     color: '#ffffff',
                     fontWeight: '700',
                     cursor: 'pointer',
-                    padding: '8px 12px',
+                    padding: '5px 8px',
+                    fontSize: '11px',
                 },
             );
 
@@ -5198,13 +5204,114 @@ export class GameScene extends Phaser.Scene {
             save,
         );
 
-        card.append(
-            title,
-            hint,
-            canvas,
+        const editorBody =
+            document.createElement('div');
+
+        Object.assign(
+            editorBody.style,
+            {
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '4px',
+            },
+        );
+
+        const sideControls =
+            document.createElement('div');
+
+        Object.assign(
+            sideControls.style,
+            {
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+                gap: '4px',
+                minWidth: '0',
+            },
+        );
+
+        sideControls.append(
             controls,
             actionRow,
         );
+
+        editorBody.append(
+            canvas,
+            sideControls,
+        );
+
+        card.append(
+            title,
+            hint,
+            editorBody,
+        );
+
+        const applyResponsiveEditorLayout =
+            (): void => {
+                const landscape =
+                    window.innerWidth >
+                        window.innerHeight &&
+                    window.innerHeight <= 600;
+
+                if (landscape) {
+                    Object.assign(
+                        card.style,
+                        {
+                            width:
+                                'min(620px, calc(100vw - 12px))',
+                            padding: '7px 10px',
+                        },
+                    );
+
+                    Object.assign(
+                        editorBody.style,
+                        {
+                            flexDirection: 'row',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            gap: '10px',
+                        },
+                    );
+
+                    Object.assign(
+                        canvas.style,
+                        {
+                            width:
+                                'min(150px, 36vh)',
+                            height:
+                                'min(225px, 54vh)',
+                        },
+                    );
+
+                    Object.assign(
+                        controls.style,
+                        {
+                            maxWidth: '230px',
+                            marginTop: '0',
+                        },
+                    );
+
+                    Object.assign(
+                        actionRow.style,
+                        {
+                            maxWidth: '230px',
+                            marginTop: '2px',
+                        },
+                    );
+
+                    title.style.fontSize =
+                        '15px';
+                    hint.style.marginBottom =
+                        '3px';
+                } else {
+                    editorBody.style
+                        .flexDirection =
+                        'column';
+                }
+            };
+
+        applyResponsiveEditorLayout();
 
         overlay.appendChild(card);
         document.body.appendChild(
