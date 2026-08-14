@@ -4,6 +4,7 @@ import {
     type NetworkBrushShape,
     type NetworkPaintPoint,
     type NetworkPaintStroke,
+    type NetworkAvatarPreset,
     type NetworkPlayerState,
     type NetworkShotFired,
     type NetworkHunterAim,
@@ -292,21 +293,30 @@ export class GameScene extends Phaser.Scene {
         this.spectatorStatusText =
             this.add.text(
                 this.gameWidth - 148,
-                111,
+                112,
                 '',
                 {
                     fontFamily:
                         'monospace',
-                    fontSize: '10px',
+                    fontSize:
+                        getLanguage() === 'ja'
+                            ? '9px'
+                            : '10px',
                     fontStyle: 'bold',
                     color: '#28445a',
                     backgroundColor:
-                        'rgba(236, 247, 255, 0.92)',
-                    fixedWidth: 160,
-                    fixedHeight: 26,
+                        'rgba(236, 247, 255, 0.94)',
+                    fixedWidth: 188,
+                    fixedHeight: 32,
                     align: 'center',
                     padding: {
-                        top: 6,
+                        top: 8,
+                        left: 6,
+                        right: 6,
+                    },
+                    wordWrap: {
+                        width: 176,
+                        useAdvancedWrap: true,
                     },
                 },
             )
@@ -1149,6 +1159,11 @@ export class GameScene extends Phaser.Scene {
     private currentStrokeHistoryPoints: NetworkPaintPoint[] = [];
     private localPaintHistory: NetworkPaintStroke[] = [];
     private redoPaintHistory: NetworkPaintStroke[] = [];
+    private lobbyAvatarPreset: NetworkPaintStroke[] = [];
+    private readonly lobbyAvatarPresetStorageKey =
+        'chameleon-hunt-avatar-preset-v1';
+    private lobbyAvatarPresetsBySession =
+        new Map<string, NetworkPaintStroke[]>();
     private straightLineStart?: NetworkPaintPoint;
     private straightLineStartWorld?: Phaser.Math.Vector2;
     private straightLinePreview?: Phaser.GameObjects.Graphics;
@@ -2034,6 +2049,9 @@ export class GameScene extends Phaser.Scene {
             this.gameHeight,
         );
 
+        this.lobbyAvatarPreset =
+            this.loadLobbyAvatarPreset();
+
         this.registerMultiplayerEvents();
         this.enterLobbyPhase();
 
@@ -2446,6 +2464,23 @@ export class GameScene extends Phaser.Scene {
                     );
 
                     this.updateMultiplayerHud();
+
+                    const lobbyPreset =
+                        this.lobbyAvatarPresetsBySession
+                            .get(
+                                sessionId,
+                            );
+
+                    if (
+                        lobbyPreset &&
+                        this.phase === 'lobby'
+                    ) {
+                        this.networkPlayerManager
+                            .applyLobbyAvatarPreset(
+                                sessionId,
+                                lobbyPreset,
+                            );
+                    }
                 },
             ),
         );
@@ -2684,6 +2719,41 @@ export class GameScene extends Phaser.Scene {
                             );
                         },
                     );
+                },
+            ),
+        );
+
+        this.networkUnsubscribers.push(
+            multiplayerClient.onAvatarPreset(
+                (
+                    preset:
+                        NetworkAvatarPreset,
+                ) => {
+                    const strokes =
+                        preset.strokes
+                            .map(
+                                (stroke) => ({
+                                    ...stroke,
+                                    targetSessionId:
+                                        preset.sessionId,
+                                }),
+                            );
+
+                    this.lobbyAvatarPresetsBySession
+                        .set(
+                            preset.sessionId,
+                            strokes,
+                        );
+
+                    if (
+                        this.phase === 'lobby'
+                    ) {
+                        this.networkPlayerManager
+                            .applyLobbyAvatarPreset(
+                                preset.sessionId,
+                                strokes,
+                            );
+                    }
                 },
             ),
         );
@@ -3982,6 +4052,26 @@ export class GameScene extends Phaser.Scene {
 
         this.updateLobbyUi();
 
+        if (joinedPhase === 'lobby') {
+            this.time.delayedCall(
+                120,
+                () => {
+                    if (
+                        multiplayerClient
+                            .getRoom() ===
+                            room &&
+                        this.phase ===
+                            'lobby'
+                    ) {
+                        multiplayerClient
+                            .requestAvatarPresets();
+
+                        this.sendLobbyAvatarPreset();
+                    }
+                },
+            );
+        }
+
         console.log(
             '[Chameleon Hunt] Room ready',
             {
@@ -4299,6 +4389,832 @@ export class GameScene extends Phaser.Scene {
             .setVisible(false);
     }
 
+    private loadLobbyAvatarPreset(): NetworkPaintStroke[] {
+        try {
+            const raw =
+                localStorage.getItem(
+                    this.lobbyAvatarPresetStorageKey,
+                );
+
+            if (!raw) {
+                return [];
+            }
+
+            const parsed =
+                JSON.parse(raw);
+
+            if (!Array.isArray(parsed)) {
+                return [];
+            }
+
+            return parsed
+                .slice(0, 80)
+                .filter(
+                    (stroke) =>
+                        stroke &&
+                        Number.isFinite(
+                            stroke.color,
+                        ) &&
+                        Number.isFinite(
+                            stroke.size,
+                        ) &&
+                        Array.isArray(
+                            stroke.points,
+                        ),
+                )
+                .map(
+                    (stroke) => ({
+                        targetSessionId: '',
+                        color:
+                            Phaser.Math.Clamp(
+                                Math.round(
+                                    stroke.color,
+                                ),
+                                0,
+                                0xffffff,
+                            ),
+                        size:
+                            Phaser.Math.Clamp(
+                                Math.round(
+                                    stroke.size,
+                                ),
+                                1,
+                                12,
+                            ),
+                        shape:
+                            stroke.shape ===
+                                'square'
+                                ? 'square'
+                                : 'circle',
+                        points:
+                            stroke.points
+                                .slice(0, 240)
+                                .map(
+                                    (point: {
+                                        x?: number;
+                                        y?: number;
+                                    }) => ({
+                                        x:
+                                            Phaser.Math.Clamp(
+                                                Math.round(
+                                                    Number(
+                                                        point.x ??
+                                                        40,
+                                                    ),
+                                                ),
+                                                0,
+                                                80,
+                                            ),
+                                        y:
+                                            Phaser.Math.Clamp(
+                                                Math.round(
+                                                    Number(
+                                                        point.y ??
+                                                        60,
+                                                    ),
+                                                ),
+                                                0,
+                                                120,
+                                            ),
+                                    }),
+                                ),
+                    }),
+                );
+        } catch {
+            return [];
+        }
+    }
+
+    private sendLobbyAvatarPreset(): void {
+        if (
+            !multiplayerClient.isConnected()
+        ) {
+            return;
+        }
+
+        const sessionId =
+            multiplayerClient
+                .getSessionId();
+
+        if (!sessionId) {
+            return;
+        }
+
+        const strokes =
+            this.lobbyAvatarPreset
+                .map(
+                    (stroke) => ({
+                        ...stroke,
+                        targetSessionId:
+                            sessionId,
+                        points:
+                            stroke.points.map(
+                                (point) => ({
+                                    x: point.x,
+                                    y: point.y,
+                                }),
+                            ),
+                    }),
+                );
+
+        multiplayerClient
+            .sendAvatarPreset(
+                strokes,
+            );
+
+        this.lobbyAvatarPresetsBySession
+            .set(
+                sessionId,
+                strokes,
+            );
+
+        this.networkPlayerManager
+            ?.applyLobbyAvatarPreset(
+                sessionId,
+                strokes,
+            );
+    }
+
+    private openLobbyAvatarEditor(): void {
+        this.closeMenuModal();
+        this.input.enabled = false;
+
+        if (
+            this.lobbyAvatarPreset.length ===
+            0
+        ) {
+            this.lobbyAvatarPreset =
+                this.loadLobbyAvatarPreset();
+        }
+
+        const overlay =
+            document.createElement('div');
+
+        Object.assign(
+            overlay.style,
+            {
+                position: 'fixed',
+                inset: '0',
+                zIndex: '10000',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background:
+                    'rgba(8, 15, 22, 0.72)',
+                pointerEvents: 'auto',
+                touchAction: 'none',
+            },
+        );
+
+        const card =
+            document.createElement('div');
+
+        Object.assign(
+            card.style,
+            {
+                width:
+                    'min(520px, calc(100vw - 24px))',
+                boxSizing: 'border-box',
+                padding: '18px',
+                border:
+                    '4px solid #75a66e',
+                borderRadius: '14px',
+                background: '#fff9e8',
+                boxShadow:
+                    '0 20px 60px rgba(0,0,0,.38)',
+                fontFamily:
+                    'Arial, sans-serif',
+                color: '#35523d',
+                textAlign: 'center',
+            },
+        );
+
+        const title =
+            document.createElement('div');
+
+        title.textContent =
+            tr('내 캐릭터 꾸미기');
+
+        Object.assign(
+            title.style,
+            {
+                fontSize: '22px',
+                fontWeight: '800',
+                marginBottom: '4px',
+            },
+        );
+
+        const hint =
+            document.createElement('div');
+
+        hint.textContent =
+            tr('여기서 그린 모습은 대기실의 모든 플레이어에게 보입니다.');
+
+        Object.assign(
+            hint.style,
+            {
+                fontSize: '12px',
+                color: '#71806b',
+                marginBottom: '12px',
+            },
+        );
+
+        const canvas =
+            document.createElement('canvas');
+
+        canvas.width = 240;
+        canvas.height = 360;
+
+        Object.assign(
+            canvas.style,
+            {
+                width: '240px',
+                height: '360px',
+                maxHeight: '52vh',
+                objectFit: 'contain',
+                imageRendering: 'pixelated',
+                background: '#dfeadd',
+                border: '3px solid #6f8f65',
+                borderRadius: '10px',
+                cursor: 'crosshair',
+                touchAction: 'none',
+            },
+        );
+
+        const context =
+            canvas.getContext('2d');
+
+        if (!context) {
+            this.input.enabled = true;
+            return;
+        }
+
+        const palette = [
+            '#111827',
+            '#ffffff',
+            '#ef4444',
+            '#f97316',
+            '#facc15',
+            '#22c55e',
+            '#14b8a6',
+            '#38bdf8',
+            '#3b82f6',
+            '#8b5cf6',
+            '#ec4899',
+            '#8b5a2b',
+        ];
+
+        let selectedColor =
+            0x3b82f6;
+
+        let selectedSize = 3;
+        let drawing = false;
+        let currentPoints:
+            NetworkPaintPoint[] = [];
+
+        const strokes:
+            NetworkPaintStroke[] =
+                this.lobbyAvatarPreset
+                    .map(
+                        (stroke) => ({
+                            ...stroke,
+                            targetSessionId: '',
+                            points:
+                                stroke.points.map(
+                                    (point) => ({
+                                        x: point.x,
+                                        y: point.y,
+                                    }),
+                                ),
+                        }),
+                    );
+
+        const insideBody = (
+            x: number,
+            y: number,
+        ): boolean => {
+            const headDx =
+                x - 40;
+            const headDy =
+                y - 48;
+
+            return (
+                headDx * headDx +
+                    headDy * headDy <=
+                    12 * 12 ||
+                (
+                    x >= 31 &&
+                    x <= 48 &&
+                    y >= 55 &&
+                    y <= 78
+                ) ||
+                (
+                    x >= 24 &&
+                    x <= 31 &&
+                    y >= 57 &&
+                    y <= 74
+                ) ||
+                (
+                    x >= 48 &&
+                    x <= 55 &&
+                    y >= 57 &&
+                    y <= 74
+                ) ||
+                (
+                    x >= 31 &&
+                    x <= 38 &&
+                    y >= 75 &&
+                    y <= 88
+                ) ||
+                (
+                    x >= 41 &&
+                    x <= 48 &&
+                    y >= 75 &&
+                    y <= 88
+                )
+            );
+        };
+
+        const drawBodyPixel = (
+            x: number,
+            y: number,
+            color: string,
+        ): void => {
+            if (!insideBody(x, y)) {
+                return;
+            }
+
+            context.fillStyle =
+                color;
+
+            context.fillRect(
+                x * 3,
+                y * 3,
+                3,
+                3,
+            );
+        };
+
+        const replay = (): void => {
+            context.clearRect(
+                0,
+                0,
+                canvas.width,
+                canvas.height,
+            );
+
+            context.fillStyle =
+                '#dfeadd';
+
+            context.fillRect(
+                0,
+                0,
+                canvas.width,
+                canvas.height,
+            );
+
+            for (
+                let y = 0;
+                y < 120;
+                y += 1
+            ) {
+                for (
+                    let x = 0;
+                    x < 80;
+                    x += 1
+                ) {
+                    if (insideBody(x, y)) {
+                        drawBodyPixel(
+                            x,
+                            y,
+                            '#f5eee2',
+                        );
+                    }
+                }
+            }
+
+            strokes.forEach(
+                (stroke) => {
+                    const color =
+                        `#${stroke.color
+                            .toString(16)
+                            .padStart(6, '0')}`;
+
+                    stroke.points.forEach(
+                        (point) => {
+                            const radius =
+                                stroke.size <= 1
+                                    ? 0
+                                    : stroke.size;
+
+                            for (
+                                let oy =
+                                    -radius;
+                                oy <= radius;
+                                oy += 1
+                            ) {
+                                for (
+                                    let ox =
+                                        -radius;
+                                    ox <= radius;
+                                    ox += 1
+                                ) {
+                                    if (
+                                        stroke.shape !==
+                                            'square' &&
+                                        ox * ox +
+                                            oy * oy >
+                                            radius *
+                                                radius
+                                    ) {
+                                        continue;
+                                    }
+
+                                    drawBodyPixel(
+                                        Math.round(
+                                            point.x +
+                                            ox,
+                                        ),
+                                        Math.round(
+                                            point.y +
+                                            oy,
+                                        ),
+                                        color,
+                                    );
+                                }
+                            }
+                        },
+                    );
+                },
+            );
+        };
+
+        replay();
+
+        const controls =
+            document.createElement('div');
+
+        Object.assign(
+            controls.style,
+            {
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '7px',
+                justifyContent: 'center',
+                marginTop: '12px',
+            },
+        );
+
+        palette.forEach(
+            (color) => {
+                const swatch =
+                    document.createElement(
+                        'button',
+                    );
+
+                swatch.type = 'button';
+
+                Object.assign(
+                    swatch.style,
+                    {
+                        width: '30px',
+                        height: '30px',
+                        padding: '0',
+                        border:
+                            '2px solid #53695a',
+                        borderRadius: '7px',
+                        background: color,
+                        cursor: 'pointer',
+                    },
+                );
+
+                swatch.addEventListener(
+                    'click',
+                    () => {
+                        selectedColor =
+                            Number.parseInt(
+                                color.slice(1),
+                                16,
+                            );
+                    },
+                );
+
+                controls.appendChild(
+                    swatch,
+                );
+            },
+        );
+
+        const sizeInput =
+            document.createElement('input');
+
+        sizeInput.type = 'range';
+        sizeInput.min = '1';
+        sizeInput.max = '8';
+        sizeInput.value =
+            String(selectedSize);
+
+        sizeInput.addEventListener(
+            'input',
+            () => {
+                selectedSize =
+                    Number(
+                        sizeInput.value,
+                    );
+            },
+        );
+
+        controls.appendChild(
+            sizeInput,
+        );
+
+        const getPoint = (
+            event: PointerEvent,
+        ): NetworkPaintPoint => {
+            const rect =
+                canvas.getBoundingClientRect();
+
+            return {
+                x:
+                    Phaser.Math.Clamp(
+                        Math.floor(
+                            (
+                                event.clientX -
+                                rect.left
+                            ) /
+                            rect.width *
+                            80,
+                        ),
+                        0,
+                        79,
+                    ),
+                y:
+                    Phaser.Math.Clamp(
+                        Math.floor(
+                            (
+                                event.clientY -
+                                rect.top
+                            ) /
+                            rect.height *
+                            120,
+                        ),
+                        0,
+                        119,
+                    ),
+            };
+        };
+
+        canvas.addEventListener(
+            'pointerdown',
+            (event) => {
+                event.preventDefault();
+                drawing = true;
+                currentPoints = [
+                    getPoint(event),
+                ];
+                canvas.setPointerCapture(
+                    event.pointerId,
+                );
+            },
+        );
+
+        canvas.addEventListener(
+            'pointermove',
+            (event) => {
+                if (!drawing) {
+                    return;
+                }
+
+                event.preventDefault();
+
+                const point =
+                    getPoint(event);
+
+                const last =
+                    currentPoints[
+                        currentPoints.length -
+                        1
+                    ];
+
+                if (
+                    !last ||
+                    last.x !== point.x ||
+                    last.y !== point.y
+                ) {
+                    currentPoints.push(
+                        point,
+                    );
+                }
+
+                const previewStroke:
+                    NetworkPaintStroke = {
+                        targetSessionId: '',
+                        color:
+                            selectedColor,
+                        size:
+                            selectedSize,
+                        shape: 'circle',
+                        points:
+                            currentPoints,
+                    };
+
+                strokes.push(
+                    previewStroke,
+                );
+                replay();
+                strokes.pop();
+            },
+        );
+
+        const finishStroke =
+            (): void => {
+                if (!drawing) {
+                    return;
+                }
+
+                drawing = false;
+
+                if (
+                    currentPoints.length >
+                    0
+                ) {
+                    strokes.push({
+                        targetSessionId: '',
+                        color:
+                            selectedColor,
+                        size:
+                            selectedSize,
+                        shape: 'circle',
+                        points:
+                            currentPoints.slice(
+                                0,
+                                240,
+                            ),
+                    });
+                }
+
+                currentPoints = [];
+                replay();
+            };
+
+        canvas.addEventListener(
+            'pointerup',
+            finishStroke,
+        );
+
+        canvas.addEventListener(
+            'pointercancel',
+            finishStroke,
+        );
+
+        const actionRow =
+            document.createElement('div');
+
+        Object.assign(
+            actionRow.style,
+            {
+                display: 'flex',
+                gap: '8px',
+                justifyContent: 'center',
+                marginTop: '12px',
+            },
+        );
+
+        const makeButton = (
+            label: string,
+            background: string,
+            callback: () => void,
+        ): HTMLButtonElement => {
+            const button =
+                document.createElement(
+                    'button',
+                );
+
+            button.type = 'button';
+            button.textContent = label;
+
+            Object.assign(
+                button.style,
+                {
+                    minWidth: '92px',
+                    minHeight: '38px',
+                    border: '0',
+                    borderRadius: '8px',
+                    background,
+                    color: '#ffffff',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    padding: '8px 12px',
+                },
+            );
+
+            button.addEventListener(
+                'click',
+                callback,
+            );
+
+            return button;
+        };
+
+        const undo =
+            makeButton(
+                tr('되돌리기'),
+                '#78966f',
+                () => {
+                    strokes.pop();
+                    replay();
+                },
+            );
+
+        const clear =
+            makeButton(
+                tr('초기화'),
+                '#b36b67',
+                () => {
+                    strokes.length = 0;
+                    replay();
+                },
+            );
+
+        const cancel =
+            makeButton(
+                tr('취소'),
+                '#7b8490',
+                () => {
+                    overlay.remove();
+                    this.menuModalOverlay =
+                        undefined;
+
+                    window.setTimeout(
+                        () => {
+                            this.input.enabled =
+                                true;
+                        },
+                        80,
+                    );
+                },
+            );
+
+        const save =
+            makeButton(
+                tr('저장'),
+                '#55ae5f',
+                () => {
+                    this.lobbyAvatarPreset =
+                        strokes.slice(
+                            0,
+                            80,
+                        );
+
+                    localStorage.setItem(
+                        this.lobbyAvatarPresetStorageKey,
+                        JSON.stringify(
+                            this.lobbyAvatarPreset,
+                        ),
+                    );
+
+                    overlay.remove();
+                    this.menuModalOverlay =
+                        undefined;
+
+                    window.setTimeout(
+                        () => {
+                            this.input.enabled =
+                                true;
+                        },
+                        80,
+                    );
+
+                    this.showStatus(
+                        tr('캐릭터 꾸미기를 저장했습니다.'),
+                    );
+                },
+            );
+
+        actionRow.append(
+            undo,
+            clear,
+            cancel,
+            save,
+        );
+
+        card.append(
+            title,
+            hint,
+            canvas,
+            controls,
+            actionRow,
+        );
+
+        overlay.appendChild(card);
+        document.body.appendChild(
+            overlay,
+        );
+
+        this.menuModalOverlay =
+            overlay;
+    }
+
     private showMainMenu(): void {
         if (
             multiplayerClient.isConnected()
@@ -4505,6 +5421,44 @@ export class GameScene extends Phaser.Scene {
                 },
             )
             .setDepth(503);
+
+
+        const avatarCustomizeButton =
+            this.add.text(
+                762,
+                118,
+                `🎨 ${tr('내 캐릭터 꾸미기')}`,
+                {
+                    fontFamily:
+                        'Arial, sans-serif',
+                    fontSize:
+                        getLanguage() === 'ja'
+                            ? '11px'
+                            : '12px',
+                    fontStyle: 'bold',
+                    color: '#35523d',
+                    backgroundColor:
+                        '#e8f5dc',
+                    fixedWidth: 176,
+                    fixedHeight: 32,
+                    align: 'center',
+                    padding: {
+                        top: 8,
+                    },
+                },
+            )
+                .setOrigin(0.5)
+                .setDepth(504)
+                .setInteractive({
+                    useHandCursor: true,
+                });
+
+        avatarCustomizeButton.on(
+            'pointerdown',
+            () => {
+                this.openLobbyAvatarEditor();
+            },
+        );
 
         const makeAction = (
             y: number,
@@ -4714,6 +5668,7 @@ export class GameScene extends Phaser.Scene {
             roomListHeader,
             refreshButton,
             actionTitle,
+            avatarCustomizeButton,
             publicCreate,
             privateCreate,
             privateJoin,
@@ -8049,6 +9004,25 @@ export class GameScene extends Phaser.Scene {
             .setVisible(false);
 
         this.updateLobbyUi();
+
+        if (
+            multiplayerClient.isConnected()
+        ) {
+            multiplayerClient
+                .requestAvatarPresets();
+
+            this.time.delayedCall(
+                80,
+                () => {
+                    if (
+                        this.phase ===
+                            'lobby'
+                    ) {
+                        this.sendLobbyAvatarPreset();
+                    }
+                },
+            );
+        }
     }
 
     private getGameplayFixedUiObjects(): Phaser.GameObjects.GameObject[] {
@@ -8338,6 +9312,22 @@ export class GameScene extends Phaser.Scene {
         this.ensureGameplayCameraFollow();
     }
 
+    private formatSpectatorStatus(
+        role: 'hunter' | 'hider',
+        name: string,
+    ): string {
+        const safeName =
+            name.length > 14
+                ? `${name.slice(0, 13)}…`
+                : name;
+
+        return `${
+            role === 'hunter'
+                ? 'HUNTER'
+                : 'HIDER'
+        } · ${safeName}`;
+    }
+
     private cycleSpectatorView(): void {
         if (
             this.phase !== 'hunt' ||
@@ -8410,12 +9400,10 @@ export class GameScene extends Phaser.Scene {
         this.spectatorStatusText
             ?.setText(
                 selected
-                    ? `${
-                        selected.role ===
-                            'hunter'
-                            ? 'HUNTER'
-                            : 'HIDER'
-                    } · ${selected.name}`
+                    ? this.formatSpectatorStatus(
+                        selected.role,
+                        selected.name,
+                    )
                     : tr('시야: 내 캐릭터'),
             )
             .setVisible(true);
@@ -8648,6 +9636,13 @@ export class GameScene extends Phaser.Scene {
 
         if (phase === 'countdown') {
             this.clearStatus();
+
+            /*
+             * Lobby avatar art is cosmetic only. Clear it before the actual
+             * round so every player begins Paint with the normal white base.
+             */
+            this.networkPlayerManager
+                .clearAllPaint();
 
             this.networkPlayerManager
                 .syncLobbyPositionsFromState();

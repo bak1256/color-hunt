@@ -1971,6 +1971,52 @@ export class NetworkPlayerManager {
     );
   }
 
+  applyLobbyAvatarPreset(
+    sessionId: string,
+    strokes: NetworkPaintStroke[],
+  ): void {
+    const view =
+      this.players.get(
+        sessionId,
+      );
+
+    if (!view?.paintLayer) {
+      return;
+    }
+
+    view.paintLayer.texture.clear();
+
+    strokes.forEach(
+      (stroke) => {
+        stroke.points.forEach(
+          (point) => {
+            this.stampMaskedPaintBrush(
+              view,
+              Math.round(point.x),
+              Math.round(point.y),
+              stroke.color,
+              stroke.size,
+              stroke.shape,
+            );
+          },
+        );
+      },
+    );
+
+    this.renderPaintTexture(
+      view.paintLayer.texture,
+    );
+
+    this.syncPaintLayerPosition(
+      view,
+      false,
+    );
+
+    view.paintLayer.texture
+      .setVisible(true)
+      .setAlpha(1);
+  }
+
   applyPaintStroke(
     stroke: NetworkPaintStroke,
     _textureKey: string,

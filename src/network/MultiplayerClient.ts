@@ -35,6 +35,15 @@ export type NetworkPaintStroke = {
   points: NetworkPaintPoint[];
 };
 
+export type NetworkAvatarPreset = {
+  sessionId: string;
+  strokes: NetworkPaintStroke[];
+};
+
+export type AvatarPresetHandler = (
+  preset: NetworkAvatarPreset,
+) => void;
+
 export type NetworkShotFired = {
   shooterId: string;
   startX: number;
@@ -247,6 +256,9 @@ export class MultiplayerClient {
 
   private readonly paintStrokeHandlers =
     new Set<PaintStrokeHandler>();
+
+  private readonly avatarPresetHandlers =
+    new Set<AvatarPresetHandler>();
 
   private readonly shotFiredHandlers =
     new Set<ShotFiredHandler>();
@@ -949,6 +961,43 @@ private attachRoom(
     );
 
     room.onMessage<
+      NetworkAvatarPreset
+    >(
+      "avatar_preset",
+      (preset) => {
+        this.avatarPresetHandlers
+          .forEach(
+            (handler) => {
+              handler(preset);
+            },
+          );
+      },
+    );
+
+    room.onMessage<{
+      presets?: NetworkAvatarPreset[];
+    }>(
+      "avatar_presets",
+      (payload) => {
+        const presets =
+          Array.isArray(payload?.presets)
+            ? payload.presets
+            : [];
+
+        presets.forEach(
+          (preset) => {
+            this.avatarPresetHandlers
+              .forEach(
+                (handler) => {
+                  handler(preset);
+                },
+              );
+          },
+        );
+      },
+    );
+
+    room.onMessage<
       NetworkLobbySnapshot
     >(
       "lobby_snapshot",
@@ -1329,6 +1378,28 @@ private attachRoom(
     );
   }
 
+  sendAvatarPreset(
+    strokes: NetworkPaintStroke[],
+  ): void {
+    if (!this.room) {
+      return;
+    }
+
+    this.room.send(
+      "avatar_preset",
+      {
+        strokes,
+      },
+    );
+  }
+
+  requestAvatarPresets(): void {
+    this.room?.send(
+      "request_avatar_presets",
+      {},
+    );
+  }
+
   sendPaintStroke(
     stroke: NetworkPaintStroke,
   ): void {
@@ -1474,6 +1545,18 @@ private attachRoom(
 
     return () => {
       this.playerChangedHandlers
+        .delete(handler);
+    };
+  }
+
+  onAvatarPreset(
+    handler: AvatarPresetHandler,
+  ): () => void {
+    this.avatarPresetHandlers
+      .add(handler);
+
+    return () => {
+      this.avatarPresetHandlers
         .delete(handler);
     };
   }
