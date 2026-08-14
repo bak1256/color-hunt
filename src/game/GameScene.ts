@@ -4162,7 +4162,7 @@ export class GameScene extends Phaser.Scene {
         const roomDivider = this.add
             .rectangle(
                 325,
-                214,
+                218,
                 466,
                 1,
                 0xa9c99b,
@@ -4174,7 +4174,7 @@ export class GameScene extends Phaser.Scene {
         const roomListHeader =
             this.add.text(
                 102,
-                221,
+                226,
                 `${tr('방 이름')}      ${tr('인원')}      ${tr('상태')}`,
                 {
                     fontFamily:
@@ -4191,9 +4191,9 @@ export class GameScene extends Phaser.Scene {
          */
         const refreshButton =
             this.makeMenuButton(
-                522,
+                526,
                 184,
-                `↻  ${tr('새로고침')}`,
+                `↻ ${tr('새로고침')}`,
                 () => {
                     void this.refreshPublicRoomList(true);
                 },
@@ -4201,24 +4201,26 @@ export class GameScene extends Phaser.Scene {
 
         refreshButton
             .setFixedSize(
-                92,
-                30,
+                78,
+                26,
             )
             .setAlign('center')
             .setOrigin(0.5)
             .setFontSize(
                 getLanguage() === 'en'
-                    ? 10
-                    : 12,
+                    ? 9
+                    : getLanguage() === 'ja'
+                        ? 9
+                        : 10,
             )
             .setPadding(
                 0,
-                3,
+                1,
                 0,
                 0,
             )
             .setBackgroundColor(
-                '#e7f4da',
+                '#dff0d1',
             )
             .setColor(
                 '#2f6844',
@@ -4476,7 +4478,7 @@ export class GameScene extends Phaser.Scene {
                 ? this.add
                     .text(
                         102,
-                        246,
+                        252,
                         tr('방 목록을 불러오는 중...'),
                         {
                             fontFamily: 'Arial, sans-serif',
@@ -4537,7 +4539,7 @@ export class GameScene extends Phaser.Scene {
                     this.add
                         .text(
                             102,
-                            246,
+                            252,
                             tr('생성된 공개방이 없습니다.'),
                             {
                                 fontFamily: 'Arial, sans-serif',
@@ -4574,7 +4576,7 @@ export class GameScene extends Phaser.Scene {
                         const row =
                             this.makeMenuButton(
                                 325,
-                                252 +
+                                258 +
                                     index * 39,
                                 `${roomTitle} · ${room.clients}/${room.maxClients} · ${trPhase(phase)}`,
                                 () => {
@@ -4708,9 +4710,9 @@ export class GameScene extends Phaser.Scene {
         this.lobbyInfoCard =
             this.add.rectangle(
                 824,
-                158,
+                150,
                 228,
-                112,
+                104,
                 0xfffdf5,
                 1,
             )
@@ -4724,7 +4726,7 @@ export class GameScene extends Phaser.Scene {
         this.lobbyInfoText =
             this.add.text(
                 824,
-                113,
+                106,
                 '',
                 {
                     fontFamily:
@@ -4746,7 +4748,7 @@ export class GameScene extends Phaser.Scene {
         this.lobbyHintText =
             this.add.text(
                 824,
-                223,
+                214,
                 '',
                 {
                     fontFamily:
@@ -4763,7 +4765,7 @@ export class GameScene extends Phaser.Scene {
         this.lobbyMovementHelpText =
             this.add.text(
                 824,
-                245,
+                236,
                 tr('WASD 이동'),
                 {
                     fontFamily:
@@ -4783,9 +4785,9 @@ export class GameScene extends Phaser.Scene {
         this.lobbyControlsCard =
             this.add.rectangle(
                 824,
-                342,
+                350,
                 228,
-                174,
+                194,
                 0xeaf7fb,
                 0.98,
             )
@@ -4799,7 +4801,7 @@ export class GameScene extends Phaser.Scene {
         this.roleHunterButton =
             this.makeMenuButton(
                 770,
-                286,
+                282,
                 tr('HUNTER 지원'),
                 () => {
                     const localPlayer =
@@ -4820,7 +4822,7 @@ export class GameScene extends Phaser.Scene {
         this.roleHiderButton =
             this.makeMenuButton(
                 878,
-                286,
+                282,
                 tr('지원 취소'),
                 () => {
                     multiplayerClient
@@ -4889,7 +4891,7 @@ export class GameScene extends Phaser.Scene {
                         return this.makeMenuButton(
                             754 +
                                 index * 70,
-                            356,
+                            360,
                             `${seconds}s`,
                             () => {
                                 if (
@@ -4922,7 +4924,7 @@ export class GameScene extends Phaser.Scene {
         this.startGameButton =
             this.add.text(
                 824,
-                408,
+                414,
                 tr('START GAME'),
                 {
                     fontFamily:
@@ -4984,7 +4986,7 @@ export class GameScene extends Phaser.Scene {
         this.lobbyFooterDivider =
             this.add.rectangle(
                 824,
-                453,
+                462,
                 214,
                 1,
                 0xb7cf9f,
@@ -4994,8 +4996,8 @@ export class GameScene extends Phaser.Scene {
 
         this.inviteLinkButton =
             this.makeMenuButton(
-                770,
-                486,
+                768,
+                492,
                 tr('초대 링크 복사'),
                 () => {
                     void this.copyInviteLink();
@@ -5009,7 +5011,7 @@ export class GameScene extends Phaser.Scene {
                     '#ffffff',
                 )
                 .setFixedSize(
-                    104,
+                    108,
                     34,
                 )
                 .setAlign('center')
@@ -5021,8 +5023,8 @@ export class GameScene extends Phaser.Scene {
 
         this.leaveRoomButton =
             this.makeMenuButton(
-                878,
-                486,
+                880,
+                492,
                 tr('로비로 나가기'),
                 () => {
                     void this.leaveCurrentRoomToLobby();
@@ -5036,7 +5038,7 @@ export class GameScene extends Phaser.Scene {
                     '#ffffff',
                 )
                 .setFixedSize(
-                    104,
+                    108,
                     34,
                 )
                 .setAlign('center')
@@ -5482,21 +5484,21 @@ export class GameScene extends Phaser.Scene {
 
         this.inviteLinkButton
             ?.setFontSize(
-                getLanguage() === 'en'
-                    ? 10
-                    : getLanguage() === 'ja'
-                        ? 11
-                        : 12,
-            );
+                getLanguage() === 'ja'
+                    ? 9
+                    : getLanguage() === 'en'
+                        ? 9
+                        : 10,
+            )
 
         this.leaveRoomButton
             ?.setFontSize(
-                getLanguage() === 'en'
+                getLanguage() === 'ja'
                     ? 10
-                    : getLanguage() === 'ja'
-                        ? 11
-                        : 12,
-            );
+                    : getLanguage() === 'en'
+                        ? 9
+                        : 10,
+            )
 
         const selectedPaintDuration =
             multiplayerClient
@@ -5578,7 +5580,7 @@ export class GameScene extends Phaser.Scene {
         this.startGameButton
             .setFixedSize(
                 214,
-                42,
+                40,
             )
             .setAlign('center')
             .setFontSize(
