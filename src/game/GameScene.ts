@@ -6105,9 +6105,9 @@ export class GameScene extends Phaser.Scene {
         this.lobbyControlsCard =
             this.add.rectangle(
                 824,
-                350,
+                352,
                 228,
-                194,
+                220,
                 0xeaf7fb,
                 0.98,
             )
@@ -6121,7 +6121,7 @@ export class GameScene extends Phaser.Scene {
         this.roleHunterButton =
             this.makeMenuButton(
                 770,
-                282,
+                274,
                 tr('HUNTER 지원'),
                 () => {
                     const localPlayer =
@@ -6136,13 +6136,13 @@ export class GameScene extends Phaser.Scene {
                 },
             )
                 .setDepth(406)
-                .setFixedSize(104, 36)
+                .setFixedSize(104, 32)
                 .setAlign('center');
 
         this.roleHiderButton =
             this.makeMenuButton(
                 878,
-                282,
+                274,
                 tr('지원 취소'),
                 () => {
                     multiplayerClient
@@ -6152,7 +6152,7 @@ export class GameScene extends Phaser.Scene {
                 },
             )
                 .setDepth(406)
-                .setFixedSize(104, 36)
+                .setFixedSize(104, 32)
                 .setAlign('center');
 
         [
@@ -6185,7 +6185,7 @@ export class GameScene extends Phaser.Scene {
         this.lobbyPaintDurationLabel =
             this.add.text(
                 824,
-                314,
+                306,
                 tr('색칠 시간'),
                 {
                     fontFamily:
@@ -6211,7 +6211,7 @@ export class GameScene extends Phaser.Scene {
                         return this.makeMenuButton(
                             754 +
                                 index * 70,
-                            338,
+                            328,
                             `${seconds}s`,
                             () => {
                                 if (
@@ -6241,7 +6241,7 @@ export class GameScene extends Phaser.Scene {
         this.lobbyHuntDurationLabel =
             this.add.text(
                 824,
-                366,
+                356,
                 tr('사냥 시간'),
                 {
                     fontFamily:
@@ -6267,7 +6267,7 @@ export class GameScene extends Phaser.Scene {
                         return this.makeMenuButton(
                             754 +
                                 index * 70,
-                            390,
+                            378,
                             `${seconds}s`,
                             () => {
                                 if (
@@ -6300,7 +6300,7 @@ export class GameScene extends Phaser.Scene {
         this.startGameButton =
             this.add.text(
                 824,
-                434,
+                426,
                 tr('START GAME'),
                 {
                     fontFamily:
@@ -6311,10 +6311,10 @@ export class GameScene extends Phaser.Scene {
                     backgroundColor:
                         '#65b94f',
                     fixedWidth: 214,
-                    fixedHeight: 42,
+                    fixedHeight: 38,
                     align: 'center',
                     padding: {
-                        top: 11,
+                        top: 9,
                     },
                 },
             )
@@ -6362,7 +6362,7 @@ export class GameScene extends Phaser.Scene {
         this.lobbyFooterDivider =
             this.add.rectangle(
                 824,
-                474,
+                470,
                 214,
                 1,
                 0xb7cf9f,
@@ -6373,7 +6373,7 @@ export class GameScene extends Phaser.Scene {
         this.inviteLinkButton =
             this.makeMenuButton(
                 768,
-                500,
+                494,
                 tr('초대 링크 복사'),
                 () => {
                     void this.copyInviteLink();
@@ -6400,7 +6400,7 @@ export class GameScene extends Phaser.Scene {
         this.leaveRoomButton =
             this.makeMenuButton(
                 880,
-                500,
+                494,
                 tr('로비로 나가기'),
                 () => {
                     void this.leaveCurrentRoomToLobby();
@@ -14065,15 +14065,19 @@ export class GameScene extends Phaser.Scene {
             this.redoPaintHistory = [];
 
             /*
-             * Keep enough useful undo depth without allowing an endless
-             * memory history on long paint sessions.
+             * IMPORTANT:
+             * localPaintHistory is the complete authoritative picture used
+             * by rebuildLocalPaintFromHistory() at Paint -> Hunt.
+             *
+             * Do NOT trim old strokes here. The old 40-stroke limit meant
+             * early camouflage (very often torso/legs painted first) was
+             * discarded. Hunt then cleared the body to white and replayed
+             * only the newest 40 strokes, making the Hunter see an
+             * incompletely painted Hider.
+             *
+             * Undo depth can be handled independently; the final painted
+             * state must retain every stroke for the duration of this round.
              */
-            if (
-                this.localPaintHistory.length >
-                40
-            ) {
-                this.localPaintHistory.shift();
-            }
         }
 
         this.activeStrokePoints = [];
@@ -14226,12 +14230,10 @@ export class GameScene extends Phaser.Scene {
             restoredStroke,
         );
 
-        if (
-            this.localPaintHistory.length >
-            40
-        ) {
-            this.localPaintHistory.shift();
-        }
+        /*
+         * Never trim localPaintHistory here either. It is also the complete
+         * reconstruction source for the Hunt transition.
+         */
 
         /*
          * Rebuild and broadcast the same complete paint state used by Undo,
