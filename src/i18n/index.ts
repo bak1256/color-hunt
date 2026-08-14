@@ -5,6 +5,11 @@ const STORAGE_KEY = 'chameleon-hunt-language';
 type Dict = Record<string, string>;
 
 const ja: Dict = {
+  "Shift+드래그  직선 그리기":"Shift+ドラッグ  直線を描く",
+  "Ctrl+Z  한 단계 되돌리기":"Ctrl+Z  1段階元に戻す",
+  "기본 색상 팔레트":"基本カラーパレット",
+  "배경 위장색 + 검정/흰색 팔레트":"背景迷彩色 + 黒/白パレット",
+
   "두 손가락: 확대/축소":"2本指：拡大 / 縮小",
   "브러시 모양":"ブラシ形状",
   "원형":"円形",
@@ -60,6 +65,11 @@ const ja: Dict = {
 };
 
 const en: Dict = {
+  "Shift+드래그  직선 그리기":"Shift+Drag  Draw straight line",
+  "Ctrl+Z  한 단계 되돌리기":"Ctrl+Z  Undo one stroke",
+  "기본 색상 팔레트":"Standard color palette",
+  "배경 위장색 + 검정/흰색 팔레트":"Background camo + black/white palette",
+
   "두 손가락: 확대/축소":"Two fingers: Zoom in / out",
   "브러시 모양":"Brush Shape",
   "원형":"Circle",
@@ -104,6 +114,11 @@ const en: Dict = {
 };
 
 const zh: Dict = {
+  "Shift+드래그  직선 그리기":"Shift+拖动  绘制直线",
+  "Ctrl+Z  한 단계 되돌리기":"Ctrl+Z  撤销一步",
+  "기본 색상 팔레트":"基础颜色调色板",
+  "배경 위장색 + 검정/흰색 팔레트":"背景伪装色 + 黑/白调色板",
+
   "두 손가락: 확대/축소":"双指：放大 / 缩小",
   "브러시 모양":"画笔形状",
   "원형":"圆形",
@@ -145,6 +160,11 @@ const zh: Dict = {
 };
 
 const ko: Dict = {
+  "Shift+드래그  직선 그리기":"Shift+드래그  직선 그리기",
+  "Ctrl+Z  한 단계 되돌리기":"Ctrl+Z  한 단계 되돌리기",
+  "기본 색상 팔레트":"기본 색상 팔레트",
+  "배경 위장색 + 검정/흰색 팔레트":"배경 위장색 + 검정/흰색 팔레트",
+
   "두 손가락: 확대/축소":"두 손가락: 확대/축소",
   "스포이드":"스포이드",
   "스포이드: 배경을 누른 채 움직이고 손을 떼면 색상이 선택됩니다":"스포이드: 배경을 누른 채 움직이고 손을 떼면 색상이 선택됩니다",

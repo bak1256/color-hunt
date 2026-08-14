@@ -132,6 +132,24 @@ export class GameScene extends Phaser.Scene {
     private readonly defaultPaintColor = 0x000000;
     private paintColor = this.defaultPaintColor;
 
+    private readonly standardPaintColors = [
+        0x000000,
+        0xef4444,
+        0xf97316,
+        0xfacc15,
+        0x84cc16,
+        0x22c55e,
+        0x14b8a6,
+        0x38bdf8,
+        0x3b82f6,
+        0x8b5cf6,
+        0xec4899,
+        0x8b5a2b,
+        0xf5eee2,
+        0x9ca3af,
+        0x374151,
+    ];
+
     private brushSize = 4;
     private brushShape: BrushShape = 'circle';
     private isPainting = false;
@@ -932,6 +950,22 @@ export class GameScene extends Phaser.Scene {
                 showSpectatorButton,
             );
 
+        if (
+            showSpectatorButton &&
+            this.spectatorButton
+        ) {
+            /*
+             * Keep this button at a real screen coordinate even while Hunt
+             * camera zoom is 1.65. This was why it could disappear offscreen
+             * on mobile despite visible=true.
+             */
+            this.setFixedHudScreenPosition(
+                this.spectatorButton,
+                this.gameWidth - 128,
+                96,
+            );
+        }
+
         if (!canMove) {
             this.mobileMovePointerId = -1;
             this.mobileMoveX = 0;
@@ -1048,6 +1082,8 @@ export class GameScene extends Phaser.Scene {
     private currentStrokeHistoryPoints: NetworkPaintPoint[] = [];
     private localPaintHistory: NetworkPaintStroke[] = [];
     private straightLineStart?: NetworkPaintPoint;
+    private straightLineStartWorld?: Phaser.Math.Vector2;
+    private straightLinePreview?: Phaser.GameObjects.Graphics;
     private undoPaintButton?: Phaser.GameObjects.Text;
     private mobilePaintPrecisionRing?: Phaser.GameObjects.Arc;
     private mobilePaintPrecisionCrosshair?: Phaser.GameObjects.Graphics;
@@ -6718,25 +6754,59 @@ export class GameScene extends Phaser.Scene {
             );
 
         /*
-         * Focus area sits slightly in front of the Hunter, centered on the
-         * shotgun aim direction. Everything outside is dark and visually
-         * noisy, so scanning without deliberate aim is much harder.
+         * Hunter vision is a directional fan starting at the body.
+         * This gives the shotgun a deliberate "flashlight / field of focus"
+         * feel instead of a circular hole floating in front of the Hunter.
          */
-        const focusDistance =
-            82 / zoom;
+        const range =
+            285 / zoom;
 
-        const radius =
-            122 / zoom;
+        const halfAngle =
+            Phaser.Math.DegToRad(
+                34,
+            );
 
-        const focusX =
-            center.x +
-            Math.cos(angle) *
-                focusDistance;
+        const leftPoint =
+            new Phaser.Math.Vector2(
+                center.x +
+                    Math.cos(
+                        angle -
+                            halfAngle,
+                    ) *
+                        range,
+                center.y +
+                    Math.sin(
+                        angle -
+                            halfAngle,
+                    ) *
+                        range,
+            );
 
-        const focusY =
-            center.y +
-            Math.sin(angle) *
-                focusDistance;
+        const rightPoint =
+            new Phaser.Math.Vector2(
+                center.x +
+                    Math.cos(
+                        angle +
+                            halfAngle,
+                    ) *
+                        range,
+                center.y +
+                    Math.sin(
+                        angle +
+                            halfAngle,
+                    ) *
+                        range,
+            );
+
+        /*
+         * Darken everything outside the triangle by horizontal scan-lines.
+         * This avoids browser-specific inverted GeometryMask artifacts.
+         */
+        const triangle = [
+            center,
+            leftPoint,
+            rightPoint,
+        ];
 
         const margin =
             Math.max(
@@ -6744,95 +6814,225 @@ export class GameScene extends Phaser.Scene {
                 this.gameHeight,
             );
 
+        const minWorldX =
+            -margin;
+        const maxWorldX =
+            this.gameWidth +
+            margin;
+        const minWorldY =
+            -margin;
+        const maxWorldY =
+            this.gameHeight +
+            margin;
+
         const step =
             Math.max(
                 2,
                 3 / zoom,
             );
 
+        const edgeIntersectionX = (
+            a: Phaser.Math.Vector2,
+            b: Phaser.Math.Vector2,
+            y: number,
+        ): number | null => {
+            const minY =
+                Math.min(
+                    a.y,
+                    b.y,
+                );
+            const maxY =
+                Math.max(
+                    a.y,
+                    b.y,
+                );
+
+            if (
+                y < minY ||
+                y >= maxY ||
+                Math.abs(
+                    b.y - a.y,
+                ) < 0.0001
+            ) {
+                return null;
+            }
+
+            const t =
+                (
+                    y - a.y
+                ) /
+                (
+                    b.y - a.y
+                );
+
+            return Phaser.Math.Linear(
+                a.x,
+                b.x,
+                t,
+            );
+        };
+
         graphics.fillStyle(
             0x071019,
-            0.69,
+            0.72,
         );
 
         for (
-            let y = -margin;
-            y <
-            this.gameHeight + margin;
+            let y = minWorldY;
+            y <= maxWorldY;
             y += step
         ) {
-            const dy =
-                y - focusY;
+            const intersections:
+                number[] = [];
+
+            for (
+                let index = 0;
+                index < 3;
+                index += 1
+            ) {
+                const x =
+                    edgeIntersectionX(
+                        triangle[index],
+                        triangle[
+                            (
+                                index + 1
+                            ) %
+                                3
+                        ],
+                        y,
+                    );
+
+                if (
+                    x !== null &&
+                    Number.isFinite(x)
+                ) {
+                    intersections.push(
+                        x,
+                    );
+                }
+            }
+
+            intersections.sort(
+                (a, b) =>
+                    a - b,
+            );
 
             if (
-                Math.abs(dy) >
-                radius
+                intersections.length < 2
             ) {
                 graphics.fillRect(
-                    -margin,
+                    minWorldX,
                     y,
-                    this.gameWidth +
-                        margin * 2,
+                    maxWorldX -
+                        minWorldX,
                     step + 1,
                 );
                 continue;
             }
 
-            const halfWidth =
-                Math.sqrt(
-                    Math.max(
-                        0,
-                        radius *
-                            radius -
-                        dy * dy,
-                    ),
-                );
+            const visibleLeft =
+                intersections[0];
+
+            const visibleRight =
+                intersections[
+                    intersections.length -
+                    1
+                ];
 
             graphics.fillRect(
-                -margin,
+                minWorldX,
                 y,
-                focusX -
-                    halfWidth +
-                    margin,
+                Math.max(
+                    0,
+                    visibleLeft -
+                        minWorldX,
+                ),
                 step + 1,
             );
 
             graphics.fillRect(
-                focusX +
-                    halfWidth,
+                visibleRight,
                 y,
-                this.gameWidth +
-                    margin -
-                    (
-                        focusX +
-                        halfWidth
-                    ),
+                Math.max(
+                    0,
+                    maxWorldX -
+                        visibleRight,
+                ),
                 step + 1,
             );
         }
 
         /*
-         * Soft/muddy peripheral edge: several translucent rings create a
-         * defocused transition rather than a perfectly crisp spotlight.
+         * Soft layered fan edges. The inner cone is clearest; the edges get
+         * progressively hazier so peripheral searching feels defocused.
          */
         for (
-            let index = 0;
-            index < 12;
-            index += 1
+            let layer = 0;
+            layer < 7;
+            layer += 1
         ) {
+            const spread =
+                halfAngle +
+                Phaser.Math.DegToRad(
+                    layer * 1.8,
+                );
+
+            const layerRange =
+                range +
+                layer *
+                    (5 / zoom);
+
+            const leftX =
+                center.x +
+                Math.cos(
+                    angle -
+                        spread,
+                ) *
+                    layerRange;
+
+            const leftY =
+                center.y +
+                Math.sin(
+                    angle -
+                        spread,
+                ) *
+                    layerRange;
+
+            const rightX =
+                center.x +
+                Math.cos(
+                    angle +
+                        spread,
+                ) *
+                    layerRange;
+
+            const rightY =
+                center.y +
+                Math.sin(
+                    angle +
+                        spread,
+                ) *
+                    layerRange;
+
             graphics
                 .lineStyle(
-                    4 / zoom,
-                    0x253746,
-                    0.035 +
-                        index * 0.012,
+                    3 / zoom,
+                    0x243746,
+                    0.10 +
+                        layer *
+                            0.025,
                 )
-                .strokeCircle(
-                    focusX,
-                    focusY,
-                    radius +
-                        index *
-                            (3 / zoom),
+                .lineBetween(
+                    center.x,
+                    center.y,
+                    leftX,
+                    leftY,
+                )
+                .lineBetween(
+                    center.x,
+                    center.y,
+                    rightX,
+                    rightY,
                 );
         }
     }
@@ -8291,12 +8491,19 @@ export class GameScene extends Phaser.Scene {
                 localIsHunter,
             );
 
-            if (localIsHunter) {
-                this.refreshHunterCamoPalette();
-            }
+            /*
+             * Both roles refresh map colors, but only HIDER receives them in
+             * the normal left palette. HUNTER keeps the standard palette.
+             * The old separate CAMO SWATCH panel is no longer shown.
+             */
+            this.refreshHunterCamoPalette();
+
+            this.applyRolePaintPalette(
+                localIsHunter,
+            );
 
             this.setHunterCamoPaletteVisible(
-                localIsHunter,
+                false,
             );
 
             this.updatePaintControlHelp();
@@ -9267,21 +9474,7 @@ export class GameScene extends Phaser.Scene {
 
     private createPaintPalette(): void {
         const colors = [
-            0x000000,
-            0xef4444,
-            0xf97316,
-            0xfacc15,
-            0x84cc16,
-            0x22c55e,
-            0x14b8a6,
-            0x38bdf8,
-            0x3b82f6,
-            0x8b5cf6,
-            0xec4899,
-            0x8b5a2b,
-            0xf5eee2,
-            0x9ca3af,
-            0x374151,
+            ...this.standardPaintColors,
         ];
 
         const panel = this.add
@@ -9585,8 +9778,8 @@ export class GameScene extends Phaser.Scene {
 
         this.undoPaintButton =
             this.add.text(
-                535,
-                this.gameHeight - 78,
+                548,
+                this.gameHeight - 104,
                 `↶ ${tr('되돌리기')}`,
                 {
                     fontFamily:
@@ -9596,11 +9789,11 @@ export class GameScene extends Phaser.Scene {
                     color: '#26352b',
                     backgroundColor:
                         '#f2e6c8',
-                    fixedWidth: 82,
-                    fixedHeight: 28,
+                    fixedWidth: 88,
+                    fixedHeight: 24,
                     align: 'center',
                     padding: {
-                        top: 7,
+                        top: 5,
                     },
                 },
             )
@@ -9618,9 +9811,30 @@ export class GameScene extends Phaser.Scene {
                     Phaser.Input.Pointer,
             ) => {
                 pointer.event
+                    ?.preventDefault?.();
+                pointer.event
                     ?.stopPropagation?.();
 
+                this.isPainting = false;
+                this.finishActivePaintStroke();
+                this.clearStraightLinePreview();
+
                 this.undoLastPaintStroke();
+            },
+        );
+
+        this.undoPaintButton.on(
+            'pointerup',
+            (
+                pointer:
+                    Phaser.Input.Pointer,
+            ) => {
+                pointer.event
+                    ?.preventDefault?.();
+                pointer.event
+                    ?.stopPropagation?.();
+
+                this.isPainting = false;
             },
         );
 
@@ -10062,6 +10276,85 @@ export class GameScene extends Phaser.Scene {
         }
     }
 
+    private applyRolePaintPalette(
+        localIsHunter: boolean,
+    ): void {
+        const colors =
+            localIsHunter
+                ? [
+                    ...this.standardPaintColors,
+                ]
+                : [
+                    0x000000,
+                    0xf5eee2,
+                    ...this.hunterCamoColors,
+                ].slice(
+                    0,
+                    this.standardPaintColors
+                        .length,
+                );
+
+        const swatches =
+            this.paletteObjects
+                .filter(
+                    (
+                        object,
+                    ): object is
+                        Phaser.GameObjects.Rectangle =>
+                        object instanceof
+                        Phaser.GameObjects.Rectangle &&
+                        typeof object.getData(
+                            'paletteColor',
+                        ) ===
+                            'number',
+                );
+
+        swatches.forEach(
+            (
+                swatch,
+                index,
+            ) => {
+                const color =
+                    colors[
+                        index %
+                            colors.length
+                    ] ??
+                    this.defaultPaintColor;
+
+                swatch
+                    .setFillStyle(
+                        color,
+                        1,
+                    )
+                    .setData(
+                        'paletteColor',
+                        color,
+                    );
+            },
+        );
+
+        /*
+         * If the currently selected color vanished when the role palette
+         * changed, reset selection to the first available color.
+         */
+        if (
+            !colors.includes(
+                this.paintColor,
+            )
+        ) {
+            this.paintColor =
+                colors[0] ??
+                this.defaultPaintColor;
+            this.createBrushTexture();
+        }
+
+        this.highlightPaletteColor(
+            this.paintColor,
+        );
+        this.updatePaintHud();
+        this.updatePaintPreviewImmediately();
+    }
+
     private refreshHunterCamoPalette(): void {
         const sourceImage =
             this.textures
@@ -10320,7 +10613,7 @@ export class GameScene extends Phaser.Scene {
                 )
                 .slice(
                     0,
-                    12,
+                    13,
                 );
 
         for (
@@ -10329,7 +10622,7 @@ export class GameScene extends Phaser.Scene {
         ) {
             if (
                 this.hunterCamoColors
-                    .length >= 12
+                    .length >= 13
             ) {
                 break;
             }
@@ -10474,13 +10767,15 @@ export class GameScene extends Phaser.Scene {
                 tr('PAINT CONTROLS'),
                 tr('좌클릭  색칠'),
                 hunterPaint
-                    ? tr('CAMO SWATCH  배경 대표색')
-                    : tr('우클릭  스포이드'),
+                    ? tr('기본 색상 팔레트')
+                    : tr('배경 위장색 + 검정/흰색 팔레트'),
                 hunterPaint
                     ? tr('우클릭  숨은 배경 추출 불가')
-                    : '',
+                    : tr('우클릭  스포이드'),
                 tr('휠      확대 / 축소'),
                 tr('Ctrl+휠 브러시 크기'),
+                tr('Shift+드래그  직선 그리기'),
+                tr('Ctrl+Z  한 단계 되돌리기'),
                 tr('팔레트  브러시 모양'),
                 tr('B       모양 전환'),
                 tr(`현재 ${this.getBrushShapeLabel()} · ${this.brushSize}`),
@@ -10712,6 +11007,11 @@ export class GameScene extends Phaser.Scene {
         this.paintPreview = this.add.graphics();
         this.paintPreview.setDepth(200);
         this.paintPreview.setVisible(false);
+
+        this.straightLinePreview =
+            this.add.graphics()
+                .setDepth(205)
+                .setVisible(false);
 
         this.createBrushTexture();
         this.redrawPaintPreview();
@@ -10993,6 +11293,90 @@ export class GameScene extends Phaser.Scene {
             .setVisible(false);
     }
 
+    private updateStraightLinePreview(
+        pointer: Phaser.Input.Pointer,
+    ): void {
+        if (
+            !this.straightLinePreview ||
+            !this.straightLineStartWorld ||
+            !this.shiftPaintKey?.isDown ||
+            !this.isPainting ||
+            this.phase !== 'paint'
+        ) {
+            this.clearStraightLinePreview();
+            return;
+        }
+
+        const target =
+            this.getPaintInputWorldPoint(
+                pointer,
+            );
+
+        const previewWidth =
+            Math.max(
+                1,
+                this.getPaintPreviewBrushSize() *
+                    1.7,
+            );
+
+        this.straightLinePreview
+            .clear()
+            .setVisible(true)
+            .lineStyle(
+                previewWidth,
+                this.paintColor,
+                0.48,
+            )
+            .lineBetween(
+                this.straightLineStartWorld.x,
+                this.straightLineStartWorld.y,
+                target.x,
+                target.y,
+            )
+            .lineStyle(
+                1.5,
+                0x172027,
+                0.78,
+            )
+            .lineBetween(
+                this.straightLineStartWorld.x,
+                this.straightLineStartWorld.y,
+                target.x,
+                target.y,
+            );
+    }
+
+    private clearStraightLinePreview(): void {
+        this.straightLinePreview
+            ?.clear()
+            .setVisible(false);
+    }
+
+    private isPaintUiHit(
+        currentlyOver:
+            Phaser.GameObjects.GameObject[],
+    ): boolean {
+        return currentlyOver.some(
+            (object) =>
+                this.paletteObjects.includes(
+                    object,
+                ) ||
+                this.hunterCamoPaletteObjects.includes(
+                    object,
+                ) ||
+                object ===
+                    this.eyedropperButton ||
+                object ===
+                    this.undoPaintButton ||
+                object ===
+                    this.spectatorButton ||
+                object ===
+                    this.brushSizeSliderTrack ||
+                object ===
+                    this.brushSizeSliderKnob,
+        );
+    }
+
     private createPointerControls(): void {
         this.input.on(
             Phaser.Input.Events.POINTER_DOWN,
@@ -11008,11 +11392,16 @@ export class GameScene extends Phaser.Scene {
                  * background underneath the button.
                  */
                 if (
-                    this.eyedropperButton &&
-                    currentlyOver.includes(
-                        this.eyedropperButton,
+                    this.isPaintUiHit(
+                        currentlyOver,
                     )
                 ) {
+                    /*
+                     * Palette/Undo/slider presses are UI-only. Never allow
+                     * the same touch to paint the world underneath.
+                     */
+                    this.isPainting = false;
+                    this.clearStraightLinePreview();
                     return;
                 }
 
@@ -11205,6 +11594,18 @@ export class GameScene extends Phaser.Scene {
                             }
                             : undefined;
 
+                    this.straightLineStartWorld =
+                        this.shiftPaintKey?.isDown
+                            ? new Phaser.Math.Vector2(
+                                paintTarget.x,
+                                paintTarget.y,
+                            )
+                            : undefined;
+
+                    this.updateStraightLinePreview(
+                        pointer,
+                    );
+
                     return;
                 }
 
@@ -11279,9 +11680,12 @@ export class GameScene extends Phaser.Scene {
                         this.straightLineStart
                     ) {
                         /*
-                         * Shift+drag only previews the endpoint. The actual
-                         * continuous straight stroke is committed on release.
+                         * Live visual preview. No permanent paint is stamped
+                         * until release, so the player can aim the line.
                          */
+                        this.updateStraightLinePreview(
+                            pointer,
+                        );
                         return;
                     }
 
@@ -11388,6 +11792,9 @@ export class GameScene extends Phaser.Scene {
 
                 this.straightLineStart =
                     undefined;
+                this.straightLineStartWorld =
+                    undefined;
+                this.clearStraightLinePreview();
 
                 this.hideMobilePaintPrecisionGuide();
 
@@ -11772,18 +12179,31 @@ export class GameScene extends Phaser.Scene {
         this.currentStrokeHistoryPoints = [];
         this.activeStrokeTargetSessionId = '';
         this.straightLineStart = undefined;
+        this.straightLineStartWorld =
+            undefined;
+        this.clearStraightLinePreview();
     }
 
     private undoLastPaintStroke(): void {
         if (
             this.phase !== 'paint' ||
-            !this.isMultiplayerSession() ||
+            !this.isMultiplayerSession()
+        ) {
+            return;
+        }
+
+        /*
+         * If Undo was pressed while a stroke was active, finish it first.
+         * That active stroke becomes the step that is removed below.
+         */
+        this.finishActivePaintStroke();
+
+        if (
             this.localPaintHistory.length === 0
         ) {
             return;
         }
 
-        this.finishActivePaintStroke();
         this.localPaintHistory.pop();
 
         const sessionId =
@@ -11794,10 +12214,18 @@ export class GameScene extends Phaser.Scene {
         }
 
         /*
-         * Existing paint protocol is enough for synchronized undo:
-         * first repaint the complete masked body with its base color, then
-         * replay every retained local stroke. Remote clients see exactly the
-         * same result without a new server message type.
+         * IMPORTANT:
+         * The server validates normal brush sizes (1..20). The old Undo sent
+         * one 64px brush, so remote clients could reject/ignore that reset
+         * while the local client still appeared correct.
+         *
+         * Two legal 20px square stamps cover the complete authoritative
+         * 80x120 character silhouette:
+         *   upper: head + torso/arms
+         *   lower: torso + legs
+         *
+         * Colyseus preserves message order, therefore every remote client
+         * receives: WHITE RESET -> retained strokes replay.
          */
         const resetStroke:
             NetworkPaintStroke = {
@@ -11806,26 +12234,34 @@ export class GameScene extends Phaser.Scene {
                 color:
                     0xf5eee2,
                 size:
-                    64,
+                    20,
                 shape:
                     'square',
                 points: [
                     {
                         x: 40,
-                        y: 60,
+                        y: 48,
+                    },
+                    {
+                        x: 40,
+                        y: 78,
                     },
                 ],
             };
 
-        this.networkPlayerManager
-            .stampLocalPaintPoint(
-                40,
-                60,
-                this.brushTextureKey,
-                resetStroke.color,
-                resetStroke.size,
-                resetStroke.shape,
-            );
+        resetStroke.points.forEach(
+            (point) => {
+                this.networkPlayerManager
+                    .stampLocalPaintPoint(
+                        point.x,
+                        point.y,
+                        this.brushTextureKey,
+                        resetStroke.color,
+                        resetStroke.size,
+                        resetStroke.shape,
+                    );
+            },
+        );
 
         multiplayerClient
             .sendPaintStroke(
@@ -14055,6 +14491,9 @@ export class GameScene extends Phaser.Scene {
         this.localPaintHistory = [];
         this.currentStrokeHistoryPoints = [];
         this.straightLineStart = undefined;
+        this.straightLineStartWorld =
+            undefined;
+        this.clearStraightLinePreview();
         this.phase = 'paint';
 
         if (
@@ -14114,6 +14553,19 @@ export class GameScene extends Phaser.Scene {
         this.isPainting = false;
         this.paintColor =
             this.defaultPaintColor;
+
+        if (
+            this.isMultiplayerSession()
+        ) {
+            this.refreshHunterCamoPalette();
+            this.applyRolePaintPalette(
+                this.networkPlayerManager
+                    .isLocalHunter(),
+            );
+            this.setHunterCamoPaletteVisible(
+                false,
+            );
+        }
 
         this.createBrushTexture();
 
