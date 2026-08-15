@@ -256,19 +256,19 @@ export class GameScene extends Phaser.Scene {
         this.survivalHudText =
             this.add.text(
                 this.gameWidth / 2,
-                38,
+                46,
                 '',
                 {
                     fontFamily:
                         'monospace',
-                    fontSize: '9px',
+                    fontSize: '12px',
                     fontStyle: 'bold',
                     color: '#ffffff',
                     backgroundColor:
-                        'rgba(15,23,32,0.62)',
+                        'rgba(15,23,32,0.72)',
                     padding: {
-                        x: 7,
-                        y: 3,
+                        x: 9,
+                        y: 4,
                     },
                 },
             )
@@ -278,20 +278,68 @@ export class GameScene extends Phaser.Scene {
                 .setVisible(false);
     }
 
+    private getAuthoritativeAliveHiderCount(): number {
+        const room =
+            multiplayerClient.getRoom();
+
+        if (!room?.state?.players) {
+            return 0;
+        }
+
+        let aliveCount = 0;
+
+        room.state.players.forEach(
+            (player: NetworkPlayerState) => {
+                if (
+                    player.role === 'hider' &&
+                    player.alive
+                ) {
+                    aliveCount += 1;
+                }
+            },
+        );
+
+        return aliveCount;
+    }
+
     private updateSurvivalHud(): void {
+        if (
+            !this.survivalHudGraphics ||
+            !this.survivalHudText
+        ) {
+            return;
+        }
+
+        const localRole =
+            multiplayerClient
+                .getLocalPlayer()
+                ?.role;
+
+        /*
+         * During Hunter customization the top paint UI is already dense.
+         * Hide the survival HUD only for the Hunter in Paint.
+         *
+         * Hiders can still see it during Paint, and BOTH roles see it
+         * throughout Hunt.
+         */
         const visible =
             this.isMultiplayerSession() &&
             (
                 this.phase === 'countdown' ||
-                this.phase === 'paint' ||
+                (
+                    this.phase === 'paint' &&
+                    localRole === 'hider'
+                ) ||
                 this.phase === 'hunt'
             );
 
         if (!visible) {
             this.survivalHudGraphics
-                ?.setVisible(false);
+                .setVisible(false);
+
             this.survivalHudText
-                ?.setVisible(false);
+                .setVisible(false);
+
             return;
         }
 
@@ -299,16 +347,24 @@ export class GameScene extends Phaser.Scene {
             multiplayerClient.getRoom();
 
         if (!room?.state?.players) {
+            this.survivalHudGraphics
+                .setVisible(false);
+
+            this.survivalHudText
+                .setVisible(false);
             return;
         }
 
         const hiders:
             NetworkPlayerState[] = [];
+
         let hunterCount = 0;
 
         room.state.players.forEach(
             (player: NetworkPlayerState) => {
-                if (player.role === 'hunter') {
+                if (
+                    player.role === 'hunter'
+                ) {
                     hunterCount += 1;
                 } else {
                     hiders.push(player);
@@ -316,20 +372,37 @@ export class GameScene extends Phaser.Scene {
             },
         );
 
-        const spacing = 15;
-        const divider = 18;
-        const total =
-            Math.max(1, hiders.length) *
-                spacing +
-            divider +
-            Math.max(1, hunterCount) *
-                spacing;
+        /*
+         * PERSON ICON
+         *
+         * HIDER : bright beige person
+         * FOUND : same person, translucent
+         * HUNTER: black person
+         */
+        const hiderSpacing = 18;
+        const hunterSpacing = 18;
+        const dividerGap = 28;
+
+        const totalWidth =
+            Math.max(
+                hiders.length,
+                1,
+            ) *
+                hiderSpacing +
+            dividerGap +
+            Math.max(
+                hunterCount,
+                1,
+            ) *
+                hunterSpacing;
 
         let x =
             this.gameWidth / 2 -
-            total / 2;
+            totalWidth / 2 +
+            7;
 
-        const y = 18;
+        const headY = 15;
+        const bodyY = 24;
 
         this.survivalHudGraphics
             .clear()
@@ -337,36 +410,63 @@ export class GameScene extends Phaser.Scene {
 
         hiders.forEach(
             (player) => {
+                const alpha =
+                    player.alive
+                        ? 1
+                        : 0.22;
+
                 this.survivalHudGraphics
                     .fillStyle(
-                        0x090d12,
-                        player.alive
-                            ? 0.95
-                            : 0.18,
+                        0xf5eee2,
+                        alpha,
                     )
                     .fillCircle(
                         x,
-                        y,
-                        5,
+                        headY,
+                        4,
                     )
-                    .lineStyle(
-                        1,
-                        0xffffff,
-                        player.alive
-                            ? 0.85
-                            : 0.22,
-                    )
-                    .strokeCircle(
-                        x,
-                        y,
-                        5,
+                    .fillRoundedRect(
+                        x - 4,
+                        bodyY - 5,
+                        8,
+                        11,
+                        2,
                     );
 
-                x += spacing;
+                /*
+                 * Small arms make the symbol read as a person rather than
+                 * a circle/rectangle pair.
+                 */
+                this.survivalHudGraphics
+                    .lineStyle(
+                        2,
+                        0xf5eee2,
+                        alpha,
+                    )
+                    .lineBetween(
+                        x - 6,
+                        bodyY - 2,
+                        x + 6,
+                        bodyY - 2,
+                    )
+                    .lineBetween(
+                        x - 2,
+                        bodyY + 5,
+                        x - 3,
+                        bodyY + 10,
+                    )
+                    .lineBetween(
+                        x + 2,
+                        bodyY + 5,
+                        x + 3,
+                        bodyY + 10,
+                    );
+
+                x += hiderSpacing;
             },
         );
 
-        x += divider;
+        x += dividerGap;
 
         for (
             let index = 0;
@@ -375,35 +475,58 @@ export class GameScene extends Phaser.Scene {
         ) {
             this.survivalHudGraphics
                 .fillStyle(
-                    0x111827,
-                    0.95,
+                    0x090d12,
+                    1,
                 )
-                .fillRect(
-                    x - 5,
-                    y - 5,
-                    10,
-                    10,
+                .fillCircle(
+                    x,
+                    headY,
+                    4,
+                )
+                .fillRoundedRect(
+                    x - 4,
+                    bodyY - 5,
+                    8,
+                    11,
+                    2,
                 )
                 .lineStyle(
+                    2,
+                    0x090d12,
                     1,
-                    0xffffff,
-                    0.8,
                 )
-                .strokeRect(
-                    x - 5,
-                    y - 5,
-                    10,
-                    10,
+                .lineBetween(
+                    x - 6,
+                    bodyY - 2,
+                    x + 6,
+                    bodyY - 2,
+                )
+                .lineBetween(
+                    x - 2,
+                    bodyY + 5,
+                    x - 3,
+                    bodyY + 10,
+                )
+                .lineBetween(
+                    x + 2,
+                    bodyY + 5,
+                    x + 3,
+                    bodyY + 10,
                 );
 
-            x += spacing;
+            x += hunterSpacing;
         }
 
         this.survivalHudText
             .setText(
-                `${tr('HIDER')}  /  ${tr('HUNTER')}`,
+                `${tr('HIDER')}   /   ${tr('HUNTER')}`,
             )
-            .setVisible(true);
+            .setPosition(
+                this.gameWidth / 2,
+                48,
+            )
+            .setVisible(true)
+            .setAlpha(0.92);
     }
 
     private showHiderFoundEffect(
@@ -9442,6 +9565,11 @@ export class GameScene extends Phaser.Scene {
 
     private enterLobbyPhase(): void {
         this.phase = 'lobby';
+
+        this.survivalHudGraphics
+            ?.setVisible(false);
+        this.survivalHudText
+            ?.setVisible(false);
         this.syncPhaseMusic();
         this.syncMapBackground();
         this.hidePoints = 0;
@@ -9579,6 +9707,8 @@ export class GameScene extends Phaser.Scene {
             this.paintZoomText,
             this.paintControlHelpText,
             this.multiplayerText,
+            this.survivalHudGraphics,
+            this.survivalHudText,
             this.bgmToggleButton,
             this.hunterBlindPanel,
             this.hunterBlindText,
@@ -10043,7 +10173,39 @@ export class GameScene extends Phaser.Scene {
     private handleNetworkRoundResult(
         result: NetworkRoundResult,
     ): void {
+        /*
+         * CRITICAL SAFETY:
+         * A transient/stale Hunter-win packet must never end a live round
+         * while authoritative room state still contains an alive Hider.
+         *
+         * Server player.alive values are the same authority used for Hunt
+         * gameplay, so reject the impossible result and wait for a coherent
+         * state/result pair.
+         */
+        if (
+            result.winner === 'hunters' &&
+            this.phase === 'hunt' &&
+            this.getAuthoritativeAliveHiderCount() > 0
+        ) {
+            console.warn(
+                '[Color Hunt] Ignored premature Hunter victory while Hiders are still alive',
+                {
+                    aliveHiders:
+                        this.getAuthoritativeAliveHiderCount(),
+                    result,
+                },
+            );
+
+            return;
+        }
+
         this.roundResultWinner = result.winner;
+
+        this.survivalHudGraphics
+            ?.setVisible(false);
+        this.survivalHudText
+            ?.setVisible(false);
+
         this.clearAllAimingVisuals();
         this.resetGameplayCamera();
         this.hideLegacySinglePlayerActors();
@@ -10199,6 +10361,7 @@ export class GameScene extends Phaser.Scene {
                 remainingMs;
 
             this.updateLobbyUi();
+            this.updateSurvivalHud();
             return;
         }
 
@@ -10302,6 +10465,8 @@ export class GameScene extends Phaser.Scene {
             this.phaseEndTime =
                 this.time.now +
                 remainingMs;
+
+            this.updateSurvivalHud();
             return;
         }
 
@@ -10367,6 +10532,13 @@ export class GameScene extends Phaser.Scene {
                 this.time.now +
                 remainingMs;
 
+            /*
+             * Camera zoom compensation has already been applied above.
+             * Survival HUD is part of fixed UI now, so refresh visibility
+             * after the Hunt camera starts.
+             */
+            this.updateSurvivalHud();
+
             return;
         }
 
@@ -10374,6 +10546,29 @@ export class GameScene extends Phaser.Scene {
             const authoritativeWinner =
                 multiplayerClient.getRoom()
                     ?.state.winner;
+
+            /*
+             * Same safety for phase transition. If winner says Hunters but
+             * authoritative players still contain a living Hider, this
+             * finished transition is internally inconsistent and must not
+             * terminate the client's round.
+             */
+            if (
+                authoritativeWinner === 'hunters' &&
+                this.getAuthoritativeAliveHiderCount() > 0
+            ) {
+                console.warn(
+                    '[Color Hunt] Ignored inconsistent finished phase: alive Hiders remain',
+                    {
+                        aliveHiders:
+                            this.getAuthoritativeAliveHiderCount(),
+                    },
+                );
+
+                this.phase = 'hunt';
+                this.updateSurvivalHud();
+                return;
+            }
 
             if (
                 authoritativeWinner === 'hunters' ||
