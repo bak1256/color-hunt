@@ -1042,11 +1042,20 @@ export class GameScene extends Phaser.Scene {
                         );
                 }
 
-                if (
-                    this.mobileTouchPoints.size <
-                    2
-                ) {
+                const realDownCount =
+                    [
+                        ...this.mobileTouchPoints
+                            .keys(),
+                    ].filter(
+                        (id) =>
+                            this.isMobilePointerActuallyDown(
+                                id,
+                            ),
+                    ).length;
+
+                if (realDownCount < 2) {
                     this.mobilePinchDistance = 0;
+                    this.mobilePinchActive = false;
                 }
             };
 
@@ -1182,60 +1191,87 @@ export class GameScene extends Phaser.Scene {
         );
     }
 
+    private isMobilePointerActuallyDown(
+        pointerId: number,
+    ): boolean {
+        const manager =
+            this.input.manager as unknown as {
+                pointers?: Array<{
+                    id: number;
+                    isDown: boolean;
+                }>;
+            };
+
+        return Boolean(
+            manager.pointers?.some(
+                (pointer) =>
+                    pointer.id === pointerId &&
+                    pointer.isDown,
+            ),
+        );
+    }
+
     private updateMobilePinchGesture(): void {
         if (
             this.phase !== 'paint' ||
             !this.isMultiplayerSession()
         ) {
             this.mobilePinchDistance = 0;
+            this.mobilePinchActive = false;
             return;
         }
 
-        const points =
+        const activeTouches =
             [...this.mobileTouchPoints.entries()]
                 .filter(
                     ([id, point]) =>
+                        this.isMobilePointerActuallyDown(
+                            id,
+                        ) &&
                         id !==
                             this.mobileMovePointerId &&
                         id !==
                             this.mobileAimPointerId &&
+                        id !==
+                            this.mobileFirePointerId &&
                         !this.isMobileControlScreenPoint(
                             point.x,
                             point.y,
                         ),
-                )
-                .map(
-                    ([, point]) =>
-                        point,
                 );
 
-        if (points.length < 2) {
+        /*
+         * Exactly two physically-held fingers are required.
+         * One finger can never enter zoom logic, even if a stale pointer
+         * coordinate remains in mobileTouchPoints.
+         */
+        if (activeTouches.length !== 2) {
             this.mobilePinchDistance = 0;
+            this.mobilePinchActive = false;
             return;
         }
 
-        /*
-         * Two-finger zoom is never paint. Cancel a first-finger preview
-         * before the pinch starts so zooming cannot accidentally draw.
-         */
-        if (
-            this.mobilePendingPaintPointerId >= 0
-        ) {
-            this.clearMobilePendingPaint();
-            this.isPainting = false;
-        }
+        const first =
+            activeTouches[0][1];
+
+        const second =
+            activeTouches[1][1];
 
         const distance =
             Phaser.Math.Distance.Between(
-                points[0].x,
-                points[0].y,
-                points[1].x,
-                points[1].y,
+                first.x,
+                first.y,
+                second.x,
+                second.y,
             );
 
         if (
             this.mobilePinchDistance <= 0
         ) {
+            /*
+             * Second finger only ARMS pinch.
+             * Merely touching with finger #2 must not zoom or cancel paint.
+             */
             this.mobilePinchDistance =
                 distance;
             return;
@@ -1245,7 +1281,38 @@ export class GameScene extends Phaser.Scene {
             distance -
             this.mobilePinchDistance;
 
-        if (Math.abs(delta) < 10) {
+        /*
+         * Require a deliberate pinch before changing camera zoom.
+         */
+        if (
+            !this.mobilePinchActive &&
+            Math.abs(delta) < 14
+        ) {
+            return;
+        }
+
+        if (!this.mobilePinchActive) {
+            this.mobilePinchActive = true;
+
+            /*
+             * Commit an already-started stroke before switching to zoom.
+             * A preview-only touch is simply cancelled.
+             */
+            if (this.isPainting) {
+                this.finishActivePaintStroke();
+                this.isPainting = false;
+            }
+
+            if (
+                this.mobilePendingPaintPointerId >= 0
+            ) {
+                this.clearMobilePendingPaint();
+            }
+
+            this.clearStraightLinePreview();
+        }
+
+        if (Math.abs(delta) < 8) {
             return;
         }
 
@@ -1659,6 +1726,7 @@ export class GameScene extends Phaser.Scene {
     private mobileTouchPoints =
         new Map<number, Phaser.Math.Vector2>();
     private mobilePinchDistance = 0;
+    private mobilePinchActive = false;
     private mobilePendingPaintPointerId = -1;
     private mobilePendingPaintStartScreen?: Phaser.Math.Vector2;
     private mobilePendingPaintStartWorld?: Phaser.Math.Vector2;
@@ -11397,6 +11465,9 @@ export class GameScene extends Phaser.Scene {
 
     private resetPaintWorldZoom(): void {
         this.paintWorldZoom = 1;
+        this.mobilePinchDistance = 0;
+        this.mobilePinchActive = false;
+        this.mobileTouchPoints.clear();
         const camera =
             this.cameras.main;
 
@@ -13755,6 +13826,25 @@ export class GameScene extends Phaser.Scene {
                     return;
                 }
 
+                /*
+                 * On mobile, finger #2 belongs to pinch zoom.
+                 * It must never replace the pending/active paint pointer.
+                 */
+                if (
+                    this.mobileControlsEnabled &&
+                    (
+                        this.mobilePinchActive ||
+                        (
+                            this.mobileTouchPoints.size >= 1 &&
+                            !this.mobileTouchPoints.has(
+                                pointer.id,
+                            )
+                        )
+                    )
+                ) {
+                    return;
+                }
+
                 if (this.eyedropperArmed) {
                     /*
                      * Ignore every paint/palette UI object while the tool is
@@ -13992,6 +14082,29 @@ export class GameScene extends Phaser.Scene {
                     this.updateEyedropperMagnifier(
                         pointer,
                     );
+                    return;
+                }
+
+                const activeMobilePaintTouches =
+                    this.mobileControlsEnabled
+                        ? [
+                            ...this.mobileTouchPoints
+                                .keys(),
+                        ].filter(
+                            (id) =>
+                                this.isMobilePointerActuallyDown(
+                                    id,
+                                ),
+                        ).length
+                        : 0;
+
+                if (
+                    this.mobileControlsEnabled &&
+                    (
+                        this.mobilePinchActive ||
+                        activeMobilePaintTouches >= 2
+                    )
+                ) {
                     return;
                 }
 
