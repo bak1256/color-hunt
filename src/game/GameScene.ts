@@ -6930,16 +6930,22 @@ export class GameScene extends Phaser.Scene {
             this.buildLobbyAvatarPreviewTexture();
 
         /*
-         * Waiting-room Hider body uses the native 80 x 120 pixel texture
-         * at scale 1.  Keep this lobby preview at the exact same displayed
-         * size so users see their customization at its real in-game scale.
+         * Keep the CHARACTER itself at the exact native waiting-room size
+         * (80 x 120), but make the decorative preview frame compact.
+         *
+         * The previous 86 x 126 frame was visually protruding above/below
+         * the lobby header area.  The frame is now a small portrait window
+         * centered inside the header while the avatar keeps its real size.
+         *
+         * We intentionally let the character slightly overflow the frame
+         * rather than scaling the character down.
          */
         const avatarPreviewFrame =
             this.add.rectangle(
-                625,
-                118,
-                86,
-                126,
+                632,
+                132,
+                66,
+                82,
                 0xdfeadd,
                 1,
             )
@@ -6952,8 +6958,8 @@ export class GameScene extends Phaser.Scene {
 
         const avatarPreview =
             this.add.image(
-                625,
-                118,
+                632,
+                132,
                 avatarPreviewTexture,
             )
                 .setDisplaySize(
@@ -6965,7 +6971,7 @@ export class GameScene extends Phaser.Scene {
         const avatarCustomizeButton =
             this.add.text(
                 758,
-                118,
+                132,
                 `🎨 ${tr('내 캐릭터 꾸미기')}`,
                 {
                     fontFamily:
