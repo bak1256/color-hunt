@@ -233,6 +233,11 @@ export class GameScene extends Phaser.Scene {
 
     private targetText!: Phaser.GameObjects.Text;
 
+    private survivalHudGraphics!: Phaser.GameObjects.Graphics;
+    private survivalHudText!: Phaser.GameObjects.Text;
+    private knownAliveState =
+        new Map<string, boolean>();
+
     private paintColorText!: Phaser.GameObjects.Text;
     private brushSizeText!: Phaser.GameObjects.Text;
     private paletteObjects: Phaser.GameObjects.GameObject[] = [];
@@ -240,6 +245,302 @@ export class GameScene extends Phaser.Scene {
     private hunterCamoColors: number[] = [];
     private paintZoomText!: Phaser.GameObjects.Text;
     private paintControlHelpText!: Phaser.GameObjects.Text;
+
+    private createSurvivalHud(): void {
+        this.survivalHudGraphics =
+            this.add.graphics()
+                .setScrollFactor(0)
+                .setDepth(6010)
+                .setVisible(false);
+
+        this.survivalHudText =
+            this.add.text(
+                this.gameWidth / 2,
+                38,
+                '',
+                {
+                    fontFamily:
+                        'monospace',
+                    fontSize: '9px',
+                    fontStyle: 'bold',
+                    color: '#ffffff',
+                    backgroundColor:
+                        'rgba(15,23,32,0.62)',
+                    padding: {
+                        x: 7,
+                        y: 3,
+                    },
+                },
+            )
+                .setOrigin(0.5)
+                .setScrollFactor(0)
+                .setDepth(6011)
+                .setVisible(false);
+    }
+
+    private updateSurvivalHud(): void {
+        const visible =
+            this.isMultiplayerSession() &&
+            (
+                this.phase === 'countdown' ||
+                this.phase === 'paint' ||
+                this.phase === 'hunt'
+            );
+
+        if (!visible) {
+            this.survivalHudGraphics
+                ?.setVisible(false);
+            this.survivalHudText
+                ?.setVisible(false);
+            return;
+        }
+
+        const room =
+            multiplayerClient.getRoom();
+
+        if (!room?.state?.players) {
+            return;
+        }
+
+        const hiders:
+            NetworkPlayerState[] = [];
+        let hunterCount = 0;
+
+        room.state.players.forEach(
+            (player: NetworkPlayerState) => {
+                if (player.role === 'hunter') {
+                    hunterCount += 1;
+                } else {
+                    hiders.push(player);
+                }
+            },
+        );
+
+        const spacing = 15;
+        const divider = 18;
+        const total =
+            Math.max(1, hiders.length) *
+                spacing +
+            divider +
+            Math.max(1, hunterCount) *
+                spacing;
+
+        let x =
+            this.gameWidth / 2 -
+            total / 2;
+
+        const y = 18;
+
+        this.survivalHudGraphics
+            .clear()
+            .setVisible(true);
+
+        hiders.forEach(
+            (player) => {
+                this.survivalHudGraphics
+                    .fillStyle(
+                        0x090d12,
+                        player.alive
+                            ? 0.95
+                            : 0.18,
+                    )
+                    .fillCircle(
+                        x,
+                        y,
+                        5,
+                    )
+                    .lineStyle(
+                        1,
+                        0xffffff,
+                        player.alive
+                            ? 0.85
+                            : 0.22,
+                    )
+                    .strokeCircle(
+                        x,
+                        y,
+                        5,
+                    );
+
+                x += spacing;
+            },
+        );
+
+        x += divider;
+
+        for (
+            let index = 0;
+            index < hunterCount;
+            index += 1
+        ) {
+            this.survivalHudGraphics
+                .fillStyle(
+                    0x111827,
+                    0.95,
+                )
+                .fillRect(
+                    x - 5,
+                    y - 5,
+                    10,
+                    10,
+                )
+                .lineStyle(
+                    1,
+                    0xffffff,
+                    0.8,
+                )
+                .strokeRect(
+                    x - 5,
+                    y - 5,
+                    10,
+                    10,
+                );
+
+            x += spacing;
+        }
+
+        this.survivalHudText
+            .setText(
+                `${tr('HIDER')}  /  ${tr('HUNTER')}`,
+            )
+            .setVisible(true);
+    }
+
+    private showHiderFoundEffect(
+        sessionId: string,
+    ): void {
+        const position =
+            this.networkPlayerManager
+                .getPlayerPosition(
+                    sessionId,
+                );
+
+        if (!position) {
+            return;
+        }
+
+        const localIsHunter =
+            multiplayerClient
+                .getLocalPlayer()
+                ?.role === 'hunter';
+
+        const burst =
+            this.add.graphics()
+                .setDepth(5900)
+                .lineStyle(
+                    4,
+                    0xffe27a,
+                    1,
+                );
+
+        for (
+            let index = 0;
+            index < 12;
+            index += 1
+        ) {
+            const angle =
+                (
+                    Math.PI * 2 *
+                    index
+                ) / 12;
+
+            burst.lineBetween(
+                position.x +
+                    Math.cos(angle) * 8,
+                position.y +
+                    Math.sin(angle) * 8,
+                position.x +
+                    Math.cos(angle) * 32,
+                position.y +
+                    Math.sin(angle) * 32,
+            );
+        }
+
+        const foundText =
+            this.add.text(
+                position.x,
+                position.y - 42,
+                `💥 ${tr('찾았다!')}`,
+                {
+                    fontFamily:
+                        'Arial, sans-serif',
+                    fontSize: '21px',
+                    fontStyle: 'bold',
+                    color: '#fff6a5',
+                    stroke: '#5a220c',
+                    strokeThickness: 5,
+                },
+            )
+                .setOrigin(0.5)
+                .setDepth(5901);
+
+        this.tweens.add({
+            targets: burst,
+            alpha: 0,
+            scaleX: 1.8,
+            scaleY: 1.8,
+            duration: 520,
+            onComplete: () => {
+                burst.destroy();
+            },
+        });
+
+        this.tweens.add({
+            targets: foundText,
+            y: position.y - 74,
+            alpha: 0,
+            scaleX: 1.2,
+            scaleY: 1.2,
+            duration: 850,
+            ease: 'Back.easeOut',
+            onComplete: () => {
+                foundText.destroy();
+            },
+        });
+
+        this.cameras.main.shake(
+            localIsHunter
+                ? 160
+                : 100,
+            localIsHunter
+                ? 0.009
+                : 0.004,
+        );
+
+        if (localIsHunter) {
+            this.hunterHitConfirmSound
+                ?.play({
+                    volume: 0.82,
+                    rate: 0.92,
+                });
+
+            this.showStatus(
+                tr('찾았다!'),
+            );
+
+            this.time.delayedCall(
+                900,
+                () => {
+                    if (
+                        this.statusText.text ===
+                        tr('찾았다!')
+                    ) {
+                        this.clearStatus();
+                    }
+                },
+            );
+        } else if (
+            sessionId ===
+            multiplayerClient
+                .getSessionId()
+        ) {
+            this.hitSound
+                ?.play({
+                    volume: 0.8,
+                    rate: 0.88,
+                });
+        }
+    }
 
     private createMobileControls(): void {
         /*
@@ -2017,6 +2318,7 @@ export class GameScene extends Phaser.Scene {
 
         this.createKeyboardControls();
         this.createHud();
+        this.createSurvivalHud();
         this.createBgmToggleButton();
 
         this.events.once(
@@ -2426,6 +2728,13 @@ export class GameScene extends Phaser.Scene {
                         player,
                     );
 
+                    this.knownAliveState.set(
+                        sessionId,
+                        player.alive,
+                    );
+
+                    this.updateSurvivalHud();
+
                     if (
                         sessionId ===
                         multiplayerClient.getSessionId()
@@ -2499,6 +2808,12 @@ export class GameScene extends Phaser.Scene {
                         sessionId,
                     );
 
+                    this.knownAliveState.delete(
+                        sessionId,
+                    );
+
+                    this.updateSurvivalHud();
+
                     console.log(
                         '[Chameleon Hunt] Player removed',
                         sessionId,
@@ -2516,10 +2831,33 @@ export class GameScene extends Phaser.Scene {
                     sessionId: string,
                     player: NetworkPlayerState,
                 ) => {
+                    const wasAlive =
+                        this.knownAliveState.get(
+                            sessionId,
+                        );
+
                     this.networkPlayerManager.updatePlayer(
                         sessionId,
                         player,
                     );
+
+                    this.knownAliveState.set(
+                        sessionId,
+                        player.alive,
+                    );
+
+                    if (
+                        this.phase === 'hunt' &&
+                        wasAlive === true &&
+                        player.alive === false &&
+                        player.role === 'hider'
+                    ) {
+                        this.showHiderFoundEffect(
+                            sessionId,
+                        );
+                    }
+
+                    this.updateSurvivalHud();
 
                     if (
                         sessionId ===

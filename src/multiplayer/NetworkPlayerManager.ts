@@ -69,8 +69,14 @@ export class NetworkPlayerManager {
 
   private readonly hiderMoveSpeed = 180;
   private readonly hunterMoveSpeed = 125;
-  private readonly sendInterval = 33;
+  private readonly sendInterval = 16;
   private lastSendTime = 0;
+  private recentSentPositions:
+    Array<{
+      x: number;
+      y: number;
+      sentAt: number;
+    }> = [];
 
   /*
    * 로컬 이동 중 서버 echo 좌표가 local prediction을 매 packet마다
@@ -79,7 +85,7 @@ export class NetworkPlayerManager {
   private lastLocalMoveInputAt = 0;
   private localWasMoving = false;
   private lastAuthoritativeSyncAt = 0;
-  private readonly authoritativeSyncIntervalMs = 33;
+  private readonly authoritativeSyncIntervalMs = 16;
   private readonly localMoveReconcileGraceMs = 180;
   private readonly localHardCorrectionDistance = 32;
 
@@ -110,6 +116,7 @@ export class NetworkPlayerManager {
     this.lastLocalMoveInputAt = 0;
     this.localWasMoving = false;
     this.lastAuthoritativeSyncAt = 0;
+    this.recentSentPositions = [];
   }
 
   syncPlayersFromCurrentRoom(): void {
@@ -743,6 +750,13 @@ export class NetworkPlayerManager {
           player.y,
         );
 
+      const normalDelayedEcho =
+        recentlyMoving &&
+        this.isNormalServerEcho(
+          player.x,
+          player.y,
+        );
+
       /*
        * 로컬 캐릭터는 입력 중 client prediction을 우선합니다.
        * 예전에는 서버 echo packet이 올 때마다 localX/localY를 과거 좌표로
@@ -767,16 +781,28 @@ export class NetworkPlayerManager {
         this.localMovementInitialized =
           true;
       } else if (
+        !normalDelayedEcho &&
         correctionDistance >=
-        this.localHardCorrectionDistance
+          this.localHardCorrectionDistance
       ) {
-        this.localX = player.x;
-        this.localY = player.y;
+        this.localX =
+          Phaser.Math.Linear(
+            this.localX,
+            player.x,
+            0.72,
+          );
+
+        this.localY =
+          Phaser.Math.Linear(
+            this.localY,
+            player.y,
+            0.72,
+          );
 
         this.setViewPosition(
           view,
-          player.x,
-          player.y,
+          this.localX,
+          this.localY,
         );
       } else if (!recentlyMoving) {
         /*
@@ -908,6 +934,44 @@ export class NetworkPlayerManager {
     );
   }
 
+  private rememberSentPosition(
+    x: number,
+    y: number,
+  ): void {
+    const now =
+      this.scene.time.now;
+
+    this.recentSentPositions.push({
+      x,
+      y,
+      sentAt: now,
+    });
+
+    this.recentSentPositions =
+      this.recentSentPositions
+        .filter(
+          (entry) =>
+            now - entry.sentAt <
+            1200,
+        )
+        .slice(-80);
+  }
+
+  private isNormalServerEcho(
+    x: number,
+    y: number,
+  ): boolean {
+    return this.recentSentPositions.some(
+      (entry) =>
+        Phaser.Math.Distance.Between(
+          entry.x,
+          entry.y,
+          x,
+          y,
+        ) <= 2.25,
+    );
+  }
+
   moveLocalPlayer(
     directionX: number,
     directionY: number,
@@ -944,6 +1008,11 @@ export class NetworkPlayerManager {
          * and every remote Hunter settle on exactly the same point.
          */
         multiplayerClient.sendMove(
+          this.localX,
+          this.localY,
+        );
+
+        this.rememberSentPosition(
           this.localX,
           this.localY,
         );
@@ -1044,6 +1113,11 @@ export class NetworkPlayerManager {
       this.lastSendTime = now;
 
       multiplayerClient.sendMove(
+        this.localX,
+        this.localY,
+      );
+
+      this.rememberSentPosition(
         this.localX,
         this.localY,
       );
@@ -1355,6 +1429,24 @@ export class NetworkPlayerManager {
         "hunter" &&
       multiplayerClient.getLocalPlayer()
         ?.role === "hunter"
+    );
+  }
+
+  getPlayerPosition(
+    sessionId: string,
+  ): Phaser.Math.Vector2 | null {
+    const view =
+      this.players.get(
+        sessionId,
+      );
+
+    if (!view) {
+      return null;
+    }
+
+    return new Phaser.Math.Vector2(
+      view.container.x,
+      view.container.y,
     );
   }
 
@@ -3230,49 +3322,25 @@ export class NetworkPlayerManager {
      */
     if (view.role === "hider") {
       /*
-       * SAFE HIDER WALK ANIMATION:
-       * Never move head/arms/legs independently. The visible pixel body and
-       * paint RenderTexture are siblings inside the SAME player container.
-       * We animate only the parent scale, so camouflage and body receive the
-       * exact same transform every frame and cannot separate.
+       * Keep camouflage rigid while moving. The old squash/stretch of the
+       * entire container looked like network shaking and could make painted
+       * edges appear to wobble.
        */
-      const targetBlend =
+      view.walkBlend =
         moving ? 1 : 0;
 
-      view.walkBlend =
-        Phaser.Math.Linear(
-          view.walkBlend,
-          targetBlend,
-          moving ? 0.22 : 0.14,
-        );
-
-      if (moving) {
-        view.walkPhase +=
-          delta * 0.014;
-      }
-
-      const stride =
-        Math.sin(
-          view.walkPhase,
-        ) * view.walkBlend;
-
-      /*
-       * Subtle pixel-character bounce/squash.
-       * No Y position offset is used: only the shared parent transform.
-       */
       view.container.setScale(
-        1 + Math.abs(stride) * 0.018,
-        1 - Math.abs(stride) * 0.014,
+        1,
+        1,
       );
 
       view.shadow?.setScale(
-        1 + Math.abs(stride) * 0.08,
-        1 - Math.abs(stride) * 0.04,
+        1,
+        1,
       );
 
       if (
         moving &&
-        view.walkBlend > 0.22 &&
         this.scene.time.now >=
           view.nextFootstepAt
       ) {
