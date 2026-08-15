@@ -5155,6 +5155,196 @@ export class GameScene extends Phaser.Scene {
             );
     }
 
+    private buildLobbyAvatarPreviewTexture(): string {
+        const textureKey =
+            'lobby-avatar-preview';
+
+        if (
+            this.textures.exists(
+                textureKey,
+            )
+        ) {
+            this.textures.remove(
+                textureKey,
+            );
+        }
+
+        const previewCanvas =
+            document.createElement(
+                'canvas',
+            );
+
+        previewCanvas.width = 80;
+        previewCanvas.height = 120;
+
+        const previewContext =
+            previewCanvas.getContext(
+                '2d',
+            );
+
+        if (!previewContext) {
+            return textureKey;
+        }
+
+        previewContext.clearRect(
+            0,
+            0,
+            80,
+            120,
+        );
+
+        const insideBody = (
+            x: number,
+            y: number,
+        ): boolean => {
+            const headDx =
+                x - 40;
+            const headDy =
+                y - 48;
+
+            return (
+                headDx * headDx +
+                    headDy * headDy <=
+                    12 * 12 ||
+                (
+                    x >= 31 &&
+                    x <= 48 &&
+                    y >= 55 &&
+                    y <= 78
+                ) ||
+                (
+                    x >= 24 &&
+                    x <= 31 &&
+                    y >= 57 &&
+                    y <= 74
+                ) ||
+                (
+                    x >= 48 &&
+                    x <= 55 &&
+                    y >= 57 &&
+                    y <= 74
+                ) ||
+                (
+                    x >= 31 &&
+                    x <= 38 &&
+                    y >= 75 &&
+                    y <= 88
+                ) ||
+                (
+                    x >= 41 &&
+                    x <= 48 &&
+                    y >= 75 &&
+                    y <= 88
+                )
+            );
+        };
+
+        const drawPixel = (
+            x: number,
+            y: number,
+            color: string,
+        ): void => {
+            if (!insideBody(x, y)) {
+                return;
+            }
+
+            previewContext.fillStyle =
+                color;
+
+            previewContext.fillRect(
+                x,
+                y,
+                1,
+                1,
+            );
+        };
+
+        for (
+            let y = 0;
+            y < 120;
+            y += 1
+        ) {
+            for (
+                let x = 0;
+                x < 80;
+                x += 1
+            ) {
+                if (
+                    insideBody(
+                        x,
+                        y,
+                    )
+                ) {
+                    drawPixel(
+                        x,
+                        y,
+                        '#f5eee2',
+                    );
+                }
+            }
+        }
+
+        this.lobbyAvatarPreset.forEach(
+            (stroke) => {
+                const color =
+                    `#${stroke.color
+                        .toString(16)
+                        .padStart(6, '0')}`;
+
+                stroke.points.forEach(
+                    (point) => {
+                        const radius =
+                            stroke.size <= 1
+                                ? 0
+                                : stroke.size;
+
+                        for (
+                            let oy = -radius;
+                            oy <= radius;
+                            oy += 1
+                        ) {
+                            for (
+                                let ox = -radius;
+                                ox <= radius;
+                                ox += 1
+                            ) {
+                                if (
+                                    stroke.shape !==
+                                        'square' &&
+                                    ox * ox +
+                                        oy * oy >
+                                        radius *
+                                            radius
+                                ) {
+                                    continue;
+                                }
+
+                                drawPixel(
+                                    Math.round(
+                                        point.x +
+                                        ox,
+                                    ),
+                                    Math.round(
+                                        point.y +
+                                        oy,
+                                    ),
+                                    color,
+                                );
+                            }
+                        }
+                    },
+                );
+            },
+        );
+
+        this.textures.addCanvas(
+            textureKey,
+            previewCanvas,
+        );
+
+        return textureKey;
+    }
+
     private openLobbyAvatarEditor(): void {
         this.closeMenuModal();
         this.input.enabled = false;
@@ -5193,13 +5383,14 @@ export class GameScene extends Phaser.Scene {
             card.style,
             {
                 width:
-                    'min(520px, calc(100vw - 24px))',
+                    'min(620px, calc(100vw - 20px))',
                 boxSizing: 'border-box',
-                padding: '10px 12px',
+                padding: '9px 11px',
                 border:
                     '3px solid #75a66e',
                 borderRadius: '12px',
-                maxHeight: 'calc(100dvh - 12px)',
+                maxHeight:
+                    'calc(100dvh - 10px)',
                 overflowY: 'auto',
                 background: '#fff9e8',
                 boxShadow:
@@ -5220,9 +5411,9 @@ export class GameScene extends Phaser.Scene {
         Object.assign(
             title.style,
             {
-                fontSize: '18px',
+                fontSize: '17px',
                 fontWeight: '800',
-                marginBottom: '2px',
+                marginBottom: '1px',
             },
         );
 
@@ -5230,7 +5421,7 @@ export class GameScene extends Phaser.Scene {
             document.createElement('div');
 
         hint.textContent =
-            tr('여기서 그린 모습은 대기실의 모든 플레이어에게 보입니다.');
+            tr('휠: 확대/축소 · Ctrl+휠: 브러시 · 모바일: 두 손가락 확대');
 
         Object.assign(
             hint.style,
@@ -5238,7 +5429,26 @@ export class GameScene extends Phaser.Scene {
                 fontSize: '10px',
                 lineHeight: '12px',
                 color: '#71806b',
-                marginBottom: '6px',
+                marginBottom: '4px',
+            },
+        );
+
+        const canvasFrame =
+            document.createElement('div');
+
+        Object.assign(
+            canvasFrame.style,
+            {
+                position: 'relative',
+                width: '190px',
+                height: '285px',
+                overflow: 'hidden',
+                border:
+                    '3px solid #6f8f65',
+                borderRadius: '10px',
+                background: '#dfeadd',
+                boxSizing: 'border-box',
+                flex: '0 0 auto',
             },
         );
 
@@ -5251,18 +5461,18 @@ export class GameScene extends Phaser.Scene {
         Object.assign(
             canvas.style,
             {
-                width: 'min(180px, 31vh)',
-                height: 'min(270px, 46vh)',
-                maxWidth: '180px',
-                maxHeight: '270px',
-                objectFit: 'fill',
-                imageRendering: 'pixelated',
-                background: '#dfeadd',
-                border: '3px solid #6f8f65',
-                borderRadius: '10px',
+                width: '100%',
+                height: '100%',
+                display: 'block',
+                imageRendering:
+                    'pixelated',
                 cursor: 'crosshair',
                 touchAction: 'none',
             },
+        );
+
+        canvasFrame.appendChild(
+            canvas,
         );
 
         const context =
@@ -5272,6 +5482,13 @@ export class GameScene extends Phaser.Scene {
             this.input.enabled = true;
             return;
         }
+
+        /*
+         * Keep a stable non-null reference for nested editor callbacks.
+         * TypeScript does not preserve the null narrowing of `context`
+         * inside functions such as replay(), so use ctx there.
+         */
+        const ctx = context;
 
         const palette = [
             '#111827',
@@ -5292,9 +5509,32 @@ export class GameScene extends Phaser.Scene {
             0x3b82f6;
 
         let selectedSize = 3;
+        let editorZoom = 1.8;
         let drawing = false;
+        let paintStarted = false;
+        let pendingPointerId = -1;
+        let pendingStartScreen:
+            { x: number; y: number } |
+            undefined;
+
         let currentPoints:
             NetworkPaintPoint[] = [];
+
+        let hoverPoint:
+            NetworkPaintPoint |
+            undefined;
+
+        let pinchDistance = 0;
+        let pinchActive = false;
+
+        const activePointers =
+            new Map<
+                number,
+                {
+                    x: number;
+                    y: number;
+                }
+            >();
 
         const strokes:
             NetworkPaintStroke[] =
@@ -5359,38 +5599,323 @@ export class GameScene extends Phaser.Scene {
             );
         };
 
+        const zoomInput =
+            document.createElement(
+                'input',
+            );
+
+        const sizeInput =
+            document.createElement(
+                'input',
+            );
+
+        const zoomValueText =
+            document.createElement(
+                'span',
+            );
+
+        const brushValueText =
+            document.createElement(
+                'span',
+            );
+
+        const setZoom = (
+            nextZoom: number,
+        ): void => {
+            editorZoom =
+                Phaser.Math.Clamp(
+                    nextZoom,
+                    1,
+                    3.4,
+                );
+
+            zoomInput.value =
+                String(editorZoom);
+
+            zoomValueText.textContent =
+                `${editorZoom.toFixed(1)}x`;
+
+            replay();
+        };
+
+        const setBrushSize = (
+            nextSize: number,
+        ): void => {
+            selectedSize =
+                Phaser.Math.Clamp(
+                    Math.round(
+                        nextSize,
+                    ),
+                    1,
+                    8,
+                );
+
+            sizeInput.value =
+                String(selectedSize);
+
+            brushValueText.textContent =
+                String(selectedSize);
+
+            replay();
+        };
+
+        const canvasToLogical = (
+            eventX: number,
+            eventY: number,
+        ): NetworkPaintPoint => {
+            const rect =
+                canvas.getBoundingClientRect();
+
+            const displayX =
+                (
+                    eventX -
+                    rect.left
+                ) /
+                rect.width *
+                canvas.width;
+
+            const displayY =
+                (
+                    eventY -
+                    rect.top
+                ) /
+                rect.height *
+                canvas.height;
+
+            /*
+             * Rendering zooms around logical body center (40, 60).
+             * Invert exactly the same transform for input.
+             */
+            const logicalCanvasX =
+                (
+                    displayX -
+                    canvas.width / 2
+                ) /
+                editorZoom +
+                40 * 3;
+
+            const logicalCanvasY =
+                (
+                    displayY -
+                    canvas.height / 2
+                ) /
+                editorZoom +
+                60 * 3;
+
+            return {
+                x:
+                    Phaser.Math.Clamp(
+                        Math.floor(
+                            logicalCanvasX /
+                            3,
+                        ),
+                        0,
+                        79,
+                    ),
+                y:
+                    Phaser.Math.Clamp(
+                        Math.floor(
+                            logicalCanvasY /
+                            3,
+                        ),
+                        0,
+                        119,
+                    ),
+            };
+        };
+
+        const logicalToCanvas = (
+            x: number,
+            y: number,
+        ): {
+            x: number;
+            y: number;
+        } => ({
+            x:
+                canvas.width / 2 +
+                (
+                    x * 3 -
+                    40 * 3
+                ) *
+                    editorZoom,
+            y:
+                canvas.height / 2 +
+                (
+                    y * 3 -
+                    60 * 3
+                ) *
+                    editorZoom,
+        });
+
         const drawBodyPixel = (
             x: number,
             y: number,
             color: string,
+            alpha = 1,
         ): void => {
             if (!insideBody(x, y)) {
                 return;
             }
 
+            const screen =
+                logicalToCanvas(
+                    x,
+                    y,
+                );
+
+            context.globalAlpha =
+                alpha;
+
             context.fillStyle =
                 color;
 
             context.fillRect(
-                x * 3,
-                y * 3,
-                3,
-                3,
+                screen.x,
+                screen.y,
+                Math.max(
+                    1,
+                    3 *
+                        editorZoom +
+                        0.25,
+                ),
+                Math.max(
+                    1,
+                    3 *
+                        editorZoom +
+                        0.25,
+                ),
+            );
+
+            context.globalAlpha = 1;
+        };
+
+        const paintStroke = (
+            stroke:
+                NetworkPaintStroke,
+            alpha = 1,
+        ): void => {
+            const color =
+                `#${stroke.color
+                    .toString(16)
+                    .padStart(6, '0')}`;
+
+            stroke.points.forEach(
+                (point) => {
+                    const radius =
+                        stroke.size <= 1
+                            ? 0
+                            : stroke.size;
+
+                    for (
+                        let oy = -radius;
+                        oy <= radius;
+                        oy += 1
+                    ) {
+                        for (
+                            let ox = -radius;
+                            ox <= radius;
+                            ox += 1
+                        ) {
+                            if (
+                                stroke.shape !==
+                                    'square' &&
+                                ox * ox +
+                                    oy * oy >
+                                    radius *
+                                        radius
+                            ) {
+                                continue;
+                            }
+
+                            drawBodyPixel(
+                                Math.round(
+                                    point.x +
+                                    ox,
+                                ),
+                                Math.round(
+                                    point.y +
+                                    oy,
+                                ),
+                                color,
+                                alpha,
+                            );
+                        }
+                    }
+                },
             );
         };
 
-        const replay = (): void => {
-            context.clearRect(
+        const drawBrushPreview =
+            (): void => {
+                if (!hoverPoint) {
+                    return;
+                }
+
+                const previewStroke:
+                    NetworkPaintStroke = {
+                        targetSessionId: '',
+                        color:
+                            selectedColor,
+                        size:
+                            selectedSize,
+                        shape: 'circle',
+                        points: [
+                            hoverPoint,
+                        ],
+                    };
+
+                paintStroke(
+                    previewStroke,
+                    0.42,
+                );
+
+                const center =
+                    logicalToCanvas(
+                        hoverPoint.x +
+                            0.5,
+                        hoverPoint.y +
+                            0.5,
+                    );
+
+                context.strokeStyle =
+                    'rgba(35, 62, 48, .88)';
+                context.lineWidth =
+                    Math.max(
+                        1,
+                        editorZoom,
+                    );
+
+                context.beginPath();
+                context.arc(
+                    center.x,
+                    center.y,
+                    Math.max(
+                        3,
+                        (
+                            selectedSize +
+                            0.9
+                        ) *
+                            3 *
+                            editorZoom,
+                    ),
+                    0,
+                    Math.PI * 2,
+                );
+                context.stroke();
+            };
+
+        function replay(): void {
+            ctx.clearRect(
                 0,
                 0,
                 canvas.width,
                 canvas.height,
             );
 
-            context.fillStyle =
+            ctx.fillStyle =
                 '#dfeadd';
 
-            context.fillRect(
+            ctx.fillRect(
                 0,
                 0,
                 canvas.width,
@@ -5407,7 +5932,12 @@ export class GameScene extends Phaser.Scene {
                     x < 80;
                     x += 1
                 ) {
-                    if (insideBody(x, y)) {
+                    if (
+                        insideBody(
+                            x,
+                            y,
+                        )
+                    ) {
                         drawBodyPixel(
                             x,
                             y,
@@ -5419,59 +5949,32 @@ export class GameScene extends Phaser.Scene {
 
             strokes.forEach(
                 (stroke) => {
-                    const color =
-                        `#${stroke.color
-                            .toString(16)
-                            .padStart(6, '0')}`;
-
-                    stroke.points.forEach(
-                        (point) => {
-                            const radius =
-                                stroke.size <= 1
-                                    ? 0
-                                    : stroke.size;
-
-                            for (
-                                let oy =
-                                    -radius;
-                                oy <= radius;
-                                oy += 1
-                            ) {
-                                for (
-                                    let ox =
-                                        -radius;
-                                    ox <= radius;
-                                    ox += 1
-                                ) {
-                                    if (
-                                        stroke.shape !==
-                                            'square' &&
-                                        ox * ox +
-                                            oy * oy >
-                                            radius *
-                                                radius
-                                    ) {
-                                        continue;
-                                    }
-
-                                    drawBodyPixel(
-                                        Math.round(
-                                            point.x +
-                                            ox,
-                                        ),
-                                        Math.round(
-                                            point.y +
-                                            oy,
-                                        ),
-                                        color,
-                                    );
-                                }
-                            }
-                        },
+                    paintStroke(
+                        stroke,
                     );
                 },
             );
-        };
+
+            if (
+                paintStarted &&
+                currentPoints.length > 0
+            ) {
+                paintStroke(
+                    {
+                        targetSessionId: '',
+                        color:
+                            selectedColor,
+                        size:
+                            selectedSize,
+                        shape: 'circle',
+                        points:
+                            currentPoints,
+                    },
+                );
+            }
+
+            drawBrushPreview();
+        }
 
         replay();
 
@@ -5483,9 +5986,10 @@ export class GameScene extends Phaser.Scene {
             {
                 display: 'flex',
                 flexWrap: 'wrap',
-                gap: '7px',
+                gap: '6px',
                 justifyContent: 'center',
-                marginTop: '12px',
+                marginTop: '4px',
+                maxWidth: '290px',
             },
         );
 
@@ -5501,8 +6005,8 @@ export class GameScene extends Phaser.Scene {
                 Object.assign(
                     swatch.style,
                     {
-                        width: '24px',
-                        height: '24px',
+                        width: '25px',
+                        height: '25px',
                         padding: '0',
                         border:
                             '2px solid #53695a',
@@ -5520,6 +6024,8 @@ export class GameScene extends Phaser.Scene {
                                 color.slice(1),
                                 16,
                             );
+
+                        replay();
                     },
                 );
 
@@ -5529,90 +6035,375 @@ export class GameScene extends Phaser.Scene {
             },
         );
 
-        const sizeInput =
-            document.createElement('input');
+        const makeSliderRow = (
+            label: string,
+            input:
+                HTMLInputElement,
+            value:
+                HTMLSpanElement,
+        ): HTMLDivElement => {
+            const row =
+                document.createElement(
+                    'div',
+                );
+
+            Object.assign(
+                row.style,
+                {
+                    width: '100%',
+                    display: 'grid',
+                    gridTemplateColumns:
+                        '76px 1fr 38px',
+                    gap: '6px',
+                    alignItems: 'center',
+                    fontSize: '10px',
+                    fontWeight: '700',
+                    color: '#53695a',
+                },
+            );
+
+            const labelNode =
+                document.createElement(
+                    'span',
+                );
+
+            labelNode.textContent =
+                label;
+
+            row.append(
+                labelNode,
+                input,
+                value,
+            );
+
+            return row;
+        };
+
+        zoomInput.type = 'range';
+        zoomInput.min = '1';
+        zoomInput.max = '3.4';
+        zoomInput.step = '0.1';
+        zoomInput.value =
+            String(editorZoom);
+
+        Object.assign(
+            zoomInput.style,
+            {
+                width: '100%',
+            },
+        );
+
+        zoomValueText.textContent =
+            `${editorZoom.toFixed(1)}x`;
+
+        zoomInput.addEventListener(
+            'input',
+            () => {
+                setZoom(
+                    Number(
+                        zoomInput.value,
+                    ),
+                );
+            },
+        );
 
         sizeInput.type = 'range';
         sizeInput.min = '1';
         sizeInput.max = '8';
+        sizeInput.step = '1';
         sizeInput.value =
+            String(selectedSize);
+
+        Object.assign(
+            sizeInput.style,
+            {
+                width: '100%',
+            },
+        );
+
+        brushValueText.textContent =
             String(selectedSize);
 
         sizeInput.addEventListener(
             'input',
             () => {
-                selectedSize =
+                setBrushSize(
                     Number(
                         sizeInput.value,
-                    );
+                    ),
+                );
             },
         );
 
-        controls.appendChild(
-            sizeInput,
+        controls.append(
+            makeSliderRow(
+                tr('캐릭터 확대'),
+                zoomInput,
+                zoomValueText,
+            ),
+            makeSliderRow(
+                tr('브러시 크기'),
+                sizeInput,
+                brushValueText,
+            ),
         );
 
-        const getPoint = (
-            event: PointerEvent,
-        ): NetworkPaintPoint => {
-            const rect =
-                canvas.getBoundingClientRect();
+        const finishStroke =
+            (): void => {
+                if (
+                    paintStarted &&
+                    currentPoints.length > 0
+                ) {
+                    strokes.push({
+                        targetSessionId: '',
+                        color:
+                            selectedColor,
+                        size:
+                            selectedSize,
+                        shape: 'circle',
+                        points:
+                            currentPoints.slice(
+                                0,
+                                500,
+                            ),
+                    });
+                }
 
-            return {
-                x:
-                    Phaser.Math.Clamp(
-                        Math.floor(
-                            (
-                                event.clientX -
-                                rect.left
-                            ) /
-                            rect.width *
-                            80,
-                        ),
-                        0,
-                        79,
-                    ),
-                y:
-                    Phaser.Math.Clamp(
-                        Math.floor(
-                            (
-                                event.clientY -
-                                rect.top
-                            ) /
-                            rect.height *
-                            120,
-                        ),
-                        0,
-                        119,
-                    ),
+                drawing = false;
+                paintStarted = false;
+                pendingPointerId = -1;
+                pendingStartScreen =
+                    undefined;
+                currentPoints = [];
+                replay();
             };
-        };
+
+        const updatePinch =
+            (): void => {
+                if (
+                    activePointers.size !==
+                    2
+                ) {
+                    pinchDistance = 0;
+                    pinchActive = false;
+                    return;
+                }
+
+                const points =
+                    [...activePointers.values()];
+
+                const dx =
+                    points[0].x -
+                    points[1].x;
+                const dy =
+                    points[0].y -
+                    points[1].y;
+
+                const distance =
+                    Math.hypot(
+                        dx,
+                        dy,
+                    );
+
+                if (
+                    pinchDistance <= 0
+                ) {
+                    pinchDistance =
+                        distance;
+                    return;
+                }
+
+                const delta =
+                    distance -
+                    pinchDistance;
+
+                if (
+                    !pinchActive &&
+                    Math.abs(
+                        delta,
+                    ) < 10
+                ) {
+                    return;
+                }
+
+                if (!pinchActive) {
+                    pinchActive = true;
+                    finishStroke();
+                }
+
+                if (
+                    Math.abs(
+                        delta,
+                    ) >= 4
+                ) {
+                    setZoom(
+                        editorZoom +
+                        delta *
+                            0.008,
+                    );
+
+                    pinchDistance =
+                        distance;
+                }
+            };
+
+        canvas.addEventListener(
+            'wheel',
+            (event) => {
+                event.preventDefault();
+
+                if (event.ctrlKey) {
+                    setBrushSize(
+                        selectedSize +
+                        (
+                            event.deltaY < 0
+                                ? 1
+                                : -1
+                        ),
+                    );
+                } else {
+                    setZoom(
+                        editorZoom +
+                        (
+                            event.deltaY < 0
+                                ? 0.15
+                                : -0.15
+                        ),
+                    );
+                }
+            },
+            {
+                passive: false,
+            },
+        );
 
         canvas.addEventListener(
             'pointerdown',
             (event) => {
                 event.preventDefault();
-                drawing = true;
-                currentPoints = [
-                    getPoint(event),
-                ];
+
+                activePointers.set(
+                    event.pointerId,
+                    {
+                        x: event.clientX,
+                        y: event.clientY,
+                    },
+                );
+
                 canvas.setPointerCapture(
                     event.pointerId,
                 );
+
+                if (
+                    activePointers.size >=
+                    2
+                ) {
+                    updatePinch();
+                    return;
+                }
+
+                drawing = true;
+                paintStarted = false;
+                pendingPointerId =
+                    event.pointerId;
+
+                pendingStartScreen = {
+                    x: event.clientX,
+                    y: event.clientY,
+                };
+
+                hoverPoint =
+                    canvasToLogical(
+                        event.clientX,
+                        event.clientY,
+                    );
+
+                currentPoints = [];
+                replay();
             },
         );
 
         canvas.addEventListener(
             'pointermove',
             (event) => {
-                if (!drawing) {
+                hoverPoint =
+                    canvasToLogical(
+                        event.clientX,
+                        event.clientY,
+                    );
+
+                if (
+                    activePointers.has(
+                        event.pointerId,
+                    )
+                ) {
+                    activePointers.set(
+                        event.pointerId,
+                        {
+                            x:
+                                event.clientX,
+                            y:
+                                event.clientY,
+                        },
+                    );
+                }
+
+                if (
+                    activePointers.size >=
+                    2
+                ) {
+                    updatePinch();
+                    replay();
+                    return;
+                }
+
+                if (
+                    !drawing ||
+                    pendingPointerId !==
+                        event.pointerId
+                ) {
+                    replay();
                     return;
                 }
 
                 event.preventDefault();
 
+                if (
+                    !paintStarted &&
+                    pendingStartScreen
+                ) {
+                    const moved =
+                        Math.hypot(
+                            event.clientX -
+                                pendingStartScreen.x,
+                            event.clientY -
+                                pendingStartScreen.y,
+                        );
+
+                    /*
+                     * Same safety philosophy as in-game mobile paint:
+                     * touch first = preview, actual paint after movement.
+                     */
+                    if (moved < 1) {
+                        replay();
+                        return;
+                    }
+
+                    paintStarted = true;
+
+                    currentPoints = [
+                        canvasToLogical(
+                            pendingStartScreen.x,
+                            pendingStartScreen.y,
+                        ),
+                    ];
+                }
+
                 const point =
-                    getPoint(event);
+                    canvasToLogical(
+                        event.clientX,
+                        event.clientY,
+                    );
 
                 const last =
                     currentPoints[
@@ -5630,65 +6421,53 @@ export class GameScene extends Phaser.Scene {
                     );
                 }
 
-                const previewStroke:
-                    NetworkPaintStroke = {
-                        targetSessionId: '',
-                        color:
-                            selectedColor,
-                        size:
-                            selectedSize,
-                        shape: 'circle',
-                        points:
-                            currentPoints,
-                    };
-
-                strokes.push(
-                    previewStroke,
-                );
                 replay();
-                strokes.pop();
             },
         );
 
-        const finishStroke =
-            (): void => {
-                if (!drawing) {
-                    return;
-                }
-
-                drawing = false;
+        const releasePointer =
+            (
+                event: PointerEvent,
+            ): void => {
+                activePointers.delete(
+                    event.pointerId,
+                );
 
                 if (
-                    currentPoints.length >
-                    0
+                    activePointers.size <
+                    2
                 ) {
-                    strokes.push({
-                        targetSessionId: '',
-                        color:
-                            selectedColor,
-                        size:
-                            selectedSize,
-                        shape: 'circle',
-                        points:
-                            currentPoints.slice(
-                                0,
-                                240,
-                            ),
-                    });
+                    pinchDistance = 0;
+                    pinchActive = false;
                 }
 
-                currentPoints = [];
-                replay();
+                if (
+                    pendingPointerId ===
+                        event.pointerId
+                ) {
+                    finishStroke();
+                }
             };
 
         canvas.addEventListener(
             'pointerup',
-            finishStroke,
+            releasePointer,
         );
 
         canvas.addEventListener(
             'pointercancel',
-            finishStroke,
+            releasePointer,
+        );
+
+        canvas.addEventListener(
+            'pointerleave',
+            () => {
+                if (!drawing) {
+                    hoverPoint =
+                        undefined;
+                    replay();
+                }
+            },
         );
 
         const actionRow =
@@ -5698,9 +6477,9 @@ export class GameScene extends Phaser.Scene {
             actionRow.style,
             {
                 display: 'flex',
-                gap: '8px',
+                gap: '6px',
                 justifyContent: 'center',
-                marginTop: '6px',
+                marginTop: '4px',
                 flexWrap: 'wrap',
             },
         );
@@ -5721,7 +6500,7 @@ export class GameScene extends Phaser.Scene {
             Object.assign(
                 button.style,
                 {
-                    minWidth: '76px',
+                    minWidth: '72px',
                     minHeight: '30px',
                     border: '0',
                     borderRadius: '8px',
@@ -5747,6 +6526,7 @@ export class GameScene extends Phaser.Scene {
                 tr('되돌리기'),
                 '#78966f',
                 () => {
+                    finishStroke();
                     strokes.pop();
                     replay();
                 },
@@ -5757,27 +6537,36 @@ export class GameScene extends Phaser.Scene {
                 tr('초기화'),
                 '#b36b67',
                 () => {
+                    finishStroke();
                     strokes.length = 0;
                     replay();
                 },
             );
+
+        const closeEditor = (
+            restoreInput = true,
+        ): void => {
+            overlay.remove();
+            this.menuModalOverlay =
+                undefined;
+
+            if (restoreInput) {
+                window.setTimeout(
+                    () => {
+                        this.input.enabled =
+                            true;
+                    },
+                    80,
+                );
+            }
+        };
 
         const cancel =
             makeButton(
                 tr('취소'),
                 '#7b8490',
                 () => {
-                    overlay.remove();
-                    this.menuModalOverlay =
-                        undefined;
-
-                    window.setTimeout(
-                        () => {
-                            this.input.enabled =
-                                true;
-                        },
-                        80,
-                    );
+                    closeEditor();
                 },
             );
 
@@ -5786,10 +6575,12 @@ export class GameScene extends Phaser.Scene {
                 tr('저장'),
                 '#55ae5f',
                 () => {
+                    finishStroke();
+
                     this.lobbyAvatarPreset =
                         strokes.slice(
                             0,
-                            80,
+                            120,
                         );
 
                     localStorage.setItem(
@@ -5799,17 +6590,13 @@ export class GameScene extends Phaser.Scene {
                         ),
                     );
 
-                    overlay.remove();
-                    this.menuModalOverlay =
-                        undefined;
+                    closeEditor();
 
-                    window.setTimeout(
-                        () => {
-                            this.input.enabled =
-                                true;
-                        },
-                        80,
-                    );
+                    /*
+                     * Refresh the lobby itself so the saved avatar preview
+                     * immediately shows the newly-painted state.
+                     */
+                    this.showMainMenu();
 
                     this.showStatus(
                         tr('캐릭터 꾸미기를 저장했습니다.'),
@@ -5824,19 +6611,6 @@ export class GameScene extends Phaser.Scene {
             save,
         );
 
-        const editorBody =
-            document.createElement('div');
-
-        Object.assign(
-            editorBody.style,
-            {
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '4px',
-            },
-        );
-
         const sideControls =
             document.createElement('div');
 
@@ -5847,7 +6621,8 @@ export class GameScene extends Phaser.Scene {
                 flexDirection: 'column',
                 justifyContent: 'center',
                 gap: '4px',
-                minWidth: '0',
+                minWidth: '250px',
+                maxWidth: '290px',
             },
         );
 
@@ -5856,8 +6631,22 @@ export class GameScene extends Phaser.Scene {
             actionRow,
         );
 
+        const editorBody =
+            document.createElement('div');
+
+        Object.assign(
+            editorBody.style,
+            {
+                display: 'flex',
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '10px',
+            },
+        );
+
         editorBody.append(
-            canvas,
+            canvasFrame,
             sideControls,
         );
 
@@ -5869,65 +6658,55 @@ export class GameScene extends Phaser.Scene {
 
         const applyResponsiveEditorLayout =
             (): void => {
-                const landscape =
-                    window.innerWidth >
-                        window.innerHeight &&
-                    window.innerHeight <= 600;
+                const compact =
+                    window.innerHeight <=
+                    600;
 
-                if (landscape) {
+                if (compact) {
                     Object.assign(
                         card.style,
                         {
                             width:
-                                'min(620px, calc(100vw - 12px))',
-                            padding: '7px 10px',
+                                'min(650px, calc(100vw - 10px))',
+                            padding: '6px 8px',
                         },
                     );
 
                     Object.assign(
-                        editorBody.style,
-                        {
-                            flexDirection: 'row',
-                            justifyContent: 'center',
-                            alignItems: 'center',
-                            gap: '10px',
-                        },
-                    );
-
-                    Object.assign(
-                        canvas.style,
+                        canvasFrame.style,
                         {
                             width:
-                                'min(150px, 36vh)',
+                                'min(160px, 38vh)',
                             height:
-                                'min(225px, 54vh)',
-                        },
-                    );
-
-                    Object.assign(
-                        controls.style,
-                        {
-                            maxWidth: '230px',
-                            marginTop: '0',
-                        },
-                    );
-
-                    Object.assign(
-                        actionRow.style,
-                        {
-                            maxWidth: '230px',
-                            marginTop: '2px',
+                                'min(240px, 57vh)',
                         },
                     );
 
                     title.style.fontSize =
-                        '15px';
-                    hint.style.marginBottom =
-                        '3px';
-                } else {
+                        '14px';
+
+                    hint.style.fontSize =
+                        '9px';
+
+                    sideControls.style
+                        .minWidth =
+                        '225px';
+                }
+
+                if (
+                    window.innerWidth <
+                        520 &&
+                    window.innerHeight >
+                        window.innerWidth
+                ) {
                     editorBody.style
                         .flexDirection =
                         'column';
+
+                    canvasFrame.style.width =
+                        '170px';
+                    canvasFrame.style.height =
+                        '255px';
                 }
             };
 
@@ -6135,9 +6914,52 @@ export class GameScene extends Phaser.Scene {
             .setDepth(503);
 
 
+        /*
+         * Saved lobby avatar preview:
+         * users can see their current customization before opening editor.
+         */
+        if (
+            this.lobbyAvatarPreset.length ===
+            0
+        ) {
+            this.lobbyAvatarPreset =
+                this.loadLobbyAvatarPreset();
+        }
+
+        const avatarPreviewTexture =
+            this.buildLobbyAvatarPreviewTexture();
+
+        const avatarPreviewFrame =
+            this.add.rectangle(
+                636,
+                118,
+                42,
+                54,
+                0xdfeadd,
+                1,
+            )
+                .setStrokeStyle(
+                    2,
+                    0x75a66e,
+                    1,
+                )
+                .setDepth(503);
+
+        const avatarPreview =
+            this.add.image(
+                636,
+                118,
+                avatarPreviewTexture,
+            )
+                .setDisplaySize(
+                    36,
+                    54,
+                )
+                .setDepth(504);
+
         const avatarCustomizeButton =
             this.add.text(
-                762,
+                760,
                 118,
                 `🎨 ${tr('내 캐릭터 꾸미기')}`,
                 {
@@ -6379,6 +7201,8 @@ export class GameScene extends Phaser.Scene {
             roomListHeader,
             refreshButton,
             actionTitle,
+            avatarPreviewFrame,
+            avatarPreview,
             avatarCustomizeButton,
             publicCreate,
             privateCreate,
