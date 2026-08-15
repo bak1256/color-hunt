@@ -5,6 +5,9 @@ const STORAGE_KEY = 'chameleon-hunt-language';
 type Dict = Record<string, string>;
 
 const ja: Dict = {
+  "이동":"移動",
+  "조준":"照準",
+
   "찾았다!":"見つけた！",
   "HUNTER":"HUNTER",
 
@@ -86,6 +89,9 @@ const ja: Dict = {
 };
 
 const en: Dict = {
+  "이동":"MOVE",
+  "조준":"AIM",
+
   "찾았다!":"FOUND!",
   "HIDER":"HIDER",
   "HUNTER":"HUNTER",
@@ -157,6 +163,9 @@ const en: Dict = {
 };
 
 const zh: Dict = {
+  "이동":"移动",
+  "조준":"瞄准",
+
   "찾았다!":"找到了！",
   "HUNTER":"HUNTER",
 
@@ -224,6 +233,9 @@ const zh: Dict = {
 };
 
 const ko: Dict = {
+  "이동":"이동",
+  "조준":"조준",
+
   "찾았다!":"찾았다!",
   "HUNTER":"HUNTER",
 

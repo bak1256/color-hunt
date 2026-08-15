@@ -824,6 +824,51 @@ export class GameScene extends Phaser.Scene {
         this.mobileAimKnob =
             createKnob(aimX, aimY);
 
+        const createJoystickLabel =
+            (
+                x: number,
+                y: number,
+                label: string,
+            ): Phaser.GameObjects.Text =>
+                this.add.text(
+                    x,
+                    y - 66,
+                    label,
+                    {
+                        fontFamily:
+                            'Arial, sans-serif',
+                        fontSize: '12px',
+                        fontStyle: 'bold',
+                        color: '#ffffff',
+                        backgroundColor:
+                            'rgba(20, 31, 39, 0.72)',
+                        align: 'center',
+                        fixedWidth: 64,
+                        fixedHeight: 24,
+                        padding: {
+                            top: 5,
+                        },
+                    },
+                )
+                    .setOrigin(0.5)
+                    .setScrollFactor(0)
+                    .setDepth(6002)
+                    .setVisible(false);
+
+        this.mobileMoveLabel =
+            createJoystickLabel(
+                moveX,
+                moveY,
+                tr('이동'),
+            );
+
+        this.mobileAimLabel =
+            createJoystickLabel(
+                aimX,
+                aimY,
+                tr('조준'),
+            );
+
         this.mobileFireButton =
             this.add.circle(
                 fireX,
@@ -1525,14 +1570,49 @@ export class GameScene extends Phaser.Scene {
             ?.setVisible(canMove);
         this.mobileMoveKnob
             ?.setVisible(canMove);
+
+        this.mobileMoveLabel
+            ?.setText(
+                tr('이동'),
+            )
+            .setVisible(canMove);
+
         this.mobileAimBase
             ?.setVisible(showHunterCombat);
         this.mobileAimKnob
             ?.setVisible(showHunterCombat);
+
+        this.mobileAimLabel
+            ?.setText(
+                tr('조준'),
+            )
+            .setVisible(showHunterCombat);
         this.mobileFireButton
             ?.setVisible(showHunterCombat);
         this.mobileFireLabel
             ?.setVisible(showHunterCombat);
+
+        if (
+            canMove &&
+            this.mobileMoveLabel
+        ) {
+            this.setFixedHudScreenPosition(
+                this.mobileMoveLabel,
+                82,
+                209,
+            );
+        }
+
+        if (
+            showHunterCombat &&
+            this.mobileAimLabel
+        ) {
+            this.setFixedHudScreenPosition(
+                this.mobileAimLabel,
+                this.gameWidth - 170,
+                this.gameHeight - 256,
+            );
+        }
 
         if (!canMove) {
             this.mobileMovePointerId = -1;
@@ -1711,8 +1791,10 @@ export class GameScene extends Phaser.Scene {
         );
     private mobileMoveBase?: Phaser.GameObjects.Arc;
     private mobileMoveKnob?: Phaser.GameObjects.Arc;
+    private mobileMoveLabel?: Phaser.GameObjects.Text;
     private mobileAimBase?: Phaser.GameObjects.Arc;
     private mobileAimKnob?: Phaser.GameObjects.Arc;
+    private mobileAimLabel?: Phaser.GameObjects.Text;
     private mobileFireButton?: Phaser.GameObjects.Arc;
     private mobileFireLabel?: Phaser.GameObjects.Text;
     private mobileMovePointerId = -1;
@@ -9793,8 +9875,10 @@ export class GameScene extends Phaser.Scene {
             ...this.hunterCamoPaletteObjects,
             this.mobileMoveBase,
             this.mobileMoveKnob,
+            this.mobileMoveLabel,
             this.mobileAimBase,
             this.mobileAimKnob,
+            this.mobileAimLabel,
             this.mobileFireButton,
             this.mobileFireLabel,
         ].filter(
@@ -13808,6 +13892,21 @@ export class GameScene extends Phaser.Scene {
                 }
 
                 if (this.phase === 'hunt') {
+                    /*
+                     * MOBILE HUNTER CONTROL CONTRACT:
+                     *
+                     * - left joystick  = movement only
+                     * - right joystick = aiming only
+                     * - FIRE button    = shooting only
+                     *
+                     * A generic world/screen tap must never fire on mobile.
+                     * This prevents accidental shots while moving or simply
+                     * touching the screen.
+                     */
+                    if (this.mobileControlsEnabled) {
+                        return;
+                    }
+
                     if (
                         pointer.leftButtonDown() &&
                         (
