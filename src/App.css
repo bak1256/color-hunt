@@ -24,11 +24,11 @@
   line-height: 0.9;
   letter-spacing: -0.055em;
   text-shadow:
-    0 3px 0 #ffffff,
-    3px 0 0 #ffffff,
+    0 2px 0 #ffffff,
+    2px 0 0 #ffffff,
     -2px 0 0 #ffffff,
     0 -2px 0 #ffffff,
-    4px 5px 0 rgb(72 111 81 / 14%);
+    3px 4px 0 rgb(72 111 81 / 12%);
 }
 
 .eyebrow {

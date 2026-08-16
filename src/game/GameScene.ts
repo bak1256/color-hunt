@@ -10064,8 +10064,8 @@ export class GameScene extends Phaser.Scene {
             .rectangle(
                 this.gameWidth / 2,
                 292,
-                842,
-                452,
+                836,
+                448,
                 0xfff8e7,
                 0.985,
             )
@@ -10078,8 +10078,8 @@ export class GameScene extends Phaser.Scene {
 
         const subtitle = this.add
             .text(
-                82,
-                92,
+                94,
+                102,
                 tr('위장하고, 숨고, 찾아내세요!'),
                 {
                     fontFamily:
@@ -10092,10 +10092,10 @@ export class GameScene extends Phaser.Scene {
 
         const roomCard = this.add
             .rectangle(
-                330,
                 326,
-                520,
-                300,
+                322,
+                506,
+                318,
                 0xfffdf6,
                 0.995,
             )
@@ -10108,10 +10108,10 @@ export class GameScene extends Phaser.Scene {
 
         const actionCard = this.add
             .rectangle(
-                730,
-                326,
-                246,
-                300,
+                724,
+                322,
+                260,
+                318,
                 0xfffdf6,
                 0.995,
             )
@@ -10124,8 +10124,8 @@ export class GameScene extends Phaser.Scene {
 
         const listTitle = this.add
             .text(
-                104,
-                194,
+                98,
+                176,
                 tr('공개 게임방'),
                 {
                     fontFamily:
@@ -10139,9 +10139,9 @@ export class GameScene extends Phaser.Scene {
 
         const roomDivider = this.add
             .rectangle(
-                330,
-                226,
-                450,
+                326,
+                205,
+                458,
                 1,
                 0xcbdcbe,
                 0.95,
@@ -10151,8 +10151,8 @@ export class GameScene extends Phaser.Scene {
 
         const roomListHeader =
             this.add.text(
-                106,
-                236,
+                104,
+                216,
                 `${tr('방 이름')}      ${tr('인원')}      ${tr('상태')}`,
                 {
                     fontFamily:
@@ -10169,8 +10169,8 @@ export class GameScene extends Phaser.Scene {
          */
         const refreshButton =
             this.makeMenuButton(
-                526,
-                194,
+                522,
+                176,
                 `↻ ${tr('새로고침')}`,
                 () => {
                     void this.refreshPublicRoomList(true);
@@ -10179,8 +10179,8 @@ export class GameScene extends Phaser.Scene {
 
         refreshButton
             .setFixedSize(
-                94,
-                28,
+                96,
+                30,
             )
             .setAlign('center')
             .setOrigin(0.5)
@@ -10198,7 +10198,7 @@ export class GameScene extends Phaser.Scene {
                 0,
             )
             .setBackgroundColor(
-                '#e3f4d9',
+                '#d9f0d1',
             )
             .setColor(
                 '#315c46',
@@ -10206,8 +10206,8 @@ export class GameScene extends Phaser.Scene {
 
         const actionTitle = this.add
             .text(
-                624,
-                194,
+                724,
+                174,
                 tr('게임 시작하기'),
                 {
                     fontFamily:
@@ -10240,13 +10240,19 @@ export class GameScene extends Phaser.Scene {
          * Cute pixel portrait card. The avatar is fully contained inside
          * the frame with visible padding — no intentional overflow.
          */
+        /*
+         * v0.10.10.111:
+         * Dedicated avatar portrait card.
+         * It sits BELOW the section title and has guaranteed padding on
+         * every side; no overlap with labels/buttons is possible.
+         */
         const avatarPreviewGlow =
             this.add.rectangle(
                 667,
-                236,
-                70,
-                86,
-                0xdaf4d3,
+                228,
+                84,
+                106,
+                0xdff4d5,
                 1,
             )
                 .setStrokeStyle(
@@ -10259,15 +10265,15 @@ export class GameScene extends Phaser.Scene {
         const avatarPreviewFrame =
             this.add.rectangle(
                 667,
-                236,
-                62,
-                78,
-                0xf8fff3,
+                228,
+                74,
+                96,
+                0xfafff5,
                 1,
             )
                 .setStrokeStyle(
-                    2,
-                    0x75aa79,
+                    3,
+                    0x7aaa7d,
                     1,
                 )
                 .setDepth(503);
@@ -10275,19 +10281,19 @@ export class GameScene extends Phaser.Scene {
         const avatarPreview =
             this.add.image(
                 667,
-                236,
+                228,
                 avatarPreviewTexture,
             )
                 .setDisplaySize(
-                    42,
-                    63,
+                    50,
+                    75,
                 )
                 .setDepth(504);
 
         const avatarCustomizeButton =
             this.add.text(
-                772,
-                236,
+                784,
+                228,
                 `🎨 ${tr('내 캐릭터 꾸미기')}`,
                 {
                     fontFamily:
@@ -10299,9 +10305,9 @@ export class GameScene extends Phaser.Scene {
                     fontStyle: 'bold',
                     color: '#315c46',
                     backgroundColor:
-                        '#dff3d5',
-                    fixedWidth: 124,
-                    fixedHeight: 38,
+                        '#e7f5df',
+                    fixedWidth: 126,
+                    fixedHeight: 40,
                     align: 'center',
                     padding: {
                         top: 8,
@@ -10340,11 +10346,11 @@ export class GameScene extends Phaser.Scene {
                         color: '#24332b',
                         backgroundColor:
                             color,
-                        fixedWidth: 204,
+                        fixedWidth: 216,
                         fixedHeight: 42,
                         align: 'center',
                         padding: {
-                            top: 12,
+                            top: 11,
                         },
                     },
                 )
@@ -10374,7 +10380,7 @@ export class GameScene extends Phaser.Scene {
 
         const publicCreate =
             makeAction(
-                302,
+                306,
                 `＋  ${tr('공개방 만들기')}`,
                 '#91dfa2',
                 () => {
@@ -10386,7 +10392,7 @@ export class GameScene extends Phaser.Scene {
 
         const privateCreate =
             makeAction(
-                354,
+                358,
                 `▣  ${tr('비공개방 만들기')}`,
                 '#9fd5f5',
                 () => {
@@ -10398,7 +10404,7 @@ export class GameScene extends Phaser.Scene {
 
         const privateJoin =
             makeAction(
-                406,
+                410,
                 `◎  ${tr('비공개방 참가')}`,
                 '#cbb4ef',
                 () => {
@@ -10408,12 +10414,12 @@ export class GameScene extends Phaser.Scene {
 
         const helpCard = this.add
             .rectangle(
-                730,
-                452,
-                204,
-                28,
+                724,
+                458,
+                216,
+                26,
                 0xf7f1ff,
-                0.995,
+                0.92,
             )
             .setStrokeStyle(
                 1,
@@ -10424,8 +10430,8 @@ export class GameScene extends Phaser.Scene {
 
         const helpText = this.add
             .text(
-                636,
-                443,
+                626,
+                451,
                 `${tr('게임 설명')}\n${tr('위장하고, 숨고, 찾아내세요!')}`,
                 {
                     fontFamily:
@@ -10434,7 +10440,7 @@ export class GameScene extends Phaser.Scene {
                     color: '#665b75',
                     lineSpacing: 2,
                     wordWrap: {
-                        width: 188,
+                        width: 196,
                     },
                 },
             )
@@ -10443,8 +10449,8 @@ export class GameScene extends Phaser.Scene {
         const languageBar =
             this.add.rectangle(
                 480,
-                502,
-                794,
+                500,
+                790,
                 34,
                 0xfffdf6,
                 0.995,
@@ -10473,7 +10479,7 @@ export class GameScene extends Phaser.Scene {
                     const button =
                         this.add.text(
                             310 + index * 112,
-                            502,
+                            500,
                             label,
                             {
                                 fontFamily:
@@ -10561,8 +10567,8 @@ export class GameScene extends Phaser.Scene {
             showLoading
                 ? this.add
                     .text(
-                        106,
-                        266,
+                        104,
+                        244,
                         tr('방 목록을 불러오는 중...'),
                         {
                             fontFamily: 'monospace',
@@ -10622,8 +10628,8 @@ export class GameScene extends Phaser.Scene {
                 const emptyText =
                     this.add
                         .text(
-                            106,
-                            266,
+                            104,
+                            244,
                             tr('생성된 공개방이 없습니다.'),
                             {
                                 fontFamily: 'monospace',
@@ -10659,9 +10665,9 @@ export class GameScene extends Phaser.Scene {
 
                         const row =
                             this.makeMenuButton(
-                                330,
-                                270 +
-                                    index * 40,
+                                326,
+                                250 +
+                                    index * 41,
                                 `${phase === 'lobby' ? '●' : '◉'}  ${roomTitle}     ${room.clients}/${room.maxClients}     ${phase === 'lobby' ? trPhase(phase) : tr('게임중')}`,
                                 () => {
                                     /*
@@ -10682,7 +10688,7 @@ export class GameScene extends Phaser.Scene {
                                     : 11,
                             )
                             .setFixedSize(
-                                448,
+                                454,
                                 36,
                             )
                             .setAlign(
@@ -10694,7 +10700,7 @@ export class GameScene extends Phaser.Scene {
                             .setPadding(
                                 18,
                                 9,
-                                0,
+                                12,
                                 0,
                             )
                             .setBackgroundColor(

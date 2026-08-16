@@ -809,3 +809,21 @@ canvas {
 .colorhunt-chat__input::placeholder {
   color: rgba(255,255,255,.72);
 }
+
+
+/* v0.10.10.111 — main lobby visual polish */
+.colorhunt-controls-help__button {
+  min-width: 88px;
+  border-radius: 10px;
+  font-size: 11px;
+}
+
+.colorhunt-controls-help__panel {
+  padding: 14px 16px !important;
+  border-radius: 14px !important;
+}
+
+.colorhunt-controls-help__panel div {
+  margin: 7px 0;
+  line-height: 1.55;
+}
