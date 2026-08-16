@@ -2401,6 +2401,8 @@ export class GameScene extends Phaser.Scene {
     private chatFocusArmed = false;
     private readonly chatMessageIds =
         new Set<string>();
+    private controlsHelpRoot?: HTMLDivElement;
+    private controlsHelpViewportHandler?: () => void;
     private lobbyPanel!: Phaser.GameObjects.Rectangle;
     private lobbyTitleText!: Phaser.GameObjects.Text;
     private lobbyInfoText!: Phaser.GameObjects.Text;
@@ -3356,6 +3358,7 @@ export class GameScene extends Phaser.Scene {
                 );
 
                 this.destroyChatUi();
+                this.destroyControlsHelpUi();
                 this.saveLobbyBgmResumePosition();
             },
         );
@@ -3367,6 +3370,7 @@ export class GameScene extends Phaser.Scene {
 
         this.createMultiplayerHud();
         this.createChatUi();
+        this.createControlsHelpUi();
         this.createLobbyUi();
         this.createMapSelectorUi();
         this.createHunterBlindUi();
@@ -4216,6 +4220,15 @@ export class GameScene extends Phaser.Scene {
          * Mobile: keep chat in the canvas top-left and compact enough that
          * its bottom never reaches the Paint palette at logical y≈421.
          */
+        const mobileLobby =
+            coarsePointer &&
+            this.phase === 'lobby';
+
+        this.chatRoot.classList.toggle(
+            'colorhunt-chat--mobile-lobby',
+            mobileLobby,
+        );
+
         const logicalTop =
             !coarsePointer &&
             this.phase === 'lobby'
@@ -4478,6 +4491,294 @@ export class GameScene extends Phaser.Scene {
         this.chatRoot = undefined;
         this.chatLog = undefined;
         this.chatInput = undefined;
+    }
+
+    private getControlsHelpCopy(): {
+        button: string;
+        title: string;
+        subtitle: string;
+        lobby: string;
+        paint: string;
+        hunt: string;
+        mobileLobby: string;
+        mobilePaint: string;
+        mobileHunt: string;
+    } {
+        const language =
+            getLanguage();
+
+        const copy = {
+            ko: {
+                button: '？ 조작방법',
+                title: '조작방법',
+                subtitle: '버튼을 누르고 있는 동안만 표시됩니다',
+                lobby: '대기실: 마우스로 UI 선택 · Enter 채팅',
+                paint: '색칠: 클릭/드래그 · 휠 확대/축소 · Ctrl+휠 붓 크기',
+                hunt: '사냥: WASD/방향키 이동 · 마우스 조준 · 좌클릭 발사',
+                mobileLobby: '대기실: 화면 버튼을 터치 · 채팅 입력칸을 눌러 채팅',
+                mobilePaint: '색칠: 손가락으로 칠하기 · 두 손가락 확대/축소 · 도구 아이콘으로 붓 변경',
+                mobileHunt: '사냥: 왼쪽 이동 · 오른쪽 조준 · FIRE 버튼으로 발사',
+            },
+            ja: {
+                button: '？ 操作方法',
+                title: '操作方法',
+                subtitle: '押している間だけ表示されます',
+                lobby: 'ロビー：マウスでUI選択・Enterでチャット',
+                paint: 'ペイント：クリック/ドラッグ・ホイールでズーム・Ctrl+ホイールでブラシサイズ',
+                hunt: 'ハント：WASD/矢印で移動・マウスで照準・左クリックで射撃',
+                mobileLobby: 'ロビー：画面ボタンをタップ・入力欄をタップしてチャット',
+                mobilePaint: 'ペイント：指で塗る・2本指でズーム・ツールアイコンでブラシ変更',
+                mobileHunt: 'ハント：左で移動・右で照準・FIREボタンで射撃',
+            },
+            en: {
+                button: '？ Controls',
+                title: 'Controls',
+                subtitle: 'Shown only while you hold this button',
+                lobby: 'Lobby: click UI · Enter to chat',
+                paint: 'Paint: click/drag · wheel to zoom · Ctrl+wheel for brush size',
+                hunt: 'Hunt: WASD/arrows to move · mouse to aim · left click to fire',
+                mobileLobby: 'Lobby: tap UI · tap the chat field to type',
+                mobilePaint: 'Paint: paint with one finger · pinch to zoom · use tool icons for brush shape',
+                mobileHunt: 'Hunt: left stick moves · right stick aims · FIRE button shoots',
+            },
+            zh: {
+                button: '？ 操作说明',
+                title: '操作说明',
+                subtitle: '仅在按住按钮时显示',
+                lobby: '大厅：鼠标选择界面 · Enter 打开聊天',
+                paint: '涂色：点击/拖动 · 滚轮缩放 · Ctrl+滚轮调整画笔大小',
+                hunt: '狩猎：WASD/方向键移动 · 鼠标瞄准 · 左键射击',
+                mobileLobby: '大厅：点击屏幕按钮 · 点击聊天输入框聊天',
+                mobilePaint: '涂色：单指涂色 · 双指缩放 · 使用工具图标切换画笔',
+                mobileHunt: '狩猎：左侧移动 · 右侧瞄准 · FIRE按钮射击',
+            },
+        } as const;
+
+        return (
+            copy[language] ??
+            copy.en
+        );
+    }
+
+    private createControlsHelpUi(): void {
+        if (this.controlsHelpRoot) {
+            return;
+        }
+
+        const copy =
+            this.getControlsHelpCopy();
+
+        const root =
+            document.createElement(
+                'div',
+            );
+        root.className =
+            'colorhunt-controls-help';
+
+        const button =
+            document.createElement(
+                'button',
+            );
+        button.type = 'button';
+        button.className =
+            'colorhunt-controls-help__button';
+        button.textContent =
+            copy.button;
+
+        const panel =
+            document.createElement(
+                'div',
+            );
+        panel.className =
+            'colorhunt-controls-help__panel';
+        panel.hidden = true;
+
+        root.append(
+            button,
+            panel,
+        );
+        document.body.appendChild(
+            root,
+        );
+
+        this.controlsHelpRoot =
+            root;
+
+        const updatePanel =
+            (): void => {
+                const current =
+                    this.getControlsHelpCopy();
+                const mobile =
+                    window.matchMedia(
+                        '(pointer: coarse)',
+                    ).matches;
+
+                const body =
+                    mobile
+                        ? [
+                            current.mobileLobby,
+                            current.mobilePaint,
+                            current.mobileHunt,
+                        ]
+                        : [
+                            current.lobby,
+                            current.paint,
+                            current.hunt,
+                        ];
+
+                panel.replaceChildren();
+
+                const title =
+                    document.createElement(
+                        'strong',
+                    );
+                title.textContent =
+                    current.title;
+
+                const subtitle =
+                    document.createElement(
+                        'small',
+                    );
+                subtitle.textContent =
+                    current.subtitle;
+
+                panel.append(
+                    title,
+                    subtitle,
+                );
+
+                body.forEach(
+                    (line) => {
+                        const row =
+                            document.createElement(
+                                'div',
+                            );
+                        row.textContent =
+                            line;
+                        panel.appendChild(
+                            row,
+                        );
+                    },
+                );
+            };
+
+        const show =
+            (
+                event:
+                    Event,
+            ): void => {
+                event.preventDefault();
+                event.stopPropagation();
+                updatePanel();
+                panel.hidden = false;
+                root.classList.add(
+                    'colorhunt-controls-help--open',
+                );
+            };
+
+        const hide =
+            (
+                event?:
+                    Event,
+            ): void => {
+                event?.preventDefault();
+                panel.hidden = true;
+                root.classList.remove(
+                    'colorhunt-controls-help--open',
+                );
+            };
+
+        button.addEventListener(
+            'pointerdown',
+            show,
+        );
+        button.addEventListener(
+            'pointerup',
+            hide,
+        );
+        button.addEventListener(
+            'pointercancel',
+            hide,
+        );
+        button.addEventListener(
+            'pointerleave',
+            hide,
+        );
+        button.addEventListener(
+            'touchend',
+            hide,
+            {
+                passive: false,
+            },
+        );
+
+        this.controlsHelpViewportHandler =
+            (): void => {
+                this.updateControlsHelpPosition();
+            };
+
+        window.addEventListener(
+            'resize',
+            this.controlsHelpViewportHandler,
+            {
+                passive: true,
+            },
+        );
+        window.addEventListener(
+            'colorhunt:viewportchange',
+            this.controlsHelpViewportHandler,
+        );
+
+        this.updateControlsHelpPosition();
+    }
+
+    private updateControlsHelpPosition(): void {
+        if (!this.controlsHelpRoot) {
+            return;
+        }
+
+        const rect =
+            this.game.canvas
+                .getBoundingClientRect();
+
+        this.controlsHelpRoot.style
+            .setProperty(
+                '--controls-right',
+                `${Math.round(
+                    window.innerWidth -
+                    rect.right +
+                    8,
+                )}px`,
+            );
+
+        this.controlsHelpRoot.style
+            .setProperty(
+                '--controls-top',
+                `${Math.round(
+                    rect.top + 78,
+                )}px`,
+            );
+    }
+
+    private destroyControlsHelpUi(): void {
+        if (
+            this.controlsHelpViewportHandler
+        ) {
+            window.removeEventListener(
+                'resize',
+                this.controlsHelpViewportHandler,
+            );
+            window.removeEventListener(
+                'colorhunt:viewportchange',
+                this.controlsHelpViewportHandler,
+            );
+        }
+
+        this.controlsHelpRoot
+            ?.remove();
+
+        this.controlsHelpRoot =
+            undefined;
     }
 
     private createMultiplayerHud(): void {
@@ -14969,11 +15270,16 @@ export class GameScene extends Phaser.Scene {
             this.add.text(
                 395,
                 this.gameHeight - 104,
-                tr('브러시 모양'),
+                this.mobileControlsEnabled
+                    ? `✦ ${tr('브러시 모양')}`
+                    : tr('브러시 모양'),
                 {
                     fontFamily:
                         'monospace',
-                    fontSize: '11px',
+                    fontSize:
+                        this.mobileControlsEnabled
+                            ? '12px'
+                            : '11px',
                     fontStyle: 'bold',
                     color: '#5b4636',
                 },
@@ -14992,11 +15298,17 @@ export class GameScene extends Phaser.Scene {
         }> = [
             {
                 shape: 'circle',
-                label: `● ${tr('원형')}`,
+                label:
+                    this.mobileControlsEnabled
+                        ? `●\n${tr('원형')}`
+                        : `● ${tr('원형')}`,
             },
             {
                 shape: 'square',
-                label: `■ ${tr('사각형')}`,
+                label:
+                    this.mobileControlsEnabled
+                        ? `■\n${tr('사각형')}`
+                        : `■ ${tr('사각형')}`,
             },
         ];
 
@@ -15016,19 +15328,35 @@ export class GameScene extends Phaser.Scene {
                             {
                                 fontFamily:
                                     'monospace',
-                                fontSize: '11px',
+                                fontSize:
+                                    this.mobileControlsEnabled
+                                        ? '14px'
+                                        : '11px',
                                 fontStyle: 'bold',
                                 color: '#26352b',
                                 backgroundColor:
-                                    '#e8efd8',
+                                    '#eef6df',
                                 padding: {
-                                    x: 7,
-                                    y: 4,
+                                    x:
+                                        this.mobileControlsEnabled
+                                            ? 6
+                                            : 7,
+                                    y:
+                                        this.mobileControlsEnabled
+                                            ? 3
+                                            : 4,
                                 },
                             },
                         )
                         .setOrigin(0.5)
-                        .setFixedSize(72, 28)
+                        .setFixedSize(
+                            this.mobileControlsEnabled
+                                ? 74
+                                : 72,
+                            this.mobileControlsEnabled
+                                ? 42
+                                : 28,
+                        )
                         .setAlign('center')
                         .setDepth(873)
                         .setVisible(false)
@@ -15075,21 +15403,36 @@ export class GameScene extends Phaser.Scene {
             this.add.text(
                 475,
                 this.gameHeight - 78,
-                `◉ ${tr('스포이드')}`,
+                this.mobileControlsEnabled
+                    ? `◉\n${tr('스포이드')}`
+                    : `◉ ${tr('스포이드')}`,
                 {
                     fontFamily: 'monospace',
-                    fontSize: '10px',
+                    fontSize:
+                        this.mobileControlsEnabled
+                            ? '13px'
+                            : '10px',
                     fontStyle: 'bold',
                     color: '#26352b',
-                    backgroundColor: '#e8efd8',
+                    backgroundColor: '#eef6df',
                     padding: {
                         x: 5,
-                        y: 4,
+                        y:
+                            this.mobileControlsEnabled
+                                ? 3
+                                : 4,
                     },
                 },
             )
                 .setOrigin(0.5)
-                .setFixedSize(72, 28)
+                .setFixedSize(
+                    this.mobileControlsEnabled
+                        ? 74
+                        : 72,
+                    this.mobileControlsEnabled
+                        ? 42
+                        : 28,
+                )
                 .setAlign('center')
                 .setDepth(873)
                 .setVisible(false)
@@ -20659,23 +21002,19 @@ export class GameScene extends Phaser.Scene {
         );
 
         if (this.phase === 'paint') {
-            const isHunter =
-                this.isMultiplayerSession() &&
-                this.networkPlayerManager
-                    .isLocalHunter();
-
-            if (isHunter) {
-                /*
-                 * Hunter는 중앙 대기 안내에 남은 시간이 표시되므로
-                 * 상단 Paint 타이머 자체를 숨겨 배경 박스까지 제거합니다.
-                 */
+            /*
+             * v0.10.10.103:
+             * Multiplayer Paint has ONE countdown only:
+             * the compact "위장하세요 · ⌛ n" bar.
+             * Never resurrect the legacy numeric timer box for Hider.
+             */
+            if (
+                this.isMultiplayerSession()
+            ) {
                 this.timerText
                     .setText('')
                     .setVisible(false);
             } else {
-                /*
-                 * Hider는 상단 Paint 카운트를 계속 확인할 수 있습니다.
-                 */
                 this.timerText
                     .setVisible(true)
                     .setText(
@@ -20703,8 +21042,8 @@ export class GameScene extends Phaser.Scene {
             this.hunterBlindText?.visible
         ) {
             this.hunterBlindText.setText(
-                `${tr('위장하세요')}  |  ` +
-                `⌛ ${tr(`PAINT ${remainingSeconds}`)}`,
+                `${tr('위장하세요')}  ·  ` +
+                `⌛ ${remainingSeconds}`,
             );
         }
 

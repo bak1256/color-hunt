@@ -352,3 +352,105 @@ html.colorhunt-mobile #root {
 html.colorhunt-mobile canvas {
   max-height: var(--ch-viewport-height) !important;
 }
+
+
+/* v0.10.10.103 — phase-aware chat */
+@media (pointer: coarse) {
+  .colorhunt-chat.colorhunt-chat--mobile-lobby:not(.colorhunt-chat--focused) {
+    top: auto !important;
+    left: var(--chat-canvas-left) !important;
+    bottom: max(10px, env(safe-area-inset-bottom)) !important;
+    transform: none !important;
+    max-height: 128px;
+  }
+}
+
+/* Hold-to-view controls helper */
+.colorhunt-controls-help {
+  --controls-right: 8px;
+  --controls-top: 78px;
+  position: fixed;
+  z-index: 2147483100;
+  right: var(--controls-right);
+  top: var(--controls-top);
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    "Noto Sans KR",
+    "Noto Sans JP",
+    sans-serif;
+}
+
+.colorhunt-controls-help__button {
+  min-width: 94px;
+  min-height: 36px;
+  padding: 7px 11px;
+  border: 1px solid rgba(255,255,255,.26);
+  border-radius: 11px;
+  background: rgba(15, 22, 28, .58);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  text-shadow: 0 1px 2px rgba(0,0,0,.9);
+  box-shadow: 0 3px 12px rgba(0,0,0,.18);
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  touch-action: none;
+}
+
+.colorhunt-controls-help__panel {
+  position: absolute;
+  right: 0;
+  top: 44px;
+  width: min(360px, calc(100vw - 24px));
+  padding: 13px 14px;
+  border: 1px solid rgba(255,255,255,.20);
+  border-radius: 13px;
+  background: rgba(9, 14, 19, .91);
+  color: #fff;
+  box-shadow: 0 10px 34px rgba(0,0,0,.34);
+  line-height: 1.45;
+  pointer-events: none;
+}
+
+.colorhunt-controls-help__panel[hidden] {
+  display: none !important;
+}
+
+.colorhunt-controls-help__panel strong {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 15px;
+  color: #fff4ad;
+}
+
+.colorhunt-controls-help__panel small {
+  display: block;
+  margin-bottom: 9px;
+  color: rgba(255,255,255,.62);
+  font-size: 10px;
+}
+
+.colorhunt-controls-help__panel div {
+  margin: 6px 0;
+  font-size: 12px;
+}
+
+@media (pointer: coarse) {
+  .colorhunt-controls-help__button {
+    min-width: 104px;
+    min-height: 42px;
+    font-size: 13px;
+    background: rgba(12, 19, 24, .66);
+  }
+
+  .colorhunt-controls-help__panel {
+    width: min(390px, calc(100vw - 20px));
+    padding: 14px 15px;
+  }
+
+  .colorhunt-controls-help__panel div {
+    font-size: 13px;
+  }
+}
