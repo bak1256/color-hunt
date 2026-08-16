@@ -750,3 +750,17 @@ html.colorhunt-mobile canvas {
 .colorhunt-paint-dock--desktop .colorhunt-paint-tool.is-active {
   transform: none;
 }
+
+
+/* v0.10.10.108 — unified front-end presentation */
+html,
+body {
+  background:
+    radial-gradient(circle at 50% 18%, #1c2d31 0%, #0b1115 58%, #070b0e 100%);
+}
+
+canvas {
+  box-shadow:
+    0 20px 60px rgba(0,0,0,.38),
+    0 0 0 1px rgba(126,174,153,.10);
+}
