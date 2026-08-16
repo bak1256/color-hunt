@@ -249,6 +249,22 @@ export class MultiplayerClient {
   private snapshotPaintDurationMs = 120_000;
   private snapshotHuntDurationMs = 80_000;
 
+  /* Server epoch -> local epoch offset learned from phase_changed. */
+  private serverClockOffsetMs = 0;
+  private hasServerClockOffset = false;
+
+  private localizeServerDeadline(
+    deadline: number,
+  ): number {
+    if (!Number.isFinite(deadline) || deadline <= 0) {
+      return 0;
+    }
+
+    return this.hasServerClockOffset
+      ? deadline + this.serverClockOffsetMs
+      : deadline;
+  }
+
   /*
    * create()가 성공한 순간의 sessionId를 기억합니다.
    * 최초 Schema hostId가 아직 비어 있어도 생성자는 로컬에서 방장으로 취급합니다.
@@ -1083,16 +1099,22 @@ private attachRoom(
          * device clock. Convert the server deadline to an equivalent local
          * deadline from the remaining duration carried by the same packet.
          */
+        if (
+          Number.isFinite(serverNow) &&
+          serverNow > 0
+        ) {
+          this.serverClockOffsetMs =
+            Date.now() - serverNow;
+          this.hasServerClockOffset = true;
+        }
+
         const localPhaseEndsAt =
           Number.isFinite(serverNow) &&
           serverNow > 0 &&
           Number.isFinite(phaseEndsAt)
             ? Date.now() +
-              Math.max(
-                0,
-                phaseEndsAt - serverNow,
-              )
-            : phaseEndsAt;
+              Math.max(0, phaseEndsAt - serverNow)
+            : this.localizeServerDeadline(phaseEndsAt);
 
         this.phaseChangedHandlers
           .forEach(
@@ -1119,8 +1141,11 @@ private attachRoom(
             (handler) => {
               handler(
                 room.state.phase,
-                room.state
-                  .phaseEndsAt,
+                this.localizeServerDeadline(
+                  Number(
+                    room.state.phaseEndsAt ?? 0,
+                  ),
+                ),
               );
             },
           );
@@ -1195,17 +1220,30 @@ private attachRoom(
     room.onMessage<PaintReadyState>(
       "paint_ready_state",
       (payload) => {
+        const readySessionIds =
+          Array.isArray(payload?.readySessionIds)
+            ? payload.readySessionIds.map(String)
+            : [];
+
+        const hiderCount = Number(
+          payload?.hiderCount ??
+          (payload as PaintReadyState & { total?: number })?.total ??
+          0,
+        );
+
+        const readyCount = Number(
+          payload?.readyCount ??
+          (payload as PaintReadyState & { ready?: number })?.ready ??
+          readySessionIds.length,
+        );
+
         this.paintReadyState = {
-          readySessionIds:
-            Array.isArray(payload?.readySessionIds)
-              ? payload.readySessionIds.map(String)
-              : [],
-          hiderCount:
-            Number(payload?.hiderCount ?? 0),
-          readyCount:
-            Number(payload?.readyCount ?? 0),
+          readySessionIds,
+          hiderCount,
+          readyCount,
           allHidersReady:
-            Boolean(payload?.allHidersReady),
+            payload?.allHidersReady ??
+            (hiderCount > 0 && readyCount >= hiderCount),
         };
 
         this.paintReadyStateHandlers
@@ -1582,9 +1620,11 @@ private attachRoom(
   }
 
   getPhaseEndsAt(): number {
-    return (
-      this.room?.state
-        .phaseEndsAt ?? 0
+    return this.localizeServerDeadline(
+      Number(
+        this.room?.state
+          .phaseEndsAt ?? 0,
+      ),
     );
   }
 

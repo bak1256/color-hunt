@@ -314,7 +314,7 @@ export class GameScene extends Phaser.Scene {
         this.paintReadyButton =
             this.add.text(
                 this.gameWidth / 2,
-                this.gameHeight - 118,
+                this.gameHeight - 174,
                 tr('준비 완료'),
                 {
                     fontFamily: 'Arial, sans-serif',
@@ -487,7 +487,7 @@ export class GameScene extends Phaser.Scene {
         this.setFixedHudScreenPosition(
             button,
             this.gameWidth / 2,
-            this.gameHeight - 118,
+            this.gameHeight - 174,
         );
 
         /*
@@ -653,6 +653,41 @@ export class GameScene extends Phaser.Scene {
                         : 0.22;
 
                 this.survivalHudGraphics
+                    .lineStyle(
+                        4,
+                        0x111827,
+                        alpha,
+                    )
+                    .strokeCircle(
+                        x,
+                        headY,
+                        10,
+                    )
+                    .strokeRoundedRect(
+                        x - 10,
+                        bodyY - 11,
+                        20,
+                        27,
+                        5,
+                    )
+                    .lineBetween(
+                        x - 13,
+                        bodyY - 3,
+                        x + 13,
+                        bodyY - 3,
+                    )
+                    .lineBetween(
+                        x - 4,
+                        bodyY + 12,
+                        x - 8,
+                        bodyY + 22,
+                    )
+                    .lineBetween(
+                        x + 4,
+                        bodyY + 12,
+                        x + 8,
+                        bodyY + 22,
+                    )
                     .fillStyle(
                         0xf5eee2,
                         alpha,
@@ -800,27 +835,54 @@ export class GameScene extends Phaser.Scene {
                 );
         }
 
-        const lowerHalf =
-            halfW *
-            Math.sqrt(
-                elapsedRatio,
-            );
-
         if (elapsedRatio > 0.01) {
+            /*
+             * Fill the lower chamber from the BOTTOM upward.
+             * The old full-height triangle made the sand look as if it grew
+             * downward from the neck.
+             */
+            const chamberTopY = neckY + 5;
+            const chamberBottomY = bottomY - 6;
+            const chamberHeight =
+                chamberBottomY - chamberTopY;
+            const fillTopY =
+                chamberBottomY -
+                chamberHeight * elapsedRatio;
+            const topProgress =
+                Phaser.Math.Clamp(
+                    (fillTopY - chamberTopY) /
+                        Math.max(1, chamberHeight),
+                    0,
+                    1,
+                );
+            const topHalfWidth =
+                halfW * topProgress;
+
             this.survivalHudGraphics
                 .fillStyle(
                     0x63d471,
                     0.96,
                 )
-                .fillTriangle(
-                    hourglassX,
-                    neckY + 4,
-                    hourglassX -
-                        lowerHalf,
-                    bottomY - 6,
-                    hourglassX +
-                        lowerHalf,
-                    bottomY - 6,
+                .fillPoints(
+                    [
+                        new Phaser.Math.Vector2(
+                            hourglassX - topHalfWidth,
+                            fillTopY,
+                        ),
+                        new Phaser.Math.Vector2(
+                            hourglassX + topHalfWidth,
+                            fillTopY,
+                        ),
+                        new Phaser.Math.Vector2(
+                            hourglassX + halfW - 3,
+                            chamberBottomY,
+                        ),
+                        new Phaser.Math.Vector2(
+                            hourglassX - halfW + 3,
+                            chamberBottomY,
+                        ),
+                    ],
+                    true,
                 );
         }
 
@@ -862,15 +924,48 @@ export class GameScene extends Phaser.Scene {
             index += 1
         ) {
             this.survivalHudGraphics
-                .fillStyle(
-                    0xff3b30,
-                    1,
+                .lineStyle(4, 0x111827, 1)
+                .strokeCircle(x, headY, 10)
+                .strokeRoundedRect(
+                    x - 10,
+                    bodyY - 11,
+                    20,
+                    27,
+                    5,
                 )
-                .fillCircle(
-                    x,
-                    headY,
-                    9,
+                .lineBetween(
+                    x - 13,
+                    bodyY - 3,
+                    x + 13,
+                    bodyY - 3,
                 )
+                .lineBetween(
+                    x - 4,
+                    bodyY + 12,
+                    x - 8,
+                    bodyY + 22,
+                )
+                .lineBetween(
+                    x + 4,
+                    bodyY + 12,
+                    x + 8,
+                    bodyY + 22,
+                )
+                /* shotgun outline */
+                .lineBetween(
+                    x + 8,
+                    bodyY - 4,
+                    x + 24,
+                    bodyY - 10,
+                )
+                .lineBetween(
+                    x + 21,
+                    bodyY - 9,
+                    x + 28,
+                    bodyY - 9,
+                )
+                .fillStyle(0xff3b30, 1)
+                .fillCircle(x, headY, 9)
                 .fillRoundedRect(
                     x - 9,
                     bodyY - 10,
@@ -878,15 +973,11 @@ export class GameScene extends Phaser.Scene {
                     25,
                     4,
                 )
-                .lineStyle(
-                    3,
-                    0xff3b30,
-                    1,
-                )
+                .lineStyle(3, 0xff3b30, 1)
                 .lineBetween(
                     x - 12,
                     bodyY - 3,
-                    x + 12,
+                    x + 11,
                     bodyY - 3,
                 )
                 .lineBetween(
@@ -900,6 +991,19 @@ export class GameScene extends Phaser.Scene {
                     bodyY + 12,
                     x + 7,
                     bodyY + 21,
+                )
+                /* red shotgun */
+                .lineBetween(
+                    x + 8,
+                    bodyY - 4,
+                    x + 24,
+                    bodyY - 10,
+                )
+                .lineBetween(
+                    x + 21,
+                    bodyY - 9,
+                    x + 28,
+                    bodyY - 9,
                 );
 
             x += spacing;
@@ -913,9 +1017,17 @@ export class GameScene extends Phaser.Scene {
                 this.gameWidth / 2,
                 79,
             )
-            .setFontSize(18)
+            .setFontSize(19)
+            .setStroke('#111827', 4)
             .setVisible(true)
-            .setAlpha(0.94);
+            .setAlpha(1);
+
+        /* Keep role HUD screen-fixed in Paint and Hunt camera zooms. */
+        this.setFixedHudScreenPosition(
+            this.survivalHudText,
+            this.gameWidth / 2,
+            79,
+        );
     }
 
     private showHiderFoundEffect(
@@ -1191,7 +1303,7 @@ export class GameScene extends Phaser.Scene {
                 this.add.circle(
                     x,
                     y,
-                    19,
+                    25,
                     0xffffff,
                     0.42,
                 )
@@ -1221,21 +1333,21 @@ export class GameScene extends Phaser.Scene {
             ): Phaser.GameObjects.Text =>
                 this.add.text(
                     x,
-                    y - 66,
+                    y - 82,
                     label,
                     {
                         fontFamily:
                             'Arial, sans-serif',
-                        fontSize: '12px',
+                        fontSize: '16px',
                         fontStyle: 'bold',
                         color: '#ffffff',
                         backgroundColor:
                             'rgba(20, 31, 39, 0.72)',
                         align: 'center',
-                        fixedWidth: 64,
-                        fixedHeight: 24,
+                        fixedWidth: 82,
+                        fixedHeight: 32,
                         padding: {
-                            top: 5,
+                            top: 6,
                         },
                     },
                 )
@@ -1988,7 +2100,7 @@ export class GameScene extends Phaser.Scene {
             this.setFixedHudScreenPosition(
                 this.mobileMoveLabel,
                 82,
-                209,
+                193,
             );
         }
 
@@ -1999,7 +2111,7 @@ export class GameScene extends Phaser.Scene {
             this.setFixedHudScreenPosition(
                 this.mobileAimLabel,
                 this.gameWidth - 170,
-                this.gameHeight - 256,
+                this.gameHeight - 272,
             );
         }
 
@@ -2194,7 +2306,7 @@ export class GameScene extends Phaser.Scene {
     private mobileMoveY = 0;
     private mobileAimAngle = 0;
     private mobileAimHasDirection = false;
-    private readonly mobileJoystickRadius = 46;
+    private readonly mobileJoystickRadius = 58;
     private mobileTouchPoints =
         new Map<number, Phaser.Math.Vector2>();
     private mobilePinchDistance = 0;
@@ -2754,6 +2866,15 @@ export class GameScene extends Phaser.Scene {
 
             this.localNetworkPlayerReady =
                 true;
+
+            /*
+             * MOBILE JOIN INPUT RECOVERY:
+             * the DOM join modal disables Phaser input. A successful Colyseus
+             * join is enough to release it immediately instead of waiting for
+             * a later Schema/onAdd callback (which could feel like ~10 seconds).
+             */
+            this.closeMenuModal();
+            this.input.enabled = true;
 
             this.handleJoinedRoom(
                 room,
