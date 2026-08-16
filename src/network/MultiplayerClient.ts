@@ -2418,6 +2418,35 @@ this.manualReconnectInFlight = false;
     );
   }
 
+  sendReconnectPaintSnapshot(
+    strokes: NetworkPaintStroke[],
+  ): void {
+    if (
+      !this.room ||
+      strokes.length < 1
+    ) {
+      return;
+    }
+
+    /*
+     * v0.10.10.93:
+     * The reconnecting client is the most reliable source of its own
+     * camouflage because its GameScene/localPaintHistory survives the
+     * WebSocket handoff. Ask the server to normalize these strokes to the
+     * NEW sessionId and replay them only to opponents.
+     */
+    this.room.send(
+      "restore_local_paint",
+      {
+        strokes:
+          strokes.slice(
+            0,
+            240,
+          ),
+      },
+    );
+  }
+
   sendPaintStroke(
     stroke: NetworkPaintStroke,
   ): void {

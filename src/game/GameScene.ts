@@ -4547,6 +4547,40 @@ export class GameScene extends Phaser.Scene {
                     multiplayerClient
                         .requestRoundPaintState();
 
+                    /*
+                     * v0.10.10.93:
+                     * Do not depend on old server-side session paint.
+                     * This GameScene still owns the exact current camouflage.
+                     * Once the replacement Hunter session has settled, send
+                     * that source once to the server for opponent restoration.
+                     */
+                    if (
+                        this.networkPlayerManager
+                            .isLocalHunter() &&
+                        this.localPaintHistory
+                            .length >
+                            0
+                    ) {
+                        this.time.delayedCall(
+                            900,
+                            () => {
+                                if (
+                                    this.phase ===
+                                        'paint' ||
+                                    this.phase ===
+                                        'hunt' ||
+                                    this.phase ===
+                                        'countdown'
+                                ) {
+                                    multiplayerClient
+                                        .sendReconnectPaintSnapshot(
+                                            this.localPaintHistory,
+                                        );
+                                }
+                            },
+                        );
+                    }
+
                     this.time.delayedCall(
                         60,
                         () => {
@@ -4566,6 +4600,19 @@ export class GameScene extends Phaser.Scene {
 
                             multiplayerClient
                                 .requestRoundPaintState();
+
+                            if (
+                                this.networkPlayerManager
+                                    .isLocalHunter() &&
+                                this.localPaintHistory
+                                    .length >
+                                    0
+                            ) {
+                                multiplayerClient
+                                    .sendReconnectPaintSnapshot(
+                                        this.localPaintHistory,
+                                    );
+                            }
                         },
                     );
 
