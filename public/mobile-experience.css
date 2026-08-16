@@ -772,3 +772,40 @@ canvas {
     0 18px 42px rgba(87, 117, 91, .20),
     0 0 0 2px rgba(112, 163, 121, .20);
 }
+
+
+/* v0.10.10.110 — lobby/menu UI reset polish */
+.colorhunt-controls-help__button {
+  background: rgba(255, 250, 226, .92);
+  color: #3d5748;
+  border-color: rgba(91, 134, 101, .42);
+  box-shadow: 0 3px 0 rgba(74, 108, 81, .12);
+  text-shadow: none;
+}
+
+.colorhunt-controls-help__panel {
+  background: rgba(255, 253, 243, .97) !important;
+  color: #344a3d !important;
+  border-color: rgba(99, 143, 109, .40) !important;
+  box-shadow: 0 10px 28px rgba(75, 99, 80, .22) !important;
+}
+
+.colorhunt-controls-help__panel strong {
+  color: #315c46 !important;
+}
+
+.colorhunt-controls-help__panel small {
+  color: #77887e !important;
+}
+
+.colorhunt-controls-help__panel div {
+  color: #455b4d;
+}
+
+.colorhunt-chat {
+  border-color: rgba(68, 101, 78, .18);
+}
+
+.colorhunt-chat__input::placeholder {
+  color: rgba(255,255,255,.72);
+}

@@ -2482,6 +2482,7 @@ export class GameScene extends Phaser.Scene {
     private chatRoot?: HTMLDivElement;
     private chatLog?: HTMLDivElement;
     private chatInput?: HTMLInputElement;
+    private chatSendButton?: HTMLButtonElement;
     private chatKeyboardHandler?: (
         event: KeyboardEvent,
     ) => void;
@@ -2490,6 +2491,7 @@ export class GameScene extends Phaser.Scene {
     private readonly chatMessageIds =
         new Set<string>();
     private controlsHelpRoot?: HTMLDivElement;
+    private controlsHelpButton?: HTMLButtonElement;
     private controlsHelpViewportHandler?: () => void;
     private mobilePaintDock?: HTMLDivElement;
     private mobilePaintSizeInput?: HTMLInputElement;
@@ -4055,6 +4057,8 @@ export class GameScene extends Phaser.Scene {
         this.chatRoot = root;
         this.chatLog = log;
         this.chatInput = input;
+        this.chatSendButton =
+            sendButton;
 
         const send =
             (): void => {
@@ -4619,6 +4623,8 @@ export class GameScene extends Phaser.Scene {
         this.chatRoot = undefined;
         this.chatLog = undefined;
         this.chatInput = undefined;
+        this.chatSendButton =
+            undefined;
     }
 
     private getControlsHelpCopy(): {
@@ -4627,9 +4633,11 @@ export class GameScene extends Phaser.Scene {
         subtitle: string;
         lobby: string;
         paint: string;
+        straight: string;
         hunt: string;
         mobileLobby: string;
         mobilePaint: string;
+        mobileStraight: string;
         mobileHunt: string;
     } {
         const language =
@@ -4641,10 +4649,12 @@ export class GameScene extends Phaser.Scene {
                 title: '조작방법',
                 subtitle: '버튼을 누르고 있는 동안만 표시됩니다',
                 lobby: '대기실 · 마우스로 선택 · Enter 채팅',
-                paint: '색칠 · 드래그로 칠하기 · 휠 확대 · Ctrl+휠 붓 크기',
+                paint: '색칠 · 드래그로 칠하기 · 휠 확대/축소 · Ctrl+휠 붓 크기',
+                straight: '직선 · Shift를 누른 채 드래그하면 직선으로 칠해집니다',
                 hunt: '사냥 · WASD 이동 · 마우스 조준 · 좌클릭 발사',
                 mobileLobby: '대기실 · 버튼 터치 · 채팅칸 터치',
-                mobilePaint: '색칠 · 손가락으로 칠하기 · 핀치 확대 · 아래 도구로 붓 변경',
+                mobilePaint: '색칠 · 손가락으로 칠하기 · 핀치 확대/축소 · 아래 도구로 붓 변경',
+                mobileStraight: '직선 · Shift 직선 기능은 PC 키보드 조작에서 사용할 수 있습니다',
                 mobileHunt: '사냥 · 왼쪽 이동 · 오른쪽 조준 · FIRE 발사',
             },
             ja: {
@@ -4652,10 +4662,12 @@ export class GameScene extends Phaser.Scene {
                 title: '操作方法',
                 subtitle: '押している間だけ表示されます',
                 lobby: 'ロビー · マウス選択 · Enterでチャット',
-                paint: 'ペイント · ドラッグ · ホイールズーム · Ctrl+ホイールでブラシ',
+                paint: 'ペイント · ドラッグで塗る · ホイールでズーム · Ctrl+ホイールでブラシ',
+                straight: '直線 · Shiftを押しながらドラッグすると直線で塗れます',
                 hunt: 'ハント · WASD移動 · マウス照準 · 左クリック射撃',
                 mobileLobby: 'ロビー · ボタン操作 · 入力欄タップでチャット',
-                mobilePaint: 'ペイント · 指で塗る · ピンチズーム · 下のツールで変更',
+                mobilePaint: 'ペイント · 指で塗る · ピンチズーム · 下のツールでブラシ変更',
+                mobileStraight: '直線 · Shift直線機能はPCキーボード操作で利用できます',
                 mobileHunt: 'ハント · 左で移動 · 右で照準 · FIREで射撃',
             },
             en: {
@@ -4663,10 +4675,12 @@ export class GameScene extends Phaser.Scene {
                 title: 'Controls',
                 subtitle: 'Shown only while you hold this button',
                 lobby: 'Lobby · Click UI · Enter to chat',
-                paint: 'Paint · Drag to paint · Wheel zoom · Ctrl+wheel brush size',
+                paint: 'Paint · Drag to paint · Wheel to zoom · Ctrl+wheel changes brush size',
+                straight: 'Straight line · Hold Shift while dragging to paint a straight line',
                 hunt: 'Hunt · WASD move · Mouse aim · Left click fire',
                 mobileLobby: 'Lobby · Tap buttons · Tap chat field to type',
-                mobilePaint: 'Paint · Finger paint · Pinch zoom · Bottom tools change brush',
+                mobilePaint: 'Paint · Paint with one finger · Pinch to zoom · Bottom tools change brush',
+                mobileStraight: 'Straight line · Shift straight-line mode is available with a PC keyboard',
                 mobileHunt: 'Hunt · Left move · Right aim · FIRE shoots',
             },
             zh: {
@@ -4674,10 +4688,12 @@ export class GameScene extends Phaser.Scene {
                 title: '操作说明',
                 subtitle: '仅在按住按钮时显示',
                 lobby: '大厅：鼠标选择界面 · Enter 打开聊天',
-                paint: '涂色：点击/拖动 · 滚轮缩放 · Ctrl+滚轮调整画笔大小',
+                paint: '涂色 · 拖动涂色 · 滚轮缩放 · Ctrl+滚轮调整画笔大小',
+                straight: '直线 · 按住 Shift 拖动即可画直线',
                 hunt: '狩猎：WASD/方向键移动 · 鼠标瞄准 · 左键射击',
                 mobileLobby: '大厅：点击屏幕按钮 · 点击聊天输入框聊天',
-                mobilePaint: '涂色：单指涂色 · 双指缩放 · 使用工具图标切换画笔',
+                mobilePaint: '涂色 · 单指涂色 · 双指缩放 · 使用底部工具切换画笔',
+                mobileStraight: '直线 · Shift 直线功能可在 PC 键盘操作中使用',
                 mobileHunt: '狩猎：左侧移动 · 右侧瞄准 · FIRE按钮射击',
             },
         } as const;
@@ -5224,6 +5240,8 @@ export class GameScene extends Phaser.Scene {
 
         this.controlsHelpRoot =
             root;
+        this.controlsHelpButton =
+            button;
 
         const updatePanel =
             (): void => {
@@ -5239,11 +5257,13 @@ export class GameScene extends Phaser.Scene {
                         ? [
                             current.mobileLobby,
                             current.mobilePaint,
+                            current.mobileStraight,
                             current.mobileHunt,
                         ]
                         : [
                             current.lobby,
                             current.paint,
+                            current.straight,
                             current.hunt,
                         ];
 
@@ -5382,7 +5402,7 @@ export class GameScene extends Phaser.Scene {
 
         const logicalTop =
             this.phase === 'lobby'
-                ? 76
+                ? 58
                 : 72;
 
         this.controlsHelpRoot.style
@@ -5426,6 +5446,81 @@ export class GameScene extends Phaser.Scene {
 
         this.controlsHelpRoot =
             undefined;
+        this.controlsHelpButton =
+            undefined;
+    }
+
+    private refreshDomTranslations(): void {
+        const chat =
+            this.getChatUiText(
+                'placeholder',
+            );
+
+        if (this.chatInput) {
+            this.chatInput.placeholder =
+                chat;
+        }
+
+        if (this.chatSendButton) {
+            this.chatSendButton.textContent =
+                this.getChatUiText(
+                    'send',
+                );
+        }
+
+        if (
+            this.controlsHelpButton
+        ) {
+            this.controlsHelpButton.textContent =
+                this.getControlsHelpCopy()
+                    .button;
+        }
+
+        const toolLabels:
+            Record<string, string> = {
+                circle:
+                    tr('원형'),
+                square:
+                    tr('사각형'),
+                eyedropper:
+                    tr('스포이드'),
+                undo:
+                    tr('되돌리기'),
+                redo:
+                    tr('다시 실행'),
+            };
+
+        this.mobilePaintToolButtons
+            .forEach(
+                (
+                    button,
+                    key,
+                ) => {
+                    const label =
+                        button.querySelector(
+                            'span:last-child',
+                        );
+
+                    if (
+                        label &&
+                        toolLabels[key]
+                    ) {
+                        label.textContent =
+                            toolLabels[key];
+                    }
+                },
+            );
+
+        const brushLabel =
+            this.mobilePaintDock
+                ?.querySelector(
+                    '.colorhunt-paint-size > span:first-child',
+                );
+
+        if (brushLabel) {
+            brushLabel.textContent =
+                tr('브러시');
+        }
     }
 
     private createMultiplayerHud(): void {
@@ -9931,6 +10026,8 @@ export class GameScene extends Phaser.Scene {
     }
 
     private showMainMenu(): void {
+        this.refreshDomTranslations();
+
         if (
             multiplayerClient.isConnected()
         ) {
@@ -9966,9 +10063,9 @@ export class GameScene extends Phaser.Scene {
         const panel = this.add
             .rectangle(
                 this.gameWidth / 2,
-                290,
-                820,
-                446,
+                292,
+                842,
+                452,
                 0xfff8e7,
                 0.985,
             )
@@ -9981,7 +10078,7 @@ export class GameScene extends Phaser.Scene {
 
         const subtitle = this.add
             .text(
-                78,
+                82,
                 92,
                 tr('위장하고, 숨고, 찾아내세요!'),
                 {
@@ -9995,10 +10092,10 @@ export class GameScene extends Phaser.Scene {
 
         const roomCard = this.add
             .rectangle(
-                325,
-                315,
-                510,
-                290,
+                330,
+                326,
+                520,
+                300,
                 0xfffdf6,
                 0.995,
             )
@@ -10011,10 +10108,10 @@ export class GameScene extends Phaser.Scene {
 
         const actionCard = this.add
             .rectangle(
-                725,
-                315,
-                254,
-                290,
+                730,
+                326,
+                246,
+                300,
                 0xfffdf6,
                 0.995,
             )
@@ -10027,8 +10124,8 @@ export class GameScene extends Phaser.Scene {
 
         const listTitle = this.add
             .text(
-                94,
-                184,
+                104,
+                194,
                 tr('공개 게임방'),
                 {
                     fontFamily:
@@ -10042,9 +10139,9 @@ export class GameScene extends Phaser.Scene {
 
         const roomDivider = this.add
             .rectangle(
-                325,
-                218,
-                466,
+                330,
+                226,
+                450,
                 1,
                 0xcbdcbe,
                 0.95,
@@ -10054,8 +10151,8 @@ export class GameScene extends Phaser.Scene {
 
         const roomListHeader =
             this.add.text(
-                102,
-                226,
+                106,
+                236,
                 `${tr('방 이름')}      ${tr('인원')}      ${tr('상태')}`,
                 {
                     fontFamily:
@@ -10073,7 +10170,7 @@ export class GameScene extends Phaser.Scene {
         const refreshButton =
             this.makeMenuButton(
                 526,
-                184,
+                194,
                 `↻ ${tr('새로고침')}`,
                 () => {
                     void this.refreshPublicRoomList(true);
@@ -10082,8 +10179,8 @@ export class GameScene extends Phaser.Scene {
 
         refreshButton
             .setFixedSize(
-                78,
-                26,
+                94,
+                28,
             )
             .setAlign('center')
             .setOrigin(0.5)
@@ -10109,8 +10206,8 @@ export class GameScene extends Phaser.Scene {
 
         const actionTitle = this.add
             .text(
-                622,
-                184,
+                624,
+                194,
                 tr('게임 시작하기'),
                 {
                     fontFamily:
@@ -10145,66 +10242,66 @@ export class GameScene extends Phaser.Scene {
          */
         const avatarPreviewGlow =
             this.add.rectangle(
-                632,
-                128,
-                88,
-                106,
-                0xc8efbf,
-                0.72,
+                667,
+                236,
+                70,
+                86,
+                0xdaf4d3,
+                1,
             )
                 .setStrokeStyle(
                     3,
                     0xffffff,
-                    0.96,
+                    1,
                 )
                 .setDepth(502);
 
         const avatarPreviewFrame =
             this.add.rectangle(
-                632,
-                128,
-                76,
-                94,
-                0xf2fbe9,
+                667,
+                236,
+                62,
+                78,
+                0xf8fff3,
                 1,
             )
                 .setStrokeStyle(
-                    3,
-                    0x70a875,
+                    2,
+                    0x75aa79,
                     1,
                 )
                 .setDepth(503);
 
         const avatarPreview =
             this.add.image(
-                632,
-                128,
+                667,
+                236,
                 avatarPreviewTexture,
             )
                 .setDisplaySize(
-                    52,
-                    78,
+                    42,
+                    63,
                 )
                 .setDepth(504);
 
         const avatarCustomizeButton =
             this.add.text(
-                758,
-                128,
+                772,
+                236,
                 `🎨 ${tr('내 캐릭터 꾸미기')}`,
                 {
                     fontFamily:
                         'monospace',
                     fontSize:
                         getLanguage() === 'ja'
-                            ? '11px'
-                            : '12px',
+                            ? '9px'
+                            : '10px',
                     fontStyle: 'bold',
                     color: '#315c46',
                     backgroundColor:
                         '#dff3d5',
-                    fixedWidth: 176,
-                    fixedHeight: 34,
+                    fixedWidth: 124,
+                    fixedHeight: 38,
                     align: 'center',
                     padding: {
                         top: 8,
@@ -10243,11 +10340,11 @@ export class GameScene extends Phaser.Scene {
                         color: '#24332b',
                         backgroundColor:
                             color,
-                        fixedWidth: 214,
-                        fixedHeight: 50,
+                        fixedWidth: 204,
+                        fixedHeight: 42,
                         align: 'center',
                         padding: {
-                            top: 15,
+                            top: 12,
                         },
                     },
                 )
@@ -10277,7 +10374,7 @@ export class GameScene extends Phaser.Scene {
 
         const publicCreate =
             makeAction(
-                242,
+                302,
                 `＋  ${tr('공개방 만들기')}`,
                 '#91dfa2',
                 () => {
@@ -10289,7 +10386,7 @@ export class GameScene extends Phaser.Scene {
 
         const privateCreate =
             makeAction(
-                306,
+                354,
                 `▣  ${tr('비공개방 만들기')}`,
                 '#9fd5f5',
                 () => {
@@ -10301,7 +10398,7 @@ export class GameScene extends Phaser.Scene {
 
         const privateJoin =
             makeAction(
-                370,
+                406,
                 `◎  ${tr('비공개방 참가')}`,
                 '#cbb4ef',
                 () => {
@@ -10311,10 +10408,10 @@ export class GameScene extends Phaser.Scene {
 
         const helpCard = this.add
             .rectangle(
-                725,
-                428,
-                214,
-                50,
+                730,
+                452,
+                204,
+                28,
                 0xf7f1ff,
                 0.995,
             )
@@ -10327,17 +10424,17 @@ export class GameScene extends Phaser.Scene {
 
         const helpText = this.add
             .text(
-                632,
-                412,
+                636,
+                443,
                 `${tr('게임 설명')}\n${tr('위장하고, 숨고, 찾아내세요!')}`,
                 {
                     fontFamily:
                         'monospace',
-                    fontSize: '11px',
+                    fontSize: '9px',
                     color: '#665b75',
-                    lineSpacing: 4,
+                    lineSpacing: 2,
                     wordWrap: {
-                        width: 186,
+                        width: 188,
                     },
                 },
             )
@@ -10346,8 +10443,8 @@ export class GameScene extends Phaser.Scene {
         const languageBar =
             this.add.rectangle(
                 480,
-                486,
-                780,
+                502,
+                794,
                 34,
                 0xfffdf6,
                 0.995,
@@ -10376,7 +10473,7 @@ export class GameScene extends Phaser.Scene {
                     const button =
                         this.add.text(
                             310 + index * 112,
-                            486,
+                            502,
                             label,
                             {
                                 fontFamily:
@@ -10412,6 +10509,7 @@ export class GameScene extends Phaser.Scene {
                         'pointerdown',
                         () => {
                             setLanguage(language);
+                            this.refreshDomTranslations();
                             this.closeMenuModal();
                             this.showMainMenu();
                         },
@@ -10463,8 +10561,8 @@ export class GameScene extends Phaser.Scene {
             showLoading
                 ? this.add
                     .text(
-                        102,
-                        252,
+                        106,
+                        266,
                         tr('방 목록을 불러오는 중...'),
                         {
                             fontFamily: 'monospace',
@@ -10524,8 +10622,8 @@ export class GameScene extends Phaser.Scene {
                 const emptyText =
                     this.add
                         .text(
-                            102,
-                            252,
+                            106,
+                            266,
                             tr('생성된 공개방이 없습니다.'),
                             {
                                 fontFamily: 'monospace',
@@ -10561,9 +10659,9 @@ export class GameScene extends Phaser.Scene {
 
                         const row =
                             this.makeMenuButton(
-                                325,
-                                258 +
-                                    index * 39,
+                                330,
+                                270 +
+                                    index * 40,
                                 `${phase === 'lobby' ? '●' : '◉'}  ${roomTitle}     ${room.clients}/${room.maxClients}     ${phase === 'lobby' ? trPhase(phase) : tr('게임중')}`,
                                 () => {
                                     /*
@@ -10584,7 +10682,7 @@ export class GameScene extends Phaser.Scene {
                                     : 11,
                             )
                             .setFixedSize(
-                                456,
+                                448,
                                 36,
                             )
                             .setAlign(
@@ -10594,7 +10692,7 @@ export class GameScene extends Phaser.Scene {
                                 0.5,
                             )
                             .setPadding(
-                                15,
+                                18,
                                 9,
                                 0,
                                 0,
@@ -10700,9 +10798,9 @@ export class GameScene extends Phaser.Scene {
          */
         this.lobbyPanel =
             this.add.rectangle(
-                824,
+                818,
                 286,
-                260,
+                274,
                 468,
                 0xfff8e7,
                 0.985,
@@ -10740,10 +10838,10 @@ export class GameScene extends Phaser.Scene {
          */
         this.lobbyInfoCard =
             this.add.rectangle(
-                824,
-                150,
-                228,
-                104,
+                818,
+                166,
+                238,
+                118,
                 0xfffdf6,
                 1,
             )
@@ -10756,8 +10854,8 @@ export class GameScene extends Phaser.Scene {
 
         this.lobbyInfoText =
             this.add.text(
-                824,
-                106,
+                818,
+                116,
                 '',
                 {
                     fontFamily:
@@ -10766,7 +10864,7 @@ export class GameScene extends Phaser.Scene {
                     color: '#405b4a',
                     align: 'left',
                     lineSpacing: 5,
-                    fixedWidth: 192,
+                    fixedWidth: 202,
                 },
             )
                 .setOrigin(0.5, 0)
@@ -10778,8 +10876,8 @@ export class GameScene extends Phaser.Scene {
          */
         this.lobbyHintText =
             this.add.text(
-                824,
-                214,
+                818,
+                236,
                 '',
                 {
                     fontFamily:
@@ -10795,8 +10893,8 @@ export class GameScene extends Phaser.Scene {
 
         this.lobbyMovementHelpText =
             this.add.text(
-                824,
-                236,
+                818,
+                254,
                 tr('WASD 이동'),
                 {
                     fontFamily:
@@ -10815,10 +10913,10 @@ export class GameScene extends Phaser.Scene {
          */
         this.lobbyControlsCard =
             this.add.rectangle(
-                824,
-                352,
-                228,
-                220,
+                818,
+                362,
+                238,
+                202,
                 0xeef8ff,
                 1,
             )
@@ -10831,8 +10929,8 @@ export class GameScene extends Phaser.Scene {
 
         this.roleHunterButton =
             this.makeMenuButton(
-                770,
-                274,
+                764,
+                294,
                 tr('HUNTER 지원'),
                 () => {
                     const localPlayer =
@@ -10852,8 +10950,8 @@ export class GameScene extends Phaser.Scene {
 
         this.roleHiderButton =
             this.makeMenuButton(
-                878,
-                274,
+                872,
+                294,
                 tr('지원 취소'),
                 () => {
                     multiplayerClient
@@ -10911,8 +11009,8 @@ export class GameScene extends Phaser.Scene {
 
         this.lobbyPaintDurationLabel =
             this.add.text(
-                824,
-                306,
+                818,
+                324,
                 tr('색칠 시간'),
                 {
                     fontFamily:
@@ -10936,9 +11034,9 @@ export class GameScene extends Phaser.Scene {
                             durationMs / 1000;
 
                         return this.makeMenuButton(
-                            754 +
+                            748 +
                                 index * 70,
-                            328,
+                            346,
                             `${seconds}s`,
                             () => {
                                 if (
@@ -10973,8 +11071,8 @@ export class GameScene extends Phaser.Scene {
 
         this.lobbyHuntDurationLabel =
             this.add.text(
-                824,
-                356,
+                818,
+                376,
                 tr('사냥 시간'),
                 {
                     fontFamily:
@@ -10998,9 +11096,9 @@ export class GameScene extends Phaser.Scene {
                             durationMs / 1000;
 
                         return this.makeMenuButton(
-                            754 +
+                            748 +
                                 index * 70,
-                            378,
+                            398,
                             `${seconds}s`,
                             () => {
                                 if (
@@ -11038,8 +11136,8 @@ export class GameScene extends Phaser.Scene {
          */
         this.startGameButton =
             this.add.text(
-                824,
-                426,
+                818,
+                442,
                 tr('START GAME'),
                 {
                     fontFamily:
@@ -11049,7 +11147,7 @@ export class GameScene extends Phaser.Scene {
                     color: '#ffffff',
                     backgroundColor:
                         '#76ca8c',
-                    fixedWidth: 214,
+                    fixedWidth: 222,
                     fixedHeight: 40,
                     align: 'center',
                     padding: {
@@ -11100,8 +11198,8 @@ export class GameScene extends Phaser.Scene {
          */
         this.lobbyFooterDivider =
             this.add.rectangle(
-                824,
-                470,
+                818,
+                476,
                 214,
                 1,
                 0xc9d9bf,
@@ -11111,8 +11209,8 @@ export class GameScene extends Phaser.Scene {
 
         this.inviteLinkButton =
             this.makeMenuButton(
-                768,
-                494,
+                760,
+                500,
                 tr('초대 링크 복사'),
                 () => {
                     void this.copyInviteLink();
@@ -11138,8 +11236,8 @@ export class GameScene extends Phaser.Scene {
 
         this.leaveRoomButton =
             this.makeMenuButton(
-                880,
-                494,
+                876,
+                500,
                 tr('로비로 나가기'),
                 () => {
                     void this.leaveCurrentRoomToLobby();
@@ -11173,10 +11271,10 @@ export class GameScene extends Phaser.Scene {
          */
         this.mapSelectorPanel =
             this.add.rectangle(
-                205,
+                204,
                 42,
-                330,
-                48,
+                314,
+                46,
                 0xfff1b8,
                 0.98,
             )
@@ -11190,7 +11288,7 @@ export class GameScene extends Phaser.Scene {
 
         this.mapPreviousButton =
             this.add.text(
-                70,
+                76,
                 42,
                 '◀',
                 {
@@ -11234,7 +11332,7 @@ export class GameScene extends Phaser.Scene {
 
         this.mapNextButton =
             this.add.text(
-                340,
+                332,
                 42,
                 '▶',
                 {
