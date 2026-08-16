@@ -2500,6 +2500,8 @@ export class GameScene extends Phaser.Scene {
         new Map<string, HTMLButtonElement>();
     private mobilePaintColorButtons:
         HTMLButtonElement[] = [];
+    private mainLobbyRoot?: HTMLDivElement;
+    private mainLobbyRoomList?: HTMLDivElement;
     private lobbyPanel!: Phaser.GameObjects.Rectangle;
     private lobbyTitleText!: Phaser.GameObjects.Text;
     private lobbyInfoText!: Phaser.GameObjects.Text;
@@ -3459,6 +3461,11 @@ export class GameScene extends Phaser.Scene {
                 this.destroyChatUi();
                 this.destroyControlsHelpUi();
                 this.destroyMobilePaintDock();
+                window.removeEventListener(
+                    'resize',
+                    this.updateMainLobbyDomPositionBound,
+                );
+                this.destroyMainLobbyDom();
 
                 if (
                     this.mobileMoveSafetyReleaseHandler
@@ -7830,6 +7837,12 @@ export class GameScene extends Phaser.Scene {
             >
         >,
     ): void {
+        this.destroyMainLobbyDom();
+        window.removeEventListener(
+            'resize',
+            this.updateMainLobbyDomPositionBound,
+        );
+
         this.showChatUi();
         multiplayerClient
             .requestChatHistory();
@@ -10025,6 +10038,377 @@ export class GameScene extends Phaser.Scene {
             overlay;
     }
 
+    private getLobbyAvatarPreviewDataUrl(
+        textureKey: string,
+    ): string {
+        try {
+            const source =
+                this.textures
+                    .get(textureKey)
+                    .getSourceImage() as
+                    | HTMLCanvasElement
+                    | HTMLImageElement;
+
+            if (
+                source instanceof
+                    HTMLCanvasElement
+            ) {
+                return source.toDataURL(
+                    'image/png',
+                );
+            }
+
+            if (
+                source instanceof
+                    HTMLImageElement
+            ) {
+                return source.src;
+            }
+        } catch (
+            error
+        ) {
+            console.warn(
+                '[Color Hunt] avatar preview export failed',
+                error,
+            );
+        }
+
+        return '';
+    }
+
+    private destroyMainLobbyDom(): void {
+        this.mainLobbyRoot
+            ?.remove();
+        this.mainLobbyRoot =
+            undefined;
+        this.mainLobbyRoomList =
+            undefined;
+    }
+
+    private updateMainLobbyDomPosition(): void {
+        if (!this.mainLobbyRoot) {
+            return;
+        }
+
+        const rect =
+            this.game.canvas
+                .getBoundingClientRect();
+
+        this.mainLobbyRoot.style
+            .setProperty(
+                '--lobby-left',
+                `${Math.round(
+                    rect.left +
+                    rect.width *
+                        0.035,
+                )}px`,
+            );
+
+        this.mainLobbyRoot.style
+            .setProperty(
+                '--lobby-top',
+                `${Math.round(
+                    rect.top +
+                    rect.height *
+                        0.09,
+                )}px`,
+            );
+
+        this.mainLobbyRoot.style
+            .setProperty(
+                '--lobby-width',
+                `${Math.round(
+                    rect.width *
+                        0.93,
+                )}px`,
+            );
+
+        this.mainLobbyRoot.style
+            .setProperty(
+                '--lobby-height',
+                `${Math.round(
+                    rect.height *
+                        0.87,
+                )}px`,
+            );
+    }
+
+    private createMainLobbyDom(): void {
+        this.destroyMainLobbyDom();
+
+        if (
+            this.lobbyAvatarPreset.length ===
+            0
+        ) {
+            this.lobbyAvatarPreset =
+                this.loadLobbyAvatarPreset();
+        }
+
+        const previewKey =
+            this.buildLobbyAvatarPreviewTexture();
+
+        const previewUrl =
+            this.getLobbyAvatarPreviewDataUrl(
+                previewKey,
+            );
+
+        const root =
+            document.createElement(
+                'div',
+            );
+        root.className =
+            'colorhunt-main-lobby';
+
+        const currentLanguage =
+            getLanguage();
+
+        const languages:
+            Array<{
+                code: GameLanguage;
+                label: string;
+                flag: string;
+            }> = [
+                {
+                    code: 'ko',
+                    label: '한국어',
+                    flag: '🇰🇷',
+                },
+                {
+                    code: 'ja',
+                    label: '日本語',
+                    flag: '🇯🇵',
+                },
+                {
+                    code: 'en',
+                    label: 'English',
+                    flag: '🇺🇸',
+                },
+                {
+                    code: 'zh',
+                    label: '中文',
+                    flag: '🇨🇳',
+                },
+            ];
+
+        root.innerHTML = `
+            <div class="ch-lobby-shell">
+                <section class="ch-lobby-rooms">
+                    <header class="ch-lobby-section-head">
+                        <div class="ch-lobby-section-title">
+                            <span class="ch-lobby-door">▯</span>
+                            <span>${tr('공개 게임방')}</span>
+                        </div>
+                        <button type="button" class="ch-lobby-refresh">
+                            ↻ ${tr('새로고침')}
+                        </button>
+                    </header>
+
+                    <div class="ch-lobby-room-head">
+                        <span>${tr('방 이름')}</span>
+                        <span>${tr('맵')}</span>
+                        <span>${tr('인원')}</span>
+                        <span>${tr('상태')}</span>
+                        <span></span>
+                    </div>
+
+                    <div class="ch-lobby-room-list"></div>
+
+                    <div class="ch-lobby-room-tip">
+                        ⭐ ${tr('방 이름을 클릭하면 참가할 수 있어요!')}
+                    </div>
+                </section>
+
+                <section class="ch-lobby-actions">
+                    <h2>🎮 ${tr('게임 시작하기')}</h2>
+
+                    <div class="ch-lobby-profile-card">
+                        <div class="ch-lobby-avatar-frame">
+                            ${
+                                previewUrl
+                                    ? `<img src="${previewUrl}" alt="avatar">`
+                                    : ''
+                            }
+                        </div>
+                        <div class="ch-lobby-profile-copy">
+                            <strong>${tr('내 캐릭터')}</strong>
+                            <button type="button" class="ch-lobby-avatar-edit">
+                                🎨 ${tr('내 캐릭터 꾸미기')}
+                            </button>
+                        </div>
+                    </div>
+
+                    <button type="button" class="ch-lobby-action ch-lobby-action--public">
+                        <span class="ch-lobby-action-icon">＋</span>
+                        <span>
+                            <strong>${tr('공개방 만들기')}</strong>
+                            <small>${tr('누구나 참여할 수 있는 방을 만들어요')}</small>
+                        </span>
+                    </button>
+
+                    <button type="button" class="ch-lobby-action ch-lobby-action--private">
+                        <span class="ch-lobby-action-icon">▣</span>
+                        <span>
+                            <strong>${tr('비공개방 만들기')}</strong>
+                            <small>${tr('비밀번호를 설정해 방을 만들어요')}</small>
+                        </span>
+                    </button>
+
+                    <button type="button" class="ch-lobby-action ch-lobby-action--join">
+                        <span class="ch-lobby-action-icon">♟</span>
+                        <span>
+                            <strong>${tr('비공개방 참가')}</strong>
+                            <small>${tr('초대코드를 입력해 방에 참여해요')}</small>
+                        </span>
+                    </button>
+
+                    <div class="ch-lobby-guide">
+                        <div class="ch-lobby-guide-mascot">🍄</div>
+                        <div>
+                            <strong>${tr('위장하고, 숨고, 찾아내세요!')}</strong>
+                            <span>${tr('카멜레온이 되어 색을 칠하고 헌터로부터 도망쳐 살아남아요!')}</span>
+                        </div>
+                    </div>
+                </section>
+
+                <footer class="ch-lobby-language">
+                    ${languages
+                        .map(
+                            (language) => `
+                            <button
+                                type="button"
+                                data-language="${language.code}"
+                                class="${
+                                    currentLanguage ===
+                                    language.code
+                                        ? 'is-active'
+                                        : ''
+                                }"
+                            >
+                                <span>${language.flag}</span>
+                                ${language.label}
+                            </button>
+                        `,
+                        )
+                        .join('')}
+                </footer>
+            </div>
+        `;
+
+        document.body.appendChild(
+            root,
+        );
+
+        this.mainLobbyRoot =
+            root;
+
+        this.mainLobbyRoomList =
+            root.querySelector(
+                '.ch-lobby-room-list',
+            ) ?? undefined;
+
+        root
+            .querySelector(
+                '.ch-lobby-refresh',
+            )
+            ?.addEventListener(
+                'click',
+                () => {
+                    void this.refreshPublicRoomList(
+                        true,
+                    );
+                },
+            );
+
+        root
+            .querySelector(
+                '.ch-lobby-avatar-edit',
+            )
+            ?.addEventListener(
+                'click',
+                () => {
+                    this.openLobbyAvatarEditor();
+                },
+            );
+
+        root
+            .querySelector(
+                '.ch-lobby-action--public',
+            )
+            ?.addEventListener(
+                'click',
+                () => {
+                    this.openCreateRoomModal(
+                        false,
+                    );
+                },
+            );
+
+        root
+            .querySelector(
+                '.ch-lobby-action--private',
+            )
+            ?.addEventListener(
+                'click',
+                () => {
+                    this.openCreateRoomModal(
+                        true,
+                    );
+                },
+            );
+
+        root
+            .querySelector(
+                '.ch-lobby-action--join',
+            )
+            ?.addEventListener(
+                'click',
+                () => {
+                    this.openPrivateJoinModal();
+                },
+            );
+
+        root
+            .querySelectorAll<
+                HTMLButtonElement
+            >(
+                '[data-language]',
+            )
+            .forEach(
+                (button) => {
+                    button.addEventListener(
+                        'click',
+                        () => {
+                            const language =
+                                button.dataset
+                                    .language as
+                                    GameLanguage;
+
+                            setLanguage(
+                                language,
+                            );
+                            this.refreshDomTranslations();
+                            this.showMainMenu();
+                        },
+                    );
+                },
+            );
+
+        this.updateMainLobbyDomPosition();
+
+        window.addEventListener(
+            'resize',
+            this.updateMainLobbyDomPositionBound,
+            {
+                passive: true,
+            },
+        );
+    }
+
+    private readonly updateMainLobbyDomPositionBound =
+        (): void => {
+            this.updateMainLobbyDomPosition();
+        };
+
     private showMainMenu(): void {
         this.refreshDomTranslations();
 
@@ -10034,13 +10418,19 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
-        this.multiplayerSessionActive = false;
-        this.roomHandshakeCompletedId = '';
-        this.localNetworkPlayerReady = false;
+        this.multiplayerSessionActive =
+            false;
+        this.roomHandshakeCompletedId =
+            '';
+        this.localNetworkPlayerReady =
+            false;
 
         this.roomListRenderSerial += 1;
+
         this.roomListObjects.forEach(
-            (object) => object.destroy(),
+            (object) => {
+                object.destroy();
+            },
         );
         this.roomListObjects = [];
 
@@ -10048,539 +10438,45 @@ export class GameScene extends Phaser.Scene {
         this.startRoomListAutoRefresh();
         this.enterLobbyPhase();
         this.updateLobbyUi();
-
-        /*
-         * Always clear every waiting-room HUD before rebuilding the main
-         * lobby. This is required after a cancelled in-flight room create.
-         */
         this.hideAllWaitingRoomUi();
 
         /*
-         * v0.10.10.37 lobby
-         * Two-column card layout inspired by the clean mockup:
-         * rooms on the left, room actions on the right.
+         * v0.10.10.112:
+         * Main lobby is now a responsive DOM interface modeled after the
+         * approved bright pixel mockup. Phaser stays responsible for the
+         * animated map/background; DOM owns the lobby cards and text.
          */
-        const panel = this.add
-            .rectangle(
-                this.gameWidth / 2,
-                292,
-                836,
-                448,
-                0xfff8e7,
-                0.985,
-            )
-            .setStrokeStyle(
-                2,
-                0x6ea676,
-                0.98,
-            )
-            .setDepth(500);
-
-        const subtitle = this.add
-            .text(
-                94,
-                102,
-                tr('위장하고, 숨고, 찾아내세요!'),
-                {
-                    fontFamily:
-                        'monospace',
-                    fontSize: '13px',
-                    color: '#5f7166',
-                },
-            )
-            .setDepth(502);
-
-        const roomCard = this.add
-            .rectangle(
-                326,
-                322,
-                506,
-                318,
-                0xfffdf6,
-                0.995,
-            )
-            .setStrokeStyle(
-                1,
-                0xb5d3a7,
-                1,
-            )
-            .setDepth(501);
-
-        const actionCard = this.add
-            .rectangle(
-                724,
-                322,
-                260,
-                318,
-                0xfffdf6,
-                0.995,
-            )
-            .setStrokeStyle(
-                2,
-                0xb4d7a2,
-                1,
-            )
-            .setDepth(501);
-
-        const listTitle = this.add
-            .text(
-                98,
-                176,
-                tr('공개 게임방'),
-                {
-                    fontFamily:
-                        'monospace',
-                    fontSize: '20px',
-                    fontStyle: 'bold',
-                    color: '#315c46',
-                },
-            )
-            .setDepth(503);
-
-        const roomDivider = this.add
-            .rectangle(
-                326,
-                205,
-                458,
-                1,
-                0xcbdcbe,
-                0.95,
-            )
-            .setDepth(502);
-
-
-        const roomListHeader =
-            this.add.text(
-                104,
-                216,
-                `${tr('방 이름')}      ${tr('인원')}      ${tr('상태')}`,
-                {
-                    fontFamily:
-                        'monospace',
-                    fontSize: '9px',
-                    color: '#77877d',
-                },
-            )
-                .setDepth(503);
-
-        /*
-         * Refresh belongs to the public-room header, not between unrelated
-         * elements. Right-aligned with a compact refresh glyph.
-         */
-        const refreshButton =
-            this.makeMenuButton(
-                522,
-                176,
-                `↻ ${tr('새로고침')}`,
-                () => {
-                    void this.refreshPublicRoomList(true);
-                },
-            );
-
-        refreshButton
-            .setFixedSize(
-                96,
-                30,
-            )
-            .setAlign('center')
-            .setOrigin(0.5)
-            .setFontSize(
-                getLanguage() === 'en'
-                    ? 9
-                    : getLanguage() === 'ja'
-                        ? 9
-                        : 10,
-            )
-            .setPadding(
-                0,
-                1,
-                0,
-                0,
-            )
-            .setBackgroundColor(
-                '#d9f0d1',
-            )
-            .setColor(
-                '#315c46',
-            );
-
-        const actionTitle = this.add
-            .text(
-                724,
-                174,
-                tr('게임 시작하기'),
-                {
-                    fontFamily:
-                        'monospace',
-                    fontSize: '19px',
-                    fontStyle: 'bold',
-                    color: '#315c46',
-                },
-            )
-            .setDepth(503);
-
-
-        /*
-         * Saved lobby avatar preview:
-         * users can see their current customization before opening editor.
-         */
-        if (
-            this.lobbyAvatarPreset.length ===
-            0
-        ) {
-            this.lobbyAvatarPreset =
-                this.loadLobbyAvatarPreset();
-        }
-
-        const avatarPreviewTexture =
-            this.buildLobbyAvatarPreviewTexture();
-
-        /*
-         * v0.10.10.109:
-         * Cute pixel portrait card. The avatar is fully contained inside
-         * the frame with visible padding — no intentional overflow.
-         */
-        /*
-         * v0.10.10.111:
-         * Dedicated avatar portrait card.
-         * It sits BELOW the section title and has guaranteed padding on
-         * every side; no overlap with labels/buttons is possible.
-         */
-        const avatarPreviewGlow =
-            this.add.rectangle(
-                667,
-                228,
-                84,
-                106,
-                0xdff4d5,
-                1,
-            )
-                .setStrokeStyle(
-                    3,
-                    0xffffff,
-                    1,
-                )
-                .setDepth(502);
-
-        const avatarPreviewFrame =
-            this.add.rectangle(
-                667,
-                228,
-                74,
-                96,
-                0xfafff5,
-                1,
-            )
-                .setStrokeStyle(
-                    3,
-                    0x7aaa7d,
-                    1,
-                )
-                .setDepth(503);
-
-        const avatarPreview =
-            this.add.image(
-                667,
-                228,
-                avatarPreviewTexture,
-            )
-                .setDisplaySize(
-                    50,
-                    75,
-                )
-                .setDepth(504);
-
-        const avatarCustomizeButton =
-            this.add.text(
-                784,
-                228,
-                `🎨 ${tr('내 캐릭터 꾸미기')}`,
-                {
-                    fontFamily:
-                        'monospace',
-                    fontSize:
-                        getLanguage() === 'ja'
-                            ? '9px'
-                            : '10px',
-                    fontStyle: 'bold',
-                    color: '#315c46',
-                    backgroundColor:
-                        '#e7f5df',
-                    fixedWidth: 126,
-                    fixedHeight: 40,
-                    align: 'center',
-                    padding: {
-                        top: 8,
-                    },
-                },
-            )
-                .setOrigin(0.5)
-                .setDepth(504)
-                .setInteractive({
-                    useHandCursor: true,
-                });
-
-        avatarCustomizeButton.on(
-            'pointerdown',
-            () => {
-                this.openLobbyAvatarEditor();
-            },
-        );
-
-        const makeAction = (
-            y: number,
-            label: string,
-            color: string,
-            callback: () => void,
-        ): Phaser.GameObjects.Text => {
-            const button =
-                this.add.text(
-                    725,
-                    y,
-                    label,
-                    {
-                        fontFamily:
-                            'monospace',
-                        fontSize: '15px',
-                        fontStyle: 'bold',
-                        color: '#24332b',
-                        backgroundColor:
-                            color,
-                        fixedWidth: 216,
-                        fixedHeight: 42,
-                        align: 'center',
-                        padding: {
-                            top: 11,
-                        },
-                    },
-                )
-                    .setOrigin(0.5)
-                    .setDepth(503)
-                    .setInteractive({
-                        useHandCursor: true,
-                    });
-
-            button.on(
-                'pointerover',
-                () =>
-                    button.setAlpha(0.84),
-            );
-            button.on(
-                'pointerout',
-                () =>
-                    button.setAlpha(1),
-            );
-            button.on(
-                'pointerdown',
-                callback,
-            );
-
-            return button;
-        };
-
-        const publicCreate =
-            makeAction(
-                306,
-                `＋  ${tr('공개방 만들기')}`,
-                '#91dfa2',
-                () => {
-                    this.openCreateRoomModal(
-                        false,
-                    );
-                },
-            );
-
-        const privateCreate =
-            makeAction(
-                358,
-                `▣  ${tr('비공개방 만들기')}`,
-                '#9fd5f5',
-                () => {
-                    this.openCreateRoomModal(
-                        true,
-                    );
-                },
-            );
-
-        const privateJoin =
-            makeAction(
-                410,
-                `◎  ${tr('비공개방 참가')}`,
-                '#cbb4ef',
-                () => {
-                    this.openPrivateJoinModal();
-                },
-            );
-
-        const helpCard = this.add
-            .rectangle(
-                724,
-                458,
-                216,
-                26,
-                0xf7f1ff,
-                0.92,
-            )
-            .setStrokeStyle(
-                1,
-                0xcab9e8,
-                0.98,
-            )
-            .setDepth(502);
-
-        const helpText = this.add
-            .text(
-                626,
-                451,
-                `${tr('게임 설명')}\n${tr('위장하고, 숨고, 찾아내세요!')}`,
-                {
-                    fontFamily:
-                        'monospace',
-                    fontSize: '9px',
-                    color: '#665b75',
-                    lineSpacing: 2,
-                    wordWrap: {
-                        width: 196,
-                    },
-                },
-            )
-            .setDepth(503);
-
-        const languageBar =
-            this.add.rectangle(
-                480,
-                500,
-                790,
-                34,
-                0xfffdf6,
-                0.995,
-            )
-            .setStrokeStyle(
-                2,
-                0xb4d7a2,
-                1,
-            )
-            .setDepth(502);
-
-        const languageLabels:
-            Array<[GameLanguage, string]> = [
-                ['ko', '한국어'],
-                ['ja', '日本語'],
-                ['en', 'English'],
-                ['zh', '中文'],
-            ];
-
-        const languageButtons =
-            languageLabels.map(
-                ([language, label], index) => {
-                    const selected =
-                        getLanguage() === language;
-
-                    const button =
-                        this.add.text(
-                            310 + index * 112,
-                            500,
-                            label,
-                            {
-                                fontFamily:
-                                    'monospace',
-                                fontSize: '12px',
-                                fontStyle:
-                                    selected
-                                        ? 'bold'
-                                        : 'normal',
-                                color:
-                                    selected
-                                        ? '#ffffff'
-                                        : '#a6b7af',
-                                backgroundColor:
-                                    selected
-                                        ? '#70bd83'
-                                        : '#eef6e9',
-                                fixedWidth: 96,
-                                fixedHeight: 26,
-                                align: 'center',
-                                padding: {
-                                    top: 6,
-                                },
-                            },
-                        )
-                            .setOrigin(0.5)
-                            .setDepth(504)
-                            .setInteractive({
-                                useHandCursor: true,
-                            });
-
-                    button.on(
-                        'pointerdown',
-                        () => {
-                            setLanguage(language);
-                            this.refreshDomTranslations();
-                            this.closeMenuModal();
-                            this.showMainMenu();
-                        },
-                    );
-
-                    return button;
-                },
-            );
-
-        this.mainMenuObjects.push(
-            panel,
-            subtitle,
-            roomCard,
-            actionCard,
-            listTitle,
-            roomDivider,
-            roomListHeader,
-            refreshButton,
-            actionTitle,
-            avatarPreviewGlow,
-            avatarPreviewFrame,
-            avatarPreview,
-            avatarCustomizeButton,
-            publicCreate,
-            privateCreate,
-            privateJoin,
-            helpCard,
-            helpText,
-            languageBar,
-            ...languageButtons,
-        );
+        this.createMainLobbyDom();
 
         void this.refreshPublicRoomList();
     }
 
-    private async refreshPublicRoomList(showLoading = true): Promise<void> {
+    private async refreshPublicRoomList(
+        showLoading = true,
+    ): Promise<void> {
         const renderSerial =
             ++this.roomListRenderSerial;
 
-        this.roomListObjects.forEach(
-            (object) => {
-                object.destroy();
-            },
-        );
+        const list =
+            this.mainLobbyRoomList;
 
-        this.roomListObjects = [];
+        if (!list) {
+            return;
+        }
 
-        const loading =
-            showLoading
-                ? this.add
-                    .text(
-                        104,
-                        244,
-                        tr('방 목록을 불러오는 중...'),
-                        {
-                            fontFamily: 'monospace',
-                            fontSize: '13px',
-                            color: '#75867b',
-                        },
-                    )
-                    .setDepth(503)
-                : undefined;
+        list.replaceChildren();
 
-        if (loading) {
-            this.roomListObjects.push(
+        if (showLoading) {
+            const loading =
+                document.createElement(
+                    'div',
+                );
+            loading.className =
+                'ch-lobby-empty';
+            loading.textContent =
+                tr('방 목록을 불러오는 중...');
+
+            list.appendChild(
                 loading,
             );
         }
@@ -10591,67 +10487,65 @@ export class GameScene extends Phaser.Scene {
                     await multiplayerClient
                         .listPublicRooms()
                 ).filter(
-                    (room: PublicRoomInfo) =>
+                    (
+                        room:
+                            PublicRoomInfo,
+                    ) =>
                         room.metadata
-                            ?.isPrivate !== true,
+                            ?.isPrivate !==
+                        true,
                 );
 
             if (
                 renderSerial !==
-                this.roomListRenderSerial
+                this.roomListRenderSerial ||
+                multiplayerClient
+                    .isConnected() ||
+                this.roomTransitionInProgress ||
+                !this.mainLobbyRoomList
             ) {
-                loading?.destroy();
                 return;
             }
 
-            /*
-             * 초대 링크/직접 참가 중 room list 요청이 늦게 끝나더라도
-             * 이미 방에 연결된 상태라면 메인 메뉴 UI를 다시 만들지 않습니다.
-             */
+            list.replaceChildren();
+
             if (
-                multiplayerClient.isConnected() ||
-                this.roomTransitionInProgress
+                rooms.length === 0
             ) {
-                loading?.destroy();
-                return;
-            }
+                const empty =
+                    document.createElement(
+                        'div',
+                    );
+                empty.className =
+                    'ch-lobby-empty';
+                empty.textContent =
+                    tr('생성된 공개방이 없습니다.');
 
-            console.log(
-                '[Chameleon Hunt] Public rooms',
-                rooms,
-            );
-
-            loading?.destroy();
-            this.roomListObjects = [];
-
-            if (rooms.length === 0) {
-                const emptyText =
-                    this.add
-                        .text(
-                            104,
-                            244,
-                            tr('생성된 공개방이 없습니다.'),
-                            {
-                                fontFamily: 'monospace',
-                                fontSize: '13px',
-                                color: '#75867b',
-                            },
-                        )
-                        .setDepth(503);
-
-                this.roomListObjects.push(
-                    emptyText,
+                list.appendChild(
+                    empty,
                 );
-
                 return;
             }
+
+            const mapLabels = [
+                tr('숲의 맵'),
+                tr('사막의 유적'),
+                tr('바다의 리조트'),
+                tr('성의 정원'),
+                tr('네온 시티'),
+            ];
 
             rooms
-                .slice(0, 5)
+                .slice(
+                    0,
+                    5,
+                )
                 .forEach(
                     (
-                        room: PublicRoomInfo,
-                        index: number,
+                        room:
+                            PublicRoomInfo,
+                        index:
+                            number,
                     ) => {
                         const roomTitle =
                             room.metadata
@@ -10664,122 +10558,123 @@ export class GameScene extends Phaser.Scene {
                             'lobby';
 
                         const row =
-                            this.makeMenuButton(
-                                326,
-                                250 +
-                                    index * 41,
-                                `${phase === 'lobby' ? '●' : '◉'}  ${roomTitle}     ${room.clients}/${room.maxClients}     ${phase === 'lobby' ? trPhase(phase) : tr('게임중')}`,
-                                () => {
-                                    /*
-                                     * native prompt 제거 후 공개방 참가도
-                                     * 새 DOM 모달 경로를 사용해야 합니다.
-                                     */
-                                    this.openJoinRoomModal(
-                                        room.roomId,
-                                        false,
-                                    );
-                                },
+                            document.createElement(
+                                'button',
                             );
 
-                        row
-                            .setFontSize(
-                                getLanguage() === 'en'
-                                    ? 10
-                                    : 11,
-                            )
-                            .setFixedSize(
-                                454,
-                                36,
-                            )
-                            .setAlign(
-                                'left',
-                            )
-                            .setOrigin(
-                                0.5,
-                            )
-                            .setPadding(
-                                18,
-                                9,
-                                12,
-                                0,
-                            )
-                            .setBackgroundColor(
-                                phase === 'lobby'
-                                    ? '#f1faea'
-                                    : '#f2f3f2',
-                            )
-                            .setColor(
-                                phase === 'lobby'
-                                    ? '#355c43'
-                                    : '#858b87',
-                            );
+                        row.type =
+                            'button';
+                        row.className =
+                            'ch-lobby-room-row';
 
-                        row.removeAllListeners(
-                            'pointerover',
-                        );
-                        row.removeAllListeners(
-                            'pointerout',
-                        );
+                        const textureIndex =
+                            (
+                                index %
+                                11
+                            ) +
+                            1;
 
-                        row.on(
-                            'pointerover',
+                        const thumbnail =
+                            `/assets/backgrounds/map${textureIndex}.png`;
+
+                        const available =
+                            phase ===
+                            'lobby';
+
+                        row.innerHTML = `
+                            <span class="ch-lobby-thumb">
+                                <img src="${thumbnail}" alt="">
+                            </span>
+
+                            <span class="ch-lobby-room-name">
+                                <strong>${roomTitle}</strong>
+                                <small>${mapLabels[index % mapLabels.length]}</small>
+                            </span>
+
+                            <span class="ch-lobby-room-map">
+                                ${mapLabels[index % mapLabels.length]}
+                            </span>
+
+                            <span class="ch-lobby-room-count">
+                                ${room.clients} / ${room.maxClients}
+                            </span>
+
+                            <span class="ch-lobby-room-status ${
+                                available
+                                    ? 'is-open'
+                                    : 'is-playing'
+                            }">
+                                <i></i>
+                                ${
+                                    available
+                                        ? trPhase(
+                                            phase,
+                                        )
+                                        : tr(
+                                            '게임중',
+                                        )
+                                }
+                            </span>
+
+                            <span class="ch-lobby-room-play">
+                                ▶
+                            </span>
+                        `;
+
+                        row.addEventListener(
+                            'click',
                             () => {
-                                row
-                                    .setBackgroundColor(
-                                        phase === 'lobby'
-                                            ? '#dff3d4'
-                                            : '#e8ebe9',
-                                    )
-                                    .setColor(
-                                        '#274a36',
-                                    );
+                                this.openJoinRoomModal(
+                                    room.roomId,
+                                    false,
+                                );
                             },
                         );
 
-                        row.on(
-                            'pointerout',
-                            () => {
-                                row
-                                    .setBackgroundColor(
-                                        phase ===
-                                            'lobby'
-                                            ? '#f1faea'
-                                            : '#f2f3f2',
-                                    )
-                                    .setColor(
-                                        phase ===
-                                            'lobby'
-                                            ? '#355c43'
-                                            : '#858b87',
-                                    );
-                            },
-                        );
-
-                        this.roomListObjects.push(
+                        list.appendChild(
                             row,
                         );
                     },
                 );
-        } catch (error) {
+        } catch (
+            error
+        ) {
             console.error(
                 '공개방 목록 조회 실패:',
                 error,
             );
 
             if (
-                multiplayerClient.isConnected()
+                !this.mainLobbyRoomList
             ) {
-                loading?.destroy();
                 return;
             }
 
-            loading?.setText(
-                tr('방 목록을 불러오지 못했습니다.'),
+            list.replaceChildren();
+
+            const failed =
+                document.createElement(
+                    'div',
+                );
+            failed.className =
+                'ch-lobby-empty';
+            failed.textContent =
+                tr('방 목록을 불러오지 못했습니다.');
+
+            list.appendChild(
+                failed,
             );
         }
     }
 
     private clearMainMenuObjects(): void {
+        window.removeEventListener(
+            'resize',
+            this.updateMainLobbyDomPositionBound,
+        );
+
+        this.destroyMainLobbyDom();
+
         this.mainMenuObjects.forEach(
             (object) => {
                 object.destroy();
