@@ -2388,3 +2388,82 @@ html.colorhunt-mobile body.colorhunt-unfolded .colorhunt-waiting-room {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+
+/* ============================================================
+   v0.10.10.118 — waiting-room BGM lives inside the header
+   ============================================================ */
+
+.ch-waiting-header-copy {
+  min-width: 0;
+  padding-right: 0 !important;
+}
+
+.ch-waiting-header-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  min-width: 0;
+}
+
+.ch-waiting-bgm-inline,
+.ch-waiting-help-inline {
+  position: static !important;
+  top: auto !important;
+  right: auto !important;
+  transform: none !important;
+
+  height: 27px;
+  min-width: 0;
+  max-width: none;
+  padding: 0 7px;
+
+  border: 1px solid rgba(202,224,193,.95);
+  border-radius: 8px;
+  background: #fbfff7;
+  color: #355d43;
+
+  font: inherit;
+  font-size: 7.3px;
+  font-weight: 950;
+  line-height: 1;
+
+  white-space: nowrap;
+  box-shadow:
+    0 2px 0 rgba(38,78,48,.10);
+}
+
+.ch-waiting-bgm-inline {
+  color: #315c46;
+}
+
+.ch-waiting-help-inline:active,
+.ch-waiting-bgm-inline:active {
+  transform: translateY(1px) !important;
+}
+
+/* Compact enough for narrow folded phones. */
+html.colorhunt-mobile .ch-waiting-header {
+  gap: 4px;
+}
+
+html.colorhunt-mobile .ch-waiting-header-actions {
+  gap: 3px;
+}
+
+html.colorhunt-mobile .ch-waiting-bgm-inline,
+html.colorhunt-mobile .ch-waiting-help-inline {
+  height: 23px;
+  padding: 0 5px;
+  border-radius: 6px;
+  font-size: 5.8px;
+}
+
+html.colorhunt-mobile body.colorhunt-unfolded .ch-waiting-bgm-inline,
+html.colorhunt-mobile body.colorhunt-unfolded .ch-waiting-help-inline {
+  height: 25px;
+  padding: 0 6px;
+  font-size: 6.5px;
+}

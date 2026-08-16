@@ -10511,6 +10511,9 @@ export class GameScene extends Phaser.Scene {
         this.waitingRoomMapText = undefined;
         this.waitingRoomPaintButtons = [];
         this.waitingRoomHuntButtons = [];
+
+        this.bgmToggleButton
+            ?.setVisible(true);
     }
 
     private updateWaitingRoomDomPosition(): void {
@@ -10648,9 +10651,14 @@ export class GameScene extends Phaser.Scene {
                         <span class="ch-waiting-kicker">${tr('대기방')}</span>
                         <strong>${tr('게임 준비')}</strong>
                     </div>
-                    <button type="button" class="ch-waiting-help-inline">
-                        ? ${this.getControlsHelpCopy().button.replace(/^\?\s*/, '').replace(/^？\s*/, '')}
-                    </button>
+                    <div class="ch-waiting-header-actions">
+                        <button type="button" class="ch-waiting-bgm-inline">
+                            ${this.bgmEnabled ? tr('♫ BGM ON') : tr('♫ BGM OFF')}
+                        </button>
+                        <button type="button" class="ch-waiting-help-inline">
+                            ? ${this.getControlsHelpCopy().button.replace(/^\?\s*/, '').replace(/^？\s*/, '')}
+                        </button>
+                    </div>
                 </div>
 
                 <div class="ch-waiting-info"></div>
@@ -10770,6 +10778,48 @@ export class GameScene extends Phaser.Scene {
                     void this.leaveCurrentRoomToLobby();
                 },
             );
+
+        const inlineBgm =
+            root.querySelector<HTMLButtonElement>(
+                '.ch-waiting-bgm-inline',
+            );
+
+        inlineBgm?.addEventListener(
+            'click',
+            (
+                event,
+            ) => {
+                event.preventDefault();
+                event.stopPropagation();
+
+                this.audioUnlocked =
+                    true;
+                this.bgmEnabled =
+                    !this.bgmEnabled;
+
+                localStorage.setItem(
+                    'chameleon-hunt-bgm-enabled',
+                    String(
+                        this.bgmEnabled,
+                    ),
+                );
+
+                const label =
+                    this.bgmEnabled
+                        ? tr('♫ BGM ON')
+                        : tr('♫ BGM OFF');
+
+                inlineBgm.textContent =
+                    label;
+
+                this.bgmToggleButton
+                    ?.setText(
+                        label,
+                    );
+
+                this.syncPhaseMusic();
+            },
+        );
 
         const inlineHelp =
             root.querySelector<HTMLButtonElement>(
@@ -10937,6 +10987,24 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
+        this.bgmToggleButton
+            ?.setVisible(false);
+
+        const inlineBgm =
+            this.waitingRoomRoot
+                .querySelector<
+                    HTMLButtonElement
+                >(
+                    '.ch-waiting-bgm-inline',
+                );
+
+        if (inlineBgm) {
+            inlineBgm.textContent =
+                this.bgmEnabled
+                    ? tr('♫ BGM ON')
+                    : tr('♫ BGM OFF');
+        }
+
         const room =
             multiplayerClient.getRoom();
         const roomId =
@@ -11052,6 +11120,8 @@ export class GameScene extends Phaser.Scene {
     }
 
     private showMainMenu(): void {
+        this.bgmToggleButton
+            ?.setVisible(true);
         this.destroyWaitingRoomDom();
         this.refreshDomTranslations();
 
@@ -14395,11 +14465,24 @@ export class GameScene extends Phaser.Scene {
                     String(this.bgmEnabled),
                 );
 
-                this.bgmToggleButton.setText(
+                const label =
                     this.bgmEnabled
                         ? tr('♫ BGM ON')
-                        : tr('♫ BGM OFF'),
+                        : tr('♫ BGM OFF');
+
+                this.bgmToggleButton.setText(
+                    label,
                 );
+
+                this.waitingRoomRoot
+                    ?.querySelector<
+                        HTMLButtonElement
+                    >(
+                        '.ch-waiting-bgm-inline',
+                    )
+                    ?.replaceChildren(
+                        label,
+                    );
 
                 this.syncPhaseMusic();
             },
