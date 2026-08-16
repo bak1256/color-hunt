@@ -10241,6 +10241,29 @@ export class GameScene extends Phaser.Scene {
     }
 
     private destroyMainLobbyDom(): void {
+        window.removeEventListener(
+            'resize',
+            this.updateMainLobbyDomPositionBound,
+        );
+        window.removeEventListener(
+            'orientationchange',
+            this.updateMainLobbyDomPositionBound,
+        );
+        window.removeEventListener(
+            'colorhunt:viewportchange',
+            this.updateMainLobbyDomPositionBound,
+        );
+        window.visualViewport
+            ?.removeEventListener(
+                'resize',
+                this.updateMainLobbyDomPositionBound,
+            );
+        window.visualViewport
+            ?.removeEventListener(
+                'scroll',
+                this.updateMainLobbyDomPositionBound,
+            );
+
         this.mainLobbyRoot
             ?.remove();
         this.mainLobbyRoot =
@@ -10257,6 +10280,120 @@ export class GameScene extends Phaser.Scene {
         const rect =
             this.game.canvas
                 .getBoundingClientRect();
+
+        const coarsePointer =
+            window.matchMedia(
+                '(pointer: coarse)',
+            ).matches;
+
+        if (coarsePointer) {
+            /*
+             * v0.10.10.123 MOBILE FIRST-LOBBY HOTFIX
+             *
+             * Fold/phone browsers can letterbox the 16:9 Phaser canvas.
+             * Using rect.top/rect.height for the DOM lobby then places the
+             * lobby underneath a huge visible strip of the game world.
+             *
+             * The MAIN lobby is browser UI, not gameplay HUD, so on touch
+             * devices anchor it directly to the current visual viewport.
+             * Keep only a compact 38px top rail for BGM / controls.
+             */
+            const viewport =
+                window.visualViewport;
+
+            const viewportLeft =
+                viewport?.offsetLeft ??
+                0;
+
+            const viewportTop =
+                viewport?.offsetTop ??
+                0;
+
+            const viewportWidth =
+                viewport?.width ??
+                window.innerWidth;
+
+            const viewportHeight =
+                viewport?.height ??
+                window.innerHeight;
+
+            const sideInset =
+                Math.max(
+                    5,
+                    Math.min(
+                        10,
+                        viewportWidth *
+                            0.008,
+                    ),
+                );
+
+            const topRail =
+                Math.max(
+                    38,
+                    Math.min(
+                        46,
+                        viewportHeight *
+                            0.065,
+                    ),
+                );
+
+            const bottomInset =
+                Math.max(
+                    5,
+                    Math.min(
+                        9,
+                        viewportHeight *
+                            0.012,
+                    ),
+                );
+
+            this.mainLobbyRoot.style
+                .setProperty(
+                    '--lobby-left',
+                    `${Math.round(
+                        viewportLeft +
+                        sideInset,
+                    )}px`,
+                );
+
+            this.mainLobbyRoot.style
+                .setProperty(
+                    '--lobby-top',
+                    `${Math.round(
+                        viewportTop +
+                        topRail,
+                    )}px`,
+                );
+
+            this.mainLobbyRoot.style
+                .setProperty(
+                    '--lobby-width',
+                    `${Math.round(
+                        Math.max(
+                            240,
+                            viewportWidth -
+                                sideInset *
+                                    2,
+                        ),
+                    )}px`,
+                );
+
+            this.mainLobbyRoot.style
+                .setProperty(
+                    '--lobby-height',
+                    `${Math.round(
+                        Math.max(
+                            220,
+                            viewportHeight -
+                                topRail -
+                                bottomInset,
+                        ),
+                    )}px`,
+                );
+
+            this.updateControlsHelpPosition();
+            return;
+        }
 
         this.mainLobbyRoot.style
             .setProperty(
@@ -10567,6 +10704,37 @@ export class GameScene extends Phaser.Scene {
                 passive: true,
             },
         );
+
+        window.addEventListener(
+            'orientationchange',
+            this.updateMainLobbyDomPositionBound,
+            {
+                passive: true,
+            },
+        );
+
+        window.addEventListener(
+            'colorhunt:viewportchange',
+            this.updateMainLobbyDomPositionBound,
+        );
+
+        window.visualViewport
+            ?.addEventListener(
+                'resize',
+                this.updateMainLobbyDomPositionBound,
+                {
+                    passive: true,
+                },
+            );
+
+        window.visualViewport
+            ?.addEventListener(
+                'scroll',
+                this.updateMainLobbyDomPositionBound,
+                {
+                    passive: true,
+                },
+            );
     }
 
     private readonly updateMainLobbyDomPositionBound =

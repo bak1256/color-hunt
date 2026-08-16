@@ -2560,3 +2560,242 @@ html.colorhunt-mobile .ch-waiting-role-status {
     max-height: 54px;
   }
 }
+
+
+/* ============================================================
+   v0.10.10.123 — mobile first-lobby viewport hotfix
+   ============================================================ */
+
+html.colorhunt-mobile .colorhunt-main-lobby {
+  max-width: calc(100vw - 10px);
+  max-height: calc(var(--ch-viewport-height) - 42px);
+  overflow: hidden;
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-shell {
+  width: 100%;
+  height: 100%;
+  grid-template-columns:
+    minmax(0, 1.58fr)
+    minmax(230px, .92fr);
+  grid-template-rows:
+    minmax(0, 1fr)
+    38px;
+
+  border-width: 1px;
+  border-radius: 12px;
+  box-shadow:
+    0 5px 0 rgba(70,103,73,.08),
+    0 10px 24px rgba(52,80,59,.18);
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-rooms {
+  padding: 8px 8px 5px;
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-section-head {
+  height: 40px;
+  flex-basis: 40px;
+  padding: 0 8px 0 10px;
+  border-radius: 8px 8px 0 0;
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-section-title {
+  gap: 5px;
+  font-size: clamp(11px, 2.2vw, 16px);
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-door {
+  font-size: 14px;
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-refresh {
+  min-width: 68px;
+  height: 27px;
+  padding: 0 7px;
+  border-radius: 7px;
+  font-size: 7px;
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-room-head,
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-room-row {
+  grid-template-columns:
+    minmax(128px, 1.8fr)
+    minmax(58px, .8fr)
+    42px
+    52px
+    26px;
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-room-head {
+  flex-basis: 29px;
+  padding: 0 6px;
+  font-size: 6.5px;
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-room-row {
+  height: 43px;
+  padding: 3px 6px;
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-room-name {
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 5px;
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-thumb {
+  width: 30px;
+  height: 30px;
+  border-width: 1px;
+  border-radius: 5px;
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-room-name strong {
+  font-size: 7.5px;
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-room-name small,
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-room-map,
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-room-count {
+  font-size: 5.8px;
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-room-status {
+  min-width: 42px;
+  height: 19px;
+  padding: 0 3px;
+  gap: 3px;
+  font-size: 5.3px;
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-room-status i {
+  width: 5px;
+  height: 5px;
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-room-play {
+  width: 21px;
+  height: 21px;
+  border-radius: 5px;
+  font-size: 9px;
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-room-tip {
+  flex-basis: 21px;
+  padding-left: 4px;
+  font-size: 5.8px;
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-actions {
+  min-width: 0 !important;
+  padding: 6px 7px 5px;
+  gap: 4px;
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-actions h2 {
+  flex-basis: 25px;
+  font-size: clamp(10px, 2vw, 14px);
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-profile-card {
+  flex-basis: 61px;
+  grid-template-columns: 54px minmax(0, 1fr);
+  gap: 7px;
+  padding: 5px 7px;
+  border-radius: 9px;
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-avatar-frame {
+  width: 48px;
+  height: 48px;
+  border-width: 2px;
+  border-radius: 7px;
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-avatar-frame img {
+  width: 34px;
+  height: 46px;
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-profile-copy {
+  gap: 4px;
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-profile-copy strong {
+  font-size: 7.5px;
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-avatar-edit {
+  min-height: 27px;
+  padding: 0 5px;
+  border-radius: 6px;
+  font-size: 6.2px;
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-action {
+  flex-basis: 39px;
+  grid-template-columns: 29px minmax(0, 1fr);
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 8px;
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-action-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  font-size: 15px;
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-action strong {
+  font-size: 7.5px;
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-action small {
+  margin-top: 1px;
+  font-size: 5.3px;
+  line-height: 1.1;
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-guide {
+  min-height: 31px;
+  padding: 4px 6px;
+  border-radius: 7px;
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-guide strong {
+  font-size: 6.5px;
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-guide span {
+  font-size: 5px;
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-language {
+  gap: 3px;
+  padding: 3px 5px;
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-language button {
+  min-width: 0;
+  height: 26px;
+  padding: 0 3px;
+  font-size: 5.8px;
+}
+
+/*
+ * Very narrow portrait Fold/tablet/phone:
+ * keep the same two-panel concept but give actions enough room.
+ */
+@media (pointer: coarse) and (max-width: 700px) {
+  html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-shell {
+    grid-template-columns:
+      minmax(0, 1.35fr)
+      minmax(205px, 1fr);
+  }
+
+  html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-action small,
+  html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-guide span {
+    display: none;
+  }
+}
