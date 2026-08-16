@@ -1543,14 +1543,14 @@ export class GameScene extends Phaser.Scene {
             this.add.circle(
                 fireX,
                 fireY,
-                34,
+                46,
                 0xb53535,
-                0.52,
+                0.62,
             )
                 .setStrokeStyle(
-                    3,
+                    4,
                     0xffffff,
-                    0.70,
+                    0.82,
                 )
                 .setScrollFactor(0)
                 .setDepth(6000)
@@ -1566,9 +1566,11 @@ export class GameScene extends Phaser.Scene {
                 'FIRE',
                 {
                     fontFamily: 'monospace',
-                    fontSize: '12px',
+                    fontSize: '16px',
                     fontStyle: 'bold',
                     color: '#ffffff',
+                    stroke: '#5b1111',
+                    strokeThickness: 3,
                     align: 'center',
                 },
             )
@@ -1596,6 +1598,35 @@ export class GameScene extends Phaser.Scene {
                         pointer.y,
                     ),
                 );
+
+                /*
+                 * v0.10.10.95:
+                 * FIRE and AIM touch areas used to overlap. A press on the
+                 * left side of FIRE could first enter the AIM branch, rotate
+                 * mobileAimAngle toward the button, and then fire.
+                 *
+                 * Reserve the complete FIRE area before ANY joystick logic.
+                 * Shooting itself still happens only in the fire button's
+                 * own pointerdown handler below.
+                 */
+                const fireDistance =
+                    Phaser.Math.Distance.Between(
+                        pointer.x,
+                        pointer.y,
+                        fireX,
+                        fireY,
+                    );
+
+                if (
+                    this.mobileFireButton?.visible &&
+                    fireDistance <= 54
+                ) {
+                    this.mobileFirePointerId =
+                        pointer.id;
+
+                    this.mobilePinchDistance = 0;
+                    return;
+                }
 
                 const moveDistance =
                     Phaser.Math.Distance.Between(
@@ -1678,6 +1709,17 @@ export class GameScene extends Phaser.Scene {
                         pointer.y,
                     ),
                 );
+
+                if (
+                    pointer.id ===
+                    this.mobileFirePointerId
+                ) {
+                    /*
+                     * Sliding the finger slightly while pressing FIRE must
+                     * never rotate the aim joystick.
+                     */
+                    return;
+                }
 
                 if (
                     pointer.id ===
@@ -1791,7 +1833,24 @@ export class GameScene extends Phaser.Scene {
                     Phaser.Input.Pointer,
             ) => {
                 pointer.event
+                    ?.preventDefault?.();
+                pointer.event
                     ?.stopPropagation?.();
+
+                /*
+                 * This pointer belongs exclusively to FIRE. It must never be
+                 * reused as an aim/pinch/world pointer.
+                 */
+                this.mobileFirePointerId =
+                    pointer.id;
+
+                this.mobileTouchPoints.set(
+                    pointer.id,
+                    new Phaser.Math.Vector2(
+                        pointer.x,
+                        pointer.y,
+                    ),
+                );
 
                 if (
                     this.phase !== 'hunt' ||
@@ -1801,9 +1860,6 @@ export class GameScene extends Phaser.Scene {
                 ) {
                     return;
                 }
-
-                this.mobileFirePointerId =
-                    pointer.id;
 
                 this.fireShotgun(
                     this.mobileAimAngle,
@@ -1902,7 +1958,7 @@ export class GameScene extends Phaser.Scene {
 
         return Boolean(
             this.mobileFireButton?.visible &&
-            fireDistance <= 48
+            fireDistance <= 56
         );
     }
 
