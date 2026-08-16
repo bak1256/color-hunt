@@ -10647,9 +10647,12 @@ export class GameScene extends Phaser.Scene {
                     <button type="button" data-map-step="1">▶</button>
                 </div>
 
-                <div class="ch-waiting-role">
-                    <button type="button" class="ch-waiting-role-hunter">🎯 ${tr('HUNTER 지원')}</button>
-                    <button type="button" class="ch-waiting-role-cancel">↩ ${tr('지원 취소')}</button>
+                <div class="ch-waiting-role-wrap">
+                    <div class="ch-waiting-role">
+                        <button type="button" class="ch-waiting-role-hunter">🎯 ${tr('HUNTER 지원')}</button>
+                        <button type="button" class="ch-waiting-role-cancel">↩ ${tr('지원 취소')}</button>
+                    </div>
+                    <div class="ch-waiting-role-status"></div>
                 </div>
 
                 <div class="ch-waiting-timing">
@@ -10712,16 +10715,62 @@ export class GameScene extends Phaser.Scene {
         root.querySelector('.ch-waiting-role-hunter')
             ?.addEventListener(
                 'click',
-                () => {
-                    multiplayerClient.sendHunterVolunteer(true);
+                (
+                    event,
+                ) => {
+                    const button =
+                        event.currentTarget as
+                            HTMLButtonElement;
+
+                    button.disabled =
+                        true;
+                    button.classList.add(
+                        'is-pending',
+                    );
+                    button.textContent =
+                        `… ${tr('HUNTER 지원중')}`;
+
+                    multiplayerClient
+                        .sendHunterVolunteer(
+                            true,
+                        );
+
+                    this.time.delayedCall(
+                        120,
+                        () => {
+                            button.classList.remove(
+                                'is-pending',
+                            );
+                            this.updateWaitingRoomDom();
+                        },
+                    );
                 },
             );
 
         root.querySelector('.ch-waiting-role-cancel')
             ?.addEventListener(
                 'click',
-                () => {
-                    multiplayerClient.sendHunterVolunteer(false);
+                (
+                    event,
+                ) => {
+                    const button =
+                        event.currentTarget as
+                            HTMLButtonElement;
+
+                    button.disabled =
+                        true;
+
+                    multiplayerClient
+                        .sendHunterVolunteer(
+                            false,
+                        );
+
+                    this.time.delayedCall(
+                        120,
+                        () => {
+                            this.updateWaitingRoomDom();
+                        },
+                    );
                 },
             );
 
@@ -10990,6 +11039,119 @@ export class GameScene extends Phaser.Scene {
             multiplayerClient.getSelectedMap();
         const isHost =
             multiplayerClient.isHost();
+
+        const localPlayer =
+            multiplayerClient.getLocalPlayer();
+
+        const localVolunteer =
+            Boolean(
+                localPlayer
+                    ?.hunterVolunteer,
+            );
+
+        let hunterVolunteerCount =
+            0;
+
+        room?.state.players
+            ?.forEach?.(
+                (
+                    player:
+                        NetworkPlayerState,
+                ) => {
+                    if (
+                        player.hunterVolunteer
+                    ) {
+                        hunterVolunteerCount +=
+                            1;
+                    }
+                },
+            );
+
+        const hunterVolunteerButton =
+            this.waitingRoomRoot
+                .querySelector<
+                    HTMLButtonElement
+                >(
+                    '.ch-waiting-role-hunter',
+                );
+
+        const hunterVolunteerCancel =
+            this.waitingRoomRoot
+                .querySelector<
+                    HTMLButtonElement
+                >(
+                    '.ch-waiting-role-cancel',
+                );
+
+        const hunterVolunteerStatus =
+            this.waitingRoomRoot
+                .querySelector<
+                    HTMLDivElement
+                >(
+                    '.ch-waiting-role-status',
+                );
+
+        if (
+            hunterVolunteerButton
+        ) {
+            hunterVolunteerButton
+                .classList.toggle(
+                    'is-active',
+                    localVolunteer,
+                );
+
+            hunterVolunteerButton.textContent =
+                localVolunteer
+                    ? `✓ ${tr('HUNTER 지원중')}`
+                    : `🎯 ${tr('HUNTER 지원')}`;
+
+            hunterVolunteerButton.disabled =
+                localVolunteer;
+        }
+
+        if (
+            hunterVolunteerCancel
+        ) {
+            hunterVolunteerCancel
+                .classList.toggle(
+                    'is-active',
+                    localVolunteer,
+                );
+
+            hunterVolunteerCancel.disabled =
+                !localVolunteer;
+        }
+
+        if (
+            hunterVolunteerStatus
+        ) {
+            const template =
+                tr('헌터 지원 {count}명');
+
+            hunterVolunteerStatus.textContent =
+                localVolunteer
+                    ? `${tr('헌터 지원 완료')} · ${template.replace(
+                        '{count}',
+                        String(
+                            Math.max(
+                                1,
+                                hunterVolunteerCount,
+                            ),
+                        ),
+                    )}`
+                    : template.replace(
+                        '{count}',
+                        String(
+                            hunterVolunteerCount,
+                        ),
+                    );
+
+            hunterVolunteerStatus
+                .classList.toggle(
+                    'is-active',
+                    localVolunteer,
+                );
+        }
 
         if (this.waitingRoomInfo) {
             this.waitingRoomInfo.innerHTML = `

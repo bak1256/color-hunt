@@ -5,6 +5,9 @@ const STORAGE_KEY = 'chameleon-hunt-language';
 type Dict = Record<string, string>;
 
 const ja: Dict = {
+  "HUNTER 지원중":"HUNTER 志願中",
+  "헌터 지원 완료":"ハンター志願済み",
+  "헌터 지원 {count}명":"ハンター志願 {count}人",
   "게임 시작":"ゲーム開始",
   "게임 준비":"ゲーム準備",
   "내 캐릭터":"マイキャラクター",
@@ -139,6 +142,9 @@ const ja: Dict = {
 };
 
 const en: Dict = {
+  "HUNTER 지원중":"HUNTER VOLUNTEERED",
+  "헌터 지원 완료":"Hunter volunteer active",
+  "헌터 지원 {count}명":"{count} hunter volunteer(s)",
   "게임 시작":"Start Game",
   "게임 준비":"Game Setup",
   "내 캐릭터":"My Character",
@@ -275,6 +281,9 @@ const en: Dict = {
 };
 
 const zh: Dict = {
+  "HUNTER 지원중":"已申请 HUNTER",
+  "헌터 지원 완료":"已申请猎人",
+  "헌터 지원 {count}명":"猎人申请 {count}人",
   "게임 시작":"开始游戏",
   "게임 준비":"游戏准备",
   "내 캐릭터":"我的角色",

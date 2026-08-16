@@ -2467,3 +2467,71 @@ html.colorhunt-mobile body.colorhunt-unfolded .ch-waiting-help-inline {
   padding: 0 6px;
   font-size: 6.5px;
 }
+
+
+/* v0.10.10.121 — hunter volunteer status hotfix */
+.ch-waiting-role-wrap {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.ch-waiting-role-hunter.is-active {
+  border-color: #d99436;
+  background: linear-gradient(180deg, #ffd98e, #f1b75b);
+  color: #573b18;
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,.55),
+    0 2px 0 rgba(101,70,30,.12);
+}
+
+.ch-waiting-role-hunter.is-pending {
+  opacity: .78;
+}
+
+.ch-waiting-role-cancel.is-active {
+  border-color: #c6d6c9;
+  background: #f4f7f4;
+  color: #52675a;
+}
+
+.ch-waiting-role button:disabled {
+  cursor: default;
+}
+
+.ch-waiting-role-status {
+  min-height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 4px;
+  padding: 2px 5px;
+  box-sizing: border-box;
+  border-radius: 6px;
+  background: rgba(239,245,235,.9);
+  color: #728078;
+  font-size: 7.5px;
+  font-weight: 900;
+  line-height: 1.15;
+  text-align: center;
+}
+
+.ch-waiting-role-status.is-active {
+  background: #fff3cf;
+  color: #8a5a1f;
+}
+
+html.colorhunt-mobile .ch-waiting-role-wrap {
+  flex: 0 0 42px;
+}
+
+html.colorhunt-mobile .ch-waiting-role {
+  height: 27px;
+  min-height: 27px;
+}
+
+html.colorhunt-mobile .ch-waiting-role-status {
+  min-height: 12px;
+  margin-top: 2px;
+  padding: 1px 3px;
+  font-size: 5.5px;
+}
