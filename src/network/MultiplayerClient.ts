@@ -1530,6 +1530,13 @@ private attachRoom(
     );
   }
 
+  sendReturnToLobby(): void {
+    this.room?.send(
+      "return_to_lobby",
+      {},
+    );
+  }
+
 
   getSelectedMap(): string {
     return (

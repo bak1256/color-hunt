@@ -314,7 +314,7 @@ export class GameScene extends Phaser.Scene {
         this.paintReadyButton =
             this.add.text(
                 this.gameWidth / 2,
-                this.gameHeight - 174,
+                this.gameHeight - 160,
                 tr('준비 완료'),
                 {
                     fontFamily: 'Arial, sans-serif',
@@ -487,7 +487,7 @@ export class GameScene extends Phaser.Scene {
         this.setFixedHudScreenPosition(
             button,
             this.gameWidth / 2,
-            this.gameHeight - 174,
+            this.gameHeight - 160,
         );
 
         /*
@@ -1173,21 +1173,21 @@ export class GameScene extends Phaser.Scene {
          */
         this.spectatorButton =
             this.add.text(
-                this.gameWidth - 148,
-                76,
+                this.gameWidth / 2,
+                368,
                 this.mobileControlsEnabled
                     ? tr('시야 전환')
                     : tr('TAB · 시야 전환'),
                 {
                     fontFamily:
                         'monospace',
-                    fontSize: '10px',
+                    fontSize: '13px',
                     fontStyle: 'bold',
                     color: '#ffffff',
                     backgroundColor:
                         '#416b8b',
-                    fixedWidth: 122,
-                    fixedHeight: 30,
+                    fixedWidth: 150,
+                    fixedHeight: 34,
                     align: 'center',
                     padding: {
                         top: 7,
@@ -1217,8 +1217,8 @@ export class GameScene extends Phaser.Scene {
 
         this.spectatorStatusText =
             this.add.text(
-                this.gameWidth - 148,
-                112,
+                this.gameWidth / 2,
+                408,
                 '',
                 {
                     fontFamily:
@@ -1231,8 +1231,8 @@ export class GameScene extends Phaser.Scene {
                     color: '#28445a',
                     backgroundColor:
                         'rgba(236, 247, 255, 0.94)',
-                    fixedWidth: 188,
-                    fixedHeight: 32,
+                    fixedWidth: 220,
+                    fixedHeight: 34,
                     align: 'center',
                     padding: {
                         top: 8,
@@ -1240,7 +1240,7 @@ export class GameScene extends Phaser.Scene {
                         right: 6,
                     },
                     wordWrap: {
-                        width: 176,
+                        width: 208,
                         useAdvancedWrap: true,
                     },
                 },
@@ -2026,8 +2026,8 @@ export class GameScene extends Phaser.Scene {
         ) {
             this.setFixedHudScreenPosition(
                 this.spectatorButton,
-                this.gameWidth - 148,
-                76,
+                this.gameWidth / 2,
+                368,
             );
 
             if (
@@ -2035,8 +2035,8 @@ export class GameScene extends Phaser.Scene {
             ) {
                 this.setFixedHudScreenPosition(
                     this.spectatorStatusText,
-                    this.gameWidth - 148,
-                    111,
+                    this.gameWidth / 2,
+                    408,
                 );
             }
         }
@@ -2200,6 +2200,7 @@ export class GameScene extends Phaser.Scene {
     private readonly gameplayCameraZoom = 1.65;
     private roundResultWinner: 'hunters' | 'hiders' | null = null;
     private roundResultMessage = '';
+    private roundReturnLobbyButton?: Phaser.GameObjects.Text;
     private lastPhaseRecoveryAt = 0;
     private phaseExpiredSince = 0;
     private gameplayUiSnapshots = new Map<
@@ -3677,6 +3678,44 @@ export class GameScene extends Phaser.Scene {
                         this.showHiderFoundEffect(
                             sessionId,
                         );
+
+                        if (
+                            sessionId ===
+                            multiplayerClient.getSessionId()
+                        ) {
+                            this.hideHuntTensionUi();
+                            this.showStatus(tr('걸렸다!'));
+
+                            const candidates =
+                                this.networkPlayerManager
+                                    .getSpectatablePlayers();
+
+                            const hiderCandidates =
+                                candidates.filter(
+                                    (candidate) =>
+                                        candidate.role === 'hider',
+                                );
+
+                            const pool =
+                                hiderCandidates.length > 0
+                                    ? hiderCandidates
+                                    : candidates;
+
+                            if (pool.length > 0) {
+                                const selected =
+                                    pool[Phaser.Math.Between(
+                                        0,
+                                        pool.length - 1,
+                                    )];
+
+                                this.spectatorSessionId =
+                                    selected.sessionId;
+                                this.spectatorCycleIndex = -1;
+                                this.spectatorStatusText
+                                    ?.setText(selected.name)
+                                    .setVisible(true);
+                            }
+                        }
                     }
 
                     this.updateSurvivalHud();
@@ -5035,7 +5074,29 @@ export class GameScene extends Phaser.Scene {
         }
 
         this.closeMenuModal();
+        this.input.enabled = true;
         this.stopRoomListAutoRefresh();
+
+        /* Mobile safety: never block controls while waiting for Schema onAdd. */
+        if (
+            !this.networkPlayerManager.hasPlayer(
+                room.sessionId,
+            )
+        ) {
+            this.networkPlayerManager.addPlayer(
+                room.sessionId,
+                {
+                    name: this.getSavedPlayerName(),
+                    role: 'hider',
+                    hunterVolunteer: false,
+                    x: this.gameWidth * 0.5,
+                    y: this.gameHeight * 0.55,
+                    alive: true,
+                },
+            );
+        }
+
+        this.localNetworkPlayerReady = true;
 
         const serial =
             ++this.roomHandshakeSerial;
@@ -7949,7 +8010,7 @@ export class GameScene extends Phaser.Scene {
                                 325,
                                 258 +
                                     index * 39,
-                                `${roomTitle} · ${room.clients}/${room.maxClients} · ${trPhase(phase)}`,
+                                `${roomTitle} · ${room.clients}/${room.maxClients} · ${phase === 'lobby' ? trPhase(phase) : tr('게임중')}`,
                                 () => {
                                     /*
                                      * native prompt 제거 후 공개방 참가도
@@ -9158,6 +9219,38 @@ export class GameScene extends Phaser.Scene {
             .setDepth(2001)
             .setScrollFactor(0)
             .setVisible(false);
+
+        this.roundReturnLobbyButton =
+            this.add.text(
+                this.gameWidth / 2,
+                this.gameHeight - 82,
+                tr('대기실로 이동'),
+                {
+                    fontFamily: 'monospace',
+                    fontSize: '18px',
+                    fontStyle: 'bold',
+                    color: '#ffffff',
+                    backgroundColor: '#5c8f66',
+                    padding: {
+                        x: 22,
+                        y: 10,
+                    },
+                },
+            )
+                .setOrigin(0.5)
+                .setScrollFactor(0)
+                .setDepth(2002)
+                .setVisible(false)
+                .setInteractive({ useHandCursor: true });
+
+        this.roundReturnLobbyButton.on(
+            'pointerdown',
+            () => {
+                if (this.phase === 'finished') {
+                    multiplayerClient.sendReturnToLobby();
+                }
+            },
+        );
     }
 
     private updateCountdownUi(): void {
@@ -9173,6 +9266,9 @@ export class GameScene extends Phaser.Scene {
 
         this.countdownPanel.setVisible(visible);
         this.countdownText.setVisible(visible);
+        this.roundReturnLobbyButton
+            ?.setText(tr('대기실로 이동'))
+            .setVisible(isRoundEnd);
 
         if (!visible) {
             return;
@@ -11590,7 +11686,6 @@ export class GameScene extends Phaser.Scene {
     }
 
     private formatSpectatorStatus(
-        role: 'hunter' | 'hider',
         name: string,
     ): string {
         const safeName =
@@ -11598,11 +11693,7 @@ export class GameScene extends Phaser.Scene {
                 ? `${name.slice(0, 13)}…`
                 : name;
 
-        return `${
-            role === 'hunter'
-                ? 'HUNTER'
-                : 'HIDER'
-        } · ${safeName}`;
+        return safeName;
     }
 
     private cycleSpectatorView(): void {
@@ -11661,7 +11752,7 @@ export class GameScene extends Phaser.Scene {
         if (!this.spectatorSessionId) {
             this.spectatorStatusText
                 ?.setText(
-                    tr('시야: 내 캐릭터'),
+                    multiplayerClient.getLocalPlayer()?.name ?? '',
                 )
                 .setVisible(true);
             return;
@@ -11678,10 +11769,9 @@ export class GameScene extends Phaser.Scene {
             ?.setText(
                 selected
                     ? this.formatSpectatorStatus(
-                        selected.role,
                         selected.name,
                     )
-                    : tr('시야: 내 캐릭터'),
+                    : (multiplayerClient.getLocalPlayer()?.name ?? ''),
             )
             .setVisible(true);
     }
@@ -18593,7 +18683,7 @@ export class GameScene extends Phaser.Scene {
         this.timerText = this.add
             .text(
                 this.gameWidth / 2,
-                62,
+                108,
                 '',
                 {
                     fontFamily: 'monospace',

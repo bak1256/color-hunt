@@ -5,6 +5,9 @@ const STORAGE_KEY = 'chameleon-hunt-language';
 type Dict = Record<string, string>;
 
 const ja: Dict = {
+  "걸렸다!":"見つかった！",
+  "대기실로 이동":"ロビーへ移動",
+  "게임중":"ゲーム中",
   "서버 응답이 없어 로비로 돌아갑니다.":"サーバー応答がないためロビーに戻ります。",
   "준비 완료":"準備完了",
   "준비 취소":"準備取消",
@@ -101,6 +104,9 @@ const ja: Dict = {
 };
 
 const en: Dict = {
+  "걸렸다!":"FOUND!",
+  "대기실로 이동":"Return to Lobby",
+  "게임중":"IN GAME",
   "서버 응답이 없어 로비로 돌아갑니다.":"Server response timed out. Returning to the lobby.",
   "준비 완료":"READY",
   "준비 취소":"CANCEL READY",
@@ -187,6 +193,9 @@ const en: Dict = {
 };
 
 const zh: Dict = {
+  "걸렸다!":"被发现了！",
+  "대기실로 이동":"返回大厅",
+  "게임중":"游戏中",
   "서버 응답이 없어 로비로 돌아갑니다.":"服务器无响应，正在返回大厅。",
   "준비 완료":"准备完成",
   "준비 취소":"取消准备",
@@ -269,6 +278,9 @@ const zh: Dict = {
 };
 
 const ko: Dict = {
+  "걸렸다!":"걸렸다!",
+  "대기실로 이동":"대기실로 이동",
+  "게임중":"게임중",
   "{name} 님이 연결을 종료했습니다.":"{name} 님이 연결을 종료했습니다.",
 
   "캐릭터 확대":"캐릭터 확대",
