@@ -5396,31 +5396,81 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
+        /*
+         * v0.10.10.114:
+         * One controls button, one deterministic home per screen.
+         *
+         * Main lobby  -> just above the lobby card, aligned to its right edge.
+         * Waiting room -> inside the waiting-room green header, right aligned.
+         * In game      -> inside canvas top-right, safely below BGM.
+         */
+        if (
+            this.waitingRoomRoot &&
+            this.phase === 'lobby' &&
+            multiplayerClient.isConnected()
+        ) {
+            const waitingRect =
+                this.waitingRoomRoot
+                    .getBoundingClientRect();
+
+            this.controlsHelpRoot.style
+                .setProperty(
+                    '--controls-right',
+                    `${Math.round(
+                        window.innerWidth -
+                        waitingRect.right +
+                        10,
+                    )}px`,
+                );
+
+            this.controlsHelpRoot.style
+                .setProperty(
+                    '--controls-top',
+                    `${Math.round(
+                        waitingRect.top +
+                        8,
+                    )}px`,
+                );
+
+            return;
+        }
+
+        if (
+            this.mainLobbyRoot &&
+            !multiplayerClient.isConnected()
+        ) {
+            const lobbyRect =
+                this.mainLobbyRoot
+                    .getBoundingClientRect();
+
+            this.controlsHelpRoot.style
+                .setProperty(
+                    '--controls-right',
+                    `${Math.round(
+                        window.innerWidth -
+                        lobbyRect.right +
+                        8,
+                    )}px`,
+                );
+
+            this.controlsHelpRoot.style
+                .setProperty(
+                    '--controls-top',
+                    `${Math.round(
+                        Math.max(
+                            6,
+                            lobbyRect.top -
+                            42,
+                        ),
+                    )}px`,
+                );
+
+            return;
+        }
+
         const rect =
             this.game.canvas
                 .getBoundingClientRect();
-
-        const scaleX =
-            rect.width /
-            this.gameWidth;
-        const scaleY =
-            rect.height /
-            this.gameHeight;
-
-        /*
-         * Lobby: dock the help button just ABOVE the room-info card,
-         * inside the right control column instead of floating over it.
-         * In-game: top-right, clear of the role HUD.
-         */
-        const logicalRight =
-            this.phase === 'lobby'
-                ? 18
-                : 12;
-
-        const logicalTop =
-            this.phase === 'lobby'
-                ? 58
-                : 72;
 
         this.controlsHelpRoot.style
             .setProperty(
@@ -5428,8 +5478,7 @@ export class GameScene extends Phaser.Scene {
                 `${Math.round(
                     window.innerWidth -
                     rect.right +
-                    logicalRight *
-                        scaleX,
+                    10,
                 )}px`,
             );
 
@@ -5438,8 +5487,7 @@ export class GameScene extends Phaser.Scene {
                 '--controls-top',
                 `${Math.round(
                     rect.top +
-                    logicalTop *
-                        scaleY,
+                    54,
                 )}px`,
             );
     }
@@ -10405,6 +10453,7 @@ export class GameScene extends Phaser.Scene {
             );
 
         this.updateMainLobbyDomPosition();
+        this.updateControlsHelpPosition();
 
         window.addEventListener(
             'resize',
@@ -10482,7 +10531,6 @@ export class GameScene extends Phaser.Scene {
                         <span class="ch-waiting-kicker">${tr('대기방')}</span>
                         <strong>${tr('게임 준비')}</strong>
                     </div>
-                    <button type="button" class="ch-waiting-help">? ${this.getControlsHelpCopy().title}</button>
                 </div>
 
                 <div class="ch-waiting-info"></div>
@@ -10658,34 +10706,9 @@ export class GameScene extends Phaser.Scene {
             },
         );
 
-        root.querySelector('.ch-waiting-help')
-            ?.addEventListener(
-                'pointerdown',
-                () => {
-                    this.controlsHelpButton?.dispatchEvent(
-                        new PointerEvent(
-                            'pointerdown',
-                            { bubbles: true },
-                        ),
-                    );
-                },
-            );
-
-        root.querySelector('.ch-waiting-help')
-            ?.addEventListener(
-                'pointerup',
-                () => {
-                    this.controlsHelpButton?.dispatchEvent(
-                        new PointerEvent(
-                            'pointerup',
-                            { bubbles: true },
-                        ),
-                    );
-                },
-            );
-
         this.updateWaitingRoomDomPosition();
         this.updateWaitingRoomDom();
+        this.updateControlsHelpPosition();
 
         window.addEventListener(
             'resize',
@@ -11816,6 +11839,14 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
+        if (this.waitingRoomRoot) {
+            this.mapSelectorPanel.setVisible(false);
+            this.mapSelectorLabel?.setVisible(false);
+            this.mapPreviousButton?.setVisible(false);
+            this.mapNextButton?.setVisible(false);
+            return;
+        }
+
         const visible =
             this.phase === 'lobby' &&
             multiplayerClient
@@ -12184,6 +12215,51 @@ export class GameScene extends Phaser.Scene {
                     ? tr('START GAME')
                     : tr('FOR PLAYER'),
             );
+        /*
+         * v0.10.10.114:
+         * DOM waiting room fully replaces the old Phaser right-side controls.
+         * Force-hide at the END of every lobby refresh because earlier code
+         * updates these objects for backward compatibility.
+         */
+        if (
+            isLobby &&
+            multiplayerClient.isConnected()
+        ) {
+            this.lobbyPanel.setVisible(false);
+            this.lobbyInfoCard?.setVisible(false);
+            this.lobbyControlsCard?.setVisible(false);
+            this.lobbyFooterDivider?.setVisible(false);
+            this.lobbyTitleText.setVisible(false);
+            this.lobbyInfoText.setVisible(false);
+            this.lobbyHintText?.setVisible(false);
+            this.lobbyMovementHelpText?.setVisible(false);
+            this.lobbyPaintDurationLabel?.setVisible(false);
+            this.lobbyHuntDurationLabel?.setVisible(false);
+
+            this.roleHunterButton.setVisible(false);
+            this.roleHiderButton.setVisible(false);
+            this.startGameButton.setVisible(false);
+            this.inviteLinkButton?.setVisible(false);
+            this.leaveRoomButton?.setVisible(false);
+
+            this.paintDurationButtons.forEach(
+                (button) => {
+                    button.setVisible(false);
+                },
+            );
+
+            this.huntDurationButtons.forEach(
+                (button) => {
+                    button.setVisible(false);
+                },
+            );
+
+            this.mapSelectorPanel?.setVisible(false);
+            this.mapSelectorLabel?.setVisible(false);
+            this.mapPreviousButton?.setVisible(false);
+            this.mapNextButton?.setVisible(false);
+        }
+
     }
 
     private async leaveCurrentRoomToLobby(): Promise<void> {
@@ -12243,30 +12319,6 @@ export class GameScene extends Phaser.Scene {
         this.showStatus(
             tr('방에서 나왔습니다.'),
         );
-        this.lobbyInfoText.setVisible(false);
-        this.lobbyHintText?.setVisible(false);
-        this.lobbyMovementHelpText?.setVisible(false);
-        this.lobbyPaintDurationLabel?.setVisible(false);
-        this.lobbyHuntDurationLabel?.setVisible(false);
-        this.roleHunterButton.setVisible(false);
-        this.roleHiderButton.setVisible(false);
-        this.startGameButton.setVisible(false);
-        this.inviteLinkButton?.setVisible(false);
-        this.leaveRoomButton?.setVisible(false);
-        this.paintDurationButtons.forEach(
-            (button) => {
-                button.setVisible(false);
-            },
-        );
-        this.huntDurationButtons.forEach(
-            (button) => {
-                button.setVisible(false);
-            },
-        );
-        this.mapSelectorPanel?.setVisible(false);
-        this.mapSelectorLabel?.setVisible(false);
-        this.mapPreviousButton?.setVisible(false);
-        this.mapNextButton?.setVisible(false);
 
     }
 

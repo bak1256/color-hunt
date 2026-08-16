@@ -1778,3 +1778,38 @@ canvas {
   .ch-waiting-start { flex-basis:33px;font-size:10px; }
   .ch-waiting-footer { flex-basis:27px; }
 }
+
+
+/* v0.10.10.114 — controls button final positioning/style */
+.colorhunt-controls-help {
+  pointer-events: none;
+}
+
+.colorhunt-controls-help__button {
+  pointer-events: auto;
+  min-width: 86px;
+  min-height: 32px;
+  padding: 6px 10px;
+  border-radius: 9px;
+  border: 1px solid rgba(91, 134, 101, .42);
+  background: rgba(255, 253, 240, .98);
+  color: #355d43;
+  box-shadow:
+    0 2px 0 rgba(61, 94, 67, .12),
+    0 5px 14px rgba(48, 72, 52, .12);
+  text-shadow: none;
+}
+
+.colorhunt-controls-help--open {
+  pointer-events: auto;
+}
+
+.colorhunt-controls-help__panel {
+  right: 0;
+  top: 39px;
+}
+
+/* Embedded help button was removed; prevent stale CSS from displaying one. */
+.ch-waiting-help {
+  display: none !important;
+}
