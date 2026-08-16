@@ -684,3 +684,69 @@ html.colorhunt-mobile canvas {
     white-space: nowrap;
   }
 }
+
+
+/* v0.10.10.107 — desktop adopts the redesigned Paint dock */
+.colorhunt-paint-dock--desktop {
+  grid-template-columns:
+    minmax(240px, 1.35fr)
+    minmax(360px, 2fr)
+    minmax(180px, .9fr);
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 16px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(24, 31, 36, .91),
+      rgba(10, 15, 19, .91)
+    );
+}
+
+.colorhunt-paint-dock--desktop .colorhunt-paint-dock__colors {
+  grid-template-columns: repeat(8, 28px);
+  justify-content: center;
+  gap: 6px;
+}
+
+.colorhunt-paint-dock--desktop .colorhunt-paint-color {
+  width: 28px;
+  height: 28px;
+  max-width: none;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.colorhunt-paint-dock--desktop .colorhunt-paint-dock__tools {
+  grid-template-columns: repeat(5, minmax(64px, 1fr));
+  gap: 7px;
+}
+
+.colorhunt-paint-dock--desktop .colorhunt-paint-tool {
+  height: 50px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.colorhunt-paint-dock--desktop .colorhunt-paint-tool__icon {
+  width: 22px;
+  height: 22px;
+}
+
+.colorhunt-paint-dock--desktop .colorhunt-paint-size {
+  font-size: 12px;
+  gap: 8px;
+}
+
+.colorhunt-paint-dock--desktop .colorhunt-paint-size input[type="range"] {
+  cursor: pointer;
+}
+
+.colorhunt-paint-dock--desktop .colorhunt-paint-tool:hover,
+.colorhunt-paint-dock--desktop .colorhunt-paint-color:hover {
+  transform: translateY(-1px);
+}
+
+.colorhunt-paint-dock--desktop .colorhunt-paint-tool.is-active {
+  transform: none;
+}

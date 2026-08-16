@@ -4690,7 +4690,6 @@ export class GameScene extends Phaser.Scene {
 
     private createMobilePaintDock(): void {
         if (
-            !this.mobileControlsEnabled ||
             this.mobilePaintDock
         ) {
             return;
@@ -4701,7 +4700,9 @@ export class GameScene extends Phaser.Scene {
                 'div',
             );
         root.className =
-            'colorhunt-paint-dock';
+            this.mobileControlsEnabled
+                ? 'colorhunt-paint-dock colorhunt-paint-dock--mobile'
+                : 'colorhunt-paint-dock colorhunt-paint-dock--desktop';
         root.hidden = true;
 
         const colors =
@@ -5129,15 +5130,25 @@ export class GameScene extends Phaser.Scene {
                 )}px`,
             );
 
+        const bottomGap =
+            this.mobileControlsEnabled
+                ? 8
+                : 12;
+
+        const maxWidth =
+            this.mobileControlsEnabled
+                ? 760
+                : 860;
+
         this.mobilePaintDock.style
             .setProperty(
                 '--paint-dock-bottom',
                 `${Math.round(
                     Math.max(
-                        8,
+                        bottomGap,
                         window.innerHeight -
                             rect.bottom +
-                            8,
+                            bottomGap,
                     ),
                 )}px`,
             );
@@ -5147,8 +5158,8 @@ export class GameScene extends Phaser.Scene {
                 '--paint-dock-width',
                 `${Math.round(
                     Math.min(
-                        rect.width - 20,
-                        760,
+                        rect.width - 24,
+                        maxWidth,
                     ),
                 )}px`,
             );
@@ -17282,10 +17293,11 @@ export class GameScene extends Phaser.Scene {
          * Desktop keeps the proven Phaser palette.
          * Mobile uses the responsive DOM dock so controls never overlap.
          */
-        const showPhaserPalette =
-            visible &&
-            !this.mobileControlsEnabled;
-
+        /*
+         * v0.10.10.107:
+         * Use the redesigned Paint dock on BOTH desktop and mobile.
+         * The legacy Phaser palette is now hidden everywhere.
+         */
         this.paletteObjects.forEach(
             (object) => {
                 const visibleObject =
@@ -17296,14 +17308,13 @@ export class GameScene extends Phaser.Scene {
                     };
 
                 visibleObject.setVisible?.(
-                    showPhaserPalette,
+                    false,
                 );
             },
         );
 
         this.setMobilePaintDockVisible(
-            visible &&
-            this.mobileControlsEnabled,
+            visible,
         );
 
         /*
