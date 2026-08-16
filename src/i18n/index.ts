@@ -5,6 +5,8 @@ const STORAGE_KEY = 'chameleon-hunt-language';
 type Dict = Record<string, string>;
 
 const ja: Dict = {
+  "{name} 님이 연결을 종료했습니다.":"{name} さんが接続を終了しました。",
+
   "캐릭터 확대":"キャラ拡大",
   "브러시 크기":"ブラシサイズ",
   "휠: 확대/축소 · Ctrl+휠: 브러시 · 모바일: 두 손가락 확대":"ホイール: 拡大縮小 · Ctrl+ホイール: ブラシ · モバイル: 2本指ズーム",
@@ -93,6 +95,8 @@ const ja: Dict = {
 };
 
 const en: Dict = {
+  "{name} 님이 연결을 종료했습니다.":"{name} disconnected.",
+
   "캐릭터 확대":"Character Zoom",
   "브러시 크기":"Brush Size",
   "휠: 확대/축소 · Ctrl+휠: 브러시 · 모바일: 두 손가락 확대":"Wheel: Zoom · Ctrl+Wheel: Brush · Mobile: Pinch Zoom",
@@ -171,6 +175,8 @@ const en: Dict = {
 };
 
 const zh: Dict = {
+  "{name} 님이 연결을 종료했습니다.":"{name} 已断开连接。",
+
   "캐릭터 확대":"角色缩放",
   "브러시 크기":"画笔大小",
   "휠: 확대/축소 · Ctrl+휠: 브러시 · 모바일: 두 손가락 확대":"滚轮: 缩放 · Ctrl+滚轮: 画笔 · 手机: 双指缩放",
@@ -245,6 +251,8 @@ const zh: Dict = {
 };
 
 const ko: Dict = {
+  "{name} 님이 연결을 종료했습니다.":"{name} 님이 연결을 종료했습니다.",
+
   "캐릭터 확대":"캐릭터 확대",
   "브러시 크기":"브러시 크기",
   "휠: 확대/축소 · Ctrl+휠: 브러시 · 모바일: 두 손가락 확대":"휠: 확대/축소 · Ctrl+휠: 브러시 · 모바일: 두 손가락 확대",

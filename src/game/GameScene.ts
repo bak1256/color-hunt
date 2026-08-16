@@ -235,6 +235,8 @@ export class GameScene extends Phaser.Scene {
 
     private survivalHudGraphics!: Phaser.GameObjects.Graphics;
     private survivalHudText!: Phaser.GameObjects.Text;
+    private disconnectNoticeText!: Phaser.GameObjects.Text;
+    private disconnectNoticeEvent?: Phaser.Time.TimerEvent;
     private knownAliveState =
         new Map<string, boolean>();
 
@@ -256,19 +258,19 @@ export class GameScene extends Phaser.Scene {
         this.survivalHudText =
             this.add.text(
                 this.gameWidth / 2,
-                46,
+                58,
                 '',
                 {
                     fontFamily:
                         'monospace',
-                    fontSize: '12px',
+                    fontSize: '16px',
                     fontStyle: 'bold',
                     color: '#ffffff',
                     backgroundColor:
-                        'rgba(15,23,32,0.72)',
+                        'rgba(15,23,32,0.78)',
                     padding: {
-                        x: 9,
-                        y: 4,
+                        x: 12,
+                        y: 5,
                     },
                 },
             )
@@ -276,6 +278,60 @@ export class GameScene extends Phaser.Scene {
                 .setScrollFactor(0)
                 .setDepth(6011)
                 .setVisible(false);
+
+        this.disconnectNoticeText =
+            this.add.text(
+                this.gameWidth / 2,
+                94,
+                '',
+                {
+                    fontFamily:
+                        'Arial, sans-serif',
+                    fontSize: '15px',
+                    fontStyle: 'bold',
+                    color: '#fffdf7',
+                    backgroundColor:
+                        'rgba(180, 68, 57, 0.94)',
+                    padding: {
+                        x: 14,
+                        y: 7,
+                    },
+                    align: 'center',
+                },
+            )
+                .setOrigin(0.5)
+                .setScrollFactor(0)
+                .setDepth(6020)
+                .setVisible(false);
+    }
+
+    private showPlayerDisconnectNotice(
+        name: string,
+    ): void {
+        this.disconnectNoticeEvent
+            ?.remove(false);
+
+        const template =
+            tr('{name} 님이 연결을 종료했습니다.');
+
+        this.disconnectNoticeText
+            .setText(
+                `⚠ ${template.replace(
+                    '{name}',
+                    name,
+                )}`,
+            )
+            .setAlpha(1)
+            .setVisible(true);
+
+        this.disconnectNoticeEvent =
+            this.time.delayedCall(
+                3200,
+                () => {
+                    this.disconnectNoticeText
+                        .setVisible(false);
+                },
+            );
     }
 
     private getAuthoritativeAliveHiderCount(): number {
@@ -379,9 +435,9 @@ export class GameScene extends Phaser.Scene {
          * FOUND : same person, translucent
          * HUNTER: black person
          */
-        const hiderSpacing = 18;
-        const hunterSpacing = 18;
-        const dividerGap = 28;
+        const hiderSpacing = 28;
+        const hunterSpacing = 28;
+        const dividerGap = 38;
 
         const totalWidth =
             Math.max(
@@ -401,8 +457,8 @@ export class GameScene extends Phaser.Scene {
             totalWidth / 2 +
             7;
 
-        const headY = 15;
-        const bodyY = 24;
+        const headY = 17;
+        const bodyY = 30;
 
         this.survivalHudGraphics
             .clear()
@@ -423,14 +479,14 @@ export class GameScene extends Phaser.Scene {
                     .fillCircle(
                         x,
                         headY,
-                        4,
+                        6,
                     )
                     .fillRoundedRect(
-                        x - 4,
-                        bodyY - 5,
-                        8,
-                        11,
-                        2,
+                        x - 6,
+                        bodyY - 7,
+                        12,
+                        17,
+                        3,
                     );
 
                 /*
@@ -444,22 +500,22 @@ export class GameScene extends Phaser.Scene {
                         alpha,
                     )
                     .lineBetween(
-                        x - 6,
-                        bodyY - 2,
-                        x + 6,
-                        bodyY - 2,
+                        x - 9,
+                        bodyY - 3,
+                        x + 9,
+                        bodyY - 3,
                     )
                     .lineBetween(
-                        x - 2,
-                        bodyY + 5,
                         x - 3,
-                        bodyY + 10,
+                        bodyY + 8,
+                        x - 5,
+                        bodyY + 15,
                     )
                     .lineBetween(
-                        x + 2,
-                        bodyY + 5,
                         x + 3,
-                        bodyY + 10,
+                        bodyY + 8,
+                        x + 5,
+                        bodyY + 15,
                     );
 
                 x += hiderSpacing;
@@ -523,7 +579,7 @@ export class GameScene extends Phaser.Scene {
             )
             .setPosition(
                 this.gameWidth / 2,
-                48,
+                66,
             )
             .setVisible(true)
             .setAlpha(0.92);
@@ -3087,6 +3143,13 @@ export class GameScene extends Phaser.Scene {
 
                     this.updateSurvivalHud();
 
+                    this.time.delayedCall(
+                        0,
+                        () => {
+                            this.updateSurvivalHud();
+                        },
+                    );
+
                     console.log(
                         '[Chameleon Hunt] Player removed',
                         sessionId,
@@ -3283,8 +3346,31 @@ export class GameScene extends Phaser.Scene {
                         name: string;
                     },
                 ) => {
-                    this.showStatus(
-                        tr(`${payload.name} 님의 연결이 끊겼습니다.`),
+                    this.showPlayerDisconnectNotice(
+                        payload.name,
+                    );
+
+                    /*
+                     * player_disconnected can arrive just before the Schema
+                     * removal patch. Refresh once immediately and once on the
+                     * next ticks so the top Hider/Hunter count loses exactly
+                     * the player who left.
+                     */
+                    this.updateSurvivalHud();
+
+                    [40, 140].forEach(
+                        (delay) => {
+                            this.time.delayedCall(
+                                delay,
+                                () => {
+                                    this.networkPlayerCount =
+                                        multiplayerClient
+                                            .getPlayerCount();
+                                    this.updateSurvivalHud();
+                                    this.updateMultiplayerHud();
+                                },
+                            );
+                        },
                     );
                 },
             ),
@@ -10694,6 +10780,7 @@ export class GameScene extends Phaser.Scene {
             this.multiplayerText,
             this.survivalHudGraphics,
             this.survivalHudText,
+            this.disconnectNoticeText,
             this.bgmToggleButton,
             this.hunterBlindPanel,
             this.hunterBlindText,
