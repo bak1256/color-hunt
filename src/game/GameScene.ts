@@ -2502,6 +2502,11 @@ export class GameScene extends Phaser.Scene {
         HTMLButtonElement[] = [];
     private mainLobbyRoot?: HTMLDivElement;
     private mainLobbyRoomList?: HTMLDivElement;
+    private waitingRoomRoot?: HTMLDivElement;
+    private waitingRoomInfo?: HTMLDivElement;
+    private waitingRoomMapText?: HTMLSpanElement;
+    private waitingRoomPaintButtons: HTMLButtonElement[] = [];
+    private waitingRoomHuntButtons: HTMLButtonElement[] = [];
     private lobbyPanel!: Phaser.GameObjects.Rectangle;
     private lobbyTitleText!: Phaser.GameObjects.Text;
     private lobbyInfoText!: Phaser.GameObjects.Text;
@@ -3466,6 +3471,11 @@ export class GameScene extends Phaser.Scene {
                     this.updateMainLobbyDomPositionBound,
                 );
                 this.destroyMainLobbyDom();
+                window.removeEventListener(
+                    'resize',
+                    this.updateWaitingRoomDomPositionBound,
+                );
+                this.destroyWaitingRoomDom();
 
                 if (
                     this.mobileMoveSafetyReleaseHandler
@@ -7842,6 +7852,7 @@ export class GameScene extends Phaser.Scene {
             'resize',
             this.updateMainLobbyDomPositionBound,
         );
+        this.createWaitingRoomDom();
 
         this.showChatUi();
         multiplayerClient
@@ -10100,7 +10111,7 @@ export class GameScene extends Phaser.Scene {
                 `${Math.round(
                     rect.left +
                     rect.width *
-                        0.035,
+                        0.022,
                 )}px`,
             );
 
@@ -10110,7 +10121,7 @@ export class GameScene extends Phaser.Scene {
                 `${Math.round(
                     rect.top +
                     rect.height *
-                        0.09,
+                        0.045,
                 )}px`,
             );
 
@@ -10119,7 +10130,7 @@ export class GameScene extends Phaser.Scene {
                 '--lobby-width',
                 `${Math.round(
                     rect.width *
-                        0.93,
+                        0.956,
                 )}px`,
             );
 
@@ -10128,7 +10139,7 @@ export class GameScene extends Phaser.Scene {
                 '--lobby-height',
                 `${Math.round(
                     rect.height *
-                        0.87,
+                        0.935,
                 )}px`,
             );
     }
@@ -10409,7 +10420,409 @@ export class GameScene extends Phaser.Scene {
             this.updateMainLobbyDomPosition();
         };
 
+    private destroyWaitingRoomDom(): void {
+        this.waitingRoomRoot?.remove();
+        this.waitingRoomRoot = undefined;
+        this.waitingRoomInfo = undefined;
+        this.waitingRoomMapText = undefined;
+        this.waitingRoomPaintButtons = [];
+        this.waitingRoomHuntButtons = [];
+    }
+
+    private updateWaitingRoomDomPosition(): void {
+        if (!this.waitingRoomRoot) {
+            return;
+        }
+
+        const rect =
+            this.game.canvas.getBoundingClientRect();
+
+        this.waitingRoomRoot.style.setProperty(
+            '--waiting-left',
+            `${Math.round(rect.left + rect.width * 0.69)}px`,
+        );
+        this.waitingRoomRoot.style.setProperty(
+            '--waiting-top',
+            `${Math.round(rect.top + rect.height * 0.075)}px`,
+        );
+        this.waitingRoomRoot.style.setProperty(
+            '--waiting-width',
+            `${Math.round(rect.width * 0.285)}px`,
+        );
+        this.waitingRoomRoot.style.setProperty(
+            '--waiting-height',
+            `${Math.round(rect.height * 0.84)}px`,
+        );
+    }
+
+    private readonly updateWaitingRoomDomPositionBound =
+        (): void => {
+            this.updateWaitingRoomDomPosition();
+        };
+
+    private createWaitingRoomDom(): void {
+        this.destroyWaitingRoomDom();
+
+        if (
+            !multiplayerClient.isConnected() ||
+            this.phase !== 'lobby'
+        ) {
+            return;
+        }
+
+        const root =
+            document.createElement('div');
+        root.className =
+            'colorhunt-waiting-room';
+
+        root.innerHTML = `
+            <div class="ch-waiting-shell">
+                <div class="ch-waiting-header">
+                    <div>
+                        <span class="ch-waiting-kicker">${tr('대기방')}</span>
+                        <strong>${tr('게임 준비')}</strong>
+                    </div>
+                    <button type="button" class="ch-waiting-help">? ${this.getControlsHelpCopy().title}</button>
+                </div>
+
+                <div class="ch-waiting-info"></div>
+
+                <div class="ch-waiting-map">
+                    <button type="button" data-map-step="-1">◀</button>
+                    <div>
+                        <small>${tr('맵')}</small>
+                        <span class="ch-waiting-map-text">RANDOM</span>
+                    </div>
+                    <button type="button" data-map-step="1">▶</button>
+                </div>
+
+                <div class="ch-waiting-role">
+                    <button type="button" class="ch-waiting-role-hunter">🎯 ${tr('HUNTER 지원')}</button>
+                    <button type="button" class="ch-waiting-role-cancel">↩ ${tr('지원 취소')}</button>
+                </div>
+
+                <div class="ch-waiting-timing">
+                    <section>
+                        <div class="ch-waiting-timing-title">
+                            <span>🎨 ${tr('색칠 시간')}</span>
+                            <b class="ch-waiting-paint-current"></b>
+                        </div>
+                        <div class="ch-waiting-time-options ch-waiting-paint-options">
+                            <button type="button" data-ms="90000">90s</button>
+                            <button type="button" data-ms="120000">120s</button>
+                            <button type="button" data-ms="150000">150s</button>
+                        </div>
+                    </section>
+
+                    <section>
+                        <div class="ch-waiting-timing-title">
+                            <span>🔍 ${tr('사냥 시간')}</span>
+                            <b class="ch-waiting-hunt-current"></b>
+                        </div>
+                        <div class="ch-waiting-time-options ch-waiting-hunt-options">
+                            <button type="button" data-ms="80000">80s</button>
+                            <button type="button" data-ms="100000">100s</button>
+                            <button type="button" data-ms="120000">120s</button>
+                        </div>
+                    </section>
+                </div>
+
+                <button type="button" class="ch-waiting-start">
+                    ▶ ${tr('게임 시작')}
+                </button>
+
+                <div class="ch-waiting-footer">
+                    <button type="button" class="ch-waiting-invite">🔗 ${tr('초대 링크 복사')}</button>
+                    <button type="button" class="ch-waiting-leave">🚪 ${tr('로비로 나가기')}</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(root);
+        this.waitingRoomRoot = root;
+        this.waitingRoomInfo =
+            root.querySelector('.ch-waiting-info') ?? undefined;
+        this.waitingRoomMapText =
+            root.querySelector('.ch-waiting-map-text') ?? undefined;
+
+        this.waitingRoomPaintButtons =
+            Array.from(
+                root.querySelectorAll<HTMLButtonElement>(
+                    '.ch-waiting-paint-options button',
+                ),
+            );
+        this.waitingRoomHuntButtons =
+            Array.from(
+                root.querySelectorAll<HTMLButtonElement>(
+                    '.ch-waiting-hunt-options button',
+                ),
+            );
+
+        root.querySelector('.ch-waiting-role-hunter')
+            ?.addEventListener(
+                'click',
+                () => {
+                    multiplayerClient.sendHunterVolunteer(true);
+                },
+            );
+
+        root.querySelector('.ch-waiting-role-cancel')
+            ?.addEventListener(
+                'click',
+                () => {
+                    multiplayerClient.sendHunterVolunteer(false);
+                },
+            );
+
+        root.querySelector('.ch-waiting-start')
+            ?.addEventListener(
+                'click',
+                () => {
+                    if (
+                        multiplayerClient.isHost() &&
+                        multiplayerClient.getPhase() === 'lobby'
+                    ) {
+                        multiplayerClient.sendStartGame();
+                    }
+                },
+            );
+
+        root.querySelector('.ch-waiting-invite')
+            ?.addEventListener(
+                'click',
+                () => {
+                    void this.copyInviteLink();
+                },
+            );
+
+        root.querySelector('.ch-waiting-leave')
+            ?.addEventListener(
+                'click',
+                () => {
+                    void this.leaveCurrentRoomToLobby();
+                },
+            );
+
+        root.querySelectorAll<HTMLButtonElement>(
+            '[data-map-step]',
+        ).forEach(
+            (button) => {
+                button.addEventListener(
+                    'click',
+                    () => {
+                        const step =
+                            Number(button.dataset.mapStep) < 0
+                                ? -1
+                                : 1;
+                        this.changeLobbyMapSelection(step);
+                    },
+                );
+            },
+        );
+
+        this.waitingRoomPaintButtons.forEach(
+            (button) => {
+                button.addEventListener(
+                    'click',
+                    () => {
+                        const value =
+                            Number(button.dataset.ms);
+                        if (
+                            multiplayerClient.isHost() &&
+                            Number.isFinite(value)
+                        ) {
+                            multiplayerClient
+                                .sendPaintDurationSelection(value);
+                        }
+                    },
+                );
+            },
+        );
+
+        this.waitingRoomHuntButtons.forEach(
+            (button) => {
+                button.addEventListener(
+                    'click',
+                    () => {
+                        const value =
+                            Number(button.dataset.ms);
+                        if (
+                            multiplayerClient.isHost() &&
+                            Number.isFinite(value)
+                        ) {
+                            multiplayerClient
+                                .sendHuntDurationSelection(value);
+                        }
+                    },
+                );
+            },
+        );
+
+        root.querySelector('.ch-waiting-help')
+            ?.addEventListener(
+                'pointerdown',
+                () => {
+                    this.controlsHelpButton?.dispatchEvent(
+                        new PointerEvent(
+                            'pointerdown',
+                            { bubbles: true },
+                        ),
+                    );
+                },
+            );
+
+        root.querySelector('.ch-waiting-help')
+            ?.addEventListener(
+                'pointerup',
+                () => {
+                    this.controlsHelpButton?.dispatchEvent(
+                        new PointerEvent(
+                            'pointerup',
+                            { bubbles: true },
+                        ),
+                    );
+                },
+            );
+
+        this.updateWaitingRoomDomPosition();
+        this.updateWaitingRoomDom();
+
+        window.addEventListener(
+            'resize',
+            this.updateWaitingRoomDomPositionBound,
+            { passive: true },
+        );
+    }
+
+    private updateWaitingRoomDom(): void {
+        if (
+            !this.waitingRoomRoot ||
+            !multiplayerClient.isConnected() ||
+            this.phase !== 'lobby'
+        ) {
+            return;
+        }
+
+        const room =
+            multiplayerClient.getRoom();
+        const roomId =
+            multiplayerClient.getRoomId() ?? '-';
+        const title =
+            room?.state.roomTitle ?? '-';
+        const map =
+            multiplayerClient.getSelectedMap();
+        const isHost =
+            multiplayerClient.isHost();
+
+        if (this.waitingRoomInfo) {
+            this.waitingRoomInfo.innerHTML = `
+                <div>
+                    <small>${tr('방 이름')}</small>
+                    <strong>${title}</strong>
+                </div>
+                <div>
+                    <small>${tr('인원')}</small>
+                    <strong>${multiplayerClient.getPlayerCount()} / 10</strong>
+                </div>
+                <div class="ch-waiting-room-id">
+                    <small>ROOM</small>
+                    <strong>${roomId}</strong>
+                </div>
+                ${
+                    isHost
+                        ? `<span class="ch-waiting-host">★ ${tr('방장')}</span>`
+                        : ''
+                }
+            `;
+        }
+
+        if (this.waitingRoomMapText) {
+            this.waitingRoomMapText.textContent =
+                map === 'random'
+                    ? 'RANDOM'
+                    : map.toUpperCase();
+        }
+
+        const paint =
+            multiplayerClient.getPaintDurationMs();
+        const hunt =
+            multiplayerClient.getHuntDurationMs();
+
+        this.waitingRoomPaintButtons.forEach(
+            (button) => {
+                const selected =
+                    Number(button.dataset.ms) === paint;
+                button.classList.toggle(
+                    'is-active',
+                    selected,
+                );
+                button.disabled =
+                    !isHost;
+            },
+        );
+
+        this.waitingRoomHuntButtons.forEach(
+            (button) => {
+                const selected =
+                    Number(button.dataset.ms) === hunt;
+                button.classList.toggle(
+                    'is-active',
+                    selected,
+                );
+                button.disabled =
+                    !isHost;
+            },
+        );
+
+        const paintCurrent =
+            this.waitingRoomRoot.querySelector(
+                '.ch-waiting-paint-current',
+            );
+        if (paintCurrent) {
+            paintCurrent.textContent =
+                `${Math.round(paint / 1000)}s`;
+        }
+
+        const huntCurrent =
+            this.waitingRoomRoot.querySelector(
+                '.ch-waiting-hunt-current',
+            );
+        if (huntCurrent) {
+            huntCurrent.textContent =
+                `${Math.round(hunt / 1000)}s`;
+        }
+
+        const start =
+            this.waitingRoomRoot.querySelector<
+                HTMLButtonElement
+            >('.ch-waiting-start');
+        if (start) {
+            start.disabled =
+                !isHost;
+            start.classList.toggle(
+                'is-disabled',
+                !isHost,
+            );
+        }
+
+        this.waitingRoomRoot
+            .querySelectorAll<
+                HTMLButtonElement
+            >('[data-map-step]')
+            .forEach(
+                (button) => {
+                    button.disabled =
+                        !isHost;
+                },
+            );
+    }
+
     private showMainMenu(): void {
+        this.destroyWaitingRoomDom();
+        window.removeEventListener(
+            'resize',
+            this.updateWaitingRoomDomPositionBound,
+        );
         this.refreshDomTranslations();
 
         if (
@@ -11467,6 +11880,24 @@ export class GameScene extends Phaser.Scene {
 
         const isLobby =
             this.phase === 'lobby';
+        if (
+            isLobby &&
+            multiplayerClient.isConnected()
+        ) {
+            if (!this.waitingRoomRoot) {
+                this.createWaitingRoomDom();
+            } else {
+                this.updateWaitingRoomDom();
+            }
+        } else {
+            this.destroyWaitingRoomDom();
+            window.removeEventListener(
+                'resize',
+                this.updateWaitingRoomDomPositionBound,
+            );
+        }
+
+
 
         if (isLobby) {
             this.multiplayerText
@@ -11474,10 +11905,10 @@ export class GameScene extends Phaser.Scene {
                 .setVisible(false);
         }
 
-        this.lobbyPanel.setVisible(isLobby);
-        this.lobbyInfoCard?.setVisible(isLobby);
-        this.lobbyControlsCard?.setVisible(isLobby);
-        this.lobbyFooterDivider?.setVisible(isLobby);
+        this.lobbyPanel.setVisible(false);
+        this.lobbyInfoCard?.setVisible(false);
+        this.lobbyControlsCard?.setVisible(false);
+        this.lobbyFooterDivider?.setVisible(false);
         /*
          * Main page header already shows the game title; never duplicate it
          * inside the waiting-room panel.
@@ -11774,6 +12205,11 @@ export class GameScene extends Phaser.Scene {
         await multiplayerClient.disconnect();
 
         this.hideChatUi(true);
+        this.destroyWaitingRoomDom();
+        window.removeEventListener(
+            'resize',
+            this.updateWaitingRoomDomPositionBound,
+        );
 
         this.multiplayerSessionActive = false;
         this.localNetworkPlayerReady = false;
@@ -11807,6 +12243,31 @@ export class GameScene extends Phaser.Scene {
         this.showStatus(
             tr('방에서 나왔습니다.'),
         );
+        this.lobbyInfoText.setVisible(false);
+        this.lobbyHintText?.setVisible(false);
+        this.lobbyMovementHelpText?.setVisible(false);
+        this.lobbyPaintDurationLabel?.setVisible(false);
+        this.lobbyHuntDurationLabel?.setVisible(false);
+        this.roleHunterButton.setVisible(false);
+        this.roleHiderButton.setVisible(false);
+        this.startGameButton.setVisible(false);
+        this.inviteLinkButton?.setVisible(false);
+        this.leaveRoomButton?.setVisible(false);
+        this.paintDurationButtons.forEach(
+            (button) => {
+                button.setVisible(false);
+            },
+        );
+        this.huntDurationButtons.forEach(
+            (button) => {
+                button.setVisible(false);
+            },
+        );
+        this.mapSelectorPanel?.setVisible(false);
+        this.mapSelectorLabel?.setVisible(false);
+        this.mapPreviousButton?.setVisible(false);
+        this.mapNextButton?.setVisible(false);
+
     }
 
 

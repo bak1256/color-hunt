@@ -1512,3 +1512,269 @@ canvas {
     font-size: 7.5px;
   }
 }
+
+
+/* v0.10.10.113 — main lobby sizing refinement */
+.colorhunt-main-lobby .ch-lobby-shell {
+  grid-template-rows: minmax(0, 1fr) 46px;
+}
+.colorhunt-main-lobby .ch-lobby-actions {
+  padding-top: 10px;
+  padding-bottom: 7px;
+  gap: 5px;
+}
+.colorhunt-main-lobby .ch-lobby-actions h2 {
+  flex-basis: 28px;
+}
+.colorhunt-main-lobby .ch-lobby-profile-card {
+  flex-basis: 78px;
+}
+.colorhunt-main-lobby .ch-lobby-action {
+  flex-basis: 49px;
+}
+.colorhunt-main-lobby .ch-lobby-guide {
+  min-height: 40px;
+}
+.colorhunt-main-lobby .ch-lobby-language button {
+  height: 30px;
+}
+
+/* Matching waiting-room UI */
+.colorhunt-waiting-room {
+  --waiting-left: 0px;
+  --waiting-top: 0px;
+  --waiting-width: 300px;
+  --waiting-height: 460px;
+  position: fixed;
+  z-index: 2050;
+  left: var(--waiting-left);
+  top: var(--waiting-top);
+  width: var(--waiting-width);
+  height: var(--waiting-height);
+  box-sizing: border-box;
+  font-family: ui-monospace, "SFMono-Regular", Consolas, "Noto Sans KR", "Noto Sans JP", monospace;
+  color: #2d4938;
+}
+.ch-waiting-shell {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 10px;
+  border: 2px solid rgba(93,143,101,.78);
+  border-radius: 16px;
+  background: rgba(255,253,244,.975);
+  box-shadow: 0 10px 0 rgba(65,96,69,.10), 0 20px 42px rgba(46,71,51,.24);
+}
+.ch-waiting-header {
+  flex: 0 0 45px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 7px;
+  padding: 0 9px;
+  border-radius: 10px;
+  background: linear-gradient(180deg,#327955,#286748);
+  color: #fff;
+}
+.ch-waiting-kicker {
+  display: block;
+  margin-bottom: 2px;
+  color: rgba(255,255,255,.72);
+  font-size: 7px;
+  font-weight: 800;
+}
+.ch-waiting-header strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 950;
+}
+.ch-waiting-help {
+  height: 29px;
+  padding: 0 8px;
+  border: 1px solid #c9ddbd;
+  border-radius: 8px;
+  background: #fbfff7;
+  color: #355d43;
+  font: inherit;
+  font-size: 8px;
+  font-weight: 900;
+}
+.ch-waiting-info {
+  flex: 0 0 76px;
+  position: relative;
+  display: grid;
+  grid-template-columns: 1.35fr .65fr;
+  gap: 6px;
+  padding: 9px;
+  box-sizing: border-box;
+  border: 1px solid #cbdcbe;
+  border-radius: 10px;
+  background: #fbfff8;
+}
+.ch-waiting-info small {
+  display: block;
+  color: #829086;
+  font-size: 7px;
+  font-weight: 800;
+}
+.ch-waiting-info strong {
+  display: block;
+  margin-top: 3px;
+  overflow: hidden;
+  color: #304c3a;
+  font-size: 9px;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ch-waiting-room-id { grid-column: 1 / -1; }
+.ch-waiting-host {
+  position: absolute;
+  right: 8px;
+  bottom: 7px;
+  color: #db902f;
+  font-size: 8px;
+  font-weight: 950;
+}
+.ch-waiting-map {
+  flex: 0 0 46px;
+  display: grid;
+  grid-template-columns: 36px 1fr 36px;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 6px;
+  box-sizing: border-box;
+  border: 1px solid #e2cd87;
+  border-radius: 10px;
+  background: #fff7d6;
+}
+.ch-waiting-map > button {
+  height: 32px;
+  border: 1px solid #b9d9aa;
+  border-radius: 7px;
+  background: #dff0d4;
+  color: #47714f;
+  font: inherit;
+  font-weight: 950;
+}
+.ch-waiting-map > div { text-align: center; }
+.ch-waiting-map small {
+  display: block;
+  color: #927b43;
+  font-size: 7px;
+  font-weight: 850;
+}
+.ch-waiting-map span {
+  display: block;
+  margin-top: 1px;
+  color: #5a4c2d;
+  font-size: 10px;
+  font-weight: 950;
+}
+.ch-waiting-role {
+  flex: 0 0 34px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+}
+.ch-waiting-role button {
+  border: 1px solid #d6dfcf;
+  border-radius: 7px;
+  font: inherit;
+  font-size: 8px;
+  font-weight: 950;
+}
+.ch-waiting-role-hunter { background:#f5d5a5;color:#714f28; }
+.ch-waiting-role-cancel { background:#e8f1ed;color:#52695b; }
+.ch-waiting-timing {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  gap: 6px;
+}
+.ch-waiting-timing section {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 6px 7px;
+  box-sizing: border-box;
+  border: 1px solid #dce8d7;
+  border-radius: 9px;
+  background: #f9fcf6;
+}
+.ch-waiting-timing-title {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  color:#53695a;
+  font-size:8px;
+  font-weight:900;
+}
+.ch-waiting-timing-title b { color:#2f7650;font-size:9px; }
+.ch-waiting-time-options {
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:4px;
+  margin-top:5px;
+}
+.ch-waiting-time-options button {
+  height:26px;
+  border:1px solid #d8e4d2;
+  border-radius:7px;
+  background:#edf5e9;
+  color:#64776b;
+  font:inherit;
+  font-size:8px;
+  font-weight:850;
+}
+.ch-waiting-time-options button.is-active {
+  border-color:#62ae72;
+  background:#73c987;
+  color:#fff;
+}
+.ch-waiting-time-options button:disabled { opacity:.55; }
+.ch-waiting-start {
+  flex:0 0 40px;
+  border:0;
+  border-radius:9px;
+  background:linear-gradient(180deg,#62cf7d,#49b968);
+  color:#fff;
+  font:inherit;
+  font-size:13px;
+  font-weight:950;
+  box-shadow:inset 0 -2px 0 rgba(0,0,0,.08),0 2px 0 rgba(52,89,60,.12);
+}
+.ch-waiting-start.is-disabled,
+.ch-waiting-start:disabled { background:#bcc9c0;color:#f5f7f5; }
+.ch-waiting-footer {
+  flex:0 0 31px;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:5px;
+}
+.ch-waiting-footer button {
+  border:0;
+  border-radius:7px;
+  font:inherit;
+  font-size:7.5px;
+  font-weight:900;
+}
+.ch-waiting-invite { background:#a9daf3;color:#36596d; }
+.ch-waiting-leave { background:#f1b8b8;color:#6b4242; }
+
+@media (pointer: coarse) {
+  .ch-waiting-shell { gap:4px;padding:7px; }
+  .ch-waiting-header { flex-basis:35px; }
+  .ch-waiting-header strong { font-size:10px; }
+  .ch-waiting-info { flex-basis:58px;padding:6px; }
+  .ch-waiting-map { flex-basis:38px; }
+  .ch-waiting-role { flex-basis:29px; }
+  .ch-waiting-time-options button { height:22px; }
+  .ch-waiting-start { flex-basis:33px;font-size:10px; }
+  .ch-waiting-footer { flex-basis:27px; }
+}
