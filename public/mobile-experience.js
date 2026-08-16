@@ -108,6 +108,44 @@
       window.innerHeight,
   });
 
+  /*
+   * v0.10.10.101:
+   * visualViewport shrinks when a soft keyboard opens. That must NOT resize
+   * the Phaser game or body. Keep a stable game viewport and use the shrunken
+   * visualViewport only for positioning the chat composer.
+   */
+  let stableGameWidth =
+    window.innerWidth;
+
+  let stableGameHeight =
+    window.innerHeight;
+
+  const isChatInputFocused = () =>
+    document.activeElement?.classList
+      ?.contains(
+        'colorhunt-chat__input',
+      ) ?? false;
+
+  const getKeyboardOffset = () => {
+    const viewport =
+      window.visualViewport;
+
+    if (!viewport) {
+      return 0;
+    }
+
+    return Math.max(
+      0,
+      window.innerHeight -
+        viewport.height -
+        viewport.offsetTop,
+    );
+  };
+
+  const isSoftKeyboardOpen = () =>
+    isChatInputFocused() &&
+    getKeyboardOffset() > 80;
+
   const viewportProfile = () => {
     const { width, height } = getViewport();
     const shortSide = Math.min(width, height);
@@ -294,17 +332,50 @@
   }
 
   function syncViewport() {
-    const profile =
+    const keyboardOpen =
+      isSoftKeyboardOpen();
+
+    /*
+     * Only accept a new GAME viewport while the keyboard is closed.
+     * orientation/fullscreen changes still update normally.
+     */
+    if (!keyboardOpen) {
+      stableGameWidth =
+        window.innerWidth;
+
+      stableGameHeight =
+        window.innerHeight;
+    }
+
+    const measuredProfile =
       viewportProfile();
+
+    const profile =
+      keyboardOpen
+        ? {
+            ...measuredProfile,
+            width:
+              stableGameWidth,
+            height:
+              stableGameHeight,
+            portrait:
+              stableGameHeight >
+              stableGameWidth,
+          }
+        : measuredProfile;
 
     document.documentElement.style.setProperty(
       '--ch-viewport-width',
-      `${Math.round(profile.width)}px`,
+      `${Math.round(
+        stableGameWidth,
+      )}px`,
     );
 
     document.documentElement.style.setProperty(
       '--ch-viewport-height',
-      `${Math.round(profile.height)}px`,
+      `${Math.round(
+        stableGameHeight,
+      )}px`,
     );
 
     /*
@@ -333,30 +404,32 @@
       profile.largeFormFactor,
     );
 
-    window.dispatchEvent(
-      new CustomEvent(
-        'colorhunt:viewportchange',
-        {
-          detail: {
-            width:
-              profile.width,
-            height:
-              profile.height,
-            portrait:
-              profile.portrait,
-            compactPortrait:
-              profile.compactPortrait,
-            largeFormFactor:
-              profile.largeFormFactor,
-            fullscreen:
-              Boolean(
-                document.fullscreenElement,
-              ),
-            standalone,
+    if (!keyboardOpen) {
+      window.dispatchEvent(
+        new CustomEvent(
+          'colorhunt:viewportchange',
+          {
+            detail: {
+              width:
+                profile.width,
+              height:
+                profile.height,
+              portrait:
+                profile.portrait,
+              compactPortrait:
+                profile.compactPortrait,
+              largeFormFactor:
+                profile.largeFormFactor,
+              fullscreen:
+                Boolean(
+                  document.fullscreenElement,
+                ),
+              standalone,
+            },
           },
-        },
-      ),
-    );
+        ),
+      );
+    }
   }
 
   let viewportTimer = 0;
@@ -399,13 +472,29 @@
 
   window.visualViewport?.addEventListener(
     'resize',
-    scheduleSync,
+    () => {
+      /*
+       * Chat itself listens to visualViewport and moves above the keyboard.
+       * Skip game viewport resizing while the chat keyboard is open.
+       */
+      if (
+        !isSoftKeyboardOpen()
+      ) {
+        scheduleSync();
+      }
+    },
     { passive: true },
   );
 
   window.visualViewport?.addEventListener(
     'scroll',
-    scheduleSync,
+    () => {
+      if (
+        !isSoftKeyboardOpen()
+      ) {
+        scheduleSync();
+      }
+    },
     { passive: true },
   );
 

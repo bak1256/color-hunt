@@ -179,6 +179,7 @@ html.colorhunt-mobile body.colorhunt-large-mobile canvas {
   --chat-canvas-left: 8px;
   --chat-canvas-top: 8px;
   --chat-panel-width: 300px;
+  --chat-panel-max-height: 176px;
 
   position: fixed;
   z-index: 2147483000;
@@ -186,7 +187,7 @@ html.colorhunt-mobile body.colorhunt-large-mobile canvas {
   top: var(--chat-canvas-top);
   width: var(--chat-panel-width);
   max-width: calc(100vw - 16px);
-  max-height: 188px;
+  max-height: var(--chat-panel-max-height);
 
   display: flex;
   flex-direction: column;
@@ -297,12 +298,12 @@ html.colorhunt-mobile body.colorhunt-large-mobile canvas {
  */
 @media (pointer: coarse) {
   .colorhunt-chat {
-    max-height: 160px;
+    max-height: var(--chat-panel-max-height);
   }
 
   .colorhunt-chat__log {
-    min-height: 38px;
-    max-height: 88px;
+    min-height: 28px;
+    max-height: 64px;
   }
 
   .colorhunt-chat__input {
@@ -330,14 +331,24 @@ html.colorhunt-mobile body.colorhunt-large-mobile canvas {
       390px,
       calc(100vw - 16px)
     );
-    max-height:
-      min(
-        180px,
-        calc(
-          100dvh
-          - var(--chat-keyboard-offset)
-          - 18px
-        )
-      );
+    max-height: 122px;
   }
+}
+
+
+/*
+ * v0.10.10.101:
+ * Soft keyboard must never shrink/move the game canvas.
+ * Only .colorhunt-chat changes position via --chat-keyboard-offset.
+ */
+html.colorhunt-mobile,
+html.colorhunt-mobile body,
+html.colorhunt-mobile #root {
+  height: var(--ch-viewport-height) !important;
+  min-height: var(--ch-viewport-height) !important;
+  max-height: var(--ch-viewport-height) !important;
+}
+
+html.colorhunt-mobile canvas {
+  max-height: var(--ch-viewport-height) !important;
 }

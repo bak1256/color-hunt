@@ -4095,27 +4095,70 @@ export class GameScene extends Phaser.Scene {
                 '(pointer: coarse)',
             ).matches;
 
+        const scaleX =
+            rect.width /
+            this.gameWidth;
+
+        const scaleY =
+            rect.height /
+            this.gameHeight;
+
         const panelWidth =
             Math.max(
-                220,
+                coarsePointer
+                    ? 190
+                    : 220,
                 Math.min(
                     coarsePointer
-                        ? 310
-                        : 330,
+                        ? 270
+                        : 320,
                     rect.width *
                         (
                             coarsePointer
-                                ? 0.38
-                                : 0.34
+                                ? 0.30
+                                : 0.32
                         ),
                 ),
             );
+
+        /*
+         * v0.10.10.101:
+         * Desktop Lobby: MAP selector spans logical y=18..66.
+         * Put chat directly BELOW it instead of covering it.
+         *
+         * Mobile: keep chat in the canvas top-left and compact enough that
+         * its bottom never reaches the Paint palette at logical y≈421.
+         */
+        const logicalTop =
+            !coarsePointer &&
+            this.phase === 'lobby'
+                ? 76
+                : 8;
+
+        const maxChatHeight =
+            coarsePointer &&
+            this.phase === 'paint'
+                ? Math.max(
+                    82,
+                    Math.min(
+                        118,
+                        (
+                            405 -
+                            logicalTop
+                        ) *
+                            scaleY,
+                    ),
+                )
+                : coarsePointer
+                    ? 130
+                    : 176;
 
         this.chatRoot.style
             .setProperty(
                 '--chat-canvas-left',
                 `${Math.round(
-                    rect.left + 8,
+                    rect.left +
+                    8 * scaleX,
                 )}px`,
             );
 
@@ -4123,7 +4166,9 @@ export class GameScene extends Phaser.Scene {
             .setProperty(
                 '--chat-canvas-top',
                 `${Math.round(
-                    rect.top + 8,
+                    rect.top +
+                    logicalTop *
+                        scaleY,
                 )}px`,
             );
 
@@ -4132,6 +4177,14 @@ export class GameScene extends Phaser.Scene {
                 '--chat-panel-width',
                 `${Math.round(
                     panelWidth,
+                )}px`,
+            );
+
+        this.chatRoot.style
+            .setProperty(
+                '--chat-panel-max-height',
+                `${Math.round(
+                    maxChatHeight,
                 )}px`,
             );
 
@@ -4166,6 +4219,17 @@ export class GameScene extends Phaser.Scene {
             'flex';
 
         this.updateChatKeyboardOffset();
+
+        /*
+         * Phase UI can change while viewport stays identical (Lobby -> Paint).
+         * Re-run once after Phaser has laid out that phase.
+         */
+        this.time.delayedCall(
+            0,
+            () => {
+                this.updateChatKeyboardOffset();
+            },
+        );
     }
 
     private hideChatUi(
@@ -12731,6 +12795,13 @@ export class GameScene extends Phaser.Scene {
     }
 
     private enterLobbyPhase(): void {
+        this.time.delayedCall(
+            0,
+            () => {
+                this.updateChatKeyboardOffset();
+            },
+        );
+
         this.phase = 'lobby';
 
         this.survivalHudGraphics
@@ -20671,6 +20742,13 @@ export class GameScene extends Phaser.Scene {
     }
 
     private enterPaintPhase(): void {
+        this.time.delayedCall(
+            0,
+            () => {
+                this.updateChatKeyboardOffset();
+            },
+        );
+
         this.localPaintHistory = [];
         this.redoPaintHistory = [];
         this.currentStrokeHistoryPoints = [];
@@ -20872,6 +20950,13 @@ export class GameScene extends Phaser.Scene {
     }
 
     private startHunt(): void {
+        this.time.delayedCall(
+            0,
+            () => {
+                this.updateChatKeyboardOffset();
+            },
+        );
+
         this.restoreGameplayTimerPosition();
         this.hideMobilePaintPrecisionGuide();
 
