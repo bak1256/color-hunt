@@ -313,8 +313,8 @@ export class GameScene extends Phaser.Scene {
 
         this.paintReadyButton =
             this.add.text(
-                this.gameWidth - 22,
-                118,
+                this.gameWidth / 2,
+                this.gameHeight - 118,
                 tr('준비 완료'),
                 {
                     fontFamily: 'Arial, sans-serif',
@@ -328,9 +328,11 @@ export class GameScene extends Phaser.Scene {
                     },
                 },
             )
-                .setOrigin(1, 0.5)
+                .setOrigin(0.5)
                 .setScrollFactor(0)
                 .setDepth(6020)
+                .setFixedSize(250, 38)
+                .setAlign('center')
                 .setVisible(false)
                 .setInteractive({
                     useHandCursor: true,
@@ -359,6 +361,19 @@ export class GameScene extends Phaser.Scene {
                         .sendPaintReady(
                             this.localPaintReady,
                         );
+
+                    this.time.delayedCall(
+                        80,
+                        () => {
+                            if (
+                                this.phase ===
+                                'paint'
+                            ) {
+                                multiplayerClient
+                                    .requestPaintReadyState();
+                            }
+                        },
+                    );
                 } else if (
                     role === 'hunter' &&
                     this.allHidersPaintReady
@@ -464,6 +479,49 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
+        /*
+         * READY UI always sits immediately above the paint palette.
+         * Keep it in fixed-screen coordinates even while Paint camera is
+         * zoomed for Hider/Hunter customization.
+         */
+        this.setFixedHudScreenPosition(
+            button,
+            this.gameWidth / 2,
+            this.gameHeight - 118,
+        );
+
+        /*
+         * Never show misleading 0/0 merely because the READY packet was
+         * missed. Derive the currently connected Hider count from Schema as
+         * a display fallback; the SERVER still decides whether early start
+         * is actually allowed.
+         */
+        let schemaHiderCount = 0;
+
+        multiplayerClient
+            .getRoom()
+            ?.state
+            ?.players
+            ?.forEach?.(
+                (
+                    player:
+                        NetworkPlayerState,
+                ) => {
+                    if (
+                        player.role ===
+                        'hider'
+                    ) {
+                        schemaHiderCount += 1;
+                    }
+                },
+            );
+
+        const shownHiderCount =
+            Math.max(
+                this.paintReadyHiderCount,
+                schemaHiderCount,
+            );
+
         if (role === 'hider') {
             button
                 .setText(
@@ -486,7 +544,7 @@ export class GameScene extends Phaser.Scene {
                 this.allHidersPaintReady
                     ? tr('바로 찾기 시작')
                     : tr('하이더 준비 대기') +
-                        ` ${this.paintReadyCount}/${this.paintReadyHiderCount}`,
+                        ` ${this.paintReadyCount}/${shownHiderCount}`,
             )
             .setBackgroundColor(
                 this.allHidersPaintReady
@@ -496,12 +554,11 @@ export class GameScene extends Phaser.Scene {
             .setAlpha(
                 this.allHidersPaintReady
                     ? 1
-                    : 0.72,
+                    : 0.88,
             );
     }
 
     private updateSurvivalHud(): void {
-
         if (
             !this.survivalHudGraphics ||
             !this.survivalHudText
@@ -509,13 +566,6 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
-        /*
-         * During Hunter customization the top paint UI is already dense.
-         * Hide the survival HUD only for the Hunter in Paint.
-         *
-         * Hiders can still see it during Paint, and BOTH roles see it
-         * throughout Hunt.
-         */
         const visible =
             this.isMultiplayerSession() &&
             (
@@ -538,11 +588,6 @@ export class GameScene extends Phaser.Scene {
             multiplayerClient.getRoom();
 
         if (!room?.state?.players) {
-            this.survivalHudGraphics
-                .setVisible(false);
-
-            this.survivalHudText
-                .setVisible(false);
             return;
         }
 
@@ -557,46 +602,44 @@ export class GameScene extends Phaser.Scene {
                     player.role === 'hunter'
                 ) {
                     hunterCount += 1;
-                } else {
+                } else if (
+                    player.role === 'hider'
+                ) {
                     hiders.push(player);
                 }
             },
         );
 
-        /*
-         * PERSON ICON
-         *
-         * HIDER : bright beige person
-         * FOUND : same person, translucent
-         * HUNTER: black person
-         */
-        const hiderSpacing = 36;
-        const hunterSpacing = 36;
-        const dividerGap = 46;
+        const spacing = 38;
+        const hourglassWidth = 42;
+        const hourglassGap = 16;
 
-        const totalWidth =
+        const leftWidth =
             Math.max(
                 hiders.length,
                 1,
-            ) *
-                hiderSpacing +
-            dividerGap +
+            ) * spacing;
+
+        const rightWidth =
             Math.max(
                 hunterCount,
                 1,
-            ) *
-                hunterSpacing;
+            ) * spacing;
+
+        const totalWidth =
+            leftWidth +
+            hourglassGap +
+            hourglassWidth +
+            hourglassGap +
+            rightWidth;
 
         let x =
             this.gameWidth / 2 -
             totalWidth / 2 +
-            7;
+            spacing / 2;
 
-        const headY = 20;
+        const headY = 19;
         const bodyY = 39;
-
-        const hourglassX =
-            this.gameWidth / 2;
 
         this.survivalHudGraphics
             .clear()
@@ -625,42 +668,193 @@ export class GameScene extends Phaser.Scene {
                         18,
                         25,
                         4,
-                    );
-
-                /*
-                 * Small arms make the symbol read as a person rather than
-                 * a circle/rectangle pair.
-                 */
-                this.survivalHudGraphics
+                    )
                     .lineStyle(
                         3,
                         0xf5eee2,
                         alpha,
                     )
                     .lineBetween(
-                        x - 11,
+                        x - 12,
                         bodyY - 3,
-                        x + 11,
+                        x + 12,
                         bodyY - 3,
                     )
                     .lineBetween(
                         x - 4,
-                        bodyY + 11,
-                        x - 6,
-                        bodyY + 19,
+                        bodyY + 12,
+                        x - 7,
+                        bodyY + 21,
                     )
                     .lineBetween(
                         x + 4,
-                        bodyY + 11,
-                        x + 6,
-                        bodyY + 19,
+                        bodyY + 12,
+                        x + 7,
+                        bodyY + 21,
                     );
 
-                x += hiderSpacing;
+                x += spacing;
             },
         );
 
-        x += dividerGap;
+        const hourglassX =
+            x +
+            hourglassGap +
+            hourglassWidth / 2 -
+            spacing / 2;
+
+        /*
+         * Larger, real hourglass:
+         * - upper green sand = remaining phase time
+         * - lower green sand = elapsed phase time
+         * - a thin falling stream moves continuously between them
+         */
+        const remainingMs =
+            Math.max(
+                0,
+                this.phaseEndTime -
+                    this.time.now,
+            );
+
+        const remainingRatio =
+            Phaser.Math.Clamp(
+                remainingMs /
+                    Math.max(
+                        1,
+                        this.hudPhaseDurationMs,
+                    ),
+                0,
+                1,
+            );
+
+        const elapsedRatio =
+            1 - remainingRatio;
+
+        const topY = 10;
+        const bottomY = 59;
+        const halfW = 16;
+        const neckY = 34;
+
+        this.survivalHudGraphics
+            .lineStyle(
+                3,
+                0xa7dca8,
+                1,
+            )
+            .lineBetween(
+                hourglassX - halfW - 3,
+                topY,
+                hourglassX + halfW + 3,
+                topY,
+            )
+            .lineBetween(
+                hourglassX - halfW - 3,
+                bottomY,
+                hourglassX + halfW + 3,
+                bottomY,
+            )
+            .lineBetween(
+                hourglassX - halfW,
+                topY + 3,
+                hourglassX,
+                neckY,
+            )
+            .lineBetween(
+                hourglassX + halfW,
+                topY + 3,
+                hourglassX,
+                neckY,
+            )
+            .lineBetween(
+                hourglassX,
+                neckY,
+                hourglassX - halfW,
+                bottomY - 3,
+            )
+            .lineBetween(
+                hourglassX,
+                neckY,
+                hourglassX + halfW,
+                bottomY - 3,
+            );
+
+        const upperHalf =
+            halfW *
+            remainingRatio;
+
+        if (remainingRatio > 0.01) {
+            this.survivalHudGraphics
+                .fillStyle(
+                    0x63d471,
+                    0.96,
+                )
+                .fillTriangle(
+                    hourglassX -
+                        upperHalf,
+                    topY + 7,
+                    hourglassX +
+                        upperHalf,
+                    topY + 7,
+                    hourglassX,
+                    neckY - 3,
+                );
+        }
+
+        const lowerHalf =
+            halfW *
+            Math.sqrt(
+                elapsedRatio,
+            );
+
+        if (elapsedRatio > 0.01) {
+            this.survivalHudGraphics
+                .fillStyle(
+                    0x63d471,
+                    0.96,
+                )
+                .fillTriangle(
+                    hourglassX,
+                    neckY + 4,
+                    hourglassX -
+                        lowerHalf,
+                    bottomY - 6,
+                    hourglassX +
+                        lowerHalf,
+                    bottomY - 6,
+                );
+        }
+
+        if (
+            remainingRatio > 0.01 &&
+            elapsedRatio < 0.99
+        ) {
+            const pulse =
+                0.55 +
+                0.45 *
+                Math.sin(
+                    this.time.now /
+                    90,
+                );
+
+            this.survivalHudGraphics
+                .lineStyle(
+                    2,
+                    0x79e785,
+                    pulse,
+                )
+                .lineBetween(
+                    hourglassX,
+                    neckY - 3,
+                    hourglassX,
+                    neckY + 8,
+                );
+        }
+
+        x =
+            hourglassX +
+            hourglassWidth / 2 +
+            hourglassGap +
+            spacing / 2;
 
         for (
             let index = 0;
@@ -690,122 +884,38 @@ export class GameScene extends Phaser.Scene {
                     1,
                 )
                 .lineBetween(
-                    x - 11,
+                    x - 12,
                     bodyY - 3,
-                    x + 11,
+                    x + 12,
                     bodyY - 3,
                 )
                 .lineBetween(
                     x - 4,
-                    bodyY + 11,
-                    x - 6,
-                    bodyY + 19,
+                    bodyY + 12,
+                    x - 7,
+                    bodyY + 21,
                 )
                 .lineBetween(
                     x + 4,
-                    bodyY + 11,
-                    x + 6,
-                    bodyY + 19,
+                    bodyY + 12,
+                    x + 7,
+                    bodyY + 21,
                 );
 
-            x += hunterSpacing;
-        }
-
-        const remainingMs =
-            Math.max(
-                0,
-                this.phaseEndTime -
-                    this.time.now,
-            );
-
-        const progress =
-            Phaser.Math.Clamp(
-                remainingMs /
-                    Math.max(
-                        1,
-                        this.hudPhaseDurationMs,
-                    ),
-                0,
-                1,
-            );
-
-        const hgTop = 12;
-        const hgBottom = 52;
-        const hgHalf = 11;
-
-        this.survivalHudGraphics
-            .lineStyle(
-                3,
-                0x6fcf72,
-                1,
-            )
-            .lineBetween(
-                hourglassX - hgHalf,
-                hgTop,
-                hourglassX + hgHalf,
-                hgTop,
-            )
-            .lineBetween(
-                hourglassX - hgHalf,
-                hgBottom,
-                hourglassX + hgHalf,
-                hgBottom,
-            )
-            .lineBetween(
-                hourglassX - hgHalf,
-                hgTop,
-                hourglassX + hgHalf,
-                hgBottom,
-            )
-            .lineBetween(
-                hourglassX + hgHalf,
-                hgTop,
-                hourglassX - hgHalf,
-                hgBottom,
-            );
-
-        const sandHeight =
-            28 * progress;
-
-        if (sandHeight > 0.5) {
-            this.survivalHudGraphics
-                .fillStyle(
-                    0x6fcf72,
-                    0.95,
-                )
-                .fillTriangle(
-                    hourglassX - 7 * progress,
-                    hgTop + 5,
-                    hourglassX + 7 * progress,
-                    hgTop + 5,
-                    hourglassX,
-                    hgTop + 5 +
-                        sandHeight / 2,
-                )
-                .fillTriangle(
-                    hourglassX,
-                    hgBottom - 5 -
-                        sandHeight / 2,
-                    hourglassX -
-                        7 * progress,
-                    hgBottom - 5,
-                    hourglassX +
-                        7 * progress,
-                    hgBottom - 5,
-                );
+            x += spacing;
         }
 
         this.survivalHudText
             .setText(
-                `${tr('HIDER')}   /   ${tr('HUNTER')}`,
+                `${tr('HIDER')}        ${tr('HUNTER')}`,
             )
             .setPosition(
                 this.gameWidth / 2,
-                76,
+                79,
             )
-            .setFontSize(19)
+            .setFontSize(18)
             .setVisible(true)
-            .setAlpha(0.92);
+            .setAlpha(0.94);
     }
 
     private showHiderFoundEffect(
@@ -1979,6 +2089,7 @@ export class GameScene extends Phaser.Scene {
     private roundResultWinner: 'hunters' | 'hiders' | null = null;
     private roundResultMessage = '';
     private lastPhaseRecoveryAt = 0;
+    private phaseExpiredSince = 0;
     private gameplayUiSnapshots = new Map<
         Phaser.GameObjects.GameObject,
         {
@@ -2572,11 +2683,6 @@ export class GameScene extends Phaser.Scene {
         pending:
             PendingReloadJoin,
     ): Promise<void> {
-        /*
-         * 기존 Clean Join 안정화 루틴.
-         * 현재는 reload 없이 같은 Scene에서도 사용합니다.
-         * 시작 즉시 room-list refresh를 중지해 비동기 UI 충돌을 방지합니다.
-         */
         this.stopRoomListAutoRefresh();
 
         this.roomTransitionInProgress =
@@ -2601,128 +2707,103 @@ export class GameScene extends Phaser.Scene {
                         },
                     );
 
+            /*
+             * v0.10.10.69 MOBILE JOIN:
+             * A successful Colyseus join means the socket is already inside
+             * the room. Do not freeze the entire lobby for up to 5 seconds
+             * while waiting for the first Schema player snapshot.
+             *
+             * Create a temporary local view immediately. The authoritative
+             * Schema/snapshot will overwrite role/x/y/alive as soon as it
+             * arrives.
+             */
             this.multiplayerSessionActive =
                 true;
             this.roomTransitionInProgress =
                 false;
 
-            /*
-             * callback 순서를 기다리지 않고 현재 state 전체를 직접 읽습니다.
-             */
-            this.networkPlayerManager
-                .syncPlayersFromCurrentRoom();
-
-            const startedAt =
-                this.time.now;
-
-            const finishWhenLocalExists =
-                (): void => {
-                    if (
-                        multiplayerClient.getRoom() !==
-                        room
-                    ) {
-                        return;
-                    }
-
-                    this.networkPlayerManager
-                        .syncPlayersFromCurrentRoom();
-
-                    multiplayerClient
-                        .requestLobbySnapshot();
-
-                    const snapshotLocal =
-                        multiplayerClient
-                            .getSnapshotPlayer(
-                                room.sessionId,
-                            );
-
-                    if (
-                        snapshotLocal &&
-                        !this.networkPlayerManager
-                            .hasPlayer(
-                                room.sessionId,
-                            )
-                    ) {
-                        this.networkPlayerManager
-                            .addPlayer(
-                                room.sessionId,
-                                snapshotLocal,
-                            );
-                    }
-
-                    this.localNetworkPlayerReady =
-                        this.ensureLocalNetworkPlayer(
-                            room,
-                        );
-
-                    if (
-                        this.localNetworkPlayerReady
-                    ) {
-                        this.multiplayerText
-                            .setText('')
-                            .setVisible(false);
-
-                        this.handleJoinedRoom(
-                            room,
-                        );
-                        return;
-                    }
-
-                    /*
-                     * 서버 Room에는 들어갔지만 local PlayerState가 끝까지
-                     * 만들어지지 않는 비정상 연결도 무한 대기하지 않습니다.
-                     */
-                    if (
-                        this.time.now -
-                            startedAt >=
-                        5000
-                    ) {
-                        console.warn(
-                            '[Chameleon Hunt] local player join timeout',
-                            {
-                                roomId:
-                                    pending.roomId,
-                            },
-                        );
-
-                        void multiplayerClient
-                            .disconnect();
-
-                        this.roomTransitionInProgress =
-                            false;
-                        this.multiplayerSessionActive =
-                            false;
-                        this.localNetworkPlayerReady =
-                            false;
-
-                        this.multiplayerText
-                            .setText('')
-                            .setVisible(false);
-
-                        this.showMainMenu();
-
-                        this.showStatus(
-                            tr('방에 참가할 수 없습니다. 이미 종료된 방일 수 있습니다.'),
-                        );
-
-                        void this.refreshPublicRoomList(
-                            false,
-                        );
-
-                        return;
-                    }
-
-                    this.time.delayedCall(
-                        this.time.now -
-                                startedAt <
-                            3000
-                            ? 40
-                            : 120,
-                        finishWhenLocalExists,
-                    );
+            const immediateLocal:
+                NetworkPlayerState = {
+                    name:
+                        pending.playerName,
+                    role: 'hider',
+                    hunterVolunteer:
+                        false,
+                    x:
+                        this.gameWidth *
+                        0.5,
+                    y:
+                        this.gameHeight *
+                        0.55,
+                    alive:
+                        true,
                 };
 
-            finishWhenLocalExists();
+            if (
+                !this.networkPlayerManager
+                    .hasPlayer(
+                        room.sessionId,
+                    )
+            ) {
+                this.networkPlayerManager
+                    .addPlayer(
+                        room.sessionId,
+                        immediateLocal,
+                    );
+            }
+
+            this.localNetworkPlayerReady =
+                true;
+
+            this.handleJoinedRoom(
+                room,
+            );
+
+            this.localNetworkPlayerReady =
+                true;
+
+            this.multiplayerText
+                .setText('')
+                .setVisible(false);
+
+            /*
+             * Reconcile authoritative state in the background without
+             * blocking touch buttons or the movement joystick.
+             */
+            [40, 140, 360, 900].forEach(
+                (delay) => {
+                    this.time.delayedCall(
+                        delay,
+                        () => {
+                            if (
+                                multiplayerClient
+                                    .getRoom() !==
+                                room
+                            ) {
+                                return;
+                            }
+
+                            multiplayerClient
+                                .requestLobbySnapshot();
+
+                            this.networkPlayerManager
+                                .syncPlayersFromCurrentRoom();
+
+                            this.ensureLocalNetworkPlayer(
+                                room,
+                            );
+
+                            if (
+                                this.phase ===
+                                'lobby'
+                            ) {
+                                this.networkPlayerManager
+                                    .syncLobbyPositionsFromState();
+                            }
+                        },
+                    );
+                },
+            );
         } catch (error) {
             console.error(
                 '[Chameleon Hunt] clean boot join failed',
@@ -2732,6 +2813,8 @@ export class GameScene extends Phaser.Scene {
             this.roomTransitionInProgress =
                 false;
             this.multiplayerSessionActive =
+                false;
+            this.localNetworkPlayerReady =
                 false;
 
             this.multiplayerText
@@ -5161,7 +5244,14 @@ export class GameScene extends Phaser.Scene {
                 .getRoom();
 
         if (room) {
+            const sessionId =
+                room.sessionId;
+
             this.localNetworkPlayerReady =
+                this.networkPlayerManager
+                    .hasPlayer(
+                        sessionId,
+                    ) ||
                 this.ensureLocalNetworkPlayer(
                     room,
                 );
@@ -10888,23 +10978,24 @@ export class GameScene extends Phaser.Scene {
         this.hunterBlindText = this.add
             .text(
                 this.gameWidth / 2,
-                72,
+                122,
                 [
                     tr('HIDERS ARE PAINTING...'),
                     tr('Hunter도 자신의 위장색을 칠해보세요.'),
                 ].join('\n'),
                 {
                     fontFamily: 'monospace',
-                    fontSize: '27px',
+                    fontSize: '17px',
                     fontStyle: 'bold',
                     color: '#f3f4f6',
-                    backgroundColor: '#343b42',
+                    backgroundColor: 'rgba(52,59,66,0.88)',
+                    fixedWidth: 430,
                     padding: {
-                        x: 18,
-                        y: 12,
+                        x: 12,
+                        y: 7,
                     },
                     align: 'center',
-                    lineSpacing: 12,
+                    lineSpacing: 5,
                 },
             )
             .setOrigin(0.5)
@@ -11691,6 +11782,8 @@ export class GameScene extends Phaser.Scene {
         phase: string,
         phaseEndsAt: number,
     ): void {
+        this.phaseExpiredSince = 0;
+
         const remainingMs =
             Math.max(
                 0,
@@ -11701,11 +11794,16 @@ export class GameScene extends Phaser.Scene {
             this.time.now +
             remainingMs;
 
-        this.hudPhaseDurationMs =
-            Math.max(
-                1,
-                remainingMs,
-            );
+        if (
+            phase !== this.phase ||
+            this.hudPhaseDurationMs <= 1
+        ) {
+            this.hudPhaseDurationMs =
+                Math.max(
+                    1,
+                    remainingMs,
+                );
+        }
 
         if (phase !== 'paint') {
             this.localPaintReady = false;
@@ -11791,6 +11889,30 @@ export class GameScene extends Phaser.Scene {
             this.localPaintReady = false;
             this.enterPaintPhase();
             this.updatePaintReadyButton();
+
+            /*
+             * READY state is gameplay coordination, not a one-shot cosmetic
+             * event. Request it explicitly because mobile/background tabs can
+             * miss the initial server broadcast around the phase transition.
+             */
+            [0, 180, 600].forEach(
+                (delay) => {
+                    this.time.delayedCall(
+                        delay,
+                        () => {
+                            if (
+                                this.phase ===
+                                'paint' &&
+                                multiplayerClient
+                                    .isConnected()
+                            ) {
+                                multiplayerClient
+                                    .requestPaintReadyState();
+                            }
+                        },
+                    );
+                },
+            );
 
             this.networkPlayerManager
                 .setNamesVisible(false);
@@ -18797,6 +18919,43 @@ export class GameScene extends Phaser.Scene {
 
                 multiplayerClient
                     .requestLobbySnapshot();
+
+                /*
+                 * A client that lost connectivity during Paint can otherwise
+                 * stare at PAINT 0 forever because it can no longer receive
+                 * the server's Hunt/Lobby transition. Give synchronization a
+                 * short grace period, then fail safely back to the main menu.
+                 */
+                if (
+                    this.phase === 'paint'
+                ) {
+                    if (
+                        this.phaseExpiredSince <= 0
+                    ) {
+                        this.phaseExpiredSince =
+                            this.time.now;
+                    }
+
+                    if (
+                        this.time.now -
+                            this.phaseExpiredSince >
+                        4000
+                    ) {
+                        this.phaseExpiredSince = 0;
+
+                        this.showStatus(
+                            tr('서버 응답이 없어 로비로 돌아갑니다.'),
+                        );
+
+                        void multiplayerClient
+                            .disconnect();
+                        return;
+                    }
+                }
+            } else if (
+                remainingMilliseconds > 0
+            ) {
+                this.phaseExpiredSince = 0;
             }
 
             if (

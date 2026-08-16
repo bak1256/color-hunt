@@ -1467,6 +1467,13 @@ private attachRoom(
     );
   }
 
+  requestPaintReadyState(): void {
+    this.room?.send(
+      "request_paint_ready_state",
+      {},
+    );
+  }
+
   sendEarlyStartHunt(): void {
     this.room?.send(
       "early_start_hunt",
