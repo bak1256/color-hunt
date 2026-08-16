@@ -100,6 +100,10 @@ export type ConnectionDropHandler = (
 export type ConnectionRecoveredHandler =
   () => void;
 
+export type RoundPaintStateHandler = (
+  strokes: NetworkPaintStroke[],
+) => void;
+
 export type NetworkRoundResult = {
   winner: "hunters" | "hiders";
   reason?:
@@ -358,6 +362,9 @@ this.phaseChangedHandlers.forEach(
   private readonly connectionRecoveredHandlers =
     new Set<ConnectionRecoveredHandler>();
 
+  private readonly roundPaintStateHandlers =
+    new Set<RoundPaintStateHandler>();
+
   private roomHealthCleanup?: () => void;
 
   private lastRoomPingAt = 0;
@@ -413,6 +420,16 @@ this.phaseChangedHandlers.forEach(
 
     this.client =
       new Client(this.serverUrl);
+
+    void fetch(
+      `${this.serverUrl}/hi`,
+      {
+        method: "GET",
+        cache: "no-store",
+      },
+    ).catch(() => {
+      // Optional connection prewarm.
+    });
   }
 
   async createRoom(
@@ -991,6 +1008,8 @@ private async attemptFreshRejoin(
       this.deliveredPhase = "";
       this.requestLobbySnapshot();
       this.requestPaintReadyState();
+      this.requestAvatarPresets();
+      this.requestRoundPaintState();
 
       [80, 220, 650].forEach(
         (delay) => {
@@ -1086,6 +1105,8 @@ private async attemptFreshRejoin(
 
       this.requestLobbySnapshot();
       this.requestPaintReadyState();
+      this.requestAvatarPresets();
+      this.requestRoundPaintState();
 
       globalThis.setTimeout(
         () => {
@@ -1424,6 +1445,8 @@ this.manualReconnectInFlight = false;
 
         this.requestLobbySnapshot();
         this.requestPaintReadyState();
+        this.requestAvatarPresets();
+        this.requestRoundPaintState();
 
         this.clearConnectionIssue();
 
@@ -1691,6 +1714,25 @@ this.manualReconnectInFlight = false;
             );
           },
         );
+      },
+    );
+
+    room.onMessage<{
+      strokes?: NetworkPaintStroke[];
+    }>(
+      "round_paint_state",
+      (payload) => {
+        const strokes =
+          Array.isArray(payload?.strokes)
+            ? payload.strokes
+            : [];
+
+        this.roundPaintStateHandlers
+          .forEach(
+            (handler) => {
+              handler(strokes);
+            },
+          );
       },
     );
 
@@ -2267,6 +2309,27 @@ this.manualReconnectInFlight = false;
   requestAvatarPresets(): void {
     this.room?.send(
       "request_avatar_presets",
+      {},
+    );
+  }
+
+  onRoundPaintState(
+    handler: RoundPaintStateHandler,
+  ): () => void {
+    this.roundPaintStateHandlers.add(
+      handler,
+    );
+
+    return () => {
+      this.roundPaintStateHandlers.delete(
+        handler,
+      );
+    };
+  }
+
+  requestRoundPaintState(): void {
+    this.room?.send(
+      "request_round_paint_state",
       {},
     );
   }

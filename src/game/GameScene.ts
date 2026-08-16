@@ -318,7 +318,7 @@ export class GameScene extends Phaser.Scene {
                 tr('준비 완료'),
                 {
                     fontFamily: 'Arial, sans-serif',
-                    fontSize: '18px',
+                    fontSize: '16px',
                     fontStyle: 'bold',
                     color: '#ffffff',
                     backgroundColor: '#4f9d69',
@@ -782,6 +782,54 @@ export class GameScene extends Phaser.Scene {
         const halfW = 16;
         const neckY = 34;
 
+        /*
+         * v0.10.10.83:
+         * Strong dark outer edge so the hourglass stays readable on bright
+         * maps, then draw the green inner frame on top.
+         */
+        this.survivalHudGraphics
+            .lineStyle(
+                6,
+                0x111827,
+                0.95,
+            )
+            .lineBetween(
+                hourglassX - halfW - 3,
+                topY,
+                hourglassX + halfW + 3,
+                topY,
+            )
+            .lineBetween(
+                hourglassX - halfW - 3,
+                bottomY,
+                hourglassX + halfW + 3,
+                bottomY,
+            )
+            .lineBetween(
+                hourglassX - halfW,
+                topY + 3,
+                hourglassX,
+                neckY,
+            )
+            .lineBetween(
+                hourglassX + halfW,
+                topY + 3,
+                hourglassX,
+                neckY,
+            )
+            .lineBetween(
+                hourglassX,
+                neckY,
+                hourglassX - halfW,
+                bottomY - 3,
+            )
+            .lineBetween(
+                hourglassX,
+                neckY,
+                hourglassX + halfW,
+                bottomY - 3,
+            );
+
         this.survivalHudGraphics
             .lineStyle(
                 3,
@@ -1186,7 +1234,7 @@ export class GameScene extends Phaser.Scene {
                     fontStyle: 'bold',
                     color: '#ffffff',
                     backgroundColor:
-                        '#39aee2',
+                        'rgba(57, 174, 226, 0.42)',
                     stroke: '#082b3a',
                     strokeThickness: 4,
                     fixedWidth: 170,
@@ -1228,11 +1276,11 @@ export class GameScene extends Phaser.Scene {
                         'monospace',
                     fontSize: '13px',
                     fontStyle: 'bold',
-                    color: '#17384a',
+                    color: '#ffffff',
                     backgroundColor:
-                        'rgba(245, 252, 255, 0.97)',
-                    stroke: '#ffffff',
-                    strokeThickness: 2,
+                        'rgba(10, 32, 46, 0.36)',
+                    stroke: '#102a3a',
+                    strokeThickness: 4,
                     fixedWidth: 240,
                     fixedHeight: 32,
                     align: 'center',
@@ -3758,6 +3806,26 @@ export class GameScene extends Phaser.Scene {
         );
 
         this.networkUnsubscribers.push(
+            multiplayerClient.onRoundPaintState(
+                (
+                    strokes:
+                        NetworkPaintStroke[],
+                ) => {
+                    this.networkPlayerManager
+                        .clearAllPaint();
+
+                    strokes.forEach(
+                        (stroke) => {
+                            this.applyRemotePaintStroke(
+                                stroke,
+                            );
+                        },
+                    );
+                },
+            ),
+        );
+
+        this.networkUnsubscribers.push(
             multiplayerClient.onWeaponState(
                 (
                     state: NetworkWeaponState,
@@ -4122,6 +4190,12 @@ export class GameScene extends Phaser.Scene {
                     this.networkPlayerManager
                         .normalizeLocalPlayerForGameplay();
 
+                    multiplayerClient
+                        .requestAvatarPresets();
+
+                    multiplayerClient
+                        .requestRoundPaintState();
+
                     this.time.delayedCall(
                         60,
                         () => {
@@ -4138,6 +4212,9 @@ export class GameScene extends Phaser.Scene {
                                 this.networkPlayerManager
                                     .normalizeLocalPlayerForGameplay();
                             }
+
+                            multiplayerClient
+                                .requestRoundPaintState();
                         },
                     );
 
@@ -5421,7 +5498,7 @@ export class GameScene extends Phaser.Scene {
         if (joinedPhase === 'lobby') {
             this.time.delayedCall(
                 this.mobileControlsEnabled
-                    ? 1400
+                    ? 2200
                     : 120,
                 () => {
                     if (
@@ -11500,7 +11577,7 @@ export class GameScene extends Phaser.Scene {
         ) {
             this.time.delayedCall(
                 this.mobileControlsEnabled
-                    ? 1500
+                    ? 2400
                     : 0,
                 () => {
                     if (
@@ -13191,15 +13268,21 @@ export class GameScene extends Phaser.Scene {
         }
 
         /*
-         * v0.10.10.81:
-         * READY button lives near the lower middle of the screen. During
-         * Paint only, move the timer upward and frame the local character
-         * slightly above center so the initial zoom does not overlap it.
+         * v0.10.10.83:
+         * Keep Paint-only HUD in one clean stack directly below the
+         * Hider/Hunter icon bar, with enough breathing room to avoid
+         * overlapping the enlarged character.
          */
         this.setFixedHudScreenPosition(
             this.timerText,
             this.gameWidth / 2,
-            72,
+            103,
+        );
+
+        this.setFixedHudScreenPosition(
+            this.guideText,
+            this.gameWidth / 2,
+            137,
         );
     }
 
@@ -13208,6 +13291,12 @@ export class GameScene extends Phaser.Scene {
             this.timerText,
             this.gameWidth / 2,
             108,
+        );
+
+        this.setFixedHudScreenPosition(
+            this.guideText,
+            this.gameWidth / 2,
+            132,
         );
     }
 
@@ -13233,8 +13322,8 @@ export class GameScene extends Phaser.Scene {
          */
         const screenLiftPx =
             this.mobileControlsEnabled
-                ? 78
-                : 66;
+                ? 104
+                : 88;
 
         const worldYOffset =
             screenLiftPx /
@@ -19433,12 +19522,9 @@ export class GameScene extends Phaser.Scene {
              * dedicated 1.05 camera override later.
              */
             this.paintWorldZoom =
-                this.networkPlayerManager
-                    .isLocalHunter()
-                    ? 1.05
-                    : this.mobileControlsEnabled
-                        ? 4.55
-                        : 3.75;
+                this.mobileControlsEnabled
+                    ? 4.55
+                    : 3.75;
 
             this.cameras.main
                 .stopFollow()
