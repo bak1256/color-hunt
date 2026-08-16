@@ -1789,18 +1789,7 @@ export class GameScene extends Phaser.Scene {
                     pointer.id ===
                     this.mobileMovePointerId
                 ) {
-                    this.mobileMovePointerId = -1;
-                    this.mobileMoveX = 0;
-                    this.mobileMoveY = 0;
-                    this.mobileMoveKnob
-                        ?.setPosition(
-                            this.getFixedHudCompensatedX(
-                                moveX,
-                            ),
-                            this.getFixedHudCompensatedY(
-                                moveY,
-                            ),
-                        );
+                    this.resetMobileMoveControl();
                 }
 
                 if (
@@ -1892,6 +1881,52 @@ export class GameScene extends Phaser.Scene {
                     this.mobileAimAngle,
                 );
             },
+        );
+
+        /*
+         * Browser-level safety net. Phaser normally receives pointerup, but
+         * Android/iOS can lose it when the finger exits canvas, browser UI
+         * appears, focus changes, or a touch gesture gets cancelled.
+         */
+        this.mobileMoveSafetyReleaseHandler =
+            (): void => {
+                if (
+                    this.mobileMovePointerId >=
+                    0
+                ) {
+                    this.resetMobileMoveControl();
+                }
+            };
+
+        this.mobileVisibilitySafetyHandler =
+            (): void => {
+                if (
+                    document.hidden
+                ) {
+                    this.resetMobileMoveControl();
+                }
+            };
+
+        window.addEventListener(
+            'pointerup',
+            this.mobileMoveSafetyReleaseHandler,
+            true,
+        );
+
+        window.addEventListener(
+            'pointercancel',
+            this.mobileMoveSafetyReleaseHandler,
+            true,
+        );
+
+        window.addEventListener(
+            'blur',
+            this.mobileMoveSafetyReleaseHandler,
+        );
+
+        document.addEventListener(
+            'visibilitychange',
+            this.mobileVisibilitySafetyHandler,
         );
     }
 
@@ -2138,6 +2173,28 @@ export class GameScene extends Phaser.Scene {
         this.updatePaintPreviewImmediately();
     }
 
+    private resetMobileMoveControl(): void {
+        /*
+         * v0.10.10.106:
+         * One authoritative STOP path for the mobile movement stick.
+         * Mobile browsers occasionally lose POINTER_UP during gesture/UI
+         * transitions. A stale vector must never keep moving the character.
+         */
+        this.mobileMovePointerId = -1;
+        this.mobileMoveX = 0;
+        this.mobileMoveY = 0;
+
+        this.mobileMoveKnob
+            ?.setPosition(
+                this.getFixedHudCompensatedX(
+                    82,
+                ),
+                this.getFixedHudCompensatedY(
+                    275,
+                ),
+            );
+    }
+
     private updateMobileJoystick(
         kind: 'move' | 'aim',
         screenX: number,
@@ -2197,7 +2254,7 @@ export class GameScene extends Phaser.Scene {
                     ),
                 );
 
-            const strength =
+            const rawStrength =
                 Phaser.Math.Clamp(
                     length /
                         this.mobileJoystickRadius,
@@ -2205,16 +2262,49 @@ export class GameScene extends Phaser.Scene {
                     1,
                 );
 
-            if (strength < 0.16) {
+            /*
+             * A larger dead-zone prevents tiny finger drift from producing
+             * unwanted movement. Outside it, use a soft response curve:
+             * small deflection = careful movement, outer ring = full speed.
+             */
+            const deadZone = 0.22;
+
+            if (
+                rawStrength <=
+                deadZone
+            ) {
                 this.mobileMoveX = 0;
                 this.mobileMoveY = 0;
             } else {
+                const normalizedStrength =
+                    Phaser.Math.Clamp(
+                        (
+                            rawStrength -
+                            deadZone
+                        ) /
+                            (
+                                1 -
+                                deadZone
+                            ),
+                        0,
+                        1,
+                    );
+
+                const smoothStrength =
+                    normalizedStrength *
+                    normalizedStrength *
+                    (
+                        3 -
+                        2 *
+                            normalizedStrength
+                    );
+
                 this.mobileMoveX =
                     normalizedX *
-                    strength;
+                    smoothStrength;
                 this.mobileMoveY =
                     normalizedY *
-                    strength;
+                    smoothStrength;
             }
             return;
         }
@@ -2368,9 +2458,7 @@ export class GameScene extends Phaser.Scene {
         }
 
         if (!canMove) {
-            this.mobileMovePointerId = -1;
-            this.mobileMoveX = 0;
-            this.mobileMoveY = 0;
+            this.resetMobileMoveControl();
         }
 
         if (!showHunterCombat) {
@@ -2574,6 +2662,8 @@ export class GameScene extends Phaser.Scene {
     private mobileFireButton?: Phaser.GameObjects.Arc;
     private mobileFireLabel?: Phaser.GameObjects.Text;
     private mobileMovePointerId = -1;
+    private mobileMoveSafetyReleaseHandler?: () => void;
+    private mobileVisibilitySafetyHandler?: () => void;
     private mobileAimPointerId = -1;
     private mobileFirePointerId = -1;
     private mobileMoveX = 0;
@@ -3367,6 +3457,35 @@ export class GameScene extends Phaser.Scene {
                 this.destroyChatUi();
                 this.destroyControlsHelpUi();
                 this.destroyMobilePaintDock();
+
+                if (
+                    this.mobileMoveSafetyReleaseHandler
+                ) {
+                    window.removeEventListener(
+                        'pointerup',
+                        this.mobileMoveSafetyReleaseHandler,
+                        true,
+                    );
+                    window.removeEventListener(
+                        'pointercancel',
+                        this.mobileMoveSafetyReleaseHandler,
+                        true,
+                    );
+                    window.removeEventListener(
+                        'blur',
+                        this.mobileMoveSafetyReleaseHandler,
+                    );
+                }
+
+                if (
+                    this.mobileVisibilitySafetyHandler
+                ) {
+                    document.removeEventListener(
+                        'visibilitychange',
+                        this.mobileVisibilitySafetyHandler,
+                    );
+                }
+
                 this.saveLobbyBgmResumePosition();
             },
         );
@@ -7868,6 +7987,22 @@ export class GameScene extends Phaser.Scene {
         }
 
         if (this.mobileControlsEnabled) {
+            /*
+             * v0.10.10.106 MOBILE MOVE WATCHDOG:
+             * If Phaser/browser missed POINTER_UP, verify the physical
+             * pointer every frame. The first frame after finger release
+             * force-stops movement instead of letting the last vector stick.
+             */
+            if (
+                this.mobileMovePointerId >=
+                    0 &&
+                !this.isMobilePointerActuallyDown(
+                    this.mobileMovePointerId,
+                )
+            ) {
+                this.resetMobileMoveControl();
+            }
+
             directionX += this.mobileMoveX;
             directionY += this.mobileMoveY;
         }
