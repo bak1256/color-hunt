@@ -2237,16 +2237,107 @@ this.manualReconnectInFlight = false;
         );
 
         /*
-         * 이전 Room을 백그라운드로 leave한 뒤 그 onLeave가 늦게 와도
-         * 이미 새 Room에 접속했다면 새 연결 상태를 절대 지우지 않습니다.
+         * A deliberately abandoned/old Room must never affect the current
+         * connection.
          */
         if (this.room !== room) {
+          return;
+        }
+
+        /*
+         * v0.10.10.127 EMERGENCY REJOIN:
+         *
+         * Colyseus can emit the final onLeave after a short mobile/Incognito
+         * transport disturbance. The old behavior immediately set room to
+         * undefined, which made GameScene throw the Hider into the main
+         * lobby after only ~700ms.
+         *
+         * Keep the closed Room as the recovery identity for a grace period
+         * and use the existing clientKey handoff path to join the SAME room.
+         * Manual disconnect() is unaffected because it clears this.room
+         * BEFORE calling room.leave().
+         */
+        const recoverable =
+          Boolean(
+            this.lastJoinedRoomId &&
+            this.lastJoinOptions,
+          ) &&
+          (
+            this.lastStablePhase ===
+              "countdown" ||
+            this.lastStablePhase ===
+              "paint" ||
+            this.lastStablePhase ===
+              "hunt"
+          ) &&
+          (
+            typeof navigator ===
+              "undefined" ||
+            navigator.onLine
+          );
+
+        if (recoverable) {
+          this.notifyConnectionIssue(
+            reason ??
+              "unexpected_room_leave",
+          );
+
+          /*
+           * attemptFreshRejoin() only requires this.room === sourceRoom;
+           * keeping the old object here intentionally allows the handoff
+           * even though its socket has already closed.
+           */
+          void this.attemptFreshRejoin(
+            room,
+          );
+
+          [350, 900, 1800, 3200].forEach(
+            (delay) => {
+              globalThis.setTimeout(
+                () => {
+                  if (
+                    this.room === room
+                  ) {
+                    void this.attemptFreshRejoin(
+                      room,
+                    );
+                  }
+                },
+                delay,
+              );
+            },
+          );
+
+          globalThis.setTimeout(
+            () => {
+              /*
+               * Recovered successfully: attachRoom() replaced this.room.
+               */
+              if (this.room !== room) {
+                return;
+              }
+
+              this.room = undefined;
+              this.callbacks =
+                undefined;
+              this.lastStablePhase =
+                "lobby";
+
+              this.emitConnectionChanged(
+                false,
+              );
+            },
+            9000,
+          );
+
           return;
         }
 
         this.room = undefined;
         this.callbacks =
           undefined;
+        this.lastStablePhase =
+          "lobby";
 
         this.emitConnectionChanged(
           false,

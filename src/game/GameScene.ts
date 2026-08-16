@@ -1618,13 +1618,21 @@ export class GameScene extends Phaser.Scene {
                 pointer:
                     Phaser.Input.Pointer,
             ) => {
-                this.mobileTouchPoints.set(
-                    pointer.id,
-                    new Phaser.Math.Vector2(
-                        pointer.x,
-                        pointer.y,
-                    ),
-                );
+                this.pruneMobileTouchPoints();
+
+                if (
+                    this.isNativeTouchPointer(
+                        pointer,
+                    )
+                ) {
+                    this.mobileTouchPoints.set(
+                        pointer.id,
+                        new Phaser.Math.Vector2(
+                            pointer.x,
+                            pointer.y,
+                        ),
+                    );
+                }
 
                 /*
                  * v0.10.10.95:
@@ -1782,6 +1790,7 @@ export class GameScene extends Phaser.Scene {
                     return;
                 }
 
+                this.pruneMobileTouchPoints();
                 this.updateMobilePinchGesture();
             },
         );
@@ -1870,13 +1879,19 @@ export class GameScene extends Phaser.Scene {
                 this.mobileFirePointerId =
                     pointer.id;
 
-                this.mobileTouchPoints.set(
-                    pointer.id,
-                    new Phaser.Math.Vector2(
-                        pointer.x,
-                        pointer.y,
-                    ),
-                );
+                if (
+                    this.isNativeTouchPointer(
+                        pointer,
+                    )
+                ) {
+                    this.mobileTouchPoints.set(
+                        pointer.id,
+                        new Phaser.Math.Vector2(
+                            pointer.x,
+                            pointer.y,
+                        ),
+                    );
+                }
 
                 if (
                     this.phase !== 'hunt' ||
@@ -2084,6 +2099,73 @@ export class GameScene extends Phaser.Scene {
         );
     }
 
+    private isNativeTouchPointer(
+        pointer:
+            Phaser.Input.Pointer,
+    ): boolean {
+        const event =
+            pointer.event as
+                | PointerEvent
+                | TouchEvent
+                | MouseEvent
+                | undefined;
+
+        /*
+         * PointerEvent is the normal Android/iOS path. Some WebViews expose
+         * TouchEvent instead. Synthetic mouse pointers on touch devices are
+         * intentionally rejected so one finger can never become "two".
+         */
+        if (
+            typeof PointerEvent !==
+                'undefined' &&
+            event instanceof
+                PointerEvent
+        ) {
+            return (
+                event.pointerType ===
+                'touch'
+            );
+        }
+
+        if (
+            typeof TouchEvent !==
+                'undefined' &&
+            event instanceof
+                TouchEvent
+        ) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private pruneMobileTouchPoints(): void {
+        [
+            ...this.mobileTouchPoints
+                .keys(),
+        ].forEach(
+            (id) => {
+                if (
+                    !this.isMobilePointerActuallyDown(
+                        id,
+                    )
+                ) {
+                    this.mobileTouchPoints.delete(
+                        id,
+                    );
+                }
+            },
+        );
+
+        if (
+            this.mobileTouchPoints.size <
+            2
+        ) {
+            this.mobilePinchDistance = 0;
+            this.mobilePinchActive = false;
+        }
+    }
+
     private updateMobilePinchGesture(): void {
         if (
             this.phase !== 'paint' ||
@@ -2093,6 +2175,8 @@ export class GameScene extends Phaser.Scene {
             this.mobilePinchActive = false;
             return;
         }
+
+        this.pruneMobileTouchPoints();
 
         const activeTouches =
             [...this.mobileTouchPoints.entries()]
@@ -6789,10 +6873,37 @@ export class GameScene extends Phaser.Scene {
                             tr('서버 연결이 끊겼습니다. 메인 화면으로 돌아갑니다.'),
                         );
 
+                        /*
+                         * v0.10.10.127:
+                         * MultiplayerClient now keeps an unexpected mobile
+                         * leave in recovery for up to 9 seconds. A false
+                         * connection event reaching here is therefore a
+                         * confirmed terminal disconnect, but still give one
+                         * final tick for a just-completed handoff.
+                         */
                         this.time.delayedCall(
-                            700,
+                            350,
                             () => {
+                                if (
+                                    multiplayerClient
+                                        .isConnected() ||
+                                    multiplayerClient
+                                        .isConnectionRecovering()
+                                ) {
+                                    return;
+                                }
+
                                 this.clearStatus();
+
+                                /*
+                                 * Main/public lobby has no room chat.
+                                 * Remove stale room messages/composer state
+                                 * before rebuilding the lobby.
+                                 */
+                                this.hideChatUi(
+                                    true,
+                                );
+
                                 this.showMainMenu();
                             },
                         );
@@ -11609,8 +11720,18 @@ export class GameScene extends Phaser.Scene {
     }
 
     private showMainMenu(): void {
+        /*
+         * Public main lobby never keeps room-scoped chat.
+         * This also fixes the stale chat panel left behind after a terminal
+         * mobile disconnect.
+         */
+        this.hideChatUi(
+            true,
+        );
+
         this.bgmToggleButton
             ?.setVisible(true);
+
         this.destroyWaitingRoomDom();
         this.refreshDomTranslations();
 
@@ -19738,22 +19859,32 @@ export class GameScene extends Phaser.Scene {
                 }
 
                 /*
-                 * On mobile, finger #2 belongs to pinch zoom.
-                 * It must never replace the pending/active paint pointer.
+                 * v0.10.10.127:
+                 * One REAL touch always belongs to paint.
+                 * Only an actual second touch pointer may be reserved for
+                 * pinch. Synthetic mouse pointers are ignored.
                  */
                 if (
-                    this.mobileControlsEnabled &&
-                    (
-                        this.mobilePinchActive ||
-                        (
-                            this.mobileTouchPoints.size >= 1 &&
-                            !this.mobileTouchPoints.has(
-                                pointer.id,
-                            )
-                        )
-                    )
+                    this.mobileControlsEnabled
                 ) {
-                    return;
+                    this.pruneMobileTouchPoints();
+
+                    const trueSecondFinger =
+                        this.isNativeTouchPointer(
+                            pointer,
+                        ) &&
+                        this.mobileTouchPoints.size >=
+                            1 &&
+                        !this.mobileTouchPoints.has(
+                            pointer.id,
+                        );
+
+                    if (
+                        this.mobilePinchActive ||
+                        trueSecondFinger
+                    ) {
+                        return;
+                    }
                 }
 
                 if (this.eyedropperArmed) {
@@ -20006,15 +20137,36 @@ export class GameScene extends Phaser.Scene {
                     return;
                 }
 
+                if (
+                    this.mobileControlsEnabled
+                ) {
+                    this.pruneMobileTouchPoints();
+                }
+
                 const activeMobilePaintTouches =
                     this.mobileControlsEnabled
                         ? [
                             ...this.mobileTouchPoints
-                                .keys(),
+                                .entries(),
                         ].filter(
-                            (id) =>
+                            (
+                                [
+                                    id,
+                                    point,
+                                ],
+                            ) =>
                                 this.isMobilePointerActuallyDown(
                                     id,
+                                ) &&
+                                id !==
+                                    this.mobileMovePointerId &&
+                                id !==
+                                    this.mobileAimPointerId &&
+                                id !==
+                                    this.mobileFirePointerId &&
+                                !this.isMobileControlScreenPoint(
+                                    point.x,
+                                    point.y,
                                 ),
                         ).length
                         : 0;

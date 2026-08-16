@@ -3148,3 +3148,27 @@ html.colorhunt-mobile body.colorhunt-unfolded {
     bottom: var(--chat-canvas-bottom) !important;
   }
 }
+
+
+/* ============================================================
+   v0.10.10.127 — emergency disconnect / BGM / touch-paint hardening
+   ============================================================ */
+
+/* Main-lobby top-right controls get a little breathing room. */
+.colorhunt-main-lobby ~ .colorhunt-controls-help {
+  max-width: 150px;
+}
+
+/* Waiting-room BGM/help must stay as one compact action group. */
+.ch-waiting-header-actions {
+  flex-wrap: nowrap !important;
+  overflow: hidden;
+}
+
+.ch-waiting-bgm-inline,
+.ch-waiting-help-inline {
+  flex: 0 1 auto;
+  min-width: 0 !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
