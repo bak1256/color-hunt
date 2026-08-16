@@ -5396,13 +5396,20 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
+        const canvasRect =
+            this.game.canvas
+                .getBoundingClientRect();
+
         /*
-         * v0.10.10.114:
-         * One controls button, one deterministic home per screen.
+         * v0.10.10.115:
+         * Controls button must NEVER leave the actual game frame.
          *
-         * Main lobby  -> just above the lobby card, aligned to its right edge.
-         * Waiting room -> inside the waiting-room green header, right aligned.
-         * In game      -> inside canvas top-right, safely below BGM.
+         * Main lobby:
+         *   inside the canvas top-right control strip, left of BGM.
+         * Waiting room:
+         *   inside the green waiting-room header.
+         * Gameplay:
+         *   inside canvas top-right, below the BGM row.
          */
         if (
             this.waitingRoomRoot &&
@@ -5419,7 +5426,7 @@ export class GameScene extends Phaser.Scene {
                     `${Math.round(
                         window.innerWidth -
                         waitingRect.right +
-                        10,
+                        8,
                     )}px`,
                 );
 
@@ -5428,7 +5435,7 @@ export class GameScene extends Phaser.Scene {
                     '--controls-top',
                     `${Math.round(
                         waitingRect.top +
-                        8,
+                        7,
                     )}px`,
                 );
 
@@ -5439,17 +5446,13 @@ export class GameScene extends Phaser.Scene {
             this.mainLobbyRoot &&
             !multiplayerClient.isConnected()
         ) {
-            const lobbyRect =
-                this.mainLobbyRoot
-                    .getBoundingClientRect();
-
             this.controlsHelpRoot.style
                 .setProperty(
                     '--controls-right',
                     `${Math.round(
                         window.innerWidth -
-                        lobbyRect.right +
-                        8,
+                        canvasRect.right +
+                        104,
                     )}px`,
                 );
 
@@ -5457,27 +5460,20 @@ export class GameScene extends Phaser.Scene {
                 .setProperty(
                     '--controls-top',
                     `${Math.round(
-                        Math.max(
-                            6,
-                            lobbyRect.top -
-                            42,
-                        ),
+                        canvasRect.top +
+                        10,
                     )}px`,
                 );
 
             return;
         }
 
-        const rect =
-            this.game.canvas
-                .getBoundingClientRect();
-
         this.controlsHelpRoot.style
             .setProperty(
                 '--controls-right',
                 `${Math.round(
                     window.innerWidth -
-                    rect.right +
+                    canvasRect.right +
                     10,
                 )}px`,
             );
@@ -5486,8 +5482,8 @@ export class GameScene extends Phaser.Scene {
             .setProperty(
                 '--controls-top',
                 `${Math.round(
-                    rect.top +
-                    54,
+                    canvasRect.top +
+                    52,
                 )}px`,
             );
     }
@@ -6916,7 +6912,11 @@ export class GameScene extends Phaser.Scene {
                 alignItems: 'center',
                 justifyContent: 'center',
                 background:
-                    'rgba(8, 15, 22, 0.68)',
+                    'rgba(48, 74, 55, 0.28)',
+                backdropFilter:
+                    'blur(5px)',
+                WebkitBackdropFilter:
+                    'blur(5px)',
                 pointerEvents: 'auto',
                 touchAction: 'none',
             },
@@ -6946,16 +6946,18 @@ export class GameScene extends Phaser.Scene {
         Object.assign(
             card.style,
             {
-                width: 'min(430px, calc(100vw - 40px))',
+                width: 'min(460px, calc(100vw - 28px))',
                 boxSizing: 'border-box',
-                padding: '26px',
-                border: '4px solid #6f8f65',
-                borderRadius: '8px',
-                background: '#fff4d6',
+                padding: '22px 24px 24px',
+                border: '2px solid #79a97b',
+                borderRadius: '18px',
+                background:
+                    'rgba(255, 253, 244, 0.985)',
                 boxShadow:
-                    '0 18px 55px rgba(0,0,0,.35)',
-                color: '#3f513f',
-                fontFamily: 'monospace',
+                    '0 10px 0 rgba(67,101,72,.10), 0 24px 60px rgba(48,77,54,.28)',
+                color: '#2f4c3a',
+                fontFamily:
+                    'ui-monospace, SFMono-Regular, Consolas, monospace',
             },
         );
 
@@ -6967,10 +6969,14 @@ export class GameScene extends Phaser.Scene {
         Object.assign(
             heading.style,
             {
-                marginBottom: '20px',
-                fontSize: '24px',
-                fontWeight: '800',
-                textAlign: 'center',
+                marginBottom: '18px',
+                paddingBottom: '13px',
+                borderBottom:
+                    '1px solid #d7e5d1',
+                color: '#2d6748',
+                fontSize: '21px',
+                fontWeight: '950',
+                textAlign: 'left',
             },
         );
 
@@ -6994,10 +7000,11 @@ export class GameScene extends Phaser.Scene {
                     label.style,
                     {
                         display: 'block',
-                        marginTop: '6px',
+                        marginTop: '10px',
                         marginBottom: '6px',
-                        fontSize: '14px',
-                        fontWeight: '700',
+                        color: '#607568',
+                        fontSize: '12px',
+                        fontWeight: '900',
                     },
                 );
 
@@ -7017,14 +7024,17 @@ export class GameScene extends Phaser.Scene {
                     {
                         width: '100%',
                         boxSizing: 'border-box',
-                        padding: '11px 12px',
-                        border: '2px solid #6f8f65',
-                        borderRadius: '5px',
+                        padding: '12px 13px',
+                        border: '1px solid #b8d2b0',
+                        borderRadius: '10px',
                         outline: 'none',
-                        background: '#fffdf3',
-                        color: '#26352b',
-                        fontFamily: 'monospace',
-                        fontSize: '16px',
+                        background: '#fbfff7',
+                        color: '#294232',
+                        fontFamily:
+                            'ui-monospace, SFMono-Regular, Consolas, monospace',
+                        fontSize: '14px',
+                        boxShadow:
+                            'inset 0 1px 2px rgba(62,91,66,.06)',
                     },
                 );
 
@@ -7047,9 +7057,9 @@ export class GameScene extends Phaser.Scene {
             buttons.style,
             {
                 display: 'flex',
-                gap: '10px',
-                justifyContent: 'flex-end',
-                marginTop: '22px',
+                gap: '9px',
+                justifyContent: 'stretch',
+                marginTop: '20px',
             },
         );
 
@@ -7071,26 +7081,36 @@ export class GameScene extends Phaser.Scene {
                 Object.assign(
                     button.style,
                     {
-                        border: '0',
-                        borderRadius: '4px',
-                        padding: '11px 20px',
+                        flex: '1 1 0',
+                        minHeight: '42px',
+                        border: '1px solid transparent',
+                        borderRadius: '10px',
+                        padding: '10px 14px',
                         cursor: 'pointer',
-                        fontFamily: 'monospace',
-                        fontSize: '15px',
-                        fontWeight: '800',
+                        fontFamily:
+                            'ui-monospace, SFMono-Regular, Consolas, monospace',
+                        fontSize: '13px',
+                        fontWeight: '950',
+                        boxShadow:
+                            '0 2px 0 rgba(59,87,63,.10)',
                     },
                 );
             },
         );
 
         cancel.style.background =
-            '#d8dfce';
+            '#eef3ec';
+        cancel.style.borderColor =
+            '#d1ddd0';
         cancel.style.color =
-            '#405040';
+            '#556b5d';
+
         submit.style.background =
-            '#5c8f66';
+            'linear-gradient(180deg, #62cd7b, #48b766)';
+        submit.style.borderColor =
+            '#4cad64';
         submit.style.color =
-            '#fffdf3';
+            '#ffffff';
 
         cancel.onclick = (
             event,
@@ -10159,7 +10179,7 @@ export class GameScene extends Phaser.Scene {
                 `${Math.round(
                     rect.left +
                     rect.width *
-                        0.022,
+                        0.014,
                 )}px`,
             );
 
@@ -10169,7 +10189,7 @@ export class GameScene extends Phaser.Scene {
                 `${Math.round(
                     rect.top +
                     rect.height *
-                        0.045,
+                        0.082,
                 )}px`,
             );
 
@@ -10178,7 +10198,7 @@ export class GameScene extends Phaser.Scene {
                 '--lobby-width',
                 `${Math.round(
                     rect.width *
-                        0.956,
+                        0.972,
                 )}px`,
             );
 
@@ -10187,7 +10207,7 @@ export class GameScene extends Phaser.Scene {
                 '--lobby-height',
                 `${Math.round(
                     rect.height *
-                        0.935,
+                        0.895,
                 )}px`,
             );
     }
@@ -11018,13 +11038,14 @@ export class GameScene extends Phaser.Scene {
                             'lobby';
 
                         row.innerHTML = `
-                            <span class="ch-lobby-thumb">
-                                <img src="${thumbnail}" alt="">
-                            </span>
-
                             <span class="ch-lobby-room-name">
-                                <strong>${roomTitle}</strong>
-                                <small>${mapLabels[index % mapLabels.length]}</small>
+                                <span class="ch-lobby-thumb">
+                                    <img src="${thumbnail}" alt="">
+                                </span>
+                                <span class="ch-lobby-room-copy">
+                                    <strong>${roomTitle}</strong>
+                                    <small>${mapLabels[index % mapLabels.length]}</small>
+                                </span>
                             </span>
 
                             <span class="ch-lobby-room-map">
@@ -14154,18 +14175,18 @@ export class GameScene extends Phaser.Scene {
     private createBgmToggleButton(): void {
         this.bgmToggleButton = this.add
             .text(
-                this.gameWidth - 14,
-                14,
+                this.gameWidth - 12,
+                10,
                 this.bgmEnabled
                     ? tr('♫ BGM ON')
                     : tr('♫ BGM OFF'),
                 {
                     fontFamily: 'monospace',
-                    fontSize: '13px',
+                    fontSize: '11px',
                     fontStyle: 'bold',
                     color: '#ffffff',
-                    backgroundColor: '#20262bcc',
-                    padding: { x: 8, y: 6 },
+                    backgroundColor: '#284f3ee8',
+                    padding: { x: 8, y: 5 },
                 },
             )
             .setOrigin(1, 0)

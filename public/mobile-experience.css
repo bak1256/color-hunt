@@ -1813,3 +1813,282 @@ canvas {
 .ch-waiting-help {
   display: none !important;
 }
+
+
+/* ============================================================
+   v0.10.10.115 — final readability / alignment / modal polish
+   ============================================================ */
+
+/* Main lobby: readable, consistent column geometry */
+.colorhunt-main-lobby {
+  font-size: 12px;
+}
+
+.ch-lobby-shell {
+  grid-template-columns:
+    minmax(0, 1.66fr)
+    minmax(285px, .94fr);
+}
+
+.ch-lobby-rooms {
+  padding: 14px 14px 8px;
+}
+
+.ch-lobby-section-head {
+  height: 54px;
+  flex-basis: 54px;
+}
+
+.ch-lobby-section-title {
+  font-size: clamp(17px, 1.8vw, 23px);
+}
+
+.ch-lobby-refresh {
+  min-width: 94px;
+  height: 34px;
+  font-size: 11px;
+}
+
+.ch-lobby-room-head,
+.ch-lobby-room-row {
+  grid-template-columns:
+    minmax(235px, 2.45fr)
+    minmax(110px, 1.05fr)
+    72px
+    92px
+    42px;
+}
+
+.ch-lobby-room-head {
+  flex: 0 0 40px;
+  padding: 0 12px;
+  font-size: 10.5px;
+}
+
+.ch-lobby-room-list {
+  flex: 1 1 auto;
+  display: block;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: #bfd6b8 transparent;
+}
+
+.ch-lobby-room-row {
+  min-height: 0;
+  height: 62px;
+  display: grid;
+  padding: 6px 12px;
+  box-sizing: border-box;
+}
+
+.ch-lobby-room-name {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 50px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.ch-lobby-room-copy {
+  min-width: 0;
+}
+
+.ch-lobby-thumb {
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  float: none;
+}
+
+.ch-lobby-room-name strong,
+.ch-lobby-room-name small {
+  display: block;
+}
+
+.ch-lobby-room-name strong {
+  font-size: 11.5px;
+  line-height: 1.15;
+}
+
+.ch-lobby-room-name small {
+  margin-top: 4px;
+  font-size: 9px;
+}
+
+.ch-lobby-room-map,
+.ch-lobby-room-count {
+  font-size: 10.5px;
+}
+
+.ch-lobby-room-count {
+  text-align: center;
+}
+
+.ch-lobby-room-status {
+  min-width: 66px;
+  height: 27px;
+  padding: 0 8px;
+  font-size: 9px;
+}
+
+.ch-lobby-room-play {
+  width: 31px;
+  height: 31px;
+}
+
+.ch-lobby-room-tip {
+  flex-basis: 31px;
+  font-size: 9px;
+}
+
+/* Right card text slightly larger without making controls overflow */
+.ch-lobby-actions h2 {
+  font-size: clamp(17px, 1.65vw, 21px);
+}
+
+.ch-lobby-profile-copy strong {
+  font-size: 11px;
+}
+
+.ch-lobby-avatar-edit {
+  font-size: 9px;
+}
+
+.ch-lobby-action strong {
+  font-size: 12px;
+}
+
+.ch-lobby-action small {
+  font-size: 8px;
+  line-height: 1.25;
+}
+
+.ch-lobby-guide strong {
+  font-size: 9.5px;
+}
+
+.ch-lobby-guide span {
+  font-size: 7.5px;
+}
+
+/* Waiting room: information must be readable */
+.ch-waiting-shell {
+  gap: 7px;
+  padding: 11px;
+}
+
+.ch-waiting-info {
+  flex-basis: 88px;
+  padding: 10px;
+  gap: 8px;
+}
+
+.ch-waiting-info small {
+  font-size: 8.5px;
+}
+
+.ch-waiting-info strong {
+  margin-top: 4px;
+  font-size: 11px;
+}
+
+.ch-waiting-host {
+  font-size: 9px;
+}
+
+.ch-waiting-map small {
+  font-size: 8px;
+}
+
+.ch-waiting-map span {
+  font-size: 11px;
+}
+
+.ch-waiting-role button {
+  font-size: 8.5px;
+}
+
+.ch-waiting-timing-title {
+  font-size: 8.5px;
+}
+
+.ch-waiting-time-options button {
+  font-size: 8.5px;
+}
+
+/* Controls button stays compact so it fits in the reserved strip/header */
+.colorhunt-controls-help__button {
+  min-width: 82px;
+  min-height: 30px;
+  padding: 5px 9px;
+  font-size: 10px;
+}
+
+/* Modal status injected by setModalBusy */
+.colorhunt-menu-status {
+  margin-top: 12px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  background: #fff7d7;
+  color: #715e35;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+/* Desktop/fold/tablet: let the lobby occupy almost the entire usable canvas */
+@media (min-width: 761px) {
+  .colorhunt-main-lobby .ch-lobby-actions {
+    min-width: 285px;
+  }
+}
+
+/* Touch layouts keep exact columns readable instead of crushing them */
+@media (pointer: coarse) and (max-width: 900px) {
+  .ch-lobby-room-head,
+  .ch-lobby-room-row {
+    grid-template-columns:
+      minmax(145px, 1.7fr)
+      minmax(70px, .8fr)
+      48px
+      58px
+      28px;
+  }
+
+  .ch-lobby-room-row {
+    height: 50px;
+    padding: 4px 7px;
+  }
+
+  .ch-lobby-room-name {
+    grid-template-columns: 38px minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .ch-lobby-thumb {
+    width: 34px;
+    height: 34px;
+  }
+
+  .ch-lobby-room-name strong {
+    font-size: 8.5px;
+  }
+
+  .ch-lobby-room-name small,
+  .ch-lobby-room-map,
+  .ch-lobby-room-count {
+    font-size: 7px;
+  }
+
+  .ch-lobby-room-status {
+    min-width: 50px;
+    height: 22px;
+    padding: 0 4px;
+    font-size: 6.5px;
+  }
+
+  .ch-lobby-room-play {
+    width: 25px;
+    height: 25px;
+  }
+}
