@@ -858,6 +858,9 @@ export class NetworkPlayerManager {
       view.paintLayer.maskShape.destroy();
     }
 
+    this.lobbyPresetRenderTokens.delete(
+      sessionId,
+    );
     this.players.delete(sessionId);
   }
 
@@ -2101,6 +2104,135 @@ export class NetworkPlayerManager {
       size,
       shape,
     );
+  }
+
+  private readonly lobbyPresetRenderTokens =
+    new Map<string, number>();
+
+  applyLobbyAvatarPresetProgressive(
+    sessionId: string,
+    strokes: NetworkPaintStroke[],
+    pointsPerFrame = 180,
+  ): void {
+    const view =
+      this.players.get(
+        sessionId,
+      );
+
+    if (!view?.paintLayer) {
+      return;
+    }
+
+    const renderToken =
+      (
+        this.lobbyPresetRenderTokens.get(
+          sessionId,
+        ) ?? 0
+      ) + 1;
+
+    this.lobbyPresetRenderTokens.set(
+      sessionId,
+      renderToken,
+    );
+
+    const commands =
+      strokes.flatMap(
+        (stroke) =>
+          stroke.points.map(
+            (point) => ({
+              point,
+              color:
+                stroke.color,
+              size:
+                stroke.size,
+              shape:
+                stroke.shape,
+            }),
+          ),
+      );
+
+    view.paintLayer.texture.clear();
+
+    let cursor = 0;
+
+    const drawBatch =
+      (): void => {
+        if (
+          this.lobbyPresetRenderTokens.get(
+            sessionId,
+          ) !== renderToken
+        ) {
+          return;
+        }
+
+        const currentView =
+          this.players.get(
+            sessionId,
+          );
+
+        if (
+          !currentView?.paintLayer
+        ) {
+          return;
+        }
+
+        const end =
+          Math.min(
+            commands.length,
+            cursor +
+              Math.max(
+                40,
+                pointsPerFrame,
+              ),
+          );
+
+        for (
+          ;
+          cursor < end;
+          cursor += 1
+        ) {
+          const command =
+            commands[cursor];
+
+          this.stampMaskedPaintBrush(
+            currentView,
+            Math.round(
+              command.point.x,
+            ),
+            Math.round(
+              command.point.y,
+            ),
+            command.color,
+            command.size,
+            command.shape,
+          );
+        }
+
+        this.renderPaintTexture(
+          currentView.paintLayer.texture,
+        );
+
+        this.syncPaintLayerPosition(
+          currentView,
+          false,
+        );
+
+        currentView.paintLayer.texture
+          .setVisible(true)
+          .setAlpha(1);
+
+        if (
+          cursor <
+          commands.length
+        ) {
+          this.scene.time.delayedCall(
+            0,
+            drawBatch,
+          );
+        }
+      };
+
+    drawBatch();
   }
 
   applyLobbyAvatarPreset(

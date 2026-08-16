@@ -364,7 +364,9 @@ this.phaseChangedHandlers.forEach(
 
   private connectionIssueNotified = false;
 
-  private lastForcedReconnectAt = 0;
+  private manualReconnectInFlight = false;
+
+  private lastManualReconnectAt = 0;
 
   private readonly roundResultHandlers =
     new Set<RoundResultHandler>();
@@ -907,7 +909,98 @@ this.phaseChangedHandlers.forEach(
     );
   }
 
-private notifyConnectionIssue(
+private async attemptManualReconnect(
+    sourceRoom: Room<NetworkGameState>,
+  ): Promise<void> {
+    if (
+      this.room !== sourceRoom ||
+      this.manualReconnectInFlight
+    ) {
+      return;
+    }
+
+    const token =
+      sourceRoom.reconnectionToken;
+
+    if (!token) {
+      return;
+    }
+
+    const now =
+      Date.now();
+
+    if (
+      now -
+        this.lastManualReconnectAt <
+      350
+    ) {
+      return;
+    }
+
+    this.lastManualReconnectAt =
+      now;
+    this.manualReconnectInFlight =
+      true;
+    this.notifyConnectionIssue(
+      "manual_reconnect",
+    );
+
+    try {
+      const recoveredRoom =
+        await this.client.reconnect<
+          NetworkGameState
+        >(token);
+
+      if (
+        this.room !== sourceRoom &&
+        this.room !== undefined
+      ) {
+        await recoveredRoom
+          .leave();
+        return;
+      }
+
+      /*
+       * The old Room instance is obsolete now. attachRoom() installs every
+       * callback again and immediately replays the recovered Schema state.
+       */
+      this.attachRoom(
+        recoveredRoom,
+      );
+
+      this.deliveredPhase = "";
+
+      this.requestLobbySnapshot();
+      this.requestPaintReadyState();
+
+      globalThis.setTimeout(
+        () => {
+          if (
+            this.room ===
+              recoveredRoom
+          ) {
+            this.deliveredPhase =
+              "";
+            this.requestLobbySnapshot();
+          }
+        },
+        120,
+      );
+
+      this.clearConnectionIssue();
+    } catch {
+      /*
+       * The server may not have noticed the old socket drop yet.
+       * The health loop will retry shortly while the 30-second server
+       * reconnection reservation is active.
+       */
+    } finally {
+      this.manualReconnectInFlight =
+        false;
+    }
+  }
+
+  private notifyConnectionIssue(
     reason?: string,
   ): void {
     if (this.connectionIssueNotified) {
@@ -974,7 +1067,8 @@ this.room = room;
       Date.now();
     this.connectionIssueNotified =
       false;
-    this.lastForcedReconnectAt = 0;
+this.manualReconnectInFlight = false;
+    this.lastManualReconnectAt = 0;
 
     const handleBrowserOffline =
       (): void => {
@@ -993,15 +1087,24 @@ this.room = room;
           return;
         }
 
-        /*
-         * Do not claim success here. A fresh successful ping/onReconnect
-         * will clear the reconnecting state.
-         */
+        this.notifyConnectionIssue(
+          "browser_online_recovering",
+        );
+
         this.lastRoomPingAt =
           Math.min(
             this.lastRoomPingAt,
-            Date.now() - 1200,
+            Date.now() - 1400,
           );
+
+        /*
+         * Wi-Fi -> cellular often leaves the previous TCP connection in a
+         * half-open state. Start a token-based reconnection immediately
+         * instead of waiting for the browser socket timeout.
+         */
+        void this.attemptManualReconnect(
+          room,
+        );
       };
 
     globalThis.addEventListener?.(
@@ -1089,25 +1192,21 @@ this.room = room;
           }
 
           /*
-           * Some mobile Wi-Fi -> cellular switches leave the old TCP socket
-           * half-open for several seconds. Do not wait for the browser's
-           * slow socket timeout: after 2.2s without a server ping, force an
-           * UNCONSENTED leave. Colyseus treats leave(false) as an unexpected
-           * drop and immediately enters its automatic reconnection flow.
+           * Wi-Fi -> cellular can leave the old TCP socket half-open.
+           * Do NOT call leave(false) here: that can race the SDK's own Room
+           * lifecycle and leave the game UI detached. Use the official
+           * reconnection token as a manual fallback instead.
            */
           if (
             activeRound &&
-            silentFor >= 2200 &&
-            !room.reconnection
-              .isReconnecting &&
+            silentFor >= 1800 &&
             now -
-              this.lastForcedReconnectAt >=
-              4000
+              this.lastManualReconnectAt >=
+              450
           ) {
-            this.lastForcedReconnectAt =
-              now;
-
-            void room.leave(false);
+            void this.attemptManualReconnect(
+              room,
+            );
           }
         },
         650,
@@ -1142,6 +1241,20 @@ this.room = room;
         this.notifyConnectionIssue(
           reason,
         );
+
+        globalThis.setTimeout(
+          () => {
+            if (
+              this.room === room &&
+              this.connectionIssueNotified
+            ) {
+              void this.attemptManualReconnect(
+                room,
+              );
+            }
+          },
+          450,
+        );
       },
     );
 
@@ -1162,13 +1275,21 @@ this.room = room;
 
         this.clearConnectionIssue();
 
-        globalThis.setTimeout(
-          () => {
-            if (this.room === room) {
-              this.requestLobbySnapshot();
-            }
+        [80, 220, 650].forEach(
+          (delay) => {
+            globalThis.setTimeout(
+              () => {
+                if (
+                  this.room === room
+                ) {
+                  this.deliveredPhase =
+                    "";
+                  this.requestLobbySnapshot();
+                }
+              },
+              delay,
+            );
           },
-          180,
         );
       },
     );
@@ -1279,17 +1400,13 @@ this.room = room;
      * onMessage 등록이 끝난 뒤 서버에 현재 Lobby 전체를 직접 요청합니다.
      * 최초 Schema 동기화를 놓쳤더라도 이 응답으로 반드시 복구됩니다.
      */
+    /*
+     * v0.10.10.77:
+     * The initial Schema snapshot is already available when join resolves.
+     * One explicit recovery snapshot is enough; remove the extra 350ms retry
+     * from the hot join path.
+     */
     this.requestLobbySnapshot();
-
-    /* One bounded retry; do not flood a freshly joined mobile client. */
-    globalThis.setTimeout(
-      () => {
-        if (this.room === room) {
-          this.requestLobbySnapshot();
-        }
-      },
-      350,
-    );
 
     console.log(
       "[Chameleon Hunt] Connected",

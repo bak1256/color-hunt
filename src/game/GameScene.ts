@@ -3615,13 +3615,27 @@ export class GameScene extends Phaser.Scene {
                         lobbyPreset &&
                         this.phase === 'lobby'
                     ) {
-                        this.networkPlayerManager
-                            .applyLobbyAvatarPreset(
-                                sessionId,
-                                this.getMobileSafeAvatarPreset(
-                                    lobbyPreset,
-                                ),
+                        const cachedPreset =
+                            this.getMobileSafeAvatarPreset(
+                                lobbyPreset,
                             );
+
+                        if (
+                            this.mobileControlsEnabled
+                        ) {
+                            this.networkPlayerManager
+                                .applyLobbyAvatarPresetProgressive(
+                                    sessionId,
+                                    cachedPreset,
+                                    180,
+                                );
+                        } else {
+                            this.networkPlayerManager
+                                .applyLobbyAvatarPreset(
+                                    sessionId,
+                                    cachedPreset,
+                                );
+                        }
                     }
                 },
             ),
@@ -4050,11 +4064,22 @@ export class GameScene extends Phaser.Scene {
                                     return;
                                 }
 
-                                this.networkPlayerManager
-                                    .applyLobbyAvatarPreset(
-                                        preset.sessionId,
-                                        renderStrokes,
-                                    );
+                                if (
+                                    this.mobileControlsEnabled
+                                ) {
+                                    this.networkPlayerManager
+                                        .applyLobbyAvatarPresetProgressive(
+                                            preset.sessionId,
+                                            renderStrokes,
+                                            180,
+                                        );
+                                } else {
+                                    this.networkPlayerManager
+                                        .applyLobbyAvatarPreset(
+                                            preset.sessionId,
+                                            renderStrokes,
+                                        );
+                                }
                             };
 
                         if (
@@ -5814,59 +5839,13 @@ export class GameScene extends Phaser.Scene {
     private getMobileSafeAvatarPreset(
         strokes: NetworkPaintStroke[],
     ): NetworkPaintStroke[] {
-        if (!this.mobileControlsEnabled) {
-            return strokes;
-        }
-
         /*
-         * Keep the avatar's painted personality on mobile without replaying
-         * every single historical brush sample in one frame.
+         * v0.10.10.77:
+         * Never discard paint points. Previous mobile sampling caused
+         * visible holes in clothing. Rendering cost is handled progressively
+         * by NetworkPlayerManager instead.
          */
-        return strokes.map(
-            (stroke) => {
-                const points =
-                    stroke.points;
-
-                if (points.length <= 24) {
-                    return stroke;
-                }
-
-                const step =
-                    Math.max(
-                        1,
-                        Math.ceil(
-                            points.length / 23,
-                        ),
-                    );
-
-                const sampled =
-                    points.filter(
-                        (
-                            _point,
-                            index,
-                        ) =>
-                            index % step === 0,
-                    );
-
-                const last =
-                    points[
-                        points.length - 1
-                    ];
-
-                if (
-                    sampled[
-                        sampled.length - 1
-                    ] !== last
-                ) {
-                    sampled.push(last);
-                }
-
-                return {
-                    ...stroke,
-                    points: sampled,
-                };
-            },
-        );
+        return strokes;
     }
 
     private sendLobbyAvatarPreset(): void {
@@ -13217,8 +13196,12 @@ export class GameScene extends Phaser.Scene {
             Phaser.Math.Clamp(
                 this.paintWorldZoom +
                     direction * 0.25,
-                1,
-                5,
+                this.mobileControlsEnabled
+                    ? 1.5
+                    : 1,
+                this.mobileControlsEnabled
+                    ? 6
+                    : 5,
             );
 
         this.paintWorldZoom =
@@ -19354,7 +19337,9 @@ export class GameScene extends Phaser.Scene {
             this.isMultiplayerSession()
         ) {
             this.paintWorldZoom =
-                this.gameplayCameraZoom;
+                this.mobileControlsEnabled
+                    ? 2.35
+                    : this.gameplayCameraZoom;
 
             this.cameras.main
                 .stopFollow()
