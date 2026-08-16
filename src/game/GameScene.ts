@@ -10,6 +10,7 @@ import {
     type NetworkHunterAim,
     type NetworkWeaponState,
     type NetworkRoundResult,
+    type NetworkChatMessage,
     type PublicRoomInfo,
 } from '../network/MultiplayerClient';
 import { NetworkPlayerManager } from '../multiplayer/NetworkPlayerManager';
@@ -2390,6 +2391,15 @@ export class GameScene extends Phaser.Scene {
      * Multiplayer
      */
     private multiplayerText!: Phaser.GameObjects.Text;
+    private chatRoot?: HTMLDivElement;
+    private chatLog?: HTMLDivElement;
+    private chatInput?: HTMLInputElement;
+    private chatKeyboardHandler?: (
+        event: KeyboardEvent,
+    ) => void;
+    private chatViewportHandler?: () => void;
+    private readonly chatMessageIds =
+        new Set<string>();
     private lobbyPanel!: Phaser.GameObjects.Rectangle;
     private lobbyTitleText!: Phaser.GameObjects.Text;
     private lobbyInfoText!: Phaser.GameObjects.Text;
@@ -3344,6 +3354,7 @@ export class GameScene extends Phaser.Scene {
                     this.handleMobileViewportChange,
                 );
 
+                this.destroyChatUi();
                 this.saveLobbyBgmResumePosition();
             },
         );
@@ -3354,6 +3365,7 @@ export class GameScene extends Phaser.Scene {
         this.createPointerControls();
 
         this.createMultiplayerHud();
+        this.createChatUi();
         this.createLobbyUi();
         this.createMapSelectorUi();
         this.createHunterBlindUi();
@@ -3770,6 +3782,481 @@ export class GameScene extends Phaser.Scene {
      * Multiplayer
      */
 
+    private getChatUiText(
+        key:
+            | 'placeholder'
+            | 'send'
+            | 'spam'
+            | 'blocked',
+    ): string {
+        const language =
+            getLanguage();
+
+        const texts = {
+            ko: {
+                placeholder:
+                    '메시지 입력...',
+                send:
+                    '전송',
+                spam:
+                    '채팅을 너무 빠르게 보내고 있어요.',
+                blocked:
+                    '보낼 수 없는 표현이 포함되어 있어요.',
+            },
+            ja: {
+                placeholder:
+                    'メッセージを入力...',
+                send:
+                    '送信',
+                spam:
+                    'チャットの送信が速すぎます。',
+                blocked:
+                    '送信できない表現が含まれています。',
+            },
+            en: {
+                placeholder:
+                    'Type a message...',
+                send:
+                    'Send',
+                spam:
+                    'You are sending messages too quickly.',
+                blocked:
+                    'That message contains blocked language.',
+            },
+            zh: {
+                placeholder:
+                    '输入消息...',
+                send:
+                    '发送',
+                spam:
+                    '发送消息太快了。',
+                blocked:
+                    '消息中包含禁止发送的内容。',
+            },
+        } as const;
+
+        return (
+            texts[language]?.[key] ??
+            texts.en[key]
+        );
+    }
+
+    private createChatUi(): void {
+        if (this.chatRoot) {
+            return;
+        }
+
+        const root =
+            document.createElement(
+                'div',
+            );
+
+        root.className =
+            'colorhunt-chat';
+        root.style.display =
+            'none';
+
+        const log =
+            document.createElement(
+                'div',
+            );
+
+        log.className =
+            'colorhunt-chat__log';
+        log.setAttribute(
+            'aria-live',
+            'polite',
+        );
+
+        const composer =
+            document.createElement(
+                'div',
+            );
+
+        composer.className =
+            'colorhunt-chat__composer';
+
+        const input =
+            document.createElement(
+                'input',
+            );
+
+        input.className =
+            'colorhunt-chat__input';
+        input.type = 'text';
+        input.maxLength = 140;
+        input.autocomplete = 'off';
+        input.enterKeyHint = 'send';
+        input.placeholder =
+            this.getChatUiText(
+                'placeholder',
+            );
+
+        const sendButton =
+            document.createElement(
+                'button',
+            );
+
+        sendButton.type = 'button';
+        sendButton.className =
+            'colorhunt-chat__send';
+        sendButton.textContent =
+            this.getChatUiText(
+                'send',
+            );
+
+        composer.append(
+            input,
+            sendButton,
+        );
+
+        root.append(
+            log,
+            composer,
+        );
+
+        document.body.appendChild(
+            root,
+        );
+
+        this.chatRoot = root;
+        this.chatLog = log;
+        this.chatInput = input;
+
+        const send =
+            (): void => {
+                const text =
+                    input.value.trim();
+
+                if (!text) {
+                    return;
+                }
+
+                multiplayerClient
+                    .sendChatMessage(
+                        text,
+                    );
+
+                input.value = '';
+                input.focus({
+                    preventScroll:
+                        true,
+                });
+            };
+
+        sendButton.addEventListener(
+            'click',
+            send,
+        );
+
+        input.addEventListener(
+            'keydown',
+            (event) => {
+                event.stopPropagation();
+
+                if (
+                    event.key ===
+                    'Enter'
+                ) {
+                    event.preventDefault();
+                    send();
+                }
+
+                if (
+                    event.key ===
+                    'Escape'
+                ) {
+                    input.blur();
+                }
+            },
+        );
+
+        input.addEventListener(
+            'keyup',
+            (event) => {
+                event.stopPropagation();
+            },
+        );
+
+        input.addEventListener(
+            'focus',
+            () => {
+                root.classList.add(
+                    'colorhunt-chat--focused',
+                );
+
+                this.updateChatKeyboardOffset();
+            },
+        );
+
+        input.addEventListener(
+            'blur',
+            () => {
+                root.classList.remove(
+                    'colorhunt-chat--focused',
+                );
+
+                this.updateChatKeyboardOffset();
+            },
+        );
+
+        this.chatKeyboardHandler =
+            (
+                event:
+                    KeyboardEvent,
+            ): void => {
+                if (
+                    !multiplayerClient
+                        .isConnected() ||
+                    event.key !==
+                        'Enter'
+                ) {
+                    return;
+                }
+
+                const target =
+                    event.target;
+
+                if (
+                    target instanceof
+                        HTMLInputElement ||
+                    target instanceof
+                        HTMLTextAreaElement
+                ) {
+                    return;
+                }
+
+                event.preventDefault();
+                event.stopPropagation();
+
+                input.focus({
+                    preventScroll:
+                        true,
+                });
+            };
+
+        window.addEventListener(
+            'keydown',
+            this.chatKeyboardHandler,
+            true,
+        );
+
+        this.chatViewportHandler =
+            (): void => {
+                this.updateChatKeyboardOffset();
+            };
+
+        window.visualViewport
+            ?.addEventListener(
+                'resize',
+                this.chatViewportHandler,
+            );
+
+        window.visualViewport
+            ?.addEventListener(
+                'scroll',
+                this.chatViewportHandler,
+            );
+
+        this.updateChatKeyboardOffset();
+    }
+
+    private updateChatKeyboardOffset(): void {
+        if (!this.chatRoot) {
+            return;
+        }
+
+        const viewport =
+            window.visualViewport;
+
+        if (!viewport) {
+            this.chatRoot.style
+                .setProperty(
+                    '--chat-keyboard-offset',
+                    '0px',
+                );
+            return;
+        }
+
+        const keyboardOffset =
+            Math.max(
+                0,
+                window.innerHeight -
+                    viewport.height -
+                    viewport.offsetTop,
+            );
+
+        this.chatRoot.style
+            .setProperty(
+                '--chat-keyboard-offset',
+                `${Math.round(
+                    keyboardOffset,
+                )}px`,
+            );
+    }
+
+    private showChatUi(): void {
+        if (!this.chatRoot) {
+            return;
+        }
+
+        this.chatRoot.style.display =
+            'flex';
+
+        this.updateChatKeyboardOffset();
+    }
+
+    private hideChatUi(
+        clear = false,
+    ): void {
+        if (!this.chatRoot) {
+            return;
+        }
+
+        this.chatRoot.style.display =
+            'none';
+
+        this.chatInput?.blur();
+
+        if (clear) {
+            this.chatMessageIds
+                .clear();
+
+            this.chatLog
+                ?.replaceChildren();
+        }
+    }
+
+    private appendChatMessage(
+        message:
+            NetworkChatMessage,
+    ): void {
+        if (
+            !this.chatLog ||
+            !message.id ||
+            this.chatMessageIds.has(
+                message.id,
+            )
+        ) {
+            return;
+        }
+
+        this.chatMessageIds.add(
+            message.id,
+        );
+
+        if (
+            this.chatMessageIds.size >
+            80
+        ) {
+            this.chatMessageIds.clear();
+        }
+
+        const line =
+            document.createElement(
+                'div',
+            );
+
+        line.className =
+            'colorhunt-chat__message';
+
+        const name =
+            document.createElement(
+                'strong',
+            );
+
+        name.textContent =
+            `${message.name}: `;
+
+        const text =
+            document.createElement(
+                'span',
+            );
+
+        text.textContent =
+            message.text;
+
+        line.append(
+            name,
+            text,
+        );
+
+        this.chatLog.appendChild(
+            line,
+        );
+
+        while (
+            this.chatLog
+                .childElementCount >
+            40
+        ) {
+            this.chatLog.firstElementChild
+                ?.remove();
+        }
+
+        this.chatLog.scrollTop =
+            this.chatLog.scrollHeight;
+    }
+
+    private showChatNotice(
+        message: string,
+    ): void {
+        if (!this.chatLog) {
+            return;
+        }
+
+        const line =
+            document.createElement(
+                'div',
+            );
+
+        line.className =
+            'colorhunt-chat__notice';
+        line.textContent =
+            message;
+
+        this.chatLog.appendChild(
+            line,
+        );
+
+        this.chatLog.scrollTop =
+            this.chatLog.scrollHeight;
+    }
+
+    private destroyChatUi(): void {
+        if (
+            this.chatKeyboardHandler
+        ) {
+            window.removeEventListener(
+                'keydown',
+                this.chatKeyboardHandler,
+                true,
+            );
+        }
+
+        if (
+            this.chatViewportHandler
+        ) {
+            window.visualViewport
+                ?.removeEventListener(
+                    'resize',
+                    this.chatViewportHandler,
+                );
+
+            window.visualViewport
+                ?.removeEventListener(
+                    'scroll',
+                    this.chatViewportHandler,
+                );
+        }
+
+        this.chatRoot?.remove();
+
+        this.chatRoot = undefined;
+        this.chatLog = undefined;
+        this.chatInput = undefined;
+    }
+
     private createMultiplayerHud(): void {
         this.multiplayerText = this.add
             .text(
@@ -3794,6 +4281,68 @@ export class GameScene extends Phaser.Scene {
     }
 
     private registerMultiplayerEvents(): void {
+        this.networkUnsubscribers.push(
+            multiplayerClient.onChatMessage(
+                (
+                    message:
+                        NetworkChatMessage,
+                ) => {
+                    this.showChatUi();
+                    this.appendChatMessage(
+                        message,
+                    );
+                },
+            ),
+        );
+
+        this.networkUnsubscribers.push(
+            multiplayerClient.onChatHistory(
+                (
+                    messages:
+                        NetworkChatMessage[],
+                ) => {
+                    this.chatMessageIds
+                        .clear();
+
+                    this.chatLog
+                        ?.replaceChildren();
+
+                    messages.forEach(
+                        (message) => {
+                            this.appendChatMessage(
+                                message,
+                            );
+                        },
+                    );
+
+                    this.showChatUi();
+                },
+            ),
+        );
+
+        this.networkUnsubscribers.push(
+            multiplayerClient.onChatError(
+                (message: string) => {
+                    const localized =
+                        message ===
+                            'spam'
+                            ? this.getChatUiText(
+                                'spam',
+                            )
+                            : message ===
+                                  'blocked'
+                                ? this.getChatUiText(
+                                    'blocked',
+                                )
+                                : message;
+
+                    this.showChatNotice(
+                        localized,
+                    );
+                },
+            ),
+        );
+
         this.networkUnsubscribers.push(
             multiplayerClient.onPlayerAdded(
                 (
@@ -6011,6 +6560,10 @@ export class GameScene extends Phaser.Scene {
             >
         >,
     ): void {
+        this.showChatUi();
+        multiplayerClient
+            .requestChatHistory();
+
         if (
             multiplayerClient.getRoom() !== room
         ) {
@@ -9945,6 +10498,8 @@ export class GameScene extends Phaser.Scene {
          * 따라서 로비 BGM/WebAudio context도 그대로 유지됩니다.
          */
         await multiplayerClient.disconnect();
+
+        this.hideChatUi(true);
 
         this.multiplayerSessionActive = false;
         this.localNetworkPlayerReady = false;

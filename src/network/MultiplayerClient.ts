@@ -112,6 +112,26 @@ export type ReconnectedPlayerPaintHandler = (
   strokes: NetworkPaintStroke[],
 ) => void;
 
+export type NetworkChatMessage = {
+  id: string;
+  sessionId: string;
+  name: string;
+  text: string;
+  sentAt: number;
+};
+
+export type ChatMessageHandler = (
+  message: NetworkChatMessage,
+) => void;
+
+export type ChatHistoryHandler = (
+  messages: NetworkChatMessage[],
+) => void;
+
+export type ChatErrorHandler = (
+  message: string,
+) => void;
+
 export type NetworkRoundResult = {
   winner: "hunters" | "hiders";
   reason?:
@@ -381,6 +401,15 @@ this.phaseChangedHandlers.forEach(
 
   private readonly reconnectedPlayerPaintHandlers =
     new Set<ReconnectedPlayerPaintHandler>();
+
+  private readonly chatMessageHandlers =
+    new Set<ChatMessageHandler>();
+
+  private readonly chatHistoryHandlers =
+    new Set<ChatHistoryHandler>();
+
+  private readonly chatErrorHandlers =
+    new Set<ChatErrorHandler>();
 
   private roomHealthCleanup?: () => void;
 
@@ -1787,6 +1816,64 @@ this.manualReconnectInFlight = false;
       },
     );
 
+    room.onMessage<NetworkChatMessage>(
+      "chat_message",
+      (message) => {
+        if (
+          !message ||
+          typeof message.text !== "string"
+        ) {
+          return;
+        }
+
+        this.chatMessageHandlers.forEach(
+          (handler) => {
+            handler(message);
+          },
+        );
+      },
+    );
+
+    room.onMessage<{
+      messages?: NetworkChatMessage[];
+    }>(
+      "chat_history",
+      (payload) => {
+        const messages =
+          Array.isArray(payload?.messages)
+            ? payload.messages
+            : [];
+
+        this.chatHistoryHandlers.forEach(
+          (handler) => {
+            handler(messages);
+          },
+        );
+      },
+    );
+
+    room.onMessage<{
+      message?: string;
+    }>(
+      "chat_error",
+      (payload) => {
+        const message =
+          String(
+            payload?.message ?? "",
+          );
+
+        if (!message) {
+          return;
+        }
+
+        this.chatErrorHandlers.forEach(
+          (handler) => {
+            handler(message);
+          },
+        );
+      },
+    );
+
     room.onMessage<{
       strokes?: NetworkPaintStroke[];
     }>(
@@ -2395,6 +2482,80 @@ this.manualReconnectInFlight = false;
         handler,
       );
     };
+  }
+
+  onChatMessage(
+    handler: ChatMessageHandler,
+  ): () => void {
+    this.chatMessageHandlers.add(
+      handler,
+    );
+
+    return () => {
+      this.chatMessageHandlers.delete(
+        handler,
+      );
+    };
+  }
+
+  onChatHistory(
+    handler: ChatHistoryHandler,
+  ): () => void {
+    this.chatHistoryHandlers.add(
+      handler,
+    );
+
+    return () => {
+      this.chatHistoryHandlers.delete(
+        handler,
+      );
+    };
+  }
+
+  onChatError(
+    handler: ChatErrorHandler,
+  ): () => void {
+    this.chatErrorHandlers.add(
+      handler,
+    );
+
+    return () => {
+      this.chatErrorHandlers.delete(
+        handler,
+      );
+    };
+  }
+
+  sendChatMessage(
+    text: string,
+  ): void {
+    const normalized =
+      text.trim();
+
+    if (
+      !this.room ||
+      !normalized
+    ) {
+      return;
+    }
+
+    this.room.send(
+      "chat_send",
+      {
+        text:
+          normalized.slice(
+            0,
+            140,
+          ),
+      },
+    );
+  }
+
+  requestChatHistory(): void {
+    this.room?.send(
+      "request_chat_history",
+      {},
+    );
   }
 
   onRoundPaintState(
