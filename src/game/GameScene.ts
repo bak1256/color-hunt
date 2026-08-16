@@ -1193,13 +1193,15 @@ export class GameScene extends Phaser.Scene {
                 {
                     fontFamily:
                         'monospace',
-                    fontSize: '13px',
+                    fontSize: '15px',
                     fontStyle: 'bold',
                     color: '#ffffff',
                     backgroundColor:
-                        '#416b8b',
-                    fixedWidth: 150,
-                    fixedHeight: 34,
+                        '#39aee2',
+                    stroke: '#082b3a',
+                    strokeThickness: 4,
+                    fixedWidth: 170,
+                    fixedHeight: 40,
                     align: 'center',
                     padding: {
                         top: 7,
@@ -3617,7 +3619,9 @@ export class GameScene extends Phaser.Scene {
                         this.networkPlayerManager
                             .applyLobbyAvatarPreset(
                                 sessionId,
-                                lobbyPreset,
+                                this.getMobileSafeAvatarPreset(
+                                    lobbyPreset,
+                                ),
                             );
                     }
                 },
@@ -4033,12 +4037,65 @@ export class GameScene extends Phaser.Scene {
                     if (
                         this.phase === 'lobby'
                     ) {
-                        this.networkPlayerManager
-                            .applyLobbyAvatarPreset(
-                                preset.sessionId,
+                        const renderStrokes =
+                            this.getMobileSafeAvatarPreset(
                                 strokes,
                             );
+
+                        const applyPreset =
+                            (): void => {
+                                if (
+                                    this.phase !==
+                                        'lobby'
+                                ) {
+                                    return;
+                                }
+
+                                this.networkPlayerManager
+                                    .applyLobbyAvatarPreset(
+                                        preset.sessionId,
+                                        renderStrokes,
+                                    );
+                            };
+
+                        if (
+                            this.mobileControlsEnabled
+                        ) {
+                            this.time.delayedCall(
+                                80,
+                                applyPreset,
+                            );
+                        } else {
+                            applyPreset();
+                        }
                     }
+                },
+            ),
+        );
+
+        this.networkUnsubscribers.push(
+            multiplayerClient.onConnectionDrop(
+                () => {
+                    this.showStatus(
+                        tr('연결이 불안정합니다. 재접속 중...'),
+                    );
+                },
+            ),
+        );
+
+        this.networkUnsubscribers.push(
+            multiplayerClient.onConnectionRecovered(
+                () => {
+                    this.showStatus(
+                        tr('재접속했습니다.'),
+                    );
+
+                    this.time.delayedCall(
+                        1400,
+                        () => {
+                            this.clearStatus();
+                        },
+                    );
                 },
             ),
         );
@@ -5306,12 +5363,11 @@ export class GameScene extends Phaser.Scene {
 
         this.updateLobbyUi();
 
-        if (
-            joinedPhase === 'lobby' &&
-            !this.mobileControlsEnabled
-        ) {
+        if (joinedPhase === 'lobby') {
             this.time.delayedCall(
-                120,
+                this.mobileControlsEnabled
+                    ? 900
+                    : 120,
                 () => {
                     if (
                         multiplayerClient
@@ -5754,6 +5810,64 @@ export class GameScene extends Phaser.Scene {
         } catch {
             return [];
         }
+    }
+
+    private getMobileSafeAvatarPreset(
+        strokes: NetworkPaintStroke[],
+    ): NetworkPaintStroke[] {
+        if (!this.mobileControlsEnabled) {
+            return strokes;
+        }
+
+        /*
+         * Keep the avatar's painted personality on mobile without replaying
+         * every single historical brush sample in one frame.
+         */
+        return strokes.map(
+            (stroke) => {
+                const points =
+                    stroke.points;
+
+                if (points.length <= 32) {
+                    return stroke;
+                }
+
+                const step =
+                    Math.max(
+                        1,
+                        Math.ceil(
+                            points.length / 31,
+                        ),
+                    );
+
+                const sampled =
+                    points.filter(
+                        (
+                            _point,
+                            index,
+                        ) =>
+                            index % step === 0,
+                    );
+
+                const last =
+                    points[
+                        points.length - 1
+                    ];
+
+                if (
+                    sampled[
+                        sampled.length - 1
+                    ] !== last
+                ) {
+                    sampled.push(last);
+                }
+
+                return {
+                    ...stroke,
+                    points: sampled,
+                };
+            },
+        );
     }
 
     private sendLobbyAvatarPreset(): void {
@@ -11359,26 +11473,26 @@ export class GameScene extends Phaser.Scene {
 
         if (
             multiplayerClient.isConnected() &&
-            !this.mobileControlsEnabled &&
             !this.roomTransitionInProgress
         ) {
-            /*
-             * v0.10.10.74 MOBILE CRITICAL:
-             * Large avatar paint presets can block the mobile JS main thread
-             * while the join modal is still releasing input.
-             */
-            multiplayerClient
-                .requestAvatarPresets();
-
             this.time.delayedCall(
-                80,
+                this.mobileControlsEnabled
+                    ? 950
+                    : 0,
                 () => {
                     if (
-                        this.phase ===
-                            'lobby'
+                        this.phase !==
+                            'lobby' ||
+                        !multiplayerClient
+                            .isConnected()
                     ) {
-                        this.sendLobbyAvatarPreset();
+                        return;
                     }
+
+                    multiplayerClient
+                        .requestAvatarPresets();
+
+                    this.sendLobbyAvatarPreset();
                 },
             );
         }

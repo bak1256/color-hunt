@@ -93,6 +93,13 @@ export type PlayerReconnectedHandler = (
   name: string,
 ) => void;
 
+export type ConnectionDropHandler = (
+  reason?: string,
+) => void;
+
+export type ConnectionRecoveredHandler =
+  () => void;
+
 export type NetworkRoundResult = {
   winner: "hunters" | "hiders";
   reason?:
@@ -344,6 +351,12 @@ this.phaseChangedHandlers.forEach(
 
   private readonly playerReconnectedHandlers =
     new Set<PlayerReconnectedHandler>();
+
+  private readonly connectionDropHandlers =
+    new Set<ConnectionDropHandler>();
+
+  private readonly connectionRecoveredHandlers =
+    new Set<ConnectionRecoveredHandler>();
 
   private readonly roundResultHandlers =
     new Set<RoundResultHandler>();
@@ -897,6 +910,53 @@ private attachRoom(
     this.snapshotHuntDurationMs = 80_000;
     this.deliveredPhase = "";
 this.room = room;
+
+    /*
+     * Mobile network handoffs can happen before Colyseus' default
+     * 5000ms minUptime. Allow recovery after 500ms instead.
+     */
+    room.reconnection.minUptime = 500;
+    room.reconnection.maxRetries = 30;
+    room.reconnection.minDelay = 100;
+    room.reconnection.maxDelay = 1000;
+    room.reconnection.maxEnqueuedMessages = 30;
+
+    room.onDrop(
+      (
+        _code: number,
+        reason?: string,
+      ) => {
+        if (this.room !== room) {
+          return;
+        }
+
+        this.connectionDropHandlers
+          .forEach(
+            (handler) => {
+              handler(reason);
+            },
+          );
+      },
+    );
+
+    room.onReconnect(
+      () => {
+        if (this.room !== room) {
+          return;
+        }
+
+        this.requestLobbySnapshot();
+        this.requestPaintReadyState();
+
+        this.connectionRecoveredHandlers
+          .forEach(
+            (handler) => {
+              handler();
+            },
+          );
+      },
+    );
+
     this.callbacks =
       Callbacks.get(room as any);
 
@@ -1121,13 +1181,29 @@ this.room = room;
             : [];
 
         presets.forEach(
-          (preset) => {
-            this.avatarPresetHandlers
-              .forEach(
-                (handler) => {
-                  handler(preset);
-                },
-              );
+          (
+            preset,
+            index,
+          ) => {
+            /*
+             * Spread large cosmetic reconstruction across frames.
+             * Gameplay input stays responsive while avatars fill in.
+             */
+            globalThis.setTimeout(
+              () => {
+                if (this.room !== room) {
+                  return;
+                }
+
+                this.avatarPresetHandlers
+                  .forEach(
+                    (handler) => {
+                      handler(preset);
+                    },
+                  );
+              },
+              index * 90,
+            );
           },
         );
       },
@@ -1644,6 +1720,34 @@ this.room = room;
       this.snapshotActiveMap ??
       "forest"
     );
+  }
+
+  onConnectionDrop(
+    handler: ConnectionDropHandler,
+  ): () => void {
+    this.connectionDropHandlers.add(
+      handler,
+    );
+
+    return () => {
+      this.connectionDropHandlers.delete(
+        handler,
+      );
+    };
+  }
+
+  onConnectionRecovered(
+    handler: ConnectionRecoveredHandler,
+  ): () => void {
+    this.connectionRecoveredHandlers.add(
+      handler,
+    );
+
+    return () => {
+      this.connectionRecoveredHandlers.delete(
+        handler,
+      );
+    };
   }
 
   onPlayerReconnected(
