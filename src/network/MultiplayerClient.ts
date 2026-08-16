@@ -657,6 +657,28 @@ this.phaseChangedHandlers.forEach(
     return room;
   }
 
+  prewarmServer(): void {
+    /*
+     * v0.10.10.105:
+     * Warm DNS/TLS/HTTP connection while the player is browsing the room UI.
+     * This is intentionally fire-and-forget and NEVER blocks joining.
+     */
+    void fetch(
+      `${this.serverUrl}/api/rooms`,
+      {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+        },
+        cache: "no-store",
+      },
+    ).catch(
+      () => {
+        // Best-effort only.
+      },
+    );
+  }
+
   async listPublicRooms(): Promise<
     PublicRoomInfo[]
   > {

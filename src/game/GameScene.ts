@@ -2403,6 +2403,13 @@ export class GameScene extends Phaser.Scene {
         new Set<string>();
     private controlsHelpRoot?: HTMLDivElement;
     private controlsHelpViewportHandler?: () => void;
+    private mobilePaintDock?: HTMLDivElement;
+    private mobilePaintSizeInput?: HTMLInputElement;
+    private mobilePaintSizeValue?: HTMLSpanElement;
+    private mobilePaintToolButtons =
+        new Map<string, HTMLButtonElement>();
+    private mobilePaintColorButtons:
+        HTMLButtonElement[] = [];
     private lobbyPanel!: Phaser.GameObjects.Rectangle;
     private lobbyTitleText!: Phaser.GameObjects.Text;
     private lobbyInfoText!: Phaser.GameObjects.Text;
@@ -3359,6 +3366,7 @@ export class GameScene extends Phaser.Scene {
 
                 this.destroyChatUi();
                 this.destroyControlsHelpUi();
+                this.destroyMobilePaintDock();
                 this.saveLobbyBgmResumePosition();
             },
         );
@@ -3371,6 +3379,7 @@ export class GameScene extends Phaser.Scene {
         this.createMultiplayerHud();
         this.createChatUi();
         this.createControlsHelpUi();
+        this.createMobilePaintDock();
         this.createLobbyUi();
         this.createMapSelectorUi();
         this.createHunterBlindUi();
@@ -4512,34 +4521,34 @@ export class GameScene extends Phaser.Scene {
                 button: '？ 조작방법',
                 title: '조작방법',
                 subtitle: '버튼을 누르고 있는 동안만 표시됩니다',
-                lobby: '대기실: 마우스로 UI 선택 · Enter 채팅',
-                paint: '색칠: 클릭/드래그 · 휠 확대/축소 · Ctrl+휠 붓 크기',
-                hunt: '사냥: WASD/방향키 이동 · 마우스 조준 · 좌클릭 발사',
-                mobileLobby: '대기실: 화면 버튼을 터치 · 채팅 입력칸을 눌러 채팅',
-                mobilePaint: '색칠: 손가락으로 칠하기 · 두 손가락 확대/축소 · 도구 아이콘으로 붓 변경',
-                mobileHunt: '사냥: 왼쪽 이동 · 오른쪽 조준 · FIRE 버튼으로 발사',
+                lobby: '대기실 · 마우스로 선택 · Enter 채팅',
+                paint: '색칠 · 드래그로 칠하기 · 휠 확대 · Ctrl+휠 붓 크기',
+                hunt: '사냥 · WASD 이동 · 마우스 조준 · 좌클릭 발사',
+                mobileLobby: '대기실 · 버튼 터치 · 채팅칸 터치',
+                mobilePaint: '색칠 · 손가락으로 칠하기 · 핀치 확대 · 아래 도구로 붓 변경',
+                mobileHunt: '사냥 · 왼쪽 이동 · 오른쪽 조준 · FIRE 발사',
             },
             ja: {
                 button: '？ 操作方法',
                 title: '操作方法',
                 subtitle: '押している間だけ表示されます',
-                lobby: 'ロビー：マウスでUI選択・Enterでチャット',
-                paint: 'ペイント：クリック/ドラッグ・ホイールでズーム・Ctrl+ホイールでブラシサイズ',
-                hunt: 'ハント：WASD/矢印で移動・マウスで照準・左クリックで射撃',
-                mobileLobby: 'ロビー：画面ボタンをタップ・入力欄をタップしてチャット',
-                mobilePaint: 'ペイント：指で塗る・2本指でズーム・ツールアイコンでブラシ変更',
-                mobileHunt: 'ハント：左で移動・右で照準・FIREボタンで射撃',
+                lobby: 'ロビー · マウス選択 · Enterでチャット',
+                paint: 'ペイント · ドラッグ · ホイールズーム · Ctrl+ホイールでブラシ',
+                hunt: 'ハント · WASD移動 · マウス照準 · 左クリック射撃',
+                mobileLobby: 'ロビー · ボタン操作 · 入力欄タップでチャット',
+                mobilePaint: 'ペイント · 指で塗る · ピンチズーム · 下のツールで変更',
+                mobileHunt: 'ハント · 左で移動 · 右で照準 · FIREで射撃',
             },
             en: {
                 button: '？ Controls',
                 title: 'Controls',
                 subtitle: 'Shown only while you hold this button',
-                lobby: 'Lobby: click UI · Enter to chat',
-                paint: 'Paint: click/drag · wheel to zoom · Ctrl+wheel for brush size',
-                hunt: 'Hunt: WASD/arrows to move · mouse to aim · left click to fire',
-                mobileLobby: 'Lobby: tap UI · tap the chat field to type',
-                mobilePaint: 'Paint: paint with one finger · pinch to zoom · use tool icons for brush shape',
-                mobileHunt: 'Hunt: left stick moves · right stick aims · FIRE button shoots',
+                lobby: 'Lobby · Click UI · Enter to chat',
+                paint: 'Paint · Drag to paint · Wheel zoom · Ctrl+wheel brush size',
+                hunt: 'Hunt · WASD move · Mouse aim · Left click fire',
+                mobileLobby: 'Lobby · Tap buttons · Tap chat field to type',
+                mobilePaint: 'Paint · Finger paint · Pinch zoom · Bottom tools change brush',
+                mobileHunt: 'Hunt · Left move · Right aim · FIRE shoots',
             },
             zh: {
                 button: '？ 操作说明',
@@ -4558,6 +4567,488 @@ export class GameScene extends Phaser.Scene {
             copy[language] ??
             copy.en
         );
+    }
+
+    private createMobilePaintDock(): void {
+        if (
+            !this.mobileControlsEnabled ||
+            this.mobilePaintDock
+        ) {
+            return;
+        }
+
+        const root =
+            document.createElement(
+                'div',
+            );
+        root.className =
+            'colorhunt-paint-dock';
+        root.hidden = true;
+
+        const colors =
+            document.createElement(
+                'div',
+            );
+        colors.className =
+            'colorhunt-paint-dock__colors';
+
+        this.standardPaintColors.forEach(
+            (color) => {
+                const button =
+                    document.createElement(
+                        'button',
+                    );
+                button.type = 'button';
+                button.className =
+                    'colorhunt-paint-color';
+                button.dataset.color =
+                    String(color);
+                button.style
+                    .setProperty(
+                        '--paint-color',
+                        `#${color
+                            .toString(16)
+                            .padStart(
+                                6,
+                                '0',
+                            )}`,
+                    );
+                button.setAttribute(
+                    'aria-label',
+                    `#${color
+                        .toString(16)
+                        .padStart(
+                            6,
+                            '0',
+                        )}`,
+                );
+
+                button.addEventListener(
+                    'pointerdown',
+                    (
+                        event,
+                    ) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+
+                        this.paintColor =
+                            color;
+                        this.eyedropperArmed =
+                            false;
+                        this.hideEyedropperMagnifier();
+                        this.createBrushTexture(
+                            true,
+                        );
+                        this.updatePaintHud();
+                        this.updatePaintPreviewImmediately();
+                        this.highlightPaletteColor(
+                            color,
+                        );
+                        this.updateEyedropperButtonUi();
+                        this.syncMobilePaintDockUi();
+                    },
+                );
+
+                colors.appendChild(
+                    button,
+                );
+                this.mobilePaintColorButtons
+                    .push(
+                        button,
+                    );
+            },
+        );
+
+        const tools =
+            document.createElement(
+                'div',
+            );
+        tools.className =
+            'colorhunt-paint-dock__tools';
+
+        const makeTool =
+            (
+                key: string,
+                label: string,
+                svg: string,
+                onPress:
+                    () => void,
+            ): HTMLButtonElement => {
+                const button =
+                    document.createElement(
+                        'button',
+                    );
+                button.type = 'button';
+                button.className =
+                    'colorhunt-paint-tool';
+                button.dataset.tool =
+                    key;
+                button.innerHTML =
+                    `<span class="colorhunt-paint-tool__icon">${svg}</span>` +
+                    `<span>${label}</span>`;
+
+                button.addEventListener(
+                    'pointerdown',
+                    (
+                        event,
+                    ) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        onPress();
+                        this.syncMobilePaintDockUi();
+                    },
+                );
+
+                tools.appendChild(
+                    button,
+                );
+                this.mobilePaintToolButtons
+                    .set(
+                        key,
+                        button,
+                    );
+
+                return button;
+            };
+
+        const circleSvg =
+            `<svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="9"/><path d="M6 25L13 18"/></svg>`;
+
+        const squareSvg =
+            `<svg viewBox="0 0 32 32" aria-hidden="true"><rect x="8" y="8" width="16" height="16" rx="2"/><path d="M5 27L12 20"/></svg>`;
+
+        const dropperSvg =
+            `<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M20 5l7 7-4 4-2-2-9 9-5 2 2-5 9-9-2-2z"/><path d="M7 25h8"/></svg>`;
+
+        const undoSvg =
+            `<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M12 9L5 15l7 6"/><path d="M7 15h11c6 0 9 4 9 9"/></svg>`;
+
+        const redoSvg =
+            `<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M20 9l7 6-7 6"/><path d="M25 15H14c-6 0-9 4-9 9"/></svg>`;
+
+        makeTool(
+            'circle',
+            tr('원형'),
+            circleSvg,
+            () => {
+                this.eyedropperArmed =
+                    false;
+                this.hideEyedropperMagnifier();
+                this.brushShape =
+                    'circle';
+                this.createBrushTexture();
+                this.updatePaintHud();
+                this.updatePaintPreviewImmediately();
+                this.highlightBrushShape(
+                    'circle',
+                );
+                this.updateEyedropperButtonUi();
+            },
+        );
+
+        makeTool(
+            'square',
+            tr('사각형'),
+            squareSvg,
+            () => {
+                this.eyedropperArmed =
+                    false;
+                this.hideEyedropperMagnifier();
+                this.brushShape =
+                    'square';
+                this.createBrushTexture();
+                this.updatePaintHud();
+                this.updatePaintPreviewImmediately();
+                this.highlightBrushShape(
+                    'square',
+                );
+                this.updateEyedropperButtonUi();
+            },
+        );
+
+        makeTool(
+            'eyedropper',
+            tr('스포이드'),
+            dropperSvg,
+            () => {
+                const localIsHunter =
+                    this.isMultiplayerSession() &&
+                    this.networkPlayerManager
+                        .canLocalControlHunter();
+
+                if (localIsHunter) {
+                    this.eyedropperArmed =
+                        false;
+                    this.showStatus(
+                        tr('헌터는 스포이드를 사용할 수 없습니다.'),
+                    );
+                    return;
+                }
+
+                this.finishActivePaintStroke();
+                this.isPainting = false;
+                this.eyedropperArmed =
+                    !this.eyedropperArmed;
+                this.hideEyedropperMagnifier();
+
+                if (
+                    this.eyedropperArmed
+                ) {
+                    this.showStatus(
+                        tr('스포이드: 배경을 누른 채 움직이고 손을 떼면 색상이 선택됩니다'),
+                    );
+                }
+            },
+        );
+
+        makeTool(
+            'undo',
+            tr('되돌리기'),
+            undoSvg,
+            () => {
+                this.finishActivePaintStroke();
+                this.isPainting = false;
+                this.clearStraightLinePreview();
+                this.undoLastPaintStroke();
+            },
+        );
+
+        makeTool(
+            'redo',
+            tr('다시 실행'),
+            redoSvg,
+            () => {
+                this.finishActivePaintStroke();
+                this.isPainting = false;
+                this.clearStraightLinePreview();
+                this.redoLastPaintStroke();
+            },
+        );
+
+        const sizeWrap =
+            document.createElement(
+                'label',
+            );
+        sizeWrap.className =
+            'colorhunt-paint-size';
+
+        const sizeTitle =
+            document.createElement(
+                'span',
+            );
+        sizeTitle.textContent =
+            tr('브러시');
+
+        const sizeValue =
+            document.createElement(
+                'span',
+            );
+        sizeValue.className =
+            'colorhunt-paint-size__value';
+
+        const sizeInput =
+            document.createElement(
+                'input',
+            );
+        sizeInput.type = 'range';
+        sizeInput.min = '1';
+        sizeInput.max = '20';
+        sizeInput.step = '1';
+        sizeInput.value =
+            String(
+                this.brushSize,
+            );
+
+        sizeInput.addEventListener(
+            'input',
+            (
+                event,
+            ) => {
+                event.stopPropagation();
+
+                this.setBrushSize(
+                    Number(
+                        sizeInput.value,
+                    ),
+                );
+                this.syncMobilePaintDockUi();
+            },
+        );
+
+        sizeWrap.append(
+            sizeTitle,
+            sizeInput,
+            sizeValue,
+        );
+
+        root.append(
+            colors,
+            tools,
+            sizeWrap,
+        );
+        document.body.appendChild(
+            root,
+        );
+
+        root.addEventListener(
+            'pointerdown',
+            (
+                event,
+            ) => {
+                event.stopPropagation();
+            },
+        );
+
+        this.mobilePaintDock =
+            root;
+        this.mobilePaintSizeInput =
+            sizeInput;
+        this.mobilePaintSizeValue =
+            sizeValue;
+
+        this.syncMobilePaintDockUi();
+        this.updateMobilePaintDockPosition();
+    }
+
+    private setMobilePaintDockVisible(
+        visible: boolean,
+    ): void {
+        if (
+            !this.mobilePaintDock
+        ) {
+            return;
+        }
+
+        this.mobilePaintDock.hidden =
+            !visible;
+
+        if (visible) {
+            this.syncMobilePaintDockUi();
+            this.updateMobilePaintDockPosition();
+        }
+    }
+
+    private syncMobilePaintDockUi(): void {
+        if (!this.mobilePaintDock) {
+            return;
+        }
+
+        this.mobilePaintColorButtons
+            .forEach(
+                (button) => {
+                    const value =
+                        Number(
+                            button.dataset
+                                .color,
+                        );
+
+                    button.classList.toggle(
+                        'is-active',
+                        value ===
+                            this.paintColor,
+                    );
+                },
+            );
+
+        this.mobilePaintToolButtons
+            .get('circle')
+            ?.classList.toggle(
+                'is-active',
+                !this.eyedropperArmed &&
+                    this.brushShape ===
+                        'circle',
+            );
+
+        this.mobilePaintToolButtons
+            .get('square')
+            ?.classList.toggle(
+                'is-active',
+                !this.eyedropperArmed &&
+                    this.brushShape ===
+                        'square',
+            );
+
+        this.mobilePaintToolButtons
+            .get('eyedropper')
+            ?.classList.toggle(
+                'is-active',
+                this.eyedropperArmed,
+            );
+
+        if (
+            this.mobilePaintSizeInput
+        ) {
+            this.mobilePaintSizeInput.value =
+                String(
+                    this.brushSize,
+                );
+        }
+
+        if (
+            this.mobilePaintSizeValue
+        ) {
+            this.mobilePaintSizeValue.textContent =
+                `${this.brushSize}px`;
+        }
+    }
+
+    private updateMobilePaintDockPosition(): void {
+        if (!this.mobilePaintDock) {
+            return;
+        }
+
+        const rect =
+            this.game.canvas
+                .getBoundingClientRect();
+
+        this.mobilePaintDock.style
+            .setProperty(
+                '--paint-dock-left',
+                `${Math.round(
+                    rect.left +
+                    rect.width * 0.5,
+                )}px`,
+            );
+
+        this.mobilePaintDock.style
+            .setProperty(
+                '--paint-dock-bottom',
+                `${Math.round(
+                    Math.max(
+                        8,
+                        window.innerHeight -
+                            rect.bottom +
+                            8,
+                    ),
+                )}px`,
+            );
+
+        this.mobilePaintDock.style
+            .setProperty(
+                '--paint-dock-width',
+                `${Math.round(
+                    Math.min(
+                        rect.width - 20,
+                        760,
+                    ),
+                )}px`,
+            );
+    }
+
+    private destroyMobilePaintDock(): void {
+        this.mobilePaintDock
+            ?.remove();
+
+        this.mobilePaintDock =
+            undefined;
+        this.mobilePaintSizeInput =
+            undefined;
+        this.mobilePaintSizeValue =
+            undefined;
+        this.mobilePaintToolButtons
+            .clear();
+        this.mobilePaintColorButtons =
+            [];
     }
 
     private createControlsHelpUi(): void {
@@ -4715,6 +5206,7 @@ export class GameScene extends Phaser.Scene {
         this.controlsHelpViewportHandler =
             (): void => {
                 this.updateControlsHelpPosition();
+                this.updateMobilePaintDockPosition();
             };
 
         window.addEventListener(
@@ -4741,13 +5233,36 @@ export class GameScene extends Phaser.Scene {
             this.game.canvas
                 .getBoundingClientRect();
 
+        const scaleX =
+            rect.width /
+            this.gameWidth;
+        const scaleY =
+            rect.height /
+            this.gameHeight;
+
+        /*
+         * Lobby: dock the help button just ABOVE the room-info card,
+         * inside the right control column instead of floating over it.
+         * In-game: top-right, clear of the role HUD.
+         */
+        const logicalRight =
+            this.phase === 'lobby'
+                ? 18
+                : 12;
+
+        const logicalTop =
+            this.phase === 'lobby'
+                ? 76
+                : 72;
+
         this.controlsHelpRoot.style
             .setProperty(
                 '--controls-right',
                 `${Math.round(
                     window.innerWidth -
                     rect.right +
-                    8,
+                    logicalRight *
+                        scaleX,
                 )}px`,
             );
 
@@ -4755,7 +5270,9 @@ export class GameScene extends Phaser.Scene {
             .setProperty(
                 '--controls-top',
                 `${Math.round(
-                    rect.top + 78,
+                    rect.top +
+                    logicalTop *
+                        scaleY,
                 )}px`,
             );
     }
@@ -6467,6 +6984,9 @@ export class GameScene extends Phaser.Scene {
     }
 
     private openPrivateJoinModal(): void {
+        multiplayerClient
+            .prewarmServer();
+
         this.createMenuModal(
             tr('비공개방 참가'),
             [
@@ -6502,6 +7022,9 @@ export class GameScene extends Phaser.Scene {
         isPrivate: boolean,
         fromInvite = false,
     ): void {
+        multiplayerClient
+            .prewarmServer();
+
         /*
          * 이전 실패 요청에서 transition flag가 남아 있더라도
          * 방 선택/모달 표시 자체는 항상 가능해야 합니다.
@@ -6698,13 +7221,11 @@ export class GameScene extends Phaser.Scene {
                 isPrivate,
             };
 
-        this.setModalBusy(
-            true,
-            tr('방을 확인하는 중...'),
-        );
-
-        /* v0.10.10.72: join immediately; Colyseus is the authority. */
-
+        /*
+         * v0.10.10.105:
+         * One direct join state only. The old "checking room" -> "joining"
+         * double state made a single network wait feel like two waits.
+         */
         this.setModalBusy(
             true,
             tr('방에 참가하는 중...'),
@@ -13186,6 +13707,14 @@ export class GameScene extends Phaser.Scene {
         this.time.delayedCall(
             0,
             () => {
+                this.updateControlsHelpPosition();
+                this.updateMobilePaintDockPosition();
+            },
+        );
+
+        this.time.delayedCall(
+            0,
+            () => {
                 this.updateChatKeyboardOffset();
             },
         );
@@ -15934,6 +16463,13 @@ export class GameScene extends Phaser.Scene {
     }
 
     private updateEyedropperButtonUi(): void {
+        this.mobilePaintToolButtons
+            .get('eyedropper')
+            ?.classList.toggle(
+                'is-active',
+                this.eyedropperArmed,
+            );
+
         if (!this.eyedropperButton) {
             return;
         }
@@ -16606,6 +17142,15 @@ export class GameScene extends Phaser.Scene {
     private setPaintPaletteVisible(
         visible: boolean,
     ): void {
+        /*
+         * v0.10.10.105:
+         * Desktop keeps the proven Phaser palette.
+         * Mobile uses the responsive DOM dock so controls never overlap.
+         */
+        const showPhaserPalette =
+            visible &&
+            !this.mobileControlsEnabled;
+
         this.paletteObjects.forEach(
             (object) => {
                 const visibleObject =
@@ -16616,9 +17161,14 @@ export class GameScene extends Phaser.Scene {
                     };
 
                 visibleObject.setVisible?.(
-                    visible,
+                    showPhaserPalette,
                 );
             },
+        );
+
+        this.setMobilePaintDockVisible(
+            visible &&
+            this.mobileControlsEnabled,
         );
 
         /*
@@ -16638,6 +17188,19 @@ export class GameScene extends Phaser.Scene {
     private highlightPaletteColor(
         selectedColor: number,
     ): void {
+        this.mobilePaintColorButtons
+            .forEach(
+                (button) => {
+                    button.classList.toggle(
+                        'is-active',
+                        Number(
+                            button.dataset.color,
+                        ) ===
+                            selectedColor,
+                    );
+                },
+            );
+
         this.paletteObjects.forEach(
             (object) => {
                 if (
@@ -16696,6 +17259,7 @@ export class GameScene extends Phaser.Scene {
         this.updatePaintPreviewImmediately();
         this.updatePaintControlHelp();
         this.updateBrushSizeSliderUi();
+        this.syncMobilePaintDockUi();
     }
 
     private updateBrushSizeSliderUi(): void {
@@ -16792,6 +17356,24 @@ export class GameScene extends Phaser.Scene {
     private highlightBrushShape(
         selectedShape: BrushShape,
     ): void {
+        this.mobilePaintToolButtons
+            .get('circle')
+            ?.classList.toggle(
+                'is-active',
+                !this.eyedropperArmed &&
+                    selectedShape ===
+                        'circle',
+            );
+
+        this.mobilePaintToolButtons
+            .get('square')
+            ?.classList.toggle(
+                'is-active',
+                !this.eyedropperArmed &&
+                    selectedShape ===
+                        'square',
+            );
+
         this.paletteObjects.forEach(
             (object) => {
                 if (
@@ -21253,6 +21835,14 @@ export class GameScene extends Phaser.Scene {
         this.time.delayedCall(
             0,
             () => {
+                this.updateControlsHelpPosition();
+                this.updateMobilePaintDockPosition();
+            },
+        );
+
+        this.time.delayedCall(
+            0,
+            () => {
                 this.updateChatKeyboardOffset();
             },
         );
@@ -21458,6 +22048,14 @@ export class GameScene extends Phaser.Scene {
     }
 
     private startHunt(): void {
+        this.time.delayedCall(
+            0,
+            () => {
+                this.updateControlsHelpPosition();
+                this.updateMobilePaintDockPosition();
+            },
+        );
+
         this.time.delayedCall(
             0,
             () => {

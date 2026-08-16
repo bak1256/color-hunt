@@ -471,3 +471,216 @@ html.colorhunt-mobile canvas {
 .colorhunt-controls-help {
   touch-action: manipulation;
 }
+
+
+/* v0.10.10.105 — responsive mobile Paint dock */
+.colorhunt-paint-dock[hidden] {
+  display: none !important;
+}
+
+.colorhunt-paint-dock {
+  --paint-dock-left: 50vw;
+  --paint-dock-bottom: 8px;
+  --paint-dock-width: min(760px, calc(100vw - 20px));
+
+  position: fixed;
+  z-index: 2147483050;
+  left: var(--paint-dock-left);
+  bottom: var(--paint-dock-bottom);
+  transform: translateX(-50%);
+  width: var(--paint-dock-width);
+  box-sizing: border-box;
+
+  display: grid;
+  grid-template-columns: minmax(180px, 1.3fr) minmax(280px, 2fr) minmax(150px, .9fr);
+  align-items: center;
+  gap: 10px;
+
+  padding: 9px 11px;
+  border: 1px solid rgba(255,255,255,.25);
+  border-radius: 18px;
+  background: linear-gradient(
+    180deg,
+    rgba(26, 34, 39, .88),
+    rgba(11, 17, 21, .88)
+  );
+  box-shadow:
+    0 8px 30px rgba(0,0,0,.30),
+    inset 0 1px 0 rgba(255,255,255,.08);
+
+  color: #fff;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    "Noto Sans KR",
+    "Noto Sans JP",
+    sans-serif;
+
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  touch-action: manipulation;
+}
+
+.colorhunt-paint-dock__colors {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(22px, 1fr));
+  gap: 5px;
+}
+
+.colorhunt-paint-color {
+  aspect-ratio: 1;
+  min-width: 22px;
+  max-width: 34px;
+  border: 2px solid rgba(255,255,255,.78);
+  border-radius: 8px;
+  background: var(--paint-color);
+  box-shadow: 0 2px 5px rgba(0,0,0,.26);
+  padding: 0;
+  transition:
+    transform .10s ease,
+    border-color .10s ease,
+    box-shadow .10s ease;
+}
+
+.colorhunt-paint-color.is-active {
+  transform: scale(1.12);
+  border-color: #fff;
+  box-shadow:
+    0 0 0 3px rgba(255,255,255,.38),
+    0 3px 8px rgba(0,0,0,.34);
+}
+
+.colorhunt-paint-dock__tools {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(52px, 1fr));
+  gap: 6px;
+}
+
+.colorhunt-paint-tool {
+  min-width: 0;
+  height: 56px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 12px;
+  background: rgba(255,255,255,.08);
+  color: rgba(255,255,255,.88);
+  font-weight: 800;
+  font-size: 10px;
+  padding: 4px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.colorhunt-paint-tool__icon {
+  width: 25px;
+  height: 25px;
+  display: block;
+}
+
+.colorhunt-paint-tool svg {
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.colorhunt-paint-tool.is-active {
+  color: #17231b;
+  border-color: rgba(214,255,203,.95);
+  background: linear-gradient(
+    180deg,
+    #dff5d4,
+    #a9d79c
+  );
+  box-shadow: 0 2px 10px rgba(109,185,101,.30);
+}
+
+.colorhunt-paint-size {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 0 3px;
+  font-size: 11px;
+  font-weight: 800;
+  color: rgba(255,255,255,.82);
+}
+
+.colorhunt-paint-size input[type="range"] {
+  width: 100%;
+  min-width: 70px;
+  accent-color: #9fd492;
+}
+
+.colorhunt-paint-size__value {
+  min-width: 34px;
+  text-align: right;
+  color: #fff;
+}
+
+@media (max-width: 760px), (max-height: 430px) {
+  .colorhunt-paint-dock {
+    grid-template-columns: minmax(160px, 1.1fr) minmax(260px, 1.7fr);
+    grid-template-areas:
+      "colors tools"
+      "size size";
+    gap: 6px 9px;
+    padding: 7px 9px;
+    border-radius: 15px;
+  }
+
+  .colorhunt-paint-dock__colors {
+    grid-area: colors;
+  }
+
+  .colorhunt-paint-dock__tools {
+    grid-area: tools;
+  }
+
+  .colorhunt-paint-size {
+    grid-area: size;
+  }
+
+  .colorhunt-paint-tool {
+    height: 48px;
+  }
+
+  .colorhunt-paint-tool__icon {
+    width: 21px;
+    height: 21px;
+  }
+}
+
+/* Controls help: one clean sentence per row, never awkward word wraps */
+.colorhunt-controls-help__panel {
+  width: max-content !important;
+  max-width: min(560px, calc(100vw - 24px)) !important;
+  min-width: 320px;
+}
+
+.colorhunt-controls-help__panel div {
+  white-space: nowrap;
+  overflow: visible;
+  line-height: 1.65;
+}
+
+@media (pointer: coarse) {
+  .colorhunt-controls-help__panel {
+    max-width: min(620px, calc(100vw - 18px)) !important;
+    min-width: min(420px, calc(100vw - 18px));
+  }
+
+  .colorhunt-controls-help__panel div {
+    font-size: 12px;
+    white-space: nowrap;
+  }
+}
