@@ -493,6 +493,16 @@ export class NetworkPlayerManager {
 
     if (createdView) {
       /*
+       * v0.10.10.81:
+       * Always normalize the role body on creation as well as role changes.
+       * This is especially important after mobile Hunter fresh-rejoin.
+       */
+      this.updateRoleBodyVisibility(
+        createdView.container,
+        player.role,
+      );
+
+      /*
        * 생성 직후 서버 좌표를 컨테이너와 페인트 레이어에
        * 즉시 동일하게 적용합니다.
        */
@@ -3119,7 +3129,15 @@ export class NetworkPlayerManager {
         .setName(
           "network-hunter-pixel-body",
         )
-        .setVisible(false);
+        /*
+         * v0.10.10.81:
+         * A fresh reconnect session may already arrive with role=hunter.
+         * In that case updatePlayer() never sees a role CHANGE, so the old
+         * hard-coded false left only the gun visible.
+         */
+        .setVisible(
+          player.role === "hunter",
+        );
 
     const head =
       this.scene.add.circle(

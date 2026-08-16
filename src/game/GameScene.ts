@@ -9416,10 +9416,34 @@ export class GameScene extends Phaser.Scene {
         }
 
         if (isRoundEnd) {
+            /*
+             * v0.10.10.81:
+             * finished can arrive before round_result. Use the authoritative
+             * Schema winner as a fallback so the result never degrades to
+             * generic ROUND OVER merely due to packet ordering.
+             */
+            const schemaWinner =
+                multiplayerClient.getRoom()
+                    ?.state.winner;
+
+            const effectiveWinner =
+                this.roundResultWinner ??
+                (
+                    schemaWinner === 'hunters' ||
+                    schemaWinner === 'hiders'
+                        ? schemaWinner
+                        : null
+                );
+
+            if (effectiveWinner) {
+                this.roundResultWinner =
+                    effectiveWinner;
+            }
+
             const victoryText =
-                this.roundResultWinner === 'hunters'
+                effectiveWinner === 'hunters'
                     ? tr('HUNTER 승리!')
-                    : this.roundResultWinner === 'hiders'
+                    : effectiveWinner === 'hiders'
                         ? tr('HIDER 승리!')
                         : tr('ROUND OVER');
 
@@ -9428,35 +9452,24 @@ export class GameScene extends Phaser.Scene {
                 .setAlpha(0);
 
             const victoryColor =
-                this.roundResultWinner === 'hunters'
+                effectiveWinner === 'hunters'
                     ? '#d32f2f'
                     : '#1f2937';
 
-            if (remaining > 5) {
-                this.countdownText
-                    .setFontSize(58)
-                    .setColor(victoryColor)
-                    .setText(victoryText);
+            this.countdownText
+                .setFontSize(48)
+                .setColor(victoryColor)
+                .setText(
+                    [
+                        victoryText,
+                        tr('게임 종료'),
+                        String(remaining),
+                    ].join('\n'),
+                );
 
-                this.timerText
-                    .setText('')
-                    .setVisible(false);
-            } else {
-                this.countdownText
-                    .setFontSize(48)
-                    .setColor(victoryColor)
-                    .setText(
-                        [
-                            victoryText,
-                            tr('게임 종료'),
-                            String(remaining),
-                        ].join('\n'),
-                    );
-
-                this.timerText
-                    .setText('')
-                    .setVisible(false);
-            }
+            this.timerText
+                .setText('')
+                .setVisible(false);
 
             return;
         }
@@ -11428,6 +11441,7 @@ export class GameScene extends Phaser.Scene {
         );
 
         this.resetPaintWorldZoom();
+        this.restoreGameplayTimerPosition();
         this.clearStatus();
         this.setHunterPaintBlind(false);
         this.phaseEndTime = 0;
@@ -13171,6 +13185,32 @@ export class GameScene extends Phaser.Scene {
      * Painting
      */
 
+    private applyPaintOnlyScreenLayout(): void {
+        if (this.phase !== 'paint') {
+            return;
+        }
+
+        /*
+         * v0.10.10.81:
+         * READY button lives near the lower middle of the screen. During
+         * Paint only, move the timer upward and frame the local character
+         * slightly above center so the initial zoom does not overlap it.
+         */
+        this.setFixedHudScreenPosition(
+            this.timerText,
+            this.gameWidth / 2,
+            72,
+        );
+    }
+
+    private restoreGameplayTimerPosition(): void {
+        this.setFixedHudScreenPosition(
+            this.timerText,
+            this.gameWidth / 2,
+            108,
+        );
+    }
+
     private centerPaintCameraOnLocalPlayer(): void {
         if (
             this.phase !== 'paint' ||
@@ -13191,12 +13231,29 @@ export class GameScene extends Phaser.Scene {
          * Paint 중에도 캐릭터를 화면 정중앙에 둡니다.
          * 맵 경계 clamp를 쓰지 않아 가장자리에서도 중심이 흔들리지 않습니다.
          */
+        const screenLiftPx =
+            this.mobileControlsEnabled
+                ? 78
+                : 66;
+
+        const worldYOffset =
+            screenLiftPx /
+            Math.max(
+                0.01,
+                this.cameras.main.zoom,
+            );
+
         this.cameras.main
             .stopFollow()
             .removeBounds()
+            /*
+             * Center the camera slightly BELOW the character so the character
+             * itself appears higher on screen. This applies only in Paint.
+             */
             .centerOn(
                 target.x,
-                target.y,
+                target.y +
+                    worldYOffset,
             );
     }
 
@@ -19360,6 +19417,7 @@ export class GameScene extends Phaser.Scene {
         this.hideHuntTensionUi();
 
         this.timerText.setVisible(true);
+        this.applyPaintOnlyScreenLayout();
 
         /*
          * 숨는 시간도 Hunt와 같은 기본 확대 배율을 사용합니다.
@@ -19508,6 +19566,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     private startHunt(): void {
+        this.restoreGameplayTimerPosition();
         this.hideMobilePaintPrecisionGuide();
 
         if (
