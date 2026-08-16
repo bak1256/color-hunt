@@ -109,6 +109,10 @@ export class NetworkPlayerManager {
     });
 
     this.players.clear();
+    this.lobbyPresetRenderTokens.clear();
+    this.lobbyPresetAppliedSignatures.clear();
+    this.lobbyPresetRenderingSignatures.clear();
+    this.activeLobbyPresetRenderSessions.clear();
     this.localMovementInitialized = false;
     this.localLobbyInputStarted = false;
     this.localX = 480;
@@ -869,6 +873,15 @@ export class NetworkPlayerManager {
     }
 
     this.lobbyPresetRenderTokens.delete(
+      sessionId,
+    );
+    this.lobbyPresetAppliedSignatures.delete(
+      sessionId,
+    );
+    this.lobbyPresetRenderingSignatures.delete(
+      sessionId,
+    );
+    this.activeLobbyPresetRenderSessions.delete(
       sessionId,
     );
     this.players.delete(sessionId);
@@ -1853,6 +1866,7 @@ export class NetworkPlayerManager {
     color: number,
     size: number,
     shape: NetworkBrushShape,
+    renderNow = true,
   ): void {
     if (!view.paintLayer) {
       return;
@@ -1938,9 +1952,11 @@ export class NetworkPlayerManager {
       }
     }
 
-    this.renderPaintTexture(
-      view.paintLayer.texture,
-    );
+    if (renderNow) {
+      this.renderPaintTexture(
+        view.paintLayer.texture,
+      );
+    }
   }
 
   paintLocalPlayer(
@@ -2122,6 +2138,74 @@ export class NetworkPlayerManager {
   private readonly activeLobbyPresetRenderSessions =
     new Set<string>();
 
+  /*
+   * v0.10.10.119:
+   * The server can resend the same avatar preset during lobby snapshots /
+   * reconnect reconciliation.  Re-clearing and replaying an identical
+   * preset makes mobile avatars visibly blink. Cache what is already on
+   * screen and ignore exact-equivalent replays.
+   */
+  private readonly lobbyPresetAppliedSignatures =
+    new Map<string, string>();
+
+  private readonly lobbyPresetRenderingSignatures =
+    new Map<string, string>();
+
+  private getLobbyPresetSignature(
+    strokes: NetworkPaintStroke[],
+  ): string {
+    let hash = 2166136261;
+    let pointCount = 0;
+
+    const mix =
+      (value: number): void => {
+        hash ^= value | 0;
+        hash = Math.imul(
+          hash,
+          16777619,
+        );
+      };
+
+    strokes.forEach(
+      (stroke) => {
+        mix(stroke.color);
+        mix(
+          Math.round(
+            stroke.size * 100,
+          ),
+        );
+        mix(
+          stroke.shape === "square"
+            ? 2
+            : 1,
+        );
+        mix(stroke.points.length);
+
+        stroke.points.forEach(
+          (point) => {
+            pointCount += 1;
+            mix(
+              Math.round(
+                point.x * 10,
+              ),
+            );
+            mix(
+              Math.round(
+                point.y * 10,
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    return [
+      strokes.length,
+      pointCount,
+      hash >>> 0,
+    ].join(":");
+  }
+
   isLobbyAvatarRendering(): boolean {
     return (
       this.activeLobbyPresetRenderSessions.size >
@@ -2142,6 +2226,35 @@ export class NetworkPlayerManager {
     if (!view?.paintLayer) {
       return;
     }
+
+    const signature =
+      this.getLobbyPresetSignature(
+        strokes,
+      );
+
+    if (
+      this.lobbyPresetAppliedSignatures.get(
+        sessionId,
+      ) === signature
+    ) {
+      view.paintLayer.texture
+        .setVisible(true)
+        .setAlpha(1);
+      return;
+    }
+
+    if (
+      this.lobbyPresetRenderingSignatures.get(
+        sessionId,
+      ) === signature
+    ) {
+      return;
+    }
+
+    this.lobbyPresetRenderingSignatures.set(
+      sessionId,
+      signature,
+    );
 
     const renderToken =
       (
@@ -2239,6 +2352,7 @@ export class NetworkPlayerManager {
             command.color,
             command.size,
             command.shape,
+            false,
           );
         }
 
@@ -2272,6 +2386,13 @@ export class NetworkPlayerManager {
             sessionId,
           ) === renderToken
         ) {
+          this.lobbyPresetAppliedSignatures.set(
+            sessionId,
+            signature,
+          );
+          this.lobbyPresetRenderingSignatures.delete(
+            sessionId,
+          );
           this.activeLobbyPresetRenderSessions.delete(
             sessionId,
           );
@@ -2294,6 +2415,41 @@ export class NetworkPlayerManager {
       return;
     }
 
+    const signature =
+      this.getLobbyPresetSignature(
+        strokes,
+      );
+
+    if (
+      this.lobbyPresetAppliedSignatures.get(
+        sessionId,
+      ) === signature
+    ) {
+      view.paintLayer.texture
+        .setVisible(true)
+        .setAlpha(1);
+      return;
+    }
+
+    /*
+     * Cancel any older progressive job for this player before replacing
+     * the texture atomically.
+     */
+    this.lobbyPresetRenderTokens.set(
+      sessionId,
+      (
+        this.lobbyPresetRenderTokens.get(
+          sessionId,
+        ) ?? 0
+      ) + 1,
+    );
+    this.lobbyPresetRenderingSignatures.delete(
+      sessionId,
+    );
+    this.activeLobbyPresetRenderSessions.delete(
+      sessionId,
+    );
+
     view.paintLayer.texture.clear();
 
     strokes.forEach(
@@ -2307,6 +2463,7 @@ export class NetworkPlayerManager {
               stroke.color,
               stroke.size,
               stroke.shape,
+              false,
             );
           },
         );
@@ -2315,6 +2472,11 @@ export class NetworkPlayerManager {
 
     this.renderPaintTexture(
       view.paintLayer.texture,
+    );
+
+    this.lobbyPresetAppliedSignatures.set(
+      sessionId,
+      signature,
     );
 
     this.syncPaintLayerPosition(

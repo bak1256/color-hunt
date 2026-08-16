@@ -5734,22 +5734,17 @@ export class GameScene extends Phaser.Scene {
                                 lobbyPreset,
                             );
 
-                        if (
-                            this.mobileControlsEnabled
-                        ) {
-                            this.networkPlayerManager
-                                .applyLobbyAvatarPresetProgressive(
-                                    sessionId,
-                                    cachedPreset,
-                                    180,
-                                );
-                        } else {
-                            this.networkPlayerManager
-                                .applyLobbyAvatarPreset(
-                                    sessionId,
-                                    cachedPreset,
-                                );
-                        }
+                        /*
+                         * v0.10.10.119:
+                         * The optimized preset renderer now defers texture
+                         * refresh until the complete outfit is ready.
+                         * Mobile must never expose half-rendered clothing.
+                         */
+                        this.networkPlayerManager
+                            .applyLobbyAvatarPreset(
+                                sessionId,
+                                cachedPreset,
+                            );
                     }
                 },
             ),
@@ -6467,34 +6462,14 @@ export class GameScene extends Phaser.Scene {
                                     return;
                                 }
 
-                                if (
-                                    this.mobileControlsEnabled
-                                ) {
-                                    this.networkPlayerManager
-                                        .applyLobbyAvatarPresetProgressive(
-                                            preset.sessionId,
-                                            renderStrokes,
-                                            180,
-                                        );
-                                } else {
-                                    this.networkPlayerManager
-                                        .applyLobbyAvatarPreset(
-                                            preset.sessionId,
-                                            renderStrokes,
-                                        );
-                                }
+                                this.networkPlayerManager
+                                    .applyLobbyAvatarPreset(
+                                        preset.sessionId,
+                                        renderStrokes,
+                                    );
                             };
 
-                        if (
-                            this.mobileControlsEnabled
-                        ) {
-                            this.time.delayedCall(
-                                120,
-                                applyPreset,
-                            );
-                        } else {
-                            applyPreset();
-                        }
+                        applyPreset();
                     }
                 },
             ),
