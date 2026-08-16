@@ -242,6 +242,8 @@ export class GameScene extends Phaser.Scene {
     private allHidersPaintReady = false;
     private paintReadyCount = 0;
     private paintReadyHiderCount = 0;
+    private hudPhaseDurationMs = 1;
+    private lastAuthoritativePhaseCheckAt = 0;
     private knownAliveState =
         new Map<string, boolean>();
 
@@ -311,8 +313,8 @@ export class GameScene extends Phaser.Scene {
 
         this.paintReadyButton =
             this.add.text(
-                this.gameWidth / 2,
-                this.gameHeight - 42,
+                this.gameWidth - 22,
+                118,
                 tr('준비 완료'),
                 {
                     fontFamily: 'Arial, sans-serif',
@@ -326,7 +328,7 @@ export class GameScene extends Phaser.Scene {
                     },
                 },
             )
-                .setOrigin(0.5)
+                .setOrigin(1, 0.5)
                 .setScrollFactor(0)
                 .setDepth(6020)
                 .setVisible(false)
@@ -431,10 +433,22 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
-        const role =
+        const stateRole =
             multiplayerClient
                 .getLocalPlayer()
                 ?.role;
+
+        const role =
+            stateRole ??
+            (
+                this.networkPlayerManager
+                    ?.isLocalHunter()
+                    ? 'hunter'
+                    : this.networkPlayerManager
+                        ?.isLocalHider()
+                        ? 'hider'
+                        : undefined
+            );
 
         const visible =
             this.isMultiplayerSession() &&
@@ -495,11 +509,6 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
-        const localRole =
-            multiplayerClient
-                .getLocalPlayer()
-                ?.role;
-
         /*
          * During Hunter customization the top paint UI is already dense.
          * Hide the survival HUD only for the Hunter in Paint.
@@ -511,10 +520,7 @@ export class GameScene extends Phaser.Scene {
             this.isMultiplayerSession() &&
             (
                 this.phase === 'countdown' ||
-                (
-                    this.phase === 'paint' &&
-                    localRole === 'hider'
-                ) ||
+                this.phase === 'paint' ||
                 this.phase === 'hunt'
             );
 
@@ -586,8 +592,11 @@ export class GameScene extends Phaser.Scene {
             totalWidth / 2 +
             7;
 
-        const headY = 19;
-        const bodyY = 36;
+        const headY = 20;
+        const bodyY = 39;
+
+        const hourglassX =
+            this.gameWidth / 2;
 
         this.survivalHudGraphics
             .clear()
@@ -608,13 +617,13 @@ export class GameScene extends Phaser.Scene {
                     .fillCircle(
                         x,
                         headY,
-                        8,
+                        9,
                     )
                     .fillRoundedRect(
-                        x - 8,
-                        bodyY - 9,
-                        16,
-                        22,
+                        x - 9,
+                        bodyY - 10,
+                        18,
+                        25,
                         4,
                     );
 
@@ -660,24 +669,24 @@ export class GameScene extends Phaser.Scene {
         ) {
             this.survivalHudGraphics
                 .fillStyle(
-                    0xff4d4d,
+                    0xff3b30,
                     1,
                 )
                 .fillCircle(
                     x,
                     headY,
-                    8,
+                    9,
                 )
                 .fillRoundedRect(
-                    x - 8,
-                    bodyY - 9,
-                    16,
-                    22,
+                    x - 9,
+                    bodyY - 10,
+                    18,
+                    25,
                     4,
                 )
                 .lineStyle(
                     3,
-                    0xff4d4d,
+                    0xff3b30,
                     1,
                 )
                 .lineBetween(
@@ -700,6 +709,90 @@ export class GameScene extends Phaser.Scene {
                 );
 
             x += hunterSpacing;
+        }
+
+        const remainingMs =
+            Math.max(
+                0,
+                this.phaseEndTime -
+                    this.time.now,
+            );
+
+        const progress =
+            Phaser.Math.Clamp(
+                remainingMs /
+                    Math.max(
+                        1,
+                        this.hudPhaseDurationMs,
+                    ),
+                0,
+                1,
+            );
+
+        const hgTop = 12;
+        const hgBottom = 52;
+        const hgHalf = 11;
+
+        this.survivalHudGraphics
+            .lineStyle(
+                3,
+                0x6fcf72,
+                1,
+            )
+            .lineBetween(
+                hourglassX - hgHalf,
+                hgTop,
+                hourglassX + hgHalf,
+                hgTop,
+            )
+            .lineBetween(
+                hourglassX - hgHalf,
+                hgBottom,
+                hourglassX + hgHalf,
+                hgBottom,
+            )
+            .lineBetween(
+                hourglassX - hgHalf,
+                hgTop,
+                hourglassX + hgHalf,
+                hgBottom,
+            )
+            .lineBetween(
+                hourglassX + hgHalf,
+                hgTop,
+                hourglassX - hgHalf,
+                hgBottom,
+            );
+
+        const sandHeight =
+            28 * progress;
+
+        if (sandHeight > 0.5) {
+            this.survivalHudGraphics
+                .fillStyle(
+                    0x6fcf72,
+                    0.95,
+                )
+                .fillTriangle(
+                    hourglassX - 7 * progress,
+                    hgTop + 5,
+                    hourglassX + 7 * progress,
+                    hgTop + 5,
+                    hourglassX,
+                    hgTop + 5 +
+                        sandHeight / 2,
+                )
+                .fillTriangle(
+                    hourglassX,
+                    hgBottom - 5 -
+                        sandHeight / 2,
+                    hourglassX -
+                        7 * progress,
+                    hgBottom - 5,
+                    hourglassX +
+                        7 * progress,
+                    hgBottom - 5,
+                );
         }
 
         this.survivalHudText
@@ -3049,7 +3142,66 @@ export class GameScene extends Phaser.Scene {
         }
 
 
+        /*
+         * v0.10.10.68 critical sync recovery:
+         * phase_changed is a convenience notification, but Room Schema is
+         * authoritative. Reconcile it frequently so one delayed/missed
+         * message can never leave Hunter in Lobby/Paint while Hiders Hunt.
+         */
+        if (
+            this.isMultiplayerSession() &&
+            this.time.now -
+                this.lastAuthoritativePhaseCheckAt >
+                120
+        ) {
+            this.lastAuthoritativePhaseCheckAt =
+                this.time.now;
+
+            const authoritativePhase =
+                multiplayerClient.getPhase();
+
+            if (
+                authoritativePhase &&
+                authoritativePhase !==
+                    this.phase
+            ) {
+                /*
+                 * For recovery we cannot safely compare raw server epoch
+                 * against this device clock. If the transition notification
+                 * was missed, enter the authoritative phase immediately.
+                 * The next phase_changed packet supplies precise timer sync.
+                 */
+                const rawEndsAt =
+                    multiplayerClient
+                        .getPhaseEndsAt();
+
+                const fallbackDuration =
+                    authoritativePhase === 'countdown'
+                        ? 3000
+                        : Math.max(
+                            1000,
+                            rawEndsAt -
+                                Date.now(),
+                        );
+
+                this.applyNetworkPhase(
+                    authoritativePhase,
+                    Date.now() +
+                        fallbackDuration,
+                );
+            }
+        }
+
         this.updateRoundTimer();
+
+        if (
+            this.phase === 'countdown' ||
+            this.phase === 'paint' ||
+            this.phase === 'hunt'
+        ) {
+            this.updateSurvivalHud();
+        }
+
         this.updateCountdownUi();
         this.updateWeaponHeatHud();
         this.updateNetworkPlayers(delta);
@@ -10949,6 +11101,7 @@ export class GameScene extends Phaser.Scene {
             this.survivalHudGraphics,
             this.survivalHudText,
             this.disconnectNoticeText,
+            this.paintReadyButton,
             this.bgmToggleButton,
             this.hunterBlindPanel,
             this.hunterBlindText,
@@ -11548,6 +11701,12 @@ export class GameScene extends Phaser.Scene {
             this.time.now +
             remainingMs;
 
+        this.hudPhaseDurationMs =
+            Math.max(
+                1,
+                remainingMs,
+            );
+
         if (phase !== 'paint') {
             this.localPaintReady = false;
             this.allHidersPaintReady = false;
@@ -11629,11 +11788,9 @@ export class GameScene extends Phaser.Scene {
             this.networkPlayerManager
                 .syncLobbyPositionsFromState();
 
+            this.localPaintReady = false;
             this.enterPaintPhase();
             this.updatePaintReadyButton();
-
-            multiplayerClient
-                .sendPaintReady(false);
 
             this.networkPlayerManager
                 .setNamesVisible(false);

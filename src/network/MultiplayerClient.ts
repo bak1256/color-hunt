@@ -1048,6 +1048,7 @@ private attachRoom(
     room.onMessage<{
       phase?: NetworkGamePhase;
       phaseEndsAt?: number;
+      serverNow?: number;
     }>(
       "phase_changed",
       (payload) => {
@@ -1070,15 +1071,38 @@ private attachRoom(
             0,
           );
 
+        const serverNow =
+          Number(
+            payload.serverNow ??
+            0,
+          );
+
+        /*
+         * v0.10.10.68
+         * Never compare another machine's epoch deadline directly with this
+         * device clock. Convert the server deadline to an equivalent local
+         * deadline from the remaining duration carried by the same packet.
+         */
+        const localPhaseEndsAt =
+          Number.isFinite(serverNow) &&
+          serverNow > 0 &&
+          Number.isFinite(phaseEndsAt)
+            ? Date.now() +
+              Math.max(
+                0,
+                phaseEndsAt - serverNow,
+              )
+            : phaseEndsAt;
+
         this.phaseChangedHandlers
           .forEach(
             (handler) => {
               handler(
                 phase,
                 Number.isFinite(
-                  phaseEndsAt,
+                  localPhaseEndsAt,
                 )
-                  ? phaseEndsAt
+                  ? localPhaseEndsAt
                   : 0,
               );
             },
