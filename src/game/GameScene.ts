@@ -235,6 +235,8 @@ export class GameScene extends Phaser.Scene {
 
     private survivalHudGraphics!: Phaser.GameObjects.Graphics;
     private survivalHudText!: Phaser.GameObjects.Text;
+    private survivalHiderLabelText!: Phaser.GameObjects.Text;
+    private survivalHunterLabelText!: Phaser.GameObjects.Text;
     private disconnectNoticeText!: Phaser.GameObjects.Text;
     private disconnectNoticeEvent?: Phaser.Time.TimerEvent;
     private paintReadyButton?: Phaser.GameObjects.Text;
@@ -284,6 +286,44 @@ export class GameScene extends Phaser.Scene {
                 .setOrigin(0.5)
                 .setScrollFactor(0)
                 .setDepth(6011)
+                .setVisible(false);
+
+        const roleLabelStyle:
+            Phaser.Types.GameObjects.Text.TextStyle = {
+                fontFamily:
+                    'Arial, sans-serif',
+                fontSize:
+                    this.mobileControlsEnabled
+                        ? '11px'
+                        : '13px',
+                fontStyle: 'bold',
+                color: '#ffffff',
+                stroke: '#111827',
+                strokeThickness: 4,
+            };
+
+        this.survivalHiderLabelText =
+            this.add.text(
+                0,
+                36,
+                '',
+                roleLabelStyle,
+            )
+                .setOrigin(1, 0.5)
+                .setScrollFactor(0)
+                .setDepth(6012)
+                .setVisible(false);
+
+        this.survivalHunterLabelText =
+            this.add.text(
+                0,
+                36,
+                '',
+                roleLabelStyle,
+            )
+                .setOrigin(0, 0.5)
+                .setScrollFactor(0)
+                .setDepth(6012)
                 .setVisible(false);
 
         this.disconnectNoticeText =
@@ -593,6 +633,12 @@ export class GameScene extends Phaser.Scene {
             this.survivalHudText
                 .setVisible(false);
 
+            this.survivalHiderLabelText
+                .setVisible(false);
+
+            this.survivalHunterLabelText
+                .setVisible(false);
+
             return;
         }
 
@@ -622,9 +668,35 @@ export class GameScene extends Phaser.Scene {
             },
         );
 
-        const spacing = 38;
         const hourglassWidth = 42;
-        const hourglassGap = 16;
+        const hourglassGap = 14;
+        const labelReserve = 54;
+
+        const slotCount =
+            Math.max(
+                hiders.length,
+                1,
+            ) +
+            Math.max(
+                hunterCount,
+                1,
+            );
+
+        const spacing =
+            Phaser.Math.Clamp(
+                (
+                    this.gameWidth -
+                    labelReserve * 2 -
+                    hourglassWidth -
+                    hourglassGap * 2
+                ) /
+                    Math.max(
+                        1,
+                        slotCount,
+                    ),
+                20,
+                38,
+            );
 
         const leftWidth =
             Math.max(
@@ -652,6 +724,8 @@ export class GameScene extends Phaser.Scene {
 
         const headY = 19;
         const bodyY = 39;
+        const roleLabelY = 36;
+        const hiderFirstX = x;
 
         this.survivalHudGraphics
             .clear()
@@ -978,6 +1052,8 @@ export class GameScene extends Phaser.Scene {
             hourglassGap +
             spacing / 2;
 
+        const hunterFirstX = x;
+
         for (
             let index = 0;
             index < hunterCount;
@@ -1069,14 +1145,57 @@ export class GameScene extends Phaser.Scene {
             x += spacing;
         }
 
-        /*
-         * v0.10.10.80:
-         * The icons are self-explanatory. Remove the HIDER/HUNTER text label
-         * completely so it cannot be clipped or overlap the spectator UI.
-         */
         this.survivalHudText
             .setText('')
             .setVisible(false);
+
+        const hiderLabelX =
+            hiderFirstX -
+            Math.max(
+                12,
+                spacing * 0.58,
+            );
+
+        const hunterLastX =
+            hunterFirstX +
+            Math.max(
+                0,
+                hunterCount - 1,
+            ) *
+                spacing;
+
+        const hunterLabelX =
+            hunterLastX +
+            Math.max(
+                12,
+                spacing * 0.58,
+            );
+
+        this.survivalHiderLabelText
+            .setText(
+                tr('하이더'),
+            )
+            .setPosition(
+                Math.max(
+                    4,
+                    hiderLabelX,
+                ),
+                roleLabelY,
+            )
+            .setVisible(true);
+
+        this.survivalHunterLabelText
+            .setText(
+                tr('헌터'),
+            )
+            .setPosition(
+                Math.min(
+                    this.gameWidth - 4,
+                    hunterLabelX,
+                ),
+                roleLabelY,
+            )
+            .setVisible(true);
     }
 
     private showHiderFoundEffect(
@@ -2290,6 +2409,9 @@ export class GameScene extends Phaser.Scene {
         'chameleon-hunt-avatar-preset-v1';
     private lobbyAvatarPresetsBySession =
         new Map<string, NetworkPaintStroke[]>();
+    private outfitLoadingBatchReceived = false;
+    private outfitLoadingBatchDispatched = false;
+    private outfitLoadingPollEvent?: Phaser.Time.TimerEvent;
     private straightLineStart?: NetworkPaintPoint;
     private straightLineStartWorld?: Phaser.Math.Vector2;
     private straightLinePreview?: Phaser.GameObjects.Graphics;
@@ -3806,6 +3928,60 @@ export class GameScene extends Phaser.Scene {
         );
 
         this.networkUnsubscribers.push(
+            multiplayerClient.onReconnectedPlayerPaint(
+                (
+                    strokes:
+                        NetworkPaintStroke[],
+                ) => {
+                    const apply =
+                        (): boolean => {
+                            this.networkPlayerManager
+                                .syncPlayersFromCurrentRoom();
+
+                            let allApplied =
+                                true;
+
+                            strokes.forEach(
+                                (stroke) => {
+                                    if (
+                                        !this.networkPlayerManager
+                                            .hasPlayer(
+                                                stroke
+                                                    .targetSessionId,
+                                            )
+                                    ) {
+                                        allApplied =
+                                            false;
+                                        return;
+                                    }
+
+                                    this.applyRemotePaintStroke(
+                                        stroke,
+                                    );
+                                },
+                            );
+
+                            return allApplied;
+                        };
+
+                    if (!apply()) {
+                        this.time.delayedCall(
+                            500,
+                            () => {
+                                if (!apply()) {
+                                    this.time.delayedCall(
+                                        800,
+                                        apply,
+                                    );
+                                }
+                            },
+                        );
+                    }
+                },
+            ),
+        );
+
+        this.networkUnsubscribers.push(
             multiplayerClient.onRoundPaintState(
                 (
                     strokes:
@@ -4207,6 +4383,48 @@ export class GameScene extends Phaser.Scene {
                             this.clearStatus();
                         },
                     );
+                },
+            ),
+        );
+
+        this.networkUnsubscribers.push(
+            multiplayerClient.onAvatarPresetBatchStart(
+                (count: number) => {
+                    if (
+                        this.phase !==
+                            'lobby'
+                    ) {
+                        return;
+                    }
+
+                    this.outfitLoadingBatchReceived =
+                        true;
+                    this.outfitLoadingBatchDispatched =
+                        count === 0;
+
+                    if (count > 0) {
+                        this.showStatus(
+                            tr('의상 로딩 중...'),
+                        );
+                    }
+                },
+            ),
+        );
+
+        this.networkUnsubscribers.push(
+            multiplayerClient.onAvatarPresetBatchEnd(
+                () => {
+                    if (
+                        this.phase !==
+                            'lobby'
+                    ) {
+                        return;
+                    }
+
+                    this.outfitLoadingBatchDispatched =
+                        true;
+
+                    this.finishOutfitLoadingWhenReady();
                 },
             ),
         );
@@ -5536,27 +5754,73 @@ export class GameScene extends Phaser.Scene {
 
 
     private showOutfitLoadingNotice(): void {
+        this.outfitLoadingBatchReceived =
+            false;
+        this.outfitLoadingBatchDispatched =
+            false;
+
+        this.outfitLoadingPollEvent
+            ?.remove(false);
+
         this.showStatus(
             tr('의상 로딩 중...'),
         );
 
         /*
-         * Cosmetic reconstruction stays in the background.
-         * Gameplay input remains enabled while this notice is visible.
+         * Safety only. Normally the notice is cleared by the real
+         * avatar-render completion check below.
          */
-        this.time.delayedCall(
-            this.mobileControlsEnabled
-                ? 3200
-                : 1800,
-            () => {
-                if (
-                    this.phase === 'lobby'
-                ) {
-                    this.clearStatus();
-                }
-            },
-        );
+        this.outfitLoadingPollEvent =
+            this.time.addEvent({
+                delay: 10000,
+                callback: () => {
+                    if (
+                        this.phase ===
+                            'lobby'
+                    ) {
+                        this.clearStatus();
+                    }
+
+                    this.outfitLoadingPollEvent =
+                        undefined;
+                },
+            });
     }
+
+    private finishOutfitLoadingWhenReady(): void {
+        const check =
+            (): void => {
+                if (
+                    this.phase !== 'lobby'
+                ) {
+                    return;
+                }
+
+                if (
+                    !this.outfitLoadingBatchReceived ||
+                    !this.outfitLoadingBatchDispatched ||
+                    this.networkPlayerManager
+                        .isLobbyAvatarRendering()
+                ) {
+                    this.time.delayedCall(
+                        60,
+                        check,
+                    );
+                    return;
+                }
+
+                this.outfitLoadingPollEvent
+                    ?.remove(false);
+
+                this.outfitLoadingPollEvent =
+                    undefined;
+
+                this.clearStatus();
+            };
+
+        check();
+    }
+
 
     private handleJoinedRoom(
         room: NonNullable<
@@ -11740,6 +12004,14 @@ export class GameScene extends Phaser.Scene {
             multiplayerClient.isConnected() &&
             !this.roomTransitionInProgress
         ) {
+            /*
+             * v0.10.10.88a:
+             * Returning to Lobby also rebuilds cosmetic outfit layers.
+             * Keep controls active, but show the same real render-completion
+             * notice used on first room entry.
+             */
+            this.showOutfitLoadingNotice();
+
             this.time.delayedCall(
                 this.mobileControlsEnabled
                     ? 2400

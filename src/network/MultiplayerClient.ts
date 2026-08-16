@@ -44,6 +44,10 @@ export type AvatarPresetHandler = (
   preset: NetworkAvatarPreset,
 ) => void;
 
+export type AvatarPresetBatchHandler = (
+  count: number,
+) => void;
+
 export type NetworkShotFired = {
   shooterId: string;
   startX: number;
@@ -101,6 +105,10 @@ export type ConnectionRecoveredHandler =
   () => void;
 
 export type RoundPaintStateHandler = (
+  strokes: NetworkPaintStroke[],
+) => void;
+
+export type ReconnectedPlayerPaintHandler = (
   strokes: NetworkPaintStroke[],
 ) => void;
 
@@ -341,6 +349,12 @@ this.phaseChangedHandlers.forEach(
   private readonly avatarPresetHandlers =
     new Set<AvatarPresetHandler>();
 
+  private readonly avatarPresetBatchStartHandlers =
+    new Set<AvatarPresetBatchHandler>();
+
+  private readonly avatarPresetBatchEndHandlers =
+    new Set<AvatarPresetBatchHandler>();
+
   private readonly shotFiredHandlers =
     new Set<ShotFiredHandler>();
 
@@ -364,6 +378,9 @@ this.phaseChangedHandlers.forEach(
 
   private readonly roundPaintStateHandlers =
     new Set<RoundPaintStateHandler>();
+
+  private readonly reconnectedPlayerPaintHandlers =
+    new Set<ReconnectedPlayerPaintHandler>();
 
   private roomHealthCleanup?: () => void;
 
@@ -1688,6 +1705,26 @@ this.manualReconnectInFlight = false;
             ? payload.presets
             : [];
 
+        this.avatarPresetBatchStartHandlers
+          .forEach(
+            (handler) => {
+              handler(
+                presets.length,
+              );
+            },
+          );
+
+        if (presets.length === 0) {
+          this.avatarPresetBatchEndHandlers
+            .forEach(
+              (handler) => {
+                handler(0);
+              },
+            );
+
+          return;
+        }
+
         presets.forEach(
           (
             preset,
@@ -1709,11 +1746,44 @@ this.manualReconnectInFlight = false;
                       handler(preset);
                     },
                   );
+
+                if (
+                  index ===
+                  presets.length - 1
+                ) {
+                  this.avatarPresetBatchEndHandlers
+                    .forEach(
+                      (handler) => {
+                        handler(
+                          presets.length,
+                        );
+                      },
+                    );
+                }
               },
               index * 120,
             );
           },
         );
+      },
+    );
+
+    room.onMessage<{
+      strokes?: NetworkPaintStroke[];
+    }>(
+      "reconnected_player_paint",
+      (payload) => {
+        const strokes =
+          Array.isArray(payload?.strokes)
+            ? payload.strokes
+            : [];
+
+        this.reconnectedPlayerPaintHandlers
+          .forEach(
+            (handler) => {
+              handler(strokes);
+            },
+          );
       },
     );
 
@@ -2313,6 +2383,20 @@ this.manualReconnectInFlight = false;
     );
   }
 
+  onReconnectedPlayerPaint(
+    handler: ReconnectedPlayerPaintHandler,
+  ): () => void {
+    this.reconnectedPlayerPaintHandlers.add(
+      handler,
+    );
+
+    return () => {
+      this.reconnectedPlayerPaintHandlers.delete(
+        handler,
+      );
+    };
+  }
+
   onRoundPaintState(
     handler: RoundPaintStateHandler,
   ): () => void {
@@ -2482,6 +2566,34 @@ this.manualReconnectInFlight = false;
     return () => {
       this.playerChangedHandlers
         .delete(handler);
+    };
+  }
+
+  onAvatarPresetBatchStart(
+    handler: AvatarPresetBatchHandler,
+  ): () => void {
+    this.avatarPresetBatchStartHandlers.add(
+      handler,
+    );
+
+    return () => {
+      this.avatarPresetBatchStartHandlers.delete(
+        handler,
+      );
+    };
+  }
+
+  onAvatarPresetBatchEnd(
+    handler: AvatarPresetBatchHandler,
+  ): () => void {
+    this.avatarPresetBatchEndHandlers.add(
+      handler,
+    );
+
+    return () => {
+      this.avatarPresetBatchEndHandlers.delete(
+        handler,
+      );
     };
   }
 

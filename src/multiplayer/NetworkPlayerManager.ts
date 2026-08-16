@@ -2119,6 +2119,16 @@ export class NetworkPlayerManager {
   private readonly lobbyPresetRenderTokens =
     new Map<string, number>();
 
+  private readonly activeLobbyPresetRenderSessions =
+    new Set<string>();
+
+  isLobbyAvatarRendering(): boolean {
+    return (
+      this.activeLobbyPresetRenderSessions.size >
+      0
+    );
+  }
+
   applyLobbyAvatarPresetProgressive(
     sessionId: string,
     strokes: NetworkPaintStroke[],
@@ -2143,6 +2153,10 @@ export class NetworkPlayerManager {
     this.lobbyPresetRenderTokens.set(
       sessionId,
       renderToken,
+    );
+
+    this.activeLobbyPresetRenderSessions.add(
+      sessionId,
     );
 
     const commands =
@@ -2183,6 +2197,16 @@ export class NetworkPlayerManager {
         if (
           !currentView?.paintLayer
         ) {
+          if (
+            this.lobbyPresetRenderTokens.get(
+              sessionId,
+            ) === renderToken
+          ) {
+            this.activeLobbyPresetRenderSessions.delete(
+              sessionId,
+            );
+          }
+
           return;
         }
 
@@ -2238,6 +2262,18 @@ export class NetworkPlayerManager {
           this.scene.time.delayedCall(
             16,
             drawBatch,
+          );
+
+          return;
+        }
+
+        if (
+          this.lobbyPresetRenderTokens.get(
+            sessionId,
+          ) === renderToken
+        ) {
+          this.activeLobbyPresetRenderSessions.delete(
+            sessionId,
           );
         }
       };
