@@ -2535,3 +2535,28 @@ html.colorhunt-mobile .ch-waiting-role-status {
   padding: 1px 3px;
   font-size: 5.5px;
 }
+
+
+/* v0.10.10.122 — hunt chat bottom-left */
+.colorhunt-chat {
+  --chat-canvas-bottom: 8px;
+}
+
+.colorhunt-chat.colorhunt-chat--hunt:not(.colorhunt-chat--focused) {
+  top: auto !important;
+  bottom: var(--chat-canvas-bottom) !important;
+  left: var(--chat-canvas-left) !important;
+}
+
+@media (pointer: coarse) {
+  .colorhunt-chat.colorhunt-chat--hunt:not(.colorhunt-chat--focused) {
+    width: min(var(--chat-panel-width), 34vw);
+    max-height: 106px;
+  }
+
+  .colorhunt-chat.colorhunt-chat--hunt:not(.colorhunt-chat--focused)
+  .colorhunt-chat__log {
+    min-height: 24px;
+    max-height: 54px;
+  }
+}

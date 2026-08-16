@@ -1664,6 +1664,16 @@ export class GameScene extends Phaser.Scene {
                     );
 
                 if (
+                    this.mobileMovePointerId >=
+                        0 &&
+                    !this.isMobilePointerActuallyDown(
+                        this.mobileMovePointerId,
+                    )
+                ) {
+                    this.resetMobileMoveControl();
+                }
+
+                if (
                     this.mobileMoveBase?.visible &&
                     moveDistance <=
                         this.mobileJoystickRadius *
@@ -1889,13 +1899,43 @@ export class GameScene extends Phaser.Scene {
          * appears, focus changes, or a touch gesture gets cancelled.
          */
         this.mobileMoveSafetyReleaseHandler =
-            (): void => {
+            (
+                event?: Event,
+            ): void => {
+                const trackedPointerId =
+                    this.mobileMovePointerId;
+
                 if (
-                    this.mobileMovePointerId >=
+                    trackedPointerId <
                     0
                 ) {
-                    this.resetMobileMoveControl();
+                    return;
                 }
+
+                if (
+                    event instanceof
+                        PointerEvent
+                ) {
+                    window.requestAnimationFrame(
+                        () => {
+                            if (
+                                this.mobileMovePointerId !==
+                                    trackedPointerId ||
+                                this.isMobilePointerActuallyDown(
+                                    trackedPointerId,
+                                )
+                            ) {
+                                return;
+                            }
+
+                            this.resetMobileMoveControl();
+                        },
+                    );
+
+                    return;
+                }
+
+                this.resetMobileMoveControl();
             };
 
         this.mobileVisibilitySafetyHandler =
@@ -2673,7 +2713,7 @@ export class GameScene extends Phaser.Scene {
     private mobileFireButton?: Phaser.GameObjects.Arc;
     private mobileFireLabel?: Phaser.GameObjects.Text;
     private mobileMovePointerId = -1;
-    private mobileMoveSafetyReleaseHandler?: () => void;
+    private mobileMoveSafetyReleaseHandler?: (event?: Event) => void;
     private mobileVisibilitySafetyHandler?: () => void;
     private mobileAimPointerId = -1;
     private mobileFirePointerId = -1;
@@ -4376,6 +4416,15 @@ export class GameScene extends Phaser.Scene {
             mobileLobby,
         );
 
+        const huntChat =
+            this.phase ===
+            'hunt';
+
+        this.chatRoot.classList.toggle(
+            'colorhunt-chat--hunt',
+            huntChat,
+        );
+
         const logicalTop =
             !coarsePointer &&
             this.phase === 'lobby'
@@ -4416,6 +4465,20 @@ export class GameScene extends Phaser.Scene {
                     rect.top +
                     logicalTop *
                         scaleY,
+                )}px`,
+            );
+
+        this.chatRoot.style
+            .setProperty(
+                '--chat-canvas-bottom',
+                `${Math.round(
+                    Math.max(
+                        6,
+                        window.innerHeight -
+                            rect.bottom +
+                            8 *
+                                scaleY,
+                    ),
                 )}px`,
             );
 
@@ -6171,6 +6234,25 @@ export class GameScene extends Phaser.Scene {
                     this.networkPlayerManager
                         .clearAllPaint();
 
+                    this.lobbyAvatarPresetsBySession
+                        .forEach(
+                            (
+                                strokes,
+                                sessionId,
+                            ) => {
+                                this.networkPlayerManager
+                                    .applyLobbyAvatarPreset(
+                                        sessionId,
+                                        this.getMobileSafeAvatarPreset(
+                                            strokes,
+                                        ),
+                                    );
+                            },
+                        );
+
+                    multiplayerClient
+                        .requestAvatarPresets();
+
                     this.networkPlayerManager
                         .clearRevealMarkers();
 
@@ -6323,17 +6405,51 @@ export class GameScene extends Phaser.Scene {
                      * after a short tick; only a real server lobby transition
                      * is allowed to rebuild the lobby UI.
                      */
-                    this.time.delayedCall(
-                        250,
-                        () => {
-                            const serverPhase =
+                    const confirmLobbyAbort =
+                        (
+                            attempt = 0,
+                        ): void => {
+                            if (
                                 multiplayerClient
-                                    .getPhase();
+                                    .isConnectionRecovering()
+                            ) {
+                                if (
+                                    attempt <
+                                    8
+                                ) {
+                                    this.time.delayedCall(
+                                        350,
+                                        () => {
+                                            confirmLobbyAbort(
+                                                attempt +
+                                                    1,
+                                            );
+                                        },
+                                    );
+                                }
+                                return;
+                            }
 
                             if (
-                                serverPhase !==
+                                multiplayerClient
+                                    .getPhase() !==
                                 'lobby'
                             ) {
+                                return;
+                            }
+
+                            if (
+                                attempt ===
+                                0
+                            ) {
+                                this.time.delayedCall(
+                                    500,
+                                    () => {
+                                        confirmLobbyAbort(
+                                            1,
+                                        );
+                                    },
+                                );
                                 return;
                             }
 
@@ -6352,6 +6468,12 @@ export class GameScene extends Phaser.Scene {
                                     this.clearStatus();
                                 },
                             );
+                        };
+
+                    this.time.delayedCall(
+                        500,
+                        () => {
+                            confirmLobbyAbort();
                         },
                     );
                 },

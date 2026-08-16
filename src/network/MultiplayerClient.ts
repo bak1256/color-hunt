@@ -307,6 +307,9 @@ export class MultiplayerClient {
   private deliveredPhase:
     NetworkGamePhase | "" = "";
 
+  private lastStablePhase:
+    NetworkGamePhase = "lobby";
+
   private emitPhaseChanged(
     phase: NetworkGamePhase,
     phaseEndsAt: number,
@@ -321,6 +324,8 @@ return;
     }
 
     this.deliveredPhase = phase;
+    this.lastStablePhase = phase;
+
 this.phaseChangedHandlers.forEach(
       (handler) => {
         handler(
@@ -1615,7 +1620,7 @@ this.manualReconnectInFlight = false;
     try {
       this.emitPhaseChanged(
         room.state?.phase ??
-          "lobby",
+          this.lastStablePhase,
         this.localizeServerDeadline(
           Number(
             room.state
@@ -2675,8 +2680,16 @@ this.manualReconnectInFlight = false;
 
   getPhase(): NetworkGamePhase {
     return (
-      this.room?.state.phase ??
-      "lobby"
+      this.room?.state?.phase ??
+      this.lastStablePhase
+    );
+  }
+
+  isConnectionRecovering(): boolean {
+    return (
+      this.connectionIssueNotified ||
+      this.manualReconnectInFlight ||
+      this.freshRejoinInFlight
     );
   }
 
@@ -3012,6 +3025,7 @@ this.manualReconnectInFlight = false;
       undefined;
 
     this.room = undefined;
+    this.lastStablePhase = "lobby";
     this.callbacks = undefined;
     this.snapshotPlayers.clear();
     this.snapshotHostId = "";

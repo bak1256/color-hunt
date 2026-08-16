@@ -2838,6 +2838,11 @@ export class NetworkPlayerManager {
   }
 
   clearAllPaint(): void {
+    this.lobbyPresetRenderTokens.clear();
+    this.lobbyPresetAppliedSignatures.clear();
+    this.lobbyPresetRenderingSignatures.clear();
+    this.activeLobbyPresetRenderSessions.clear();
+
     this.players.forEach(
       (view) => {
         view.paintLayer?.texture.clear();
