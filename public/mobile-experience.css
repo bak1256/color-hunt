@@ -173,24 +173,34 @@ html.colorhunt-mobile body.colorhunt-large-mobile canvas {
 }
 
 
-/* v0.10.10.99 multiplayer chat */
+/* v0.10.10.100 multiplayer chat */
 .colorhunt-chat {
   --chat-keyboard-offset: 0px;
+  --chat-canvas-left: 8px;
+  --chat-canvas-top: 8px;
+  --chat-panel-width: 300px;
+
   position: fixed;
   z-index: 2147483000;
-  left: max(10px, env(safe-area-inset-left));
-  top: max(64px, calc(env(safe-area-inset-top) + 50px));
-  width: min(360px, 35vw);
-  max-height: min(260px, calc(100dvh - 150px));
+  left: var(--chat-canvas-left);
+  top: var(--chat-canvas-top);
+  width: var(--chat-panel-width);
+  max-width: calc(100vw - 16px);
+  max-height: 188px;
+
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  padding: 9px;
+  gap: 5px;
+  padding: 6px;
   box-sizing: border-box;
-  border: 1px solid rgba(255,255,255,.14);
-  border-radius: 12px;
-  background: rgba(6, 10, 14, .38);
+
+  border: 1px solid rgba(255,255,255,.10);
+  border-radius: 9px;
+
+  /* no blur: keep the game visible behind chat */
+  background: rgba(5, 8, 12, .20);
   color: #fff;
+
   font-family:
     -apple-system,
     BlinkMacSystemFont,
@@ -198,125 +208,136 @@ html.colorhunt-mobile body.colorhunt-large-mobile canvas {
     "Noto Sans KR",
     "Noto Sans JP",
     sans-serif;
-  font-size: 13px;
-  line-height: 1.35;
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+
+  font-size: 12px;
+  line-height: 1.30;
+
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+
   transition:
-    background .16s ease,
+    background .14s ease,
     bottom .12s ease,
     top .12s ease;
 }
 
 .colorhunt-chat--focused {
-  background: rgba(6, 10, 14, .72);
+  background: rgba(5, 8, 12, .52);
+  border-color: rgba(255,255,255,.18);
 }
 
 .colorhunt-chat__log {
-  min-height: 70px;
-  max-height: 175px;
+  min-height: 44px;
+  max-height: 112px;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
   pointer-events: auto;
   text-shadow:
-    0 1px 2px rgba(0,0,0,.9),
-    1px 0 1px rgba(0,0,0,.65);
+    0 1px 2px rgba(0,0,0,.98),
+    1px 0 1px rgba(0,0,0,.78);
 }
 
 .colorhunt-chat__message {
-  margin: 2px 0;
+  margin: 1px 0;
   overflow-wrap: anywhere;
 }
 
 .colorhunt-chat__message strong {
-  color: #fff4a8;
+  color: #fff0a0;
 }
 
 .colorhunt-chat__notice {
-  margin: 3px 0;
-  color: #ffcf9d;
+  margin: 2px 0;
+  color: #ffd19f;
   font-weight: 700;
 }
 
 .colorhunt-chat__composer {
   display: flex;
-  gap: 6px;
+  gap: 5px;
   align-items: stretch;
 }
 
 .colorhunt-chat__input {
   min-width: 0;
   flex: 1;
-  height: 38px;
+  height: 34px;
   box-sizing: border-box;
-  border: 1px solid rgba(255,255,255,.30);
-  border-radius: 9px;
+  border: 1px solid rgba(255,255,255,.22);
+  border-radius: 7px;
   outline: none;
-  padding: 0 10px;
-  background: rgba(0,0,0,.54);
+  padding: 0 8px;
+  background: rgba(0,0,0,.40);
   color: #fff;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .colorhunt-chat__input:focus {
-  border-color: rgba(129, 208, 255, .95);
-  box-shadow: 0 0 0 2px rgba(80, 170, 240, .18);
+  border-color: rgba(129, 208, 255, .85);
+  background: rgba(0,0,0,.66);
 }
 
 .colorhunt-chat__send {
-  min-width: 58px;
-  border: 1px solid rgba(255,255,255,.28);
-  border-radius: 9px;
-  padding: 0 10px;
-  background: rgba(57, 146, 213, .82);
+  min-width: 52px;
+  border: 1px solid rgba(255,255,255,.20);
+  border-radius: 7px;
+  padding: 0 8px;
+  background: rgba(57, 146, 213, .68);
   color: #fff;
   font-weight: 800;
-  font-size: 13px;
+  font-size: 12px;
   -webkit-tap-highlight-color: transparent;
 }
 
+/*
+ * Mobile normally stays at canvas top-left.
+ * ONLY while the keyboard is actually open/focused, move the composer
+ * above the keyboard so typed text is always visible.
+ */
 @media (pointer: coarse) {
   .colorhunt-chat {
+    max-height: 160px;
+  }
+
+  .colorhunt-chat__log {
+    min-height: 38px;
+    max-height: 88px;
+  }
+
+  .colorhunt-chat__input {
+    height: 40px;
+    font-size: 16px;
+  }
+
+  .colorhunt-chat__send {
+    min-width: 62px;
+    font-size: 13px;
+  }
+
+  .colorhunt-chat.colorhunt-chat--focused {
     top: auto;
+    left: max(
+      8px,
+      env(safe-area-inset-left)
+    );
     bottom:
       calc(
         max(8px, env(safe-area-inset-bottom))
         + var(--chat-keyboard-offset)
       );
-    width: min(390px, 46vw);
+    width: min(
+      390px,
+      calc(100vw - 16px)
+    );
     max-height:
       min(
-        235px,
+        180px,
         calc(
           100dvh
           - var(--chat-keyboard-offset)
-          - 24px
+          - 18px
         )
       );
-    padding: 8px;
-  }
-
-  .colorhunt-chat__log {
-    min-height: 60px;
-    max-height: 135px;
-  }
-
-  .colorhunt-chat__input {
-    height: 44px;
-    font-size: 16px;
-  }
-
-  .colorhunt-chat__send {
-    min-width: 68px;
-    font-size: 14px;
-  }
-}
-
-@media (pointer: coarse) and (orientation: portrait) {
-  .colorhunt-chat {
-    width: min(92vw, 430px);
-    left: 50%;
-    transform: translateX(-50%);
   }
 }

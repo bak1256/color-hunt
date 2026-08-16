@@ -4058,6 +4058,19 @@ export class GameScene extends Phaser.Scene {
                 this.chatViewportHandler,
             );
 
+        window.addEventListener(
+            'resize',
+            this.chatViewportHandler,
+            {
+                passive: true,
+            },
+        );
+
+        window.addEventListener(
+            'colorhunt:viewportchange',
+            this.chatViewportHandler,
+        );
+
         this.updateChatKeyboardOffset();
     }
 
@@ -4066,25 +4079,74 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
+        /*
+         * v0.10.10.100:
+         * Anchor chat to the real Phaser canvas rectangle, NOT browser body.
+         * This keeps desktop chat inside letterboxed/scaled game content.
+         */
+        const canvas =
+            this.game.canvas;
+
+        const rect =
+            canvas.getBoundingClientRect();
+
+        const coarsePointer =
+            window.matchMedia(
+                '(pointer: coarse)',
+            ).matches;
+
+        const panelWidth =
+            Math.max(
+                220,
+                Math.min(
+                    coarsePointer
+                        ? 310
+                        : 330,
+                    rect.width *
+                        (
+                            coarsePointer
+                                ? 0.38
+                                : 0.34
+                        ),
+                ),
+            );
+
+        this.chatRoot.style
+            .setProperty(
+                '--chat-canvas-left',
+                `${Math.round(
+                    rect.left + 8,
+                )}px`,
+            );
+
+        this.chatRoot.style
+            .setProperty(
+                '--chat-canvas-top',
+                `${Math.round(
+                    rect.top + 8,
+                )}px`,
+            );
+
+        this.chatRoot.style
+            .setProperty(
+                '--chat-panel-width',
+                `${Math.round(
+                    panelWidth,
+                )}px`,
+            );
+
         const viewport =
             window.visualViewport;
 
-        if (!viewport) {
-            this.chatRoot.style
-                .setProperty(
-                    '--chat-keyboard-offset',
-                    '0px',
-                );
-            return;
-        }
-
         const keyboardOffset =
-            Math.max(
-                0,
-                window.innerHeight -
-                    viewport.height -
-                    viewport.offsetTop,
-            );
+            viewport
+                ? Math.max(
+                    0,
+                    window.innerHeight -
+                        viewport.height -
+                        viewport.offsetTop,
+                )
+                : 0;
 
         this.chatRoot.style
             .setProperty(
@@ -4248,6 +4310,16 @@ export class GameScene extends Phaser.Scene {
                     'scroll',
                     this.chatViewportHandler,
                 );
+
+            window.removeEventListener(
+                'resize',
+                this.chatViewportHandler,
+            );
+
+            window.removeEventListener(
+                'colorhunt:viewportchange',
+                this.chatViewportHandler,
+            );
         }
 
         this.chatRoot?.remove();
@@ -15967,42 +16039,13 @@ export class GameScene extends Phaser.Scene {
     }
 
     private updatePaintControlHelp(): void {
-        if (
-            !this.paintControlHelpText
-        ) {
-            return;
-        }
-
-        const hunterPaint =
-            multiplayerClient.isConnected() &&
-            this.networkPlayerManager
-                ?.canLocalControlHunter?.();
-
-        this.paintControlHelpText.setText(
-            [
-                tr('PAINT CONTROLS'),
-                tr('좌클릭  색칠'),
-                hunterPaint
-                    ? tr('기본 색상 팔레트')
-                    : tr('배경 위장색 + 검정/흰색 팔레트'),
-                hunterPaint
-                    ? tr('우클릭  숨은 배경 추출 불가')
-                    : tr('우클릭  스포이드'),
-                tr('휠      확대 / 축소'),
-                tr('Ctrl+휠 브러시 크기'),
-                tr('Shift+드래그  직선 그리기'),
-                this.mobileControlsEnabled
-                    ? tr('터치  미리보기 · 움직이면 색칠')
-                    : '',
-                tr('Ctrl+Z  한 단계 되돌리기'),
-                tr('Ctrl+Y  한 단계 다시 실행'),
-                tr('팔레트  브러시 모양'),
-                tr('B       모양 전환'),
-                tr(`현재 ${this.getBrushShapeLabel()} · ${this.brushSize}`),
-            ]
-                .filter(Boolean)
-                .join('\n'),
-        );
+        /*
+         * v0.10.10.100:
+         * Legacy paint-control instructions intentionally removed.
+         */
+        this.paintControlHelpText
+            ?.setText('')
+            .setVisible(false);
     }
 
     private setPaintPaletteVisible(
@@ -16023,14 +16066,18 @@ export class GameScene extends Phaser.Scene {
             },
         );
 
-        this.paintZoomText?.setVisible(
-            visible &&
-            multiplayerClient.isConnected(),
-        );
+        /*
+         * v0.10.10.100:
+         * Old ZOOM / mouse-wheel / paint-control help is removed on all
+         * devices. The freed top-left area belongs to chat.
+         */
+        this.paintZoomText
+            ?.setText('')
+            .setVisible(false);
 
-        this.paintControlHelpText?.setVisible(
-            visible,
-        );
+        this.paintControlHelpText
+            ?.setText('')
+            .setVisible(false);
     }
 
     private highlightPaletteColor(
@@ -20402,41 +20449,13 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
-        const hexColor = this.paintColor
-            .toString(16)
-            .padStart(6, '0')
-            .toUpperCase();
+        this.paintColorText
+            .setText('')
+            .setVisible(false);
 
-        this.paintColorText.setText(
-            tr(`COLOR #${hexColor}`),
-        );
-
-        this.paintColorText.setBackgroundColor(
-            `#${hexColor}`,
-        );
-
-        const color =
-            Phaser.Display.Color.IntegerToColor(
-                this.paintColor,
-            );
-
-        const brightness =
-            color.red * 0.299 +
-            color.green * 0.587 +
-            color.blue * 0.114;
-
-        this.paintColorText.setColor(
-            brightness > 150
-                ? '#000000'
-                : '#ffffff',
-        );
-
-        const shapeText =
-            this.getBrushShapeLabel();
-
-        this.brushSizeText.setText(
-            tr(`BRUSH ${shapeText} ${this.brushSize}`),
-        );
+        this.brushSizeText
+            .setText('')
+            .setVisible(false);
 
         this.updatePaintControlHelp();
     }
@@ -20791,8 +20810,17 @@ export class GameScene extends Phaser.Scene {
         this.selectionRing.setVisible(true);
         this.paintPreview.setVisible(false);
 
-        this.paintColorText.setVisible(true);
-        this.brushSizeText.setVisible(true);
+        /*
+         * v0.10.10.100:
+         * Remove legacy top-left paint info (COLOR / BRUSH).
+         * Palette itself remains available.
+         */
+        this.paintColorText
+            .setText('')
+            .setVisible(false);
+        this.brushSizeText
+            .setText('')
+            .setVisible(false);
         this.setPaintPaletteVisible(true);
         this.highlightPaletteColor(
             this.paintColor,
