@@ -11393,24 +11393,21 @@ export class GameScene extends Phaser.Scene {
         this.hunterBlindText = this.add
             .text(
                 this.gameWidth / 2,
-                122,
-                [
-                    tr('HIDERS ARE PAINTING...'),
-                    tr('Hunter도 자신의 위장색을 칠해보세요.'),
-                ].join('\n'),
+                100,
+                tr('위장하세요'),
                 {
                     fontFamily: 'monospace',
-                    fontSize: '17px',
+                    fontSize: '16px',
                     fontStyle: 'bold',
                     color: '#f3f4f6',
-                    backgroundColor: 'rgba(52,59,66,0.88)',
-                    fixedWidth: 430,
+                    backgroundColor: 'rgba(32,38,43,0.68)',
                     padding: {
-                        x: 12,
-                        y: 7,
+                        x: 14,
+                        y: 6,
                     },
                     align: 'center',
-                    lineSpacing: 5,
+                    stroke: '#111827',
+                    strokeThickness: 3,
                 },
             )
             .setOrigin(0.5)
@@ -13276,13 +13273,13 @@ export class GameScene extends Phaser.Scene {
         this.setFixedHudScreenPosition(
             this.timerText,
             this.gameWidth / 2,
-            103,
+            88,
         );
 
         this.setFixedHudScreenPosition(
             this.guideText,
             this.gameWidth / 2,
-            137,
+            118,
         );
     }
 
@@ -19349,11 +19346,8 @@ export class GameScene extends Phaser.Scene {
             this.hunterBlindText?.visible
         ) {
             this.hunterBlindText.setText(
-                [
-                    tr('HIDERS ARE PAINTING...'),
-                    tr('Hunter도 자신의 위장색을 칠해보세요.'),
-                    tr(`게임 시작까지 ${remainingSeconds}초`),
-                ].join('\n'),
+                `${tr('위장하세요')}  |  ` +
+                `⌛ ${tr(`PAINT ${remainingSeconds}`)}`,
             );
         }
 
@@ -19579,9 +19573,14 @@ export class GameScene extends Phaser.Scene {
 
         this.timerText.setVisible(true);
 
-        this.guideText.setText(
-            tr('배경색을 골라 캐릭터를 위장하세요.'),
-        );
+        /*
+         * v0.10.10.84:
+         * Paint counter is the only top-center Hider text. The old generic
+         * guide consumed the same vertical space as the enlarged character.
+         */
+        this.guideText
+            .setText('')
+            .setVisible(false);
 
         this.player.setVisible(false);
         this.hunterVisuals.forEach(({ object }) => object.setVisible(false));
@@ -19729,11 +19728,13 @@ export class GameScene extends Phaser.Scene {
                     .getLocalPlayer()
                     ?.role;
 
-            this.guideText.setText(
-                localRole === 'hunter'
-                    ? tr('WASD 이동 · 마우스 조준 · 좌클릭 발사')
-                    : tr('WASD 이동'),
-            );
+            this.guideText
+                .setVisible(true)
+                .setText(
+                    localRole === 'hunter'
+                        ? tr('WASD 이동 · 마우스 조준 · 좌클릭 발사')
+                        : tr('WASD 이동'),
+                );
         } else {
             this.guideText.setText(
                 tr('WASD 이동 · 마우스 조준 · 좌클릭 발사'),
