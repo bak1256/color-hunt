@@ -9935,14 +9935,20 @@ export class GameScene extends Phaser.Scene {
                 multiplayerClient.getRoom()
                     ?.state.winner;
 
+            /*
+             * v0.10.10.91:
+             * state.winner is the final server-authoritative result.
+             * A round_result packet can arrive slightly earlier/out of order
+             * and must never override the final Schema winner.
+             */
             const effectiveWinner =
-                this.roundResultWinner ??
                 (
                     schemaWinner === 'hunters' ||
                     schemaWinner === 'hiders'
                         ? schemaWinner
                         : null
-                );
+                ) ??
+                this.roundResultWinner;
 
             if (effectiveWinner) {
                 this.roundResultWinner =
