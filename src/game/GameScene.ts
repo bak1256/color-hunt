@@ -11215,13 +11215,78 @@ export class GameScene extends Phaser.Scene {
                 return;
             }
 
-            const mapLabels = [
-                tr('숲의 맵'),
-                tr('사막의 유적'),
-                tr('바다의 리조트'),
-                tr('성의 정원'),
-                tr('네온 시티'),
-            ];
+            const getRoomMapPresentation =
+                (
+                    room:
+                        PublicRoomInfo,
+                ): {
+                    key: string;
+                    label: string;
+                    thumbnail: string;
+                } => {
+                    const rawSelected =
+                        String(
+                            room.metadata
+                                ?.selectedMap ??
+                            room.metadata
+                                ?.activeMap ??
+                            'random',
+                        ).toLowerCase();
+
+                    if (
+                        rawSelected ===
+                        'random'
+                    ) {
+                        return {
+                            key:
+                                'random',
+                            label:
+                                'RANDOM',
+                            /*
+                             * RANDOM has no fixed map before game start.
+                             * Use the forest/map1 preview as a neutral preview,
+                             * while the visible label stays RANDOM.
+                             */
+                            thumbnail:
+                                '/assets/backgrounds/map1.png',
+                        };
+                    }
+
+                    const match =
+                        /^map(?:[1-9]|1[01])$/
+                            .exec(
+                                rawSelected,
+                            );
+
+                    if (!match) {
+                        return {
+                            key:
+                                'random',
+                            label:
+                                'RANDOM',
+                            thumbnail:
+                                '/assets/backgrounds/map1.png',
+                        };
+                    }
+
+                    const mapNumber =
+                        Number(
+                            rawSelected
+                                .replace(
+                                    'map',
+                                    '',
+                                ),
+                        );
+
+                    return {
+                        key:
+                            rawSelected,
+                        label:
+                            `MAP ${mapNumber}`,
+                        thumbnail:
+                            `/assets/backgrounds/map${mapNumber}.png`,
+                    };
+                };
 
             rooms
                 .slice(
@@ -11232,8 +11297,6 @@ export class GameScene extends Phaser.Scene {
                     (
                         room:
                             PublicRoomInfo,
-                        index:
-                            number,
                     ) => {
                         const roomTitle =
                             room.metadata
@@ -11255,15 +11318,10 @@ export class GameScene extends Phaser.Scene {
                         row.className =
                             'ch-lobby-room-row';
 
-                        const textureIndex =
-                            (
-                                index %
-                                11
-                            ) +
-                            1;
-
-                        const thumbnail =
-                            `/assets/backgrounds/map${textureIndex}.png`;
+                        const mapPresentation =
+                            getRoomMapPresentation(
+                                room,
+                            );
 
                         const available =
                             phase ===
@@ -11272,16 +11330,16 @@ export class GameScene extends Phaser.Scene {
                         row.innerHTML = `
                             <span class="ch-lobby-room-name">
                                 <span class="ch-lobby-thumb">
-                                    <img src="${thumbnail}" alt="">
+                                    <img src="${mapPresentation.thumbnail}" alt="${mapPresentation.label}">
                                 </span>
                                 <span class="ch-lobby-room-copy">
                                     <strong>${roomTitle}</strong>
-                                    <small>${mapLabels[index % mapLabels.length]}</small>
+                                    <small>${mapPresentation.label}</small>
                                 </span>
                             </span>
 
                             <span class="ch-lobby-room-map">
-                                ${mapLabels[index % mapLabels.length]}
+                                ${mapPresentation.label}
                             </span>
 
                             <span class="ch-lobby-room-count">

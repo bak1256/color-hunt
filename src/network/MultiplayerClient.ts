@@ -201,6 +201,8 @@ export type PublicRoomInfo = {
     isPrivate?: boolean;
     playerCount?: number;
     phase?: string;
+    selectedMap?: string;
+    activeMap?: string;
   };
 };
 
