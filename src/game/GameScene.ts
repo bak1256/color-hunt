@@ -3965,15 +3965,20 @@ export class GameScene extends Phaser.Scene {
                         };
 
                     if (!apply()) {
-                        this.time.delayedCall(
-                            500,
-                            () => {
-                                if (!apply()) {
-                                    this.time.delayedCall(
-                                        800,
-                                        apply,
-                                    );
-                                }
+                        /*
+                         * v0.10.10.89:
+                         * Replacement Hunter Schema can arrive later on an
+                         * opponent than on the reconnecting client itself.
+                         * Retry only this tiny targeted paint payload until
+                         * the new Hunter actor exists. Never replay the full
+                         * round paint here.
+                         */
+                        [450, 1100, 2200, 3800].forEach(
+                            (delay) => {
+                                this.time.delayedCall(
+                                    delay,
+                                    apply,
+                                );
                             },
                         );
                     }
