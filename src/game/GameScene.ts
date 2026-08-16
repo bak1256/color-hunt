@@ -2762,6 +2762,16 @@ export class GameScene extends Phaser.Scene {
      */
     private readonly hiderVisionRadiusScreen = 205;
 
+    /*
+     * v0.10.10.130 balance:
+     * Hunter flashlight range buffed by 1.5x.
+     * Previous range: 285 screen px
+     * New range: 427.5 screen px
+     * FOV angle remains unchanged.
+     */
+    private readonly hunterVisionRangeScreen =
+        285 * 1.5;
+
     private heartbeatDangerOverlay!: Phaser.GameObjects.Rectangle;
     private heartbeatBorders: Phaser.GameObjects.Rectangle[] = [];
     private heartbeatText!: Phaser.GameObjects.Text;
@@ -14345,7 +14355,8 @@ export class GameScene extends Phaser.Scene {
          * This reads visually as a flashlight / fan instead of a triangle.
          */
         const range =
-            285 / zoom;
+            this.hunterVisionRangeScreen /
+            zoom;
 
         const halfAngle =
             Phaser.Math.DegToRad(
