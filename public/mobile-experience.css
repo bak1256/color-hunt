@@ -3172,3 +3172,195 @@ html.colorhunt-mobile body.colorhunt-unfolded {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+
+/* ============================================================
+   v0.10.10.128 — desktop lobby / waiting-room readability
+   PC ONLY: enlarge type together with controls so translations fit.
+   ============================================================ */
+
+@media (pointer: fine) and (min-width: 800px) {
+  /* ---------- Public main lobby ---------- */
+
+  .colorhunt-main-lobby .ch-lobby-section-title {
+    font-size: clamp(17px, 1.25vw, 22px);
+    line-height: 1.1;
+  }
+
+  .colorhunt-main-lobby .ch-lobby-refresh {
+    min-width: 96px;
+    min-height: 34px;
+    padding: 0 12px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .colorhunt-main-lobby .ch-lobby-room-head {
+    min-height: 36px;
+    font-size: 11px;
+    line-height: 1.15;
+  }
+
+  .colorhunt-main-lobby .ch-lobby-room-row {
+    min-height: 58px;
+  }
+
+  .colorhunt-main-lobby .ch-lobby-room-name strong {
+    font-size: 14px;
+    line-height: 1.15;
+  }
+
+  .colorhunt-main-lobby .ch-lobby-room-name small,
+  .colorhunt-main-lobby .ch-lobby-room-map,
+  .colorhunt-main-lobby .ch-lobby-room-count {
+    font-size: 11px;
+    line-height: 1.15;
+  }
+
+  .colorhunt-main-lobby .ch-lobby-room-status {
+    min-width: 62px;
+    min-height: 26px;
+    padding: 0 7px;
+    font-size: 10px;
+    white-space: nowrap;
+  }
+
+  .colorhunt-main-lobby .ch-lobby-room-tip {
+    min-height: 28px;
+    font-size: 10px;
+    line-height: 1.2;
+  }
+
+  .colorhunt-main-lobby .ch-lobby-actions h2 {
+    font-size: clamp(16px, 1.15vw, 20px);
+    line-height: 1.1;
+  }
+
+  .colorhunt-main-lobby .ch-lobby-profile-copy strong {
+    font-size: 13px;
+  }
+
+  .colorhunt-main-lobby .ch-lobby-avatar-edit {
+    min-height: 34px;
+    padding: 0 10px;
+    font-size: 11px;
+    line-height: 1.15;
+    white-space: normal;
+  }
+
+  .colorhunt-main-lobby .ch-lobby-action {
+    min-height: 54px;
+    padding: 7px 10px;
+  }
+
+  .colorhunt-main-lobby .ch-lobby-action strong {
+    font-size: 13px;
+    line-height: 1.1;
+  }
+
+  .colorhunt-main-lobby .ch-lobby-action small {
+    font-size: 10px;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+  }
+
+  .colorhunt-main-lobby .ch-lobby-guide strong {
+    font-size: 12px;
+  }
+
+  .colorhunt-main-lobby .ch-lobby-guide span {
+    font-size: 10px;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+  }
+
+  .colorhunt-main-lobby .ch-lobby-language button {
+    min-height: 32px;
+    padding: 0 8px;
+    font-size: 10px;
+    white-space: nowrap;
+  }
+
+  /* ---------- Waiting room ---------- */
+
+  .ch-waiting-kicker {
+    font-size: 11px;
+    line-height: 1.1;
+  }
+
+  .ch-waiting-header strong {
+    font-size: clamp(18px, 1.3vw, 23px);
+    line-height: 1.1;
+  }
+
+  .ch-waiting-bgm-inline,
+  .ch-waiting-help-inline {
+    min-height: 34px;
+    padding: 0 10px;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  .ch-waiting-info small,
+  .ch-waiting-map small {
+    font-size: 11px;
+    line-height: 1.15;
+  }
+
+  .ch-waiting-info strong,
+  .ch-waiting-map span {
+    font-size: 14px;
+    line-height: 1.15;
+  }
+
+  .ch-waiting-host {
+    font-size: 11px;
+    line-height: 1.15;
+  }
+
+  .ch-waiting-role button {
+    min-height: 36px;
+    padding: 0 9px;
+    font-size: 12px;
+    line-height: 1.15;
+    white-space: normal;
+  }
+
+  .ch-waiting-role-status {
+    min-height: 20px;
+    padding: 3px 6px;
+    font-size: 10px;
+    line-height: 1.1;
+  }
+
+  .ch-waiting-timing-title,
+  .ch-waiting-timing-title b {
+    font-size: 11px;
+    line-height: 1.15;
+  }
+
+  .ch-waiting-time-options button {
+    min-height: 30px;
+    padding: 0 7px;
+    font-size: 11px;
+  }
+
+  .ch-waiting-start {
+    min-height: 43px;
+    padding: 0 12px;
+    font-size: 14px;
+    line-height: 1.1;
+  }
+
+  .ch-waiting-footer {
+    min-height: 38px;
+  }
+
+  .ch-waiting-footer button {
+    min-height: 34px;
+    padding: 0 9px;
+    font-size: 11px;
+    line-height: 1.15;
+    white-space: normal;
+  }
+}
