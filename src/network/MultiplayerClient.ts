@@ -123,6 +123,10 @@ export type NetworkLobbySnapshot = {
   activeMap?: string;
   paintDurationMs?: number;
   huntDurationMs?: number;
+  phase?: NetworkGamePhase;
+  phaseEndsAt?: number;
+  serverNow?: number;
+  paintReadyState?: PaintReadyState;
   players: Array<
     NetworkPlayerState & {
       sessionId: string;
@@ -635,6 +639,102 @@ export class MultiplayerClient {
         ? huntDurationMs
         : 80_000;
 
+    /*
+     * v0.10.10.72:
+     * lobby_snapshot is now an authoritative recovery snapshot for every
+     * active phase, not just the Lobby UI. This heals a missed
+     * phase_changed packet at Paint -> Hunt.
+     */
+    const snapshotPhase =
+      snapshot.phase;
+
+    if (
+      snapshotPhase === "lobby" ||
+      snapshotPhase === "countdown" ||
+      snapshotPhase === "paint" ||
+      snapshotPhase === "hunt" ||
+      snapshotPhase === "finished"
+    ) {
+      const serverEndsAt =
+        Number(snapshot.phaseEndsAt ?? 0);
+
+      const serverNow =
+        Number(snapshot.serverNow ?? 0);
+
+      if (
+        Number.isFinite(serverNow) &&
+        serverNow > 0
+      ) {
+        this.serverClockOffsetMs =
+          Date.now() - serverNow;
+        this.hasServerClockOffset = true;
+      }
+
+      const localEndsAt =
+        Number.isFinite(serverNow) &&
+        serverNow > 0 &&
+        Number.isFinite(serverEndsAt)
+          ? Date.now() +
+            Math.max(
+              0,
+              serverEndsAt - serverNow,
+            )
+          : this.localizeServerDeadline(
+              serverEndsAt,
+            );
+
+      this.phaseChangedHandlers.forEach(
+        (handler) => {
+          handler(
+            snapshotPhase,
+            Number.isFinite(localEndsAt)
+              ? localEndsAt
+              : 0,
+          );
+        },
+      );
+    }
+
+    if (snapshot.paintReadyState) {
+      const readySessionIds =
+        Array.isArray(
+          snapshot.paintReadyState.readySessionIds,
+        )
+          ? snapshot.paintReadyState.readySessionIds.map(String)
+          : [];
+
+      const hiderCount =
+        Number(
+          snapshot.paintReadyState.hiderCount ?? 0,
+        );
+
+      const readyCount =
+        Number(
+          snapshot.paintReadyState.readyCount ??
+          readySessionIds.length,
+        );
+
+      this.paintReadyState = {
+        readySessionIds,
+        hiderCount,
+        readyCount,
+        allHidersReady:
+          Boolean(
+            snapshot.paintReadyState.allHidersReady,
+          ) ||
+          (
+            hiderCount > 0 &&
+            readyCount >= hiderCount
+          ),
+      };
+
+      this.paintReadyStateHandlers.forEach(
+        (handler) => {
+          handler(this.paintReadyState);
+        },
+      );
+    }
+
     const incomingIds =
       new Set<string>();
 
@@ -885,8 +985,12 @@ private attachRoom(
             handler(
               room.state?.phase ??
                 "lobby",
-              room.state
-                ?.phaseEndsAt ?? 0,
+              this.localizeServerDeadline(
+                Number(
+                  room.state
+                    ?.phaseEndsAt ?? 0,
+                ),
+              ),
             );
           } catch (error) {
             console.error(

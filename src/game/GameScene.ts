@@ -348,10 +348,22 @@ export class GameScene extends Phaser.Scene {
                     return;
                 }
 
-                const role =
+                const stateRole =
                     multiplayerClient
                         .getLocalPlayer()
                         ?.role;
+
+                const role =
+                    stateRole ??
+                    (
+                        this.networkPlayerManager
+                            ?.isLocalHunter()
+                            ? 'hunter'
+                            : this.networkPlayerManager
+                                ?.isLocalHider()
+                                ? 'hider'
+                                : undefined
+                    );
 
                 if (role === 'hider') {
                     this.localPaintReady =
@@ -4873,60 +4885,7 @@ export class GameScene extends Phaser.Scene {
             tr('방을 확인하는 중...'),
         );
 
-        /*
-         * 공개방은 클릭한 목록이 stale일 수 있으므로 실제 join 직전에
-         * 서버 room list를 한 번 더 확인합니다.
-         */
-        if (!isPrivate) {
-            try {
-                const latestRooms =
-                    await multiplayerClient
-                        .listPublicRooms();
-
-                const roomStillExists =
-                    latestRooms.some(
-                        (room) =>
-                            room.roomId ===
-                                roomId &&
-                            room.metadata
-                                ?.isPrivate !==
-                                true &&
-                            (
-                                room.metadata
-                                    ?.phase ??
-                                'lobby'
-                            ) === 'lobby' &&
-                            room.clients <
-                                room.maxClients,
-                    );
-
-                if (!roomStillExists) {
-                    this.setModalBusy(
-                        false,
-                        tr('이미 사라졌거나 참가할 수 없는 방입니다.'),
-                    );
-
-                    this.showStatus(
-                        tr('방에 참가할 수 없습니다. 방 목록을 갱신했습니다.'),
-                    );
-
-                    void this.refreshPublicRoomList(
-                        false,
-                    );
-
-                    return;
-                }
-            } catch (error) {
-                /*
-                 * 목록 API 자체가 잠깐 실패한 경우에는 join을 시도하되
-                 * 아래 5초 timeout 안전장치가 최종적으로 UI를 복구합니다.
-                 */
-                console.warn(
-                    '[Chameleon Hunt] pre-join room validation failed',
-                    error,
-                );
-            }
-        }
+        /* v0.10.10.72: join immediately; Colyseus is the authority. */
 
         this.setModalBusy(
             true,
@@ -12106,7 +12065,7 @@ export class GameScene extends Phaser.Scene {
              * event. Request it explicitly because mobile/background tabs can
              * miss the initial server broadcast around the phase transition.
              */
-            [0, 180, 600].forEach(
+            [0, 180, 600, 1200, 2400].forEach(
                 (delay) => {
                     this.time.delayedCall(
                         delay,
@@ -19150,17 +19109,20 @@ export class GameScene extends Phaser.Scene {
                     if (
                         this.time.now -
                             this.phaseExpiredSince >
-                        4000
+                        1200
                     ) {
-                        this.phaseExpiredSince = 0;
+                        /*
+                         * v0.10.10.72 HOTFIX:
+                         * Never self-disconnect at Paint 0.
+                         * requestLobbySnapshot() now carries authoritative
+                         * phase/deadline/READY state and will heal a missed
+                         * phase_changed packet.
+                         */
+                        this.phaseExpiredSince =
+                            this.time.now;
 
-                        this.showStatus(
-                            tr('서버 응답이 없어 로비로 돌아갑니다.'),
-                        );
-
-                        void multiplayerClient
-                            .disconnect();
-                        return;
+                        multiplayerClient
+                            .requestLobbySnapshot();
                     }
                 }
             } else if (
