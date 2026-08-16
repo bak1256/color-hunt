@@ -3811,13 +3811,46 @@ export class GameScene extends Phaser.Scene {
                     strokes:
                         NetworkPaintStroke[],
                 ) => {
-                    this.networkPlayerManager
-                        .clearAllPaint();
+                    /*
+                     * v0.10.10.85:
+                     * A reconnect snapshot can arrive a little earlier than
+                     * the replacement Hunter actor. Never clear paint first.
+                     * Reconcile players, then replace the paint snapshot after
+                     * the actor exists. Repeat twice as a bounded safety pulse.
+                     */
+                    const replay =
+                        (): void => {
+                            this.networkPlayerManager
+                                .syncPlayersFromCurrentRoom();
 
-                    strokes.forEach(
-                        (stroke) => {
-                            this.applyRemotePaintStroke(
-                                stroke,
+                            this.networkPlayerManager
+                                .clearAllPaint();
+
+                            strokes.forEach(
+                                (stroke) => {
+                                    this.applyRemotePaintStroke(
+                                        stroke,
+                                    );
+                                },
+                            );
+
+                            this.networkPlayerManager
+                                .restoreAllPlayerVisibility();
+
+                            if (
+                                this.phase ===
+                                    'hunt'
+                            ) {
+                                this.networkPlayerManager
+                                    .normalizeLocalPlayerForGameplay();
+                            }
+                        };
+
+                    [90, 320, 760].forEach(
+                        (delay) => {
+                            this.time.delayedCall(
+                                delay,
+                                replay,
                             );
                         },
                     );
@@ -4175,12 +4208,13 @@ export class GameScene extends Phaser.Scene {
                      * Schema so the local Hunter body, gun and Lobby avatar
                      * always represent exactly one current session.
                      */
-                    this.networkPlayerManager
-                        .clearAllPlayers();
-
-                    this.knownAliveState
-                        .clear();
-
+                    /*
+                     * v0.10.10.85:
+                     * Do NOT destroy all existing actors on reconnect.
+                     * That erased every Hider paint texture while the fresh
+                     * Hunter sessionId was still arriving. Reconcile only
+                     * changed sessions and preserve already-correct visuals.
+                     */
                     this.networkPlayerManager
                         .syncPlayersFromCurrentRoom();
 
@@ -4189,6 +4223,9 @@ export class GameScene extends Phaser.Scene {
 
                     this.networkPlayerManager
                         .normalizeLocalPlayerForGameplay();
+
+                    multiplayerClient
+                        .requestLobbySnapshot();
 
                     multiplayerClient
                         .requestAvatarPresets();
@@ -11393,17 +11430,17 @@ export class GameScene extends Phaser.Scene {
         this.hunterBlindText = this.add
             .text(
                 this.gameWidth / 2,
-                100,
+                98,
                 tr('위장하세요'),
                 {
                     fontFamily: 'monospace',
-                    fontSize: '16px',
+                    fontSize: '15px',
                     fontStyle: 'bold',
                     color: '#f3f4f6',
-                    backgroundColor: 'rgba(32,38,43,0.68)',
+                    backgroundColor: 'rgba(18,22,26,0.82)',
                     padding: {
-                        x: 14,
-                        y: 6,
+                        x: 16,
+                        y: 7,
                     },
                     align: 'center',
                     stroke: '#111827',
@@ -13273,13 +13310,13 @@ export class GameScene extends Phaser.Scene {
         this.setFixedHudScreenPosition(
             this.timerText,
             this.gameWidth / 2,
-            88,
+            96,
         );
 
         this.setFixedHudScreenPosition(
             this.guideText,
             this.gameWidth / 2,
-            118,
+            128,
         );
     }
 
@@ -13317,10 +13354,15 @@ export class GameScene extends Phaser.Scene {
          * Paint 중에도 캐릭터를 화면 정중앙에 둡니다.
          * 맵 경계 clamp를 쓰지 않아 가장자리에서도 중심이 흔들리지 않습니다.
          */
+        /*
+         * v0.10.10.85:
+         * Negative lift centers the camera ABOVE the actor, making the actor
+         * appear lower on screen. This leaves a clean HUD gap above the head.
+         */
         const screenLiftPx =
             this.mobileControlsEnabled
-                ? 104
-                : 88;
+                ? -72
+                : -58;
 
         const worldYOffset =
             screenLiftPx /
@@ -19499,7 +19541,15 @@ export class GameScene extends Phaser.Scene {
         this.nextHeartbeatAt = 0;
         this.hideHuntTensionUi();
 
-        this.timerText.setVisible(true);
+        const localIsHunter =
+            this.isMultiplayerSession() &&
+            this.networkPlayerManager
+                .isLocalHunter();
+
+        this.timerText.setVisible(
+            !localIsHunter,
+        );
+
         this.applyPaintOnlyScreenLayout();
 
         /*
@@ -19571,7 +19621,9 @@ export class GameScene extends Phaser.Scene {
             .setText('')
             .setVisible(false);
 
-        this.timerText.setVisible(true);
+        this.timerText.setVisible(
+            !localIsHunter,
+        );
 
         /*
          * v0.10.10.84:
@@ -19643,9 +19695,7 @@ export class GameScene extends Phaser.Scene {
         }
         this.updatePaintHud();
 
-        this.showStatus(
-            tr(`${this.paintDuration}초 안에 위장하세요`),
-        );
+        this.clearStatus();
 
         this.input.setDefaultCursor('crosshair');
     }
