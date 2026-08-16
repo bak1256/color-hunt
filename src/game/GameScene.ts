@@ -1021,25 +1021,14 @@ export class GameScene extends Phaser.Scene {
             x += spacing;
         }
 
+        /*
+         * v0.10.10.80:
+         * The icons are self-explanatory. Remove the HIDER/HUNTER text label
+         * completely so it cannot be clipped or overlap the spectator UI.
+         */
         this.survivalHudText
-            .setText(
-                `${tr('HIDER')}        ${tr('HUNTER')}`,
-            )
-            .setPosition(
-                this.gameWidth / 2,
-                79,
-            )
-            .setFontSize(19)
-            .setStroke('#111827', 4)
-            .setVisible(true)
-            .setAlpha(1);
-
-        /* Keep role HUD screen-fixed in Paint and Hunt camera zooms. */
-        this.setFixedHudScreenPosition(
-            this.survivalHudText,
-            this.gameWidth / 2,
-            79,
-        );
+            .setText('')
+            .setVisible(false);
     }
 
     private showHiderFoundEffect(
@@ -1186,7 +1175,7 @@ export class GameScene extends Phaser.Scene {
         this.spectatorButton =
             this.add.text(
                 this.gameWidth / 2,
-                354,
+                344,
                 this.mobileControlsEnabled
                     ? tr('시야 전환')
                     : tr('TAB · 시야 전환'),
@@ -1232,7 +1221,7 @@ export class GameScene extends Phaser.Scene {
         this.spectatorStatusText =
             this.add.text(
                 this.gameWidth / 2,
-                420,
+                430,
                 '',
                 {
                     fontFamily:
@@ -2040,7 +2029,7 @@ export class GameScene extends Phaser.Scene {
             this.setFixedHudScreenPosition(
                 this.spectatorButton,
                 this.gameWidth / 2,
-                354,
+                344,
             );
 
             if (
@@ -2049,7 +2038,7 @@ export class GameScene extends Phaser.Scene {
                 this.setFixedHudScreenPosition(
                     this.spectatorStatusText,
                     this.gameWidth / 2,
-                    420,
+                    430,
                 );
             }
         }
@@ -4110,6 +4099,48 @@ export class GameScene extends Phaser.Scene {
         this.networkUnsubscribers.push(
             multiplayerClient.onConnectionRecovered(
                 () => {
+                    /*
+                     * v0.10.10.80:
+                     * Fresh fallback reconnect can change sessionId while the
+                     * old mobile render objects still exist locally.
+                     * Rebuild ALL network actors from the authoritative room
+                     * Schema so the local Hunter body, gun and Lobby avatar
+                     * always represent exactly one current session.
+                     */
+                    this.networkPlayerManager
+                        .clearAllPlayers();
+
+                    this.knownAliveState
+                        .clear();
+
+                    this.networkPlayerManager
+                        .syncPlayersFromCurrentRoom();
+
+                    this.networkPlayerManager
+                        .restoreAllPlayerVisibility();
+
+                    this.networkPlayerManager
+                        .normalizeLocalPlayerForGameplay();
+
+                    this.time.delayedCall(
+                        60,
+                        () => {
+                            this.networkPlayerManager
+                                .syncPlayersFromCurrentRoom();
+
+                            this.networkPlayerManager
+                                .restoreAllPlayerVisibility();
+
+                            if (
+                                this.phase ===
+                                    'hunt'
+                            ) {
+                                this.networkPlayerManager
+                                    .normalizeLocalPlayerForGameplay();
+                            }
+                        },
+                    );
+
                     this.showStatus(
                         tr('재접속했습니다.'),
                     );
@@ -13200,8 +13231,8 @@ export class GameScene extends Phaser.Scene {
                     ? 1.5
                     : 1,
                 this.mobileControlsEnabled
-                    ? 8
-                    : 6,
+                    ? 9
+                    : 6.5,
             );
 
         this.paintWorldZoom =
@@ -19348,8 +19379,8 @@ export class GameScene extends Phaser.Scene {
                     .isLocalHunter()
                     ? 1.05
                     : this.mobileControlsEnabled
-                        ? 3.85
-                        : 3.15;
+                        ? 4.55
+                        : 3.75;
 
             this.cameras.main
                 .stopFollow()
