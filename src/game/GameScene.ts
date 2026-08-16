@@ -4416,19 +4416,41 @@ export class GameScene extends Phaser.Scene {
             mobileLobby,
         );
 
+        const desktopLobby =
+            !coarsePointer &&
+            this.phase === 'lobby';
+
+        const desktopPaint =
+            !coarsePointer &&
+            this.phase === 'paint';
+
         const huntChat =
             this.phase ===
             'hunt';
+
+        this.chatRoot.classList.toggle(
+            'colorhunt-chat--desktop-lobby',
+            desktopLobby,
+        );
+
+        this.chatRoot.classList.toggle(
+            'colorhunt-chat--desktop-paint',
+            desktopPaint,
+        );
 
         this.chatRoot.classList.toggle(
             'colorhunt-chat--hunt',
             huntChat,
         );
 
+        /*
+         * Desktop Paint palette occupies the lower-left ~110 logical pixels.
+         * Paint chat therefore lives at the upper-left.
+         * Lobby/Hunt use CSS bottom anchoring.
+         */
         const logicalTop =
-            !coarsePointer &&
-            this.phase === 'lobby'
-                ? 76
+            desktopPaint
+                ? 10
                 : 8;
 
         const maxChatHeight =
@@ -4445,9 +4467,11 @@ export class GameScene extends Phaser.Scene {
                             scaleY,
                     ),
                 )
-                : coarsePointer
-                    ? 130
-                    : 176;
+                : desktopPaint
+                    ? 148
+                    : coarsePointer
+                        ? 130
+                        : 176;
 
         this.chatRoot.style
             .setProperty(

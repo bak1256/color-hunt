@@ -3103,3 +3103,48 @@ html.colorhunt-mobile body.colorhunt-unfolded {
   --ch-mobile-font-lg: clamp(12px, 1.95vw, 16px);
   --ch-mobile-font-xl: clamp(14px, 2.3vw, 19px);
 }
+
+
+/* ============================================================
+   v0.10.10.126 — desktop chat phase placement
+   ============================================================ */
+
+/*
+ * PC waiting room:
+ * Keep chat in the canvas bottom-left. Unlike the old position, this does
+ * not compete with room/map UI near the top.
+ */
+@media (pointer: fine) {
+  .colorhunt-chat.colorhunt-chat--desktop-lobby:not(.colorhunt-chat--focused) {
+    top: auto !important;
+    left: var(--chat-canvas-left) !important;
+    bottom: var(--chat-canvas-bottom) !important;
+    transform: none !important;
+    width: min(var(--chat-panel-width), 320px);
+    max-height: min(var(--chat-panel-max-height), 176px);
+  }
+
+  /*
+   * PC Paint:
+   * COLOR PALETTE occupies the lower-left area (roughly the bottom 110
+   * logical pixels), so chat moves to the upper-left while painting.
+   */
+  .colorhunt-chat.colorhunt-chat--desktop-paint:not(.colorhunt-chat--focused) {
+    top: var(--chat-canvas-top) !important;
+    left: var(--chat-canvas-left) !important;
+    bottom: auto !important;
+    transform: none !important;
+    width: min(var(--chat-panel-width), 300px);
+    max-height: min(var(--chat-panel-max-height), 148px);
+  }
+
+  /*
+   * Hunt already has no paint palette; both Hunter and Hider return to the
+   * requested bottom-left position.
+   */
+  .colorhunt-chat.colorhunt-chat--hunt:not(.colorhunt-chat--focused) {
+    top: auto !important;
+    left: var(--chat-canvas-left) !important;
+    bottom: var(--chat-canvas-bottom) !important;
+  }
+}
