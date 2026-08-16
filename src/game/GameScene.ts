@@ -3823,11 +3823,63 @@ export class GameScene extends Phaser.Scene {
                             this.networkPlayerManager
                                 .syncPlayersFromCurrentRoom();
 
-                            this.networkPlayerManager
-                                .clearAllPaint();
-
+                            /*
+                             * Do not erase already-correct Hider camouflage.
+                             * Replay the authoritative snapshot on top after
+                             * the replacement Hunter actor/session exists.
+                             */
                             strokes.forEach(
-                                (stroke) => {
+                                (originalStroke) => {
+                                    let stroke =
+                                        originalStroke;
+
+                                    const room =
+                                        multiplayerClient
+                                            .getRoom();
+
+                                    const targetExists =
+                                        Boolean(
+                                            room?.state
+                                                .players
+                                                ?.get?.(
+                                                    originalStroke
+                                                        .targetSessionId,
+                                                ),
+                                        );
+
+                                    /*
+                                     * Client-side last-resort for the
+                                     * reconnecting mobile Hunter: if a
+                                     * self-paint stroke still references the
+                                     * retired sessionId, attach it to the new
+                                     * local Hunter session.
+                                     */
+                                    if (
+                                        !targetExists &&
+                                        originalStroke
+                                            .senderId ===
+                                            originalStroke
+                                                .targetSessionId &&
+                                        this.networkPlayerManager
+                                            .isLocalHunter()
+                                    ) {
+                                        const localSessionId =
+                                            multiplayerClient
+                                                .getSessionId();
+
+                                        if (
+                                            localSessionId
+                                        ) {
+                                            stroke = {
+                                                ...originalStroke,
+                                                senderId:
+                                                    localSessionId,
+                                                targetSessionId:
+                                                    localSessionId,
+                                            };
+                                        }
+                                    }
+
                                     this.applyRemotePaintStroke(
                                         stroke,
                                     );
@@ -3846,7 +3898,7 @@ export class GameScene extends Phaser.Scene {
                             }
                         };
 
-                    [90, 320, 760].forEach(
+                    [80, 260, 650, 1250].forEach(
                         (delay) => {
                             this.time.delayedCall(
                                 delay,
@@ -5439,6 +5491,29 @@ export class GameScene extends Phaser.Scene {
     }
 
 
+    private showOutfitLoadingNotice(): void {
+        this.showStatus(
+            tr('의상 로딩 중...'),
+        );
+
+        /*
+         * Cosmetic reconstruction stays in the background.
+         * Gameplay input remains enabled while this notice is visible.
+         */
+        this.time.delayedCall(
+            this.mobileControlsEnabled
+                ? 3200
+                : 1800,
+            () => {
+                if (
+                    this.phase === 'lobby'
+                ) {
+                    this.clearStatus();
+                }
+            },
+        );
+    }
+
     private handleJoinedRoom(
         room: NonNullable<
             ReturnType<
@@ -5450,6 +5525,12 @@ export class GameScene extends Phaser.Scene {
             multiplayerClient.getRoom() !== room
         ) {
             return;
+        }
+
+        if (
+            room.state?.phase === 'lobby'
+        ) {
+            this.showOutfitLoadingNotice();
         }
 
         /*
@@ -5525,7 +5606,6 @@ export class GameScene extends Phaser.Scene {
         }
 
         this.hideLegacySinglePlayerActors();
-        this.clearStatus();
 
         this.roomTransitionInProgress =
             false;
@@ -13310,7 +13390,7 @@ export class GameScene extends Phaser.Scene {
         this.setFixedHudScreenPosition(
             this.timerText,
             this.gameWidth / 2,
-            96,
+            94,
         );
 
         this.setFixedHudScreenPosition(
@@ -13359,10 +13439,15 @@ export class GameScene extends Phaser.Scene {
          * Negative lift centers the camera ABOVE the actor, making the actor
          * appear lower on screen. This leaves a clean HUD gap above the head.
          */
+        /*
+         * v0.10.10.86:
+         * Balanced Paint framing. Keep the enlarged actor between the compact
+         * counter above and READY controls below without touching either.
+         */
         const screenLiftPx =
             this.mobileControlsEnabled
-                ? -72
-                : -58;
+                ? 22
+                : 16;
 
         const worldYOffset =
             screenLiftPx /
