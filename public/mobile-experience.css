@@ -2799,3 +2799,307 @@ html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-language button {
     display: none;
   }
 }
+
+
+/* ============================================================
+   v0.10.10.125 — mobile readability pass
+   Bigger text WITHOUT breaking frames / translations.
+   ============================================================ */
+
+html.colorhunt-mobile {
+  --ch-mobile-font-xs: clamp(7px, 1.35vw, 9px);
+  --ch-mobile-font-sm: clamp(8px, 1.55vw, 10px);
+  --ch-mobile-font-md: clamp(9px, 1.8vw, 12px);
+  --ch-mobile-font-lg: clamp(11px, 2.15vw, 15px);
+  --ch-mobile-font-xl: clamp(13px, 2.65vw, 18px);
+}
+
+/* ---------- Main lobby ---------- */
+
+html.colorhunt-mobile .colorhunt-main-lobby {
+  font-size: var(--ch-mobile-font-sm);
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-section-title {
+  font-size: var(--ch-mobile-font-xl);
+  line-height: 1.05;
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-refresh {
+  min-width: 76px;
+  height: 30px;
+  padding: 0 8px;
+  font-size: var(--ch-mobile-font-sm);
+  white-space: nowrap;
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-room-head {
+  min-height: 31px;
+  font-size: var(--ch-mobile-font-xs);
+  line-height: 1.1;
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-room-row {
+  min-height: 48px;
+  height: 48px;
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-room-name strong {
+  font-size: var(--ch-mobile-font-md);
+  line-height: 1.05;
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-room-name small,
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-room-map,
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-room-count {
+  font-size: var(--ch-mobile-font-xs);
+  line-height: 1.08;
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-room-status {
+  min-width: 48px;
+  height: 22px;
+  padding: 0 5px;
+  font-size: var(--ch-mobile-font-xs);
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-room-tip {
+  min-height: 24px;
+  font-size: var(--ch-mobile-font-xs);
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-actions h2 {
+  min-height: 28px;
+  font-size: var(--ch-mobile-font-lg);
+  line-height: 1.05;
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-profile-copy strong {
+  font-size: var(--ch-mobile-font-md);
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-avatar-edit {
+  min-height: 30px;
+  padding: 0 7px;
+  font-size: var(--ch-mobile-font-sm);
+  line-height: 1.05;
+  white-space: normal;
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-action {
+  min-height: 44px;
+  padding: 5px 7px;
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-action strong {
+  font-size: var(--ch-mobile-font-md);
+  line-height: 1.05;
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-action small {
+  margin-top: 2px;
+  font-size: var(--ch-mobile-font-xs);
+  line-height: 1.12;
+  overflow-wrap: anywhere;
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-guide {
+  min-height: 36px;
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-guide strong {
+  font-size: var(--ch-mobile-font-sm);
+  line-height: 1.05;
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-guide span {
+  font-size: var(--ch-mobile-font-xs);
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-language button {
+  min-height: 28px;
+  padding: 0 5px;
+  font-size: var(--ch-mobile-font-xs);
+  white-space: nowrap;
+}
+
+/* Very narrow phone: hide only secondary descriptions, never primary labels. */
+@media (pointer: coarse) and (max-width: 560px) {
+  html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-action small,
+  html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-guide span {
+    display: none;
+  }
+
+  html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-action strong,
+  html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-profile-copy strong {
+    font-size: var(--ch-mobile-font-lg);
+  }
+}
+
+/* ---------- Waiting room ---------- */
+
+html.colorhunt-mobile .ch-waiting-kicker {
+  font-size: var(--ch-mobile-font-xs);
+  line-height: 1;
+}
+
+html.colorhunt-mobile .ch-waiting-header strong {
+  font-size: var(--ch-mobile-font-lg);
+  line-height: 1.05;
+}
+
+html.colorhunt-mobile .ch-waiting-bgm-inline,
+html.colorhunt-mobile .ch-waiting-help-inline {
+  min-height: 25px;
+  padding: 0 6px;
+  font-size: var(--ch-mobile-font-xs);
+  white-space: nowrap;
+}
+
+html.colorhunt-mobile .ch-waiting-info small {
+  font-size: var(--ch-mobile-font-xs);
+}
+
+html.colorhunt-mobile .ch-waiting-info strong {
+  font-size: var(--ch-mobile-font-md);
+  line-height: 1.05;
+}
+
+html.colorhunt-mobile .ch-waiting-host {
+  font-size: var(--ch-mobile-font-xs);
+}
+
+html.colorhunt-mobile .ch-waiting-map small {
+  font-size: var(--ch-mobile-font-xs);
+}
+
+html.colorhunt-mobile .ch-waiting-map span {
+  font-size: var(--ch-mobile-font-md);
+}
+
+html.colorhunt-mobile .ch-waiting-role button {
+  min-height: 29px;
+  padding: 0 5px;
+  font-size: var(--ch-mobile-font-xs);
+  line-height: 1.05;
+  white-space: normal;
+}
+
+html.colorhunt-mobile .ch-waiting-role-status {
+  min-height: 14px;
+  padding: 2px 4px;
+  font-size: var(--ch-mobile-font-xs);
+  line-height: 1.05;
+}
+
+html.colorhunt-mobile .ch-waiting-timing-title,
+html.colorhunt-mobile .ch-waiting-timing-title b {
+  font-size: var(--ch-mobile-font-xs);
+}
+
+html.colorhunt-mobile .ch-waiting-time-options button {
+  min-height: 23px;
+  font-size: var(--ch-mobile-font-xs);
+}
+
+html.colorhunt-mobile .ch-waiting-start {
+  min-height: 35px;
+  font-size: var(--ch-mobile-font-md);
+}
+
+html.colorhunt-mobile .ch-waiting-footer {
+  min-height: 29px;
+}
+
+html.colorhunt-mobile .ch-waiting-footer button {
+  min-height: 28px;
+  padding: 0 5px;
+  font-size: var(--ch-mobile-font-xs);
+  line-height: 1.05;
+  white-space: normal;
+}
+
+/* ---------- Chat ---------- */
+
+html.colorhunt-mobile .colorhunt-chat {
+  font-size: var(--ch-mobile-font-sm);
+}
+
+html.colorhunt-mobile .colorhunt-chat__message,
+html.colorhunt-mobile .colorhunt-chat__notice {
+  font-size: var(--ch-mobile-font-sm);
+  line-height: 1.25;
+}
+
+html.colorhunt-mobile .colorhunt-chat__input {
+  min-height: 30px;
+  padding: 5px 7px;
+  font-size: max(16px, var(--ch-mobile-font-md));
+  line-height: 1.1;
+}
+
+html.colorhunt-mobile .colorhunt-chat__send {
+  min-width: 40px;
+  min-height: 30px;
+  padding: 0 7px;
+  font-size: var(--ch-mobile-font-sm);
+}
+
+/* ---------- Controls help ---------- */
+
+html.colorhunt-mobile .colorhunt-controls-help__button {
+  min-width: 68px;
+  min-height: 26px;
+  padding: 4px 7px;
+  font-size: var(--ch-mobile-font-xs);
+}
+
+html.colorhunt-mobile .colorhunt-controls-help__panel {
+  max-width: min(82vw, 560px) !important;
+  padding: 10px !important;
+}
+
+html.colorhunt-mobile .colorhunt-controls-help__panel div {
+  font-size: var(--ch-mobile-font-sm);
+  line-height: 1.35;
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Menu / create-room / join-room modals ---------- */
+
+html.colorhunt-mobile .colorhunt-menu-status {
+  font-size: var(--ch-mobile-font-sm);
+  line-height: 1.25;
+}
+
+/* Inline-styled modal card children: target semantic elements safely. */
+html.colorhunt-mobile [role="dialog"] label,
+html.colorhunt-mobile [role="dialog"] input,
+html.colorhunt-mobile [role="dialog"] button {
+  font-size: max(12px, var(--ch-mobile-font-md)) !important;
+}
+
+html.colorhunt-mobile [role="dialog"] input,
+html.colorhunt-mobile [role="dialog"] button {
+  min-height: 38px;
+}
+
+/* ---------- Avatar editor ---------- */
+
+html.colorhunt-mobile .colorhunt-avatar-editor,
+html.colorhunt-mobile .colorhunt-avatar-editor * {
+  text-rendering: optimizeLegibility;
+}
+
+/* ---------- Fold/tablet: allow a little more type ---------- */
+
+html.colorhunt-mobile body.colorhunt-unfolded {
+  --ch-mobile-font-xs: clamp(8px, 1.2vw, 10px);
+  --ch-mobile-font-sm: clamp(9px, 1.4vw, 11px);
+  --ch-mobile-font-md: clamp(10px, 1.65vw, 13px);
+  --ch-mobile-font-lg: clamp(12px, 1.95vw, 16px);
+  --ch-mobile-font-xl: clamp(14px, 2.3vw, 19px);
+}

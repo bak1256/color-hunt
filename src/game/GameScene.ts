@@ -8860,6 +8860,9 @@ export class GameScene extends Phaser.Scene {
         const card =
             document.createElement('div');
 
+        card.className =
+            'colorhunt-avatar-editor';
+
         Object.assign(
             card.style,
             {
@@ -8892,7 +8895,7 @@ export class GameScene extends Phaser.Scene {
         Object.assign(
             title.style,
             {
-                fontSize: '17px',
+                fontSize: '19px',
                 fontWeight: '800',
                 marginBottom: '1px',
             },
@@ -8907,8 +8910,8 @@ export class GameScene extends Phaser.Scene {
         Object.assign(
             hint.style,
             {
-                fontSize: '10px',
-                lineHeight: '12px',
+                fontSize: '12px',
+                lineHeight: '15px',
                 color: '#71806b',
                 marginBottom: '4px',
             },
