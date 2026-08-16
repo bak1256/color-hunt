@@ -752,15 +752,23 @@ html.colorhunt-mobile canvas {
 }
 
 
-/* v0.10.10.108 — unified front-end presentation */
+
+
+/* v0.10.10.109 — bright, friendly pixel-game shell */
 html,
 body {
   background:
-    radial-gradient(circle at 50% 18%, #1c2d31 0%, #0b1115 58%, #070b0e 100%);
+    linear-gradient(
+      180deg,
+      #e9f7dc 0%,
+      #fff6d8 52%,
+      #e8f5ff 100%
+    );
 }
 
 canvas {
   box-shadow:
-    0 20px 60px rgba(0,0,0,.38),
-    0 0 0 1px rgba(126,174,153,.10);
+    0 9px 0 rgba(83, 120, 90, .10),
+    0 18px 42px rgba(87, 117, 91, .20),
+    0 0 0 2px rgba(112, 163, 121, .20);
 }

@@ -9969,13 +9969,13 @@ export class GameScene extends Phaser.Scene {
                 290,
                 820,
                 446,
-                0x0d151b,
-                0.97,
+                0xfff8e7,
+                0.985,
             )
             .setStrokeStyle(
                 2,
-                0x41675a,
-                0.92,
+                0x6ea676,
+                0.98,
             )
             .setDepth(500);
 
@@ -9986,9 +9986,9 @@ export class GameScene extends Phaser.Scene {
                 tr('위장하고, 숨고, 찾아내세요!'),
                 {
                     fontFamily:
-                        'Arial, sans-serif',
+                        'monospace',
                     fontSize: '13px',
-                    color: '#aebfb7',
+                    color: '#5f7166',
                 },
             )
             .setDepth(502);
@@ -9999,13 +9999,13 @@ export class GameScene extends Phaser.Scene {
                 315,
                 510,
                 290,
-                0x141f25,
-                0.97,
+                0xfffdf6,
+                0.995,
             )
             .setStrokeStyle(
                 1,
-                0x39564d,
-                0.95,
+                0xb5d3a7,
+                1,
             )
             .setDepth(501);
 
@@ -10015,12 +10015,12 @@ export class GameScene extends Phaser.Scene {
                 315,
                 254,
                 290,
-                0x141f25,
-                0.97,
+                0xfffdf6,
+                0.995,
             )
             .setStrokeStyle(
                 2,
-                0xa8c98e,
+                0xb4d7a2,
                 1,
             )
             .setDepth(501);
@@ -10032,10 +10032,10 @@ export class GameScene extends Phaser.Scene {
                 tr('공개 게임방'),
                 {
                     fontFamily:
-                        'Arial, sans-serif',
+                        'monospace',
                     fontSize: '20px',
                     fontStyle: 'bold',
-                    color: '#edf7f2',
+                    color: '#315c46',
                 },
             )
             .setDepth(503);
@@ -10046,8 +10046,8 @@ export class GameScene extends Phaser.Scene {
                 218,
                 466,
                 1,
-                0x456057,
-                0.72,
+                0xcbdcbe,
+                0.95,
             )
             .setDepth(502);
 
@@ -10059,9 +10059,9 @@ export class GameScene extends Phaser.Scene {
                 `${tr('방 이름')}      ${tr('인원')}      ${tr('상태')}`,
                 {
                     fontFamily:
-                        'Arial, sans-serif',
+                        'monospace',
                     fontSize: '9px',
-                    color: '#84978f',
+                    color: '#77877d',
                 },
             )
                 .setDepth(503);
@@ -10101,10 +10101,10 @@ export class GameScene extends Phaser.Scene {
                 0,
             )
             .setBackgroundColor(
-                '#20362f',
+                '#e3f4d9',
             )
             .setColor(
-                '#bfe7d1',
+                '#315c46',
             );
 
         const actionTitle = this.add
@@ -10114,10 +10114,10 @@ export class GameScene extends Phaser.Scene {
                 tr('게임 시작하기'),
                 {
                     fontFamily:
-                        'Arial, sans-serif',
+                        'monospace',
                     fontSize: '19px',
                     fontStyle: 'bold',
-                    color: '#edf7f2',
+                    color: '#315c46',
                 },
             )
             .setDepth(503);
@@ -10139,76 +10139,70 @@ export class GameScene extends Phaser.Scene {
             this.buildLobbyAvatarPreviewTexture();
 
         /*
-         * Keep the CHARACTER itself at the exact native waiting-room size
-         * (80 x 120), but make the decorative preview frame compact.
-         *
-         * The previous 86 x 126 frame was visually protruding above/below
-         * the lobby header area.  The frame is now a small portrait window
-         * centered inside the header while the avatar keeps its real size.
-         *
-         * We intentionally let the character slightly overflow the frame
-         * rather than scaling the character down.
+         * v0.10.10.109:
+         * Cute pixel portrait card. The avatar is fully contained inside
+         * the frame with visible padding — no intentional overflow.
          */
         const avatarPreviewGlow =
             this.add.rectangle(
                 632,
-                132,
-                104,
-                136,
-                0x78c895,
-                0.10,
+                128,
+                88,
+                106,
+                0xc8efbf,
+                0.72,
             )
                 .setStrokeStyle(
-                    1,
-                    0x8ed9a8,
-                    0.18,
+                    3,
+                    0xffffff,
+                    0.96,
                 )
                 .setDepth(502);
 
         const avatarPreviewFrame =
             this.add.rectangle(
                 632,
-                132,
-                92,
-                124,
-                0x0c1419,
-                0.96,
+                128,
+                76,
+                94,
+                0xf2fbe9,
+                1,
             )
                 .setStrokeStyle(
-                    2,
-                    0x69b987,
-                    0.92,
+                    3,
+                    0x70a875,
+                    1,
                 )
                 .setDepth(503);
 
         const avatarPreview =
             this.add.image(
                 632,
-                132,
+                128,
                 avatarPreviewTexture,
             )
                 .setDisplaySize(
-                    72,
-                    108,
+                    52,
+                    78,
                 )
                 .setDepth(504);
 
         const avatarCustomizeButton =
             this.add.text(
                 758,
-                132,
+                128,
                 `🎨 ${tr('내 캐릭터 꾸미기')}`,
                 {
                     fontFamily:
-                        'Arial, sans-serif',
+                        'monospace',
                     fontSize:
                         getLanguage() === 'ja'
                             ? '11px'
                             : '12px',
                     fontStyle: 'bold',
-                    color: '#eef9f3',
+                    color: '#315c46',
                     backgroundColor:
-                        '#28483c',
+                        '#dff3d5',
                     fixedWidth: 176,
                     fixedHeight: 34,
                     align: 'center',
@@ -10243,10 +10237,10 @@ export class GameScene extends Phaser.Scene {
                     label,
                     {
                         fontFamily:
-                            'Arial, sans-serif',
+                            'monospace',
                         fontSize: '15px',
                         fontStyle: 'bold',
-                        color: '#ffffff',
+                        color: '#24332b',
                         backgroundColor:
                             color,
                         fixedWidth: 214,
@@ -10285,7 +10279,7 @@ export class GameScene extends Phaser.Scene {
             makeAction(
                 242,
                 `＋  ${tr('공개방 만들기')}`,
-                '#55ae5f',
+                '#91dfa2',
                 () => {
                     this.openCreateRoomModal(
                         false,
@@ -10297,7 +10291,7 @@ export class GameScene extends Phaser.Scene {
             makeAction(
                 306,
                 `▣  ${tr('비공개방 만들기')}`,
-                '#3976a6',
+                '#9fd5f5',
                 () => {
                     this.openCreateRoomModal(
                         true,
@@ -10309,7 +10303,7 @@ export class GameScene extends Phaser.Scene {
             makeAction(
                 370,
                 `◎  ${tr('비공개방 참가')}`,
-                '#7057a2',
+                '#cbb4ef',
                 () => {
                     this.openPrivateJoinModal();
                 },
@@ -10321,13 +10315,13 @@ export class GameScene extends Phaser.Scene {
                 428,
                 214,
                 50,
-                0x18242a,
-                0.96,
+                0xf7f1ff,
+                0.995,
             )
             .setStrokeStyle(
                 1,
-                0x3a5049,
-                0.9,
+                0xcab9e8,
+                0.98,
             )
             .setDepth(502);
 
@@ -10338,9 +10332,9 @@ export class GameScene extends Phaser.Scene {
                 `${tr('게임 설명')}\n${tr('위장하고, 숨고, 찾아내세요!')}`,
                 {
                     fontFamily:
-                        'Arial, sans-serif',
+                        'monospace',
                     fontSize: '11px',
-                    color: '#aebdb6',
+                    color: '#665b75',
                     lineSpacing: 4,
                     wordWrap: {
                         width: 186,
@@ -10355,12 +10349,12 @@ export class GameScene extends Phaser.Scene {
                 486,
                 780,
                 34,
-                0x111c22,
-                0.97,
+                0xfffdf6,
+                0.995,
             )
             .setStrokeStyle(
                 2,
-                0xa8c98e,
+                0xb4d7a2,
                 1,
             )
             .setDepth(502);
@@ -10386,7 +10380,7 @@ export class GameScene extends Phaser.Scene {
                             label,
                             {
                                 fontFamily:
-                                    'Arial, sans-serif',
+                                    'monospace',
                                 fontSize: '12px',
                                 fontStyle:
                                     selected
@@ -10398,8 +10392,8 @@ export class GameScene extends Phaser.Scene {
                                         : '#a6b7af',
                                 backgroundColor:
                                     selected
-                                        ? '#397d5c'
-                                        : '#1a282e',
+                                        ? '#70bd83'
+                                        : '#eef6e9',
                                 fixedWidth: 96,
                                 fixedHeight: 26,
                                 align: 'center',
@@ -10473,9 +10467,9 @@ export class GameScene extends Phaser.Scene {
                         252,
                         tr('방 목록을 불러오는 중...'),
                         {
-                            fontFamily: 'Arial, sans-serif',
+                            fontFamily: 'monospace',
                             fontSize: '13px',
-                            color: '#9fb0a8',
+                            color: '#75867b',
                         },
                     )
                     .setDepth(503)
@@ -10534,9 +10528,9 @@ export class GameScene extends Phaser.Scene {
                             252,
                             tr('생성된 공개방이 없습니다.'),
                             {
-                                fontFamily: 'Arial, sans-serif',
+                                fontFamily: 'monospace',
                                 fontSize: '13px',
-                                color: '#9fb0a8',
+                                color: '#75867b',
                             },
                         )
                         .setDepth(503);
@@ -10606,12 +10600,14 @@ export class GameScene extends Phaser.Scene {
                                 0,
                             )
                             .setBackgroundColor(
-                                '#19282f',
+                                phase === 'lobby'
+                                    ? '#f1faea'
+                                    : '#f2f3f2',
                             )
                             .setColor(
                                 phase === 'lobby'
-                                    ? '#dff7e9'
-                                    : '#a9b9b3',
+                                    ? '#355c43'
+                                    : '#858b87',
                             );
 
                         row.removeAllListeners(
@@ -10626,10 +10622,12 @@ export class GameScene extends Phaser.Scene {
                             () => {
                                 row
                                     .setBackgroundColor(
-                                        '#244138',
+                                        phase === 'lobby'
+                                            ? '#dff3d4'
+                                            : '#e8ebe9',
                                     )
                                     .setColor(
-                                        '#ffffff',
+                                        '#274a36',
                                     );
                             },
                         );
@@ -10639,13 +10637,16 @@ export class GameScene extends Phaser.Scene {
                             () => {
                                 row
                                     .setBackgroundColor(
-                                        '#19282f',
+                                        phase ===
+                                            'lobby'
+                                            ? '#f1faea'
+                                            : '#f2f3f2',
                                     )
                                     .setColor(
                                         phase ===
                                             'lobby'
-                                            ? '#dff7e9'
-                                            : '#a9b9b3',
+                                            ? '#355c43'
+                                            : '#858b87',
                                     );
                             },
                         );
@@ -10703,13 +10704,13 @@ export class GameScene extends Phaser.Scene {
                 286,
                 260,
                 468,
-                0x0f181e,
-                0.95,
+                0xfff8e7,
+                0.985,
             )
                 .setStrokeStyle(
                     2,
-                    0x3f6659,
-                    0.92,
+                    0x70a978,
+                    0.98,
                 )
                 .setDepth(390);
 
@@ -10725,7 +10726,7 @@ export class GameScene extends Phaser.Scene {
                 '',
                 {
                     fontFamily:
-                        'Arial, sans-serif',
+                        'monospace',
                     fontSize: '1px',
                     color: '#00000000',
                 },
@@ -10743,13 +10744,13 @@ export class GameScene extends Phaser.Scene {
                 150,
                 228,
                 104,
-                0x162229,
-                0.96,
+                0xfffdf6,
+                1,
             )
                 .setStrokeStyle(
                     1,
-                    0x39564d,
-                    0.92,
+                    0xc1d9b5,
+                    1,
                 )
                 .setDepth(395);
 
@@ -10760,9 +10761,9 @@ export class GameScene extends Phaser.Scene {
                 '',
                 {
                     fontFamily:
-                        'Arial, sans-serif',
+                        'monospace',
                     fontSize: '11px',
-                    color: '#dce9e3',
+                    color: '#405b4a',
                     align: 'left',
                     lineSpacing: 5,
                     fixedWidth: 192,
@@ -10782,10 +10783,10 @@ export class GameScene extends Phaser.Scene {
                 '',
                 {
                     fontFamily:
-                        'Arial, sans-serif',
+                        'monospace',
                     fontSize: '15px',
                     fontStyle: 'bold',
-                    color: '#f0c06a',
+                    color: '#d88735',
                     align: 'center',
                 },
             )
@@ -10799,10 +10800,10 @@ export class GameScene extends Phaser.Scene {
                 tr('WASD 이동'),
                 {
                     fontFamily:
-                        'Arial, sans-serif',
+                        'monospace',
                     fontSize: '10px',
                     fontStyle: 'bold',
-                    color: '#9fb5ab',
+                    color: '#718578',
                     align: 'center',
                 },
             )
@@ -10818,13 +10819,13 @@ export class GameScene extends Phaser.Scene {
                 352,
                 228,
                 220,
-                0x142127,
-                0.96,
+                0xeef8ff,
+                1,
             )
                 .setStrokeStyle(
                     1,
-                    0x365660,
-                    0.90,
+                    0xa9cfe4,
+                    1,
                 )
                 .setDepth(395);
 
@@ -10867,18 +10868,18 @@ export class GameScene extends Phaser.Scene {
 
         this.roleHunterButton
             .setBackgroundColor(
-                '#76533a',
+                '#f4c486',
             )
             .setColor(
-                '#fff4e8',
+                '#5a4025',
             );
 
         this.roleHiderButton
             .setBackgroundColor(
-                '#25363d',
+                '#e0f1e8',
             )
             .setColor(
-                '#cfddd7',
+                '#3c5c4c',
             );
 
         [
@@ -10915,10 +10916,10 @@ export class GameScene extends Phaser.Scene {
                 tr('색칠 시간'),
                 {
                     fontFamily:
-                        'Arial, sans-serif',
+                        'monospace',
                     fontSize: '10px',
                     fontStyle: 'bold',
-                    color: '#91a79d',
+                    color: '#617a6c',
                 },
             )
                 .setOrigin(0.5)
@@ -10962,10 +10963,10 @@ export class GameScene extends Phaser.Scene {
                             .setAlign('center')
                             .setFontSize(10)
                             .setBackgroundColor(
-                                '#25363d',
+                                '#e0f1e8',
                             )
                             .setColor(
-                                '#dbe9e3',
+                                '#405b4a',
                             );
                     },
                 );
@@ -10977,10 +10978,10 @@ export class GameScene extends Phaser.Scene {
                 tr('사냥 시간'),
                 {
                     fontFamily:
-                        'Arial, sans-serif',
+                        'monospace',
                     fontSize: '10px',
                     fontStyle: 'bold',
-                    color: '#91a79d',
+                    color: '#617a6c',
                 },
             )
                 .setOrigin(0.5)
@@ -11024,10 +11025,10 @@ export class GameScene extends Phaser.Scene {
                             .setAlign('center')
                             .setFontSize(10)
                             .setBackgroundColor(
-                                '#25363d',
+                                '#e0f1e8',
                             )
                             .setColor(
-                                '#dbe9e3',
+                                '#405b4a',
                             );
                     },
                 );
@@ -11042,12 +11043,12 @@ export class GameScene extends Phaser.Scene {
                 tr('START GAME'),
                 {
                     fontFamily:
-                        'Arial, sans-serif',
+                        'monospace',
                     fontSize: '17px',
                     fontStyle: 'bold',
                     color: '#ffffff',
                     backgroundColor:
-                        '#3b9b68',
+                        '#76ca8c',
                     fixedWidth: 214,
                     fixedHeight: 40,
                     align: 'center',
@@ -11103,8 +11104,8 @@ export class GameScene extends Phaser.Scene {
                 470,
                 214,
                 1,
-                0x3c554d,
-                0.78,
+                0xc9d9bf,
+                0.96,
             )
                 .setDepth(396);
 
@@ -11119,10 +11120,10 @@ export class GameScene extends Phaser.Scene {
             )
                 .setDepth(406)
                 .setBackgroundColor(
-                    '#315f7d',
+                    '#a4d5ef',
                 )
                 .setColor(
-                    '#eaf6ff',
+                    '#34566b',
                 )
                 .setFixedSize(
                     108,
@@ -11146,10 +11147,10 @@ export class GameScene extends Phaser.Scene {
             )
                 .setDepth(406)
                 .setBackgroundColor(
-                    '#8f4c4c',
+                    '#f2b5b5',
                 )
                 .setColor(
-                    '#fff1f1',
+                    '#6d3f3f',
                 )
                 .setFixedSize(
                     108,
@@ -11176,13 +11177,13 @@ export class GameScene extends Phaser.Scene {
                 42,
                 330,
                 48,
-                0x0d161c,
-                0.86,
+                0xfff1b8,
+                0.98,
             )
                 .setStrokeStyle(
                     1,
-                    0x6f9185,
-                    0.76,
+                    0xd1a459,
+                    0.98,
                 )
                 .setDepth(450)
                 .setVisible(false);
@@ -11197,9 +11198,9 @@ export class GameScene extends Phaser.Scene {
                         'monospace',
                     fontSize: '24px',
                     fontStyle: 'bold',
-                    color: '#ffffff',
+                    color: '#493d2c',
                     backgroundColor:
-                        '#315847',
+                        '#b8dda8',
                     padding: {
                         x: 10,
                         y: 4,
@@ -11223,7 +11224,7 @@ export class GameScene extends Phaser.Scene {
                         'monospace',
                     fontSize: '16px',
                     fontStyle: 'bold',
-                    color: '#ffffff',
+                    color: '#493d2c',
                     align: 'center',
                 },
             )
@@ -11241,9 +11242,9 @@ export class GameScene extends Phaser.Scene {
                         'monospace',
                     fontSize: '24px',
                     fontStyle: 'bold',
-                    color: '#ffffff',
+                    color: '#493d2c',
                     backgroundColor:
-                        '#315847',
+                        '#b8dda8',
                     padding: {
                         x: 10,
                         y: 4,
