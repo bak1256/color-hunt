@@ -454,3 +454,20 @@ html.colorhunt-mobile canvas {
     font-size: 13px;
   }
 }
+
+
+/* v0.10.10.104 — precision paint touch UX */
+html.colorhunt-mobile canvas {
+  touch-action: none !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  -webkit-touch-callout: none !important;
+}
+
+/*
+ * Keep DOM overlays responsive while Phaser canvas remains gesture-locked.
+ */
+.colorhunt-chat,
+.colorhunt-controls-help {
+  touch-action: manipulation;
+}

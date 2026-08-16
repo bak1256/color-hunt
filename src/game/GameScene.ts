@@ -15146,9 +15146,13 @@ export class GameScene extends Phaser.Scene {
                 345,
                 this.gameHeight - 64,
                 670,
-                110,
-                0xfff4d6,
-                0.93,
+                this.mobileControlsEnabled
+                    ? 126
+                    : 110,
+                0xf5f0df,
+                this.mobileControlsEnabled
+                    ? 0.90
+                    : 0.93,
             )
             .setStrokeStyle(
                 2,
@@ -15162,7 +15166,9 @@ export class GameScene extends Phaser.Scene {
             .text(
                 20,
                 this.gameHeight - 83,
-                tr('COLOR PALETTE'),
+                this.mobileControlsEnabled
+                    ? ''
+                    : tr('COLOR PALETTE'),
                 {
                     fontFamily: 'monospace',
                     fontSize: '12px',
@@ -15193,20 +15199,44 @@ export class GameScene extends Phaser.Scene {
 
                 const swatch =
                     this.add.rectangle(
-                        35 +
-                            column * 32,
+                        (
+                            this.mobileControlsEnabled
+                                ? 38
+                                : 35
+                        ) +
+                            column *
+                            (
+                                this.mobileControlsEnabled
+                                    ? 34
+                                    : 32
+                            ),
                         this.gameHeight -
-                            58 +
-                            row * 29,
-                        24,
-                        24,
+                            (
+                                this.mobileControlsEnabled
+                                    ? 63
+                                    : 58
+                            ) +
+                            row *
+                            (
+                                this.mobileControlsEnabled
+                                    ? 31
+                                    : 29
+                            ),
+                        this.mobileControlsEnabled
+                            ? 28
+                            : 24,
+                        this.mobileControlsEnabled
+                            ? 28
+                            : 24,
                         color,
                         1,
                     )
                         .setStrokeStyle(
-                            2,
+                            this.mobileControlsEnabled
+                                ? 3
+                                : 2,
                             0xffffff,
-                            0.95,
+                            0.98,
                         )
                         .setDepth(872)
                         .setVisible(false)
@@ -15271,7 +15301,7 @@ export class GameScene extends Phaser.Scene {
                 395,
                 this.gameHeight - 104,
                 this.mobileControlsEnabled
-                    ? `✦ ${tr('브러시 모양')}`
+                    ? `✦ ${tr('도구')}`
                     : tr('브러시 모양'),
                 {
                     fontFamily:
@@ -15300,14 +15330,14 @@ export class GameScene extends Phaser.Scene {
                 shape: 'circle',
                 label:
                     this.mobileControlsEnabled
-                        ? `●\n${tr('원형')}`
+                        ? `🖌 ●\n${tr('원형')}`
                         : `● ${tr('원형')}`,
             },
             {
                 shape: 'square',
                 label:
                     this.mobileControlsEnabled
-                        ? `■\n${tr('사각형')}`
+                        ? `▣\n${tr('사각형')}`
                         : `■ ${tr('사각형')}`,
             },
         ];
@@ -15351,10 +15381,10 @@ export class GameScene extends Phaser.Scene {
                         .setOrigin(0.5)
                         .setFixedSize(
                             this.mobileControlsEnabled
-                                ? 74
+                                ? 78
                                 : 72,
                             this.mobileControlsEnabled
-                                ? 42
+                                ? 48
                                 : 28,
                         )
                         .setAlign('center')
@@ -15404,7 +15434,7 @@ export class GameScene extends Phaser.Scene {
                 475,
                 this.gameHeight - 78,
                 this.mobileControlsEnabled
-                    ? `◉\n${tr('스포이드')}`
+                    ? `💧\n${tr('스포이드')}`
                     : `◉ ${tr('스포이드')}`,
                 {
                     fontFamily: 'monospace',
@@ -15427,10 +15457,10 @@ export class GameScene extends Phaser.Scene {
                 .setOrigin(0.5)
                 .setFixedSize(
                     this.mobileControlsEnabled
-                        ? 74
+                        ? 78
                         : 72,
                     this.mobileControlsEnabled
-                        ? 42
+                        ? 48
                         : 28,
                 )
                 .setAlign('center')
@@ -15507,13 +15537,22 @@ export class GameScene extends Phaser.Scene {
                 {
                     fontFamily:
                         'monospace',
-                    fontSize: '9px',
+                    fontSize:
+                        this.mobileControlsEnabled
+                            ? '11px'
+                            : '9px',
                     fontStyle: 'bold',
                     color: '#26352b',
                     backgroundColor:
                         '#f2e6c8',
-                    fixedWidth: 76,
-                    fixedHeight: 28,
+                    fixedWidth:
+                        this.mobileControlsEnabled
+                            ? 80
+                            : 76,
+                    fixedHeight:
+                        this.mobileControlsEnabled
+                            ? 38
+                            : 28,
                     align: 'center',
                     padding: {
                         top: 7,
@@ -15573,13 +15612,22 @@ export class GameScene extends Phaser.Scene {
                 {
                     fontFamily:
                         'monospace',
-                    fontSize: '9px',
+                    fontSize:
+                        this.mobileControlsEnabled
+                            ? '11px'
+                            : '9px',
                     fontStyle: 'bold',
                     color: '#26352b',
                     backgroundColor:
                         '#dfeeda',
-                    fixedWidth: 76,
-                    fixedHeight: 28,
+                    fixedWidth:
+                        this.mobileControlsEnabled
+                            ? 80
+                            : 76,
+                    fixedHeight:
+                        this.mobileControlsEnabled
+                            ? 38
+                            : 28,
                     align: 'center',
                     padding: {
                         top: 7,
@@ -15667,7 +15715,9 @@ export class GameScene extends Phaser.Scene {
                 sliderY,
                 sliderMaxX -
                     sliderMinX,
-                6,
+                this.mobileControlsEnabled
+                    ? 10
+                    : 6,
                 0x6b7280,
                 0.55,
             )
@@ -15683,7 +15733,9 @@ export class GameScene extends Phaser.Scene {
                 sliderMinX,
                 sliderY,
                 0,
-                6,
+                this.mobileControlsEnabled
+                    ? 10
+                    : 6,
                 0x4f8f67,
                 1,
             )
@@ -15696,7 +15748,9 @@ export class GameScene extends Phaser.Scene {
             this.add.circle(
                 sliderMinX,
                 sliderY,
-                7,
+                this.mobileControlsEnabled
+                    ? 10
+                    : 7,
                 0xf8fafc,
                 1,
             )
@@ -16966,31 +17020,49 @@ export class GameScene extends Phaser.Scene {
         );
     }
 
+    private getPointerWorldPoint(
+        pointer: Phaser.Input.Pointer,
+        screenOffsetY = 0,
+    ): Phaser.Math.Vector2 {
+        /*
+         * v0.10.10.104:
+         * Never trust cached pointer.worldX/worldY for precision painting.
+         * After orientation/fullscreen/Fold/visualViewport changes those
+         * cached values can briefly reflect an older camera transform.
+         *
+         * Convert the CURRENT Phaser screen coordinates through the CURRENT
+         * camera every time instead.
+         */
+        const result =
+            new Phaser.Math.Vector2();
+
+        this.cameras.main.getWorldPoint(
+            pointer.x,
+            pointer.y + screenOffsetY,
+            result,
+        );
+
+        return result;
+    }
+
     private getPaintInputWorldPoint(
         pointer: Phaser.Input.Pointer,
     ): Phaser.Math.Vector2 {
         if (!this.mobileControlsEnabled) {
-            return new Phaser.Math.Vector2(
-                pointer.worldX,
-                pointer.worldY,
+            return this.getPointerWorldPoint(
+                pointer,
             );
         }
 
         /*
-         * Put the actual brush target above the finger so the finger never
-         * covers the pixel being painted. Screen offset is converted back
-         * through the current camera zoom.
+         * Mobile precision mode:
+         * move the TARGET 58 SCREEN pixels above the finger first, then
+         * convert through the camera. This stays accurate at every zoom and
+         * after viewport/orientation changes.
          */
-        const zoom =
-            Math.max(
-                0.01,
-                this.cameras.main.zoom,
-            );
-
-        return new Phaser.Math.Vector2(
-            pointer.worldX,
-            pointer.worldY -
-                58 / zoom,
+        return this.getPointerWorldPoint(
+            pointer,
+            -58,
         );
     }
 
@@ -17627,9 +17699,14 @@ export class GameScene extends Phaser.Scene {
                         return;
                     }
 
+                    const samplePoint =
+                        this.getPointerWorldPoint(
+                            pointer,
+                        );
+
                     this.pickColorFromBackground(
-                        pointer.worldX,
-                        pointer.worldY,
+                        samplePoint.x,
+                        samplePoint.y,
                     );
 
                     return;
@@ -17736,9 +17813,14 @@ export class GameScene extends Phaser.Scene {
                     return;
                 }
 
+                const selectedWorld =
+                    this.getPointerWorldPoint(
+                        pointer,
+                    );
+
                 const selected = this.findHiderAtPoint(
-                    pointer.worldX,
-                    pointer.worldY,
+                    selectedWorld.x,
+                    selectedWorld.y,
                 );
 
                 if (!selected) {
