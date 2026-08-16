@@ -3812,47 +3812,47 @@ export class GameScene extends Phaser.Scene {
                         NetworkPaintStroke[],
                 ) => {
                     /*
-                     * v0.10.10.85:
-                     * A reconnect snapshot can arrive a little earlier than
-                     * the replacement Hunter actor. Never clear paint first.
-                     * Reconcile players, then replace the paint snapshot after
-                     * the actor exists. Repeat twice as a bounded safety pulse.
+                     * v0.10.10.87 MOBILE STABILITY:
+                     *
+                     * Previous builds replayed the ENTIRE paint snapshot
+                     * 4 times. With many painted players this could mean
+                     * tens of thousands of brush stamps on the mobile main
+                     * thread and trigger "page not responding".
+                     *
+                     * Apply every valid stroke ONCE. Only strokes whose
+                     * replacement actor/session has not appeared yet are
+                     * retried later.
                      */
-                    const replay =
-                        (): void => {
+                    const applyBatch =
+                        (
+                            batch:
+                                NetworkPaintStroke[],
+                        ): NetworkPaintStroke[] => {
                             this.networkPlayerManager
                                 .syncPlayersFromCurrentRoom();
 
-                            /*
-                             * Do not erase already-correct Hider camouflage.
-                             * Replay the authoritative snapshot on top after
-                             * the replacement Hunter actor/session exists.
-                             */
-                            strokes.forEach(
-                                (originalStroke) => {
+                            const pending:
+                                NetworkPaintStroke[] =
+                                [];
+
+                            batch.forEach(
+                                (
+                                    originalStroke,
+                                ) => {
                                     let stroke =
                                         originalStroke;
 
-                                    const room =
-                                        multiplayerClient
-                                            .getRoom();
-
                                     const targetExists =
-                                        Boolean(
-                                            room?.state
-                                                .players
-                                                ?.get?.(
-                                                    originalStroke
-                                                        .targetSessionId,
-                                                ),
-                                        );
+                                        this.networkPlayerManager
+                                            .hasPlayer(
+                                                originalStroke
+                                                    .targetSessionId,
+                                            );
 
                                     /*
-                                     * Client-side last-resort for the
-                                     * reconnecting mobile Hunter: if a
-                                     * self-paint stroke still references the
-                                     * retired sessionId, attach it to the new
-                                     * local Hunter session.
+                                     * Last-resort mapping for self-painted
+                                     * reconnecting Hunter data that still
+                                     * references the retired local session.
                                      */
                                     if (
                                         !targetExists &&
@@ -3868,7 +3868,11 @@ export class GameScene extends Phaser.Scene {
                                                 .getSessionId();
 
                                         if (
-                                            localSessionId
+                                            localSessionId &&
+                                            this.networkPlayerManager
+                                                .hasPlayer(
+                                                    localSessionId,
+                                                )
                                         ) {
                                             stroke = {
                                                 ...originalStroke,
@@ -3878,6 +3882,19 @@ export class GameScene extends Phaser.Scene {
                                                     localSessionId,
                                             };
                                         }
+                                    }
+
+                                    if (
+                                        !this.networkPlayerManager
+                                            .hasPlayer(
+                                                stroke
+                                                    .targetSessionId,
+                                            )
+                                    ) {
+                                        pending.push(
+                                            originalStroke,
+                                        );
+                                        return;
                                     }
 
                                     this.applyRemotePaintStroke(
@@ -3896,16 +3913,43 @@ export class GameScene extends Phaser.Scene {
                                 this.networkPlayerManager
                                     .normalizeLocalPlayerForGameplay();
                             }
+
+                            return pending;
                         };
 
-                    [80, 260, 650, 1250].forEach(
-                        (delay) => {
-                            this.time.delayedCall(
-                                delay,
-                                replay,
-                            );
-                        },
-                    );
+                    let pending =
+                        applyBatch(
+                            strokes,
+                        );
+
+                    if (
+                        pending.length >
+                        0
+                    ) {
+                        this.time.delayedCall(
+                            420,
+                            () => {
+                                pending =
+                                    applyBatch(
+                                        pending,
+                                    );
+
+                                if (
+                                    pending.length >
+                                    0
+                                ) {
+                                    this.time.delayedCall(
+                                        700,
+                                        () => {
+                                            applyBatch(
+                                                pending,
+                                            );
+                                        },
+                                    );
+                                }
+                            },
+                        );
+                    }
                 },
             ),
         );
@@ -5527,11 +5571,12 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
-        if (
-            room.state?.phase === 'lobby'
-        ) {
-            this.showOutfitLoadingNotice();
-        }
+        /*
+         * v0.10.10.87:
+         * Do not show the outfit notice yet. applyNetworkPhase('lobby')
+         * calls enterLobbyPhase(), which clears status synchronously.
+         * The notice is shown immediately AFTER that phase initialization.
+         */
 
         /*
          * 방 생성/참가 직후 callback 순서에 의존하지 않습니다.
@@ -5572,6 +5617,12 @@ export class GameScene extends Phaser.Scene {
         );
 
         if (joinedPhase === 'lobby') {
+            /*
+             * Now enterLobbyPhase() has finished clearing old transient UI,
+             * so this message remains visible while cosmetic avatars stream.
+             */
+            this.showOutfitLoadingNotice();
+
             this.lobbyPanel
                 .setVisible(true);
 
