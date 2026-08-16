@@ -2424,7 +2424,6 @@ export class GameScene extends Phaser.Scene {
     private readonly hunterAimSendInterval = 50;
     private readonly gameplayCameraZoom = 1.65;
     private roundResultWinner: 'hunters' | 'hiders' | null = null;
-    private roundResultMessage = '';
     private roundReturnLobbyButton?: Phaser.GameObjects.Text;
     private lastPhaseRecoveryAt = 0;
     private phaseExpiredSince = 0;
@@ -12720,6 +12719,19 @@ export class GameScene extends Phaser.Scene {
 
         this.roundResultWinner = result.winner;
 
+        /*
+         * v0.10.10.96:
+         * A previous status/guide message must never survive into the final
+         * result screen as a second contradictory winner box.
+         */
+        this.guideText
+            .setText('')
+            .setVisible(false);
+
+        this.statusText
+            .setText('')
+            .setVisible(false);
+
         this.survivalHudGraphics
             ?.setVisible(false);
         this.survivalHudText
@@ -12746,14 +12758,6 @@ export class GameScene extends Phaser.Scene {
                 .setText('')
                 .setVisible(false);
 
-            const hiderWinText =
-                result.reason ===
-                    'ammo_depleted'
-                    ? tr('HIDER 승리! 헌터의 탄약이 모두 소진되어 패배했습니다.')
-                    : tr('HIDER 승리! 은신 위치를 공개합니다.');
-
-            this.roundResultMessage =
-                hiderWinText;
 
             /*
              * v0.10.10.94:
@@ -12770,9 +12774,6 @@ export class GameScene extends Phaser.Scene {
             this.phaseText
                 .setText('')
                 .setVisible(false);
-
-            this.roundResultMessage =
-                tr('HUNTER 승리!');
 
             this.guideText
                 .setText('')
@@ -12821,8 +12822,7 @@ export class GameScene extends Phaser.Scene {
             this.spectatorCycleIndex = -1;
 
             this.roundResultWinner = null;
-            this.roundResultMessage = '';
-
+    
             this.guideText
                 .setPosition(
                     18,
@@ -12926,6 +12926,14 @@ export class GameScene extends Phaser.Scene {
             this.setHunterPaintBlind(
                 localIsHunter,
             );
+
+            /*
+             * v0.10.10.96:
+             * Hunter blind PANEL remains Hunter-only, but the compact
+             * "위장하세요 | PAINT n" text is shared by Hider and Hunter.
+             */
+            this.hunterBlindText
+                ?.setVisible(true);
 
             /*
              * Both roles refresh map colors, but only HIDER receives them in
@@ -13153,36 +13161,21 @@ export class GameScene extends Phaser.Scene {
                 .setColor('#8cff9b');
 
             /*
-             * round_result가 먼저 도착하면 그 구체적인 승리/패배 사유를
-             * finished phase가 덮어쓰지 않습니다.
-             * ammo_depleted 문구는 결과 화면이 끝날 때까지 계속 유지됩니다.
+             * v0.10.10.96:
+             * Remove the legacy small winner banner completely.
+             * The large central Finished countdown is the single source of
+             * truth for HUNTER/HIDER victory display.
              */
             this.guideText
-                .setPosition(
-                    this.gameWidth / 2,
-                    112,
-                )
-                .setOrigin(0.5, 0)
-                .setDepth(5200)
-                .setFontSize(20)
+                .setText('')
                 .setBackgroundColor(
-                    'rgba(255, 244, 214, 0.96)',
+                    'rgba(0,0,0,0)',
                 )
-                .setPadding(
-                    16,
-                    9,
-                    16,
-                    9,
-                )
-                .setText(
-                    this.roundResultMessage ||
-                        (
-                            this.roundResultWinner ===
-                                'hunters'
-                                ? tr('HUNTER 승리!')
-                                : tr('HIDER 승리!')
-                        ),
-                );
+                .setVisible(false);
+
+            this.statusText
+                .setText('')
+                .setVisible(false);
 
             this.aimLine.clear();
             this.crosshair.clear();
@@ -19939,8 +19932,6 @@ export class GameScene extends Phaser.Scene {
         if (
             this.phase === 'paint' &&
             this.isMultiplayerSession() &&
-            this.networkPlayerManager
-                .isLocalHunter() &&
             this.hunterBlindText?.visible
         ) {
             this.hunterBlindText.setText(
@@ -20097,13 +20088,13 @@ export class GameScene extends Phaser.Scene {
         this.nextHeartbeatAt = 0;
         this.hideHuntTensionUi();
 
-        const localIsHunter =
-            this.isMultiplayerSession() &&
-            this.networkPlayerManager
-                .isLocalHunter();
-
+        /*
+         * v0.10.10.96:
+         * Multiplayer Paint uses the same compact top bar for both roles.
+         * Hide the old timer box so it never covers the character.
+         */
         this.timerText.setVisible(
-            !localIsHunter,
+            !this.isMultiplayerSession(),
         );
 
         this.applyPaintOnlyScreenLayout();
@@ -20177,8 +20168,13 @@ export class GameScene extends Phaser.Scene {
             .setText('')
             .setVisible(false);
 
+        /*
+         * v0.10.10.96:
+         * Multiplayer Paint uses the same compact top bar for both roles.
+         * Hide the old timer box so it never covers the character.
+         */
         this.timerText.setVisible(
-            !localIsHunter,
+            !this.isMultiplayerSession(),
         );
 
         /*
