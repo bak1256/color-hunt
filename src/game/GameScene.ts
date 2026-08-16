@@ -237,6 +237,11 @@ export class GameScene extends Phaser.Scene {
     private survivalHudText!: Phaser.GameObjects.Text;
     private disconnectNoticeText!: Phaser.GameObjects.Text;
     private disconnectNoticeEvent?: Phaser.Time.TimerEvent;
+    private paintReadyButton?: Phaser.GameObjects.Text;
+    private localPaintReady = false;
+    private allHidersPaintReady = false;
+    private paintReadyCount = 0;
+    private paintReadyHiderCount = 0;
     private knownAliveState =
         new Map<string, boolean>();
 
@@ -303,6 +308,66 @@ export class GameScene extends Phaser.Scene {
                 .setScrollFactor(0)
                 .setDepth(6020)
                 .setVisible(false);
+
+        this.paintReadyButton =
+            this.add.text(
+                this.gameWidth / 2,
+                this.gameHeight - 42,
+                tr('준비 완료'),
+                {
+                    fontFamily: 'Arial, sans-serif',
+                    fontSize: '18px',
+                    fontStyle: 'bold',
+                    color: '#ffffff',
+                    backgroundColor: '#4f9d69',
+                    padding: {
+                        x: 18,
+                        y: 9,
+                    },
+                },
+            )
+                .setOrigin(0.5)
+                .setScrollFactor(0)
+                .setDepth(6020)
+                .setVisible(false)
+                .setInteractive({
+                    useHandCursor: true,
+                });
+
+        this.paintReadyButton.on(
+            'pointerdown',
+            () => {
+                if (
+                    this.phase !== 'paint' ||
+                    !multiplayerClient.isConnected()
+                ) {
+                    return;
+                }
+
+                const role =
+                    multiplayerClient
+                        .getLocalPlayer()
+                        ?.role;
+
+                if (role === 'hider') {
+                    this.localPaintReady =
+                        !this.localPaintReady;
+
+                    multiplayerClient
+                        .sendPaintReady(
+                            this.localPaintReady,
+                        );
+                } else if (
+                    role === 'hunter' &&
+                    this.allHidersPaintReady
+                ) {
+                    multiplayerClient
+                        .sendEarlyStartHunt();
+                }
+
+                this.updatePaintReadyButton();
+            },
+        );
     }
 
     private showPlayerDisconnectNotice(
@@ -358,7 +423,71 @@ export class GameScene extends Phaser.Scene {
         return aliveCount;
     }
 
+    private updatePaintReadyButton(): void {
+        const button =
+            this.paintReadyButton;
+
+        if (!button) {
+            return;
+        }
+
+        const role =
+            multiplayerClient
+                .getLocalPlayer()
+                ?.role;
+
+        const visible =
+            this.isMultiplayerSession() &&
+            this.phase === 'paint' &&
+            (
+                role === 'hider' ||
+                role === 'hunter'
+            );
+
+        button.setVisible(visible);
+
+        if (!visible) {
+            return;
+        }
+
+        if (role === 'hider') {
+            button
+                .setText(
+                    this.localPaintReady
+                        ? tr('준비 취소')
+                        : tr('준비 완료'),
+                )
+                .setBackgroundColor(
+                    this.localPaintReady
+                        ? '#7b8794'
+                        : '#4f9d69',
+                )
+                .setAlpha(1);
+
+            return;
+        }
+
+        button
+            .setText(
+                this.allHidersPaintReady
+                    ? tr('바로 찾기 시작')
+                    : tr('하이더 준비 대기') +
+                        ` ${this.paintReadyCount}/${this.paintReadyHiderCount}`,
+            )
+            .setBackgroundColor(
+                this.allHidersPaintReady
+                    ? '#e45b4f'
+                    : '#68737d',
+            )
+            .setAlpha(
+                this.allHidersPaintReady
+                    ? 1
+                    : 0.72,
+            );
+    }
+
     private updateSurvivalHud(): void {
+
         if (
             !this.survivalHudGraphics ||
             !this.survivalHudText
@@ -435,9 +564,9 @@ export class GameScene extends Phaser.Scene {
          * FOUND : same person, translucent
          * HUNTER: black person
          */
-        const hiderSpacing = 28;
-        const hunterSpacing = 28;
-        const dividerGap = 38;
+        const hiderSpacing = 36;
+        const hunterSpacing = 36;
+        const dividerGap = 46;
 
         const totalWidth =
             Math.max(
@@ -457,8 +586,8 @@ export class GameScene extends Phaser.Scene {
             totalWidth / 2 +
             7;
 
-        const headY = 17;
-        const bodyY = 30;
+        const headY = 19;
+        const bodyY = 36;
 
         this.survivalHudGraphics
             .clear()
@@ -479,14 +608,14 @@ export class GameScene extends Phaser.Scene {
                     .fillCircle(
                         x,
                         headY,
-                        6,
+                        8,
                     )
                     .fillRoundedRect(
-                        x - 6,
-                        bodyY - 7,
-                        12,
-                        17,
-                        3,
+                        x - 8,
+                        bodyY - 9,
+                        16,
+                        22,
+                        4,
                     );
 
                 /*
@@ -495,27 +624,27 @@ export class GameScene extends Phaser.Scene {
                  */
                 this.survivalHudGraphics
                     .lineStyle(
-                        2,
+                        3,
                         0xf5eee2,
                         alpha,
                     )
                     .lineBetween(
-                        x - 9,
+                        x - 11,
                         bodyY - 3,
-                        x + 9,
+                        x + 11,
                         bodyY - 3,
                     )
                     .lineBetween(
-                        x - 3,
-                        bodyY + 8,
-                        x - 5,
-                        bodyY + 15,
+                        x - 4,
+                        bodyY + 11,
+                        x - 6,
+                        bodyY + 19,
                     )
                     .lineBetween(
-                        x + 3,
-                        bodyY + 8,
-                        x + 5,
-                        bodyY + 15,
+                        x + 4,
+                        bodyY + 11,
+                        x + 6,
+                        bodyY + 19,
                     );
 
                 x += hiderSpacing;
@@ -531,43 +660,43 @@ export class GameScene extends Phaser.Scene {
         ) {
             this.survivalHudGraphics
                 .fillStyle(
-                    0x090d12,
+                    0xff4d4d,
                     1,
                 )
                 .fillCircle(
                     x,
                     headY,
-                    4,
+                    8,
                 )
                 .fillRoundedRect(
-                    x - 4,
-                    bodyY - 5,
-                    8,
-                    11,
-                    2,
+                    x - 8,
+                    bodyY - 9,
+                    16,
+                    22,
+                    4,
                 )
                 .lineStyle(
-                    2,
-                    0x090d12,
+                    3,
+                    0xff4d4d,
                     1,
                 )
                 .lineBetween(
+                    x - 11,
+                    bodyY - 3,
+                    x + 11,
+                    bodyY - 3,
+                )
+                .lineBetween(
+                    x - 4,
+                    bodyY + 11,
                     x - 6,
-                    bodyY - 2,
+                    bodyY + 19,
+                )
+                .lineBetween(
+                    x + 4,
+                    bodyY + 11,
                     x + 6,
-                    bodyY - 2,
-                )
-                .lineBetween(
-                    x - 2,
-                    bodyY + 5,
-                    x - 3,
-                    bodyY + 10,
-                )
-                .lineBetween(
-                    x + 2,
-                    bodyY + 5,
-                    x + 3,
-                    bodyY + 10,
+                    bodyY + 19,
                 );
 
             x += hunterSpacing;
@@ -579,8 +708,9 @@ export class GameScene extends Phaser.Scene {
             )
             .setPosition(
                 this.gameWidth / 2,
-                66,
+                76,
             )
+            .setFontSize(19)
             .setVisible(true)
             .setAlpha(0.92);
     }
@@ -3372,6 +3502,32 @@ export class GameScene extends Phaser.Scene {
                             );
                         },
                     );
+                },
+            ),
+        );
+
+        this.networkUnsubscribers.push(
+            multiplayerClient.onPaintReadyState(
+                (state) => {
+                    this.paintReadyCount =
+                        state.readyCount;
+                    this.paintReadyHiderCount =
+                        state.hiderCount;
+                    this.allHidersPaintReady =
+                        state.allHidersReady;
+
+                    const sessionId =
+                        multiplayerClient
+                            .getSessionId();
+
+                    this.localPaintReady =
+                        Boolean(
+                            sessionId &&
+                            state.readySessionIds
+                                .includes(sessionId),
+                        );
+
+                    this.updatePaintReadyButton();
                 },
             ),
         );
@@ -8770,7 +8926,19 @@ export class GameScene extends Phaser.Scene {
         this.countdownText
             .setFontSize(110)
             .setColor('#1f2937')
-            .setText(String(remaining));
+            .setText(
+                remaining > 0
+                    ? String(
+                        Math.min(
+                            3,
+                            Math.max(
+                                1,
+                                remaining,
+                            ),
+                        ),
+                    )
+                    : tr('시작!'),
+            );
     }
 
     private updateWeaponHeatHud(): void {
@@ -11380,6 +11548,15 @@ export class GameScene extends Phaser.Scene {
             this.time.now +
             remainingMs;
 
+        if (phase !== 'paint') {
+            this.localPaintReady = false;
+            this.allHidersPaintReady = false;
+            this.paintReadyCount = 0;
+            this.paintReadyHiderCount = 0;
+            this.paintReadyButton
+                ?.setVisible(false);
+        }
+
         if (phase === 'lobby') {
             this.spectatorSessionId = '';
             this.spectatorCycleIndex = -1;
@@ -11453,6 +11630,11 @@ export class GameScene extends Phaser.Scene {
                 .syncLobbyPositionsFromState();
 
             this.enterPaintPhase();
+            this.updatePaintReadyButton();
+
+            multiplayerClient
+                .sendPaintReady(false);
+
             this.networkPlayerManager
                 .setNamesVisible(false);
 

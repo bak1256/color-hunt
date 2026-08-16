@@ -1268,26 +1268,66 @@ export class NetworkPlayerManager {
           view.role === "hider"
         ) {
           const actuallyMoved =
-            distance > 0.75;
+            distance > 0.35;
 
           /*
-           * Server x/y is shotgun authority. Never render a Hunt Hider at an
-           * interpolated/old coordinate, even for a single frame.
+           * v0.10.10.67
+           * Do NOT packet-snap remote Hiders during Hunt.
+           * Movement packets can arrive in uneven bursts even when they are
+           * sent frequently; snapping made the character visibly stutter.
+           *
+           * Use strong frame-rate-independent damping. With the current
+           * high-frequency movement send this stays only a few pixels behind
+           * the authoritative target while rendering continuously.
            */
-          this.setViewPosition(
-            view,
-            view.targetX,
-            view.targetY,
-          );
+          if (
+            distance > 72 ||
+            !Number.isFinite(view.container.x) ||
+            !Number.isFinite(view.container.y)
+          ) {
+            this.setViewPosition(
+              view,
+              view.targetX,
+              view.targetY,
+            );
+          } else if (distance > 0.08) {
+            const smoothing =
+              1 -
+              Math.pow(
+                0.00002,
+                delta / 1000,
+              );
+
+            this.setViewPosition(
+              view,
+              Phaser.Math.Linear(
+                view.container.x,
+                view.targetX,
+                smoothing,
+              ),
+              Phaser.Math.Linear(
+                view.container.y,
+                view.targetY,
+                smoothing,
+              ),
+            );
+          } else {
+            this.setViewPosition(
+              view,
+              view.targetX,
+              view.targetY,
+            );
+          }
 
           view.movingUntil =
             actuallyMoved
-              ? this.scene.time.now + 100
-              : 0;
+              ? this.scene.time.now + 140
+              : view.movingUntil;
 
           this.applyWalkMotion(
             view,
-            actuallyMoved,
+            this.scene.time.now <
+              view.movingUntil,
             delta,
           );
 

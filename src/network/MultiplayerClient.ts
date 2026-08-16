@@ -216,6 +216,17 @@ export type RoundAbortedHandler = (
   message: string,
 ) => void;
 
+export type PaintReadyState = {
+  readySessionIds: string[];
+  hiderCount: number;
+  readyCount: number;
+  allHidersReady: boolean;
+};
+
+export type PaintReadyStateHandler = (
+  state: PaintReadyState,
+) => void;
+
 export class MultiplayerClient {
   private readonly client: Client;
   private readonly serverUrl: string;
@@ -292,6 +303,16 @@ export class MultiplayerClient {
 
   private readonly roundAbortedHandlers =
     new Set<RoundAbortedHandler>();
+
+  private readonly paintReadyStateHandlers =
+    new Set<PaintReadyStateHandler>();
+
+  private paintReadyState: PaintReadyState = {
+    readySessionIds: [],
+    hiderCount: 0,
+    readyCount: 0,
+    allHidersReady: false,
+  };
 
   constructor() {
     this.serverUrl =
@@ -1147,6 +1168,31 @@ private attachRoom(
       },
     );
 
+    room.onMessage<PaintReadyState>(
+      "paint_ready_state",
+      (payload) => {
+        this.paintReadyState = {
+          readySessionIds:
+            Array.isArray(payload?.readySessionIds)
+              ? payload.readySessionIds.map(String)
+              : [],
+          hiderCount:
+            Number(payload?.hiderCount ?? 0),
+          readyCount:
+            Number(payload?.readyCount ?? 0),
+          allHidersReady:
+            Boolean(payload?.allHidersReady),
+        };
+
+        this.paintReadyStateHandlers
+          .forEach(
+            (handler) => {
+              handler(this.paintReadyState);
+            },
+          );
+      },
+    );
+
     room.onMessage<{
       message?: string;
     }>(
@@ -1386,6 +1432,26 @@ private attachRoom(
 
   getHuntDurationMs(): number {
     return this.snapshotHuntDurationMs;
+  }
+
+  sendPaintReady(
+    ready: boolean,
+  ): void {
+    this.room?.send(
+      "paint_ready",
+      { ready },
+    );
+  }
+
+  sendEarlyStartHunt(): void {
+    this.room?.send(
+      "early_start_hunt",
+      {},
+    );
+  }
+
+  getPaintReadyState(): PaintReadyState {
+    return this.paintReadyState;
   }
 
   sendStartGame(): void {
@@ -1727,6 +1793,19 @@ private attachRoom(
 
     return () => {
       this.playerDisconnectedHandlers
+        .delete(handler);
+    };
+  }
+
+  onPaintReadyState(
+    handler:
+      PaintReadyStateHandler,
+  ): () => void {
+    this.paintReadyStateHandlers
+      .add(handler);
+
+    return () => {
+      this.paintReadyStateHandlers
         .delete(handler);
     };
   }

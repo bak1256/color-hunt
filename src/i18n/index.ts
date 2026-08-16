@@ -5,6 +5,11 @@ const STORAGE_KEY = 'chameleon-hunt-language';
 type Dict = Record<string, string>;
 
 const ja: Dict = {
+  "준비 완료":"準備完了",
+  "준비 취소":"準備取消",
+  "바로 찾기 시작":"すぐに捜索開始",
+  "하이더 준비 대기":"HIDER準備待ち",
+  "시작!":"START!",
   "{name} 님이 연결을 종료했습니다.":"{name} さんが接続を終了しました。",
 
   "캐릭터 확대":"キャラ拡大",
@@ -95,6 +100,11 @@ const ja: Dict = {
 };
 
 const en: Dict = {
+  "준비 완료":"READY",
+  "준비 취소":"CANCEL READY",
+  "바로 찾기 시작":"START HUNT NOW",
+  "하이더 준비 대기":"WAITING FOR HIDERS",
+  "시작!":"GO!",
   "{name} 님이 연결을 종료했습니다.":"{name} disconnected.",
 
   "캐릭터 확대":"Character Zoom",
@@ -175,6 +185,11 @@ const en: Dict = {
 };
 
 const zh: Dict = {
+  "준비 완료":"准备完成",
+  "준비 취소":"取消准备",
+  "바로 찾기 시작":"立即开始搜寻",
+  "하이더 준비 대기":"等待躲藏者准备",
+  "시작!":"开始!",
   "{name} 님이 연결을 종료했습니다.":"{name} 已断开连接。",
 
   "캐릭터 확대":"角色缩放",
