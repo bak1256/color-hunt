@@ -8924,6 +8924,8 @@ export class GameScene extends Phaser.Scene {
                 width: '190px',
                 height: '285px',
                 overflow: 'hidden',
+                display: 'grid',
+                placeItems: 'center',
                 border:
                     '3px solid #6f8f65',
                 borderRadius: '10px',
@@ -8945,6 +8947,8 @@ export class GameScene extends Phaser.Scene {
                 width: '100%',
                 height: '100%',
                 display: 'block',
+                margin: '0',
+                padding: '0',
                 imageRendering:
                     'pixelated',
                 cursor: 'crosshair',
@@ -8991,6 +8995,20 @@ export class GameScene extends Phaser.Scene {
 
         let selectedSize = 3;
         let editorZoom = 1.8;
+
+        /*
+         * v0.10.10.124:
+         * Character body bounds are x=24..55, y=36..88.
+         * The real visual center is therefore (40, 62.5), not (40, 60).
+         * Use one shared center for rendering AND pointer inversion.
+         */
+        const editorCharacterCenterX =
+            40;
+        const editorCharacterCenterY =
+            62.5;
+        const editorPixelScale =
+            3;
+
         let drawing = false;
         let paintStarted = false;
         let pendingPointerId = -1;
@@ -9164,31 +9182,39 @@ export class GameScene extends Phaser.Scene {
                 canvas.height;
 
             /*
-             * Rendering zooms around logical body center (40, 60).
-             * Invert exactly the same transform for input.
+             * Exact inverse of logicalToCanvasPixelTopLeft().
+             * Pixel centers are used so the visible character and the
+             * paint/touch coordinates remain perfectly aligned.
              */
-            const logicalCanvasX =
+            const logicalX =
                 (
                     displayX -
-                    canvas.width / 2
+                    canvas.width /
+                        2
                 ) /
-                editorZoom +
-                40 * 3;
+                    (
+                        editorPixelScale *
+                        editorZoom
+                    ) +
+                editorCharacterCenterX;
 
-            const logicalCanvasY =
+            const logicalY =
                 (
                     displayY -
-                    canvas.height / 2
+                    canvas.height /
+                        2
                 ) /
-                editorZoom +
-                60 * 3;
+                    (
+                        editorPixelScale *
+                        editorZoom
+                    ) +
+                editorCharacterCenterY;
 
             return {
                 x:
                     Phaser.Math.Clamp(
                         Math.floor(
-                            logicalCanvasX /
-                            3,
+                            logicalX,
                         ),
                         0,
                         79,
@@ -9196,8 +9222,7 @@ export class GameScene extends Phaser.Scene {
                 y:
                     Phaser.Math.Clamp(
                         Math.floor(
-                            logicalCanvasY /
-                            3,
+                            logicalY,
                         ),
                         0,
                         119,
@@ -9212,19 +9237,29 @@ export class GameScene extends Phaser.Scene {
             x: number;
             y: number;
         } => ({
+            /*
+             * x/y are logical pixel coordinates. Place their CENTER around
+             * the real character center, then draw from the pixel top-left.
+             */
             x:
-                canvas.width / 2 +
+                canvas.width /
+                    2 +
                 (
-                    x * 3 -
-                    40 * 3
+                    x +
+                    0.5 -
+                    editorCharacterCenterX
                 ) *
+                    editorPixelScale *
                     editorZoom,
             y:
-                canvas.height / 2 +
+                canvas.height /
+                    2 +
                 (
-                    y * 3 -
-                    60 * 3
+                    y +
+                    0.5 -
+                    editorCharacterCenterY
                 ) *
+                    editorPixelScale *
                     editorZoom,
         });
 
@@ -9250,21 +9285,23 @@ export class GameScene extends Phaser.Scene {
             context.fillStyle =
                 color;
 
+            const pixelSize =
+                Math.max(
+                    1,
+                    editorPixelScale *
+                        editorZoom +
+                        0.25,
+                );
+
             context.fillRect(
-                screen.x,
-                screen.y,
-                Math.max(
-                    1,
-                    3 *
-                        editorZoom +
-                        0.25,
-                ),
-                Math.max(
-                    1,
-                    3 *
-                        editorZoom +
-                        0.25,
-                ),
+                screen.x -
+                    pixelSize /
+                        2,
+                screen.y -
+                    pixelSize /
+                        2,
+                pixelSize,
+                pixelSize,
             );
 
             context.globalAlpha = 1;
@@ -9352,10 +9389,8 @@ export class GameScene extends Phaser.Scene {
 
                 const center =
                     logicalToCanvas(
-                        hoverPoint.x +
-                            0.5,
-                        hoverPoint.y +
-                            0.5,
+                        hoverPoint.x,
+                        hoverPoint.y,
                     );
 
                 context.strokeStyle =
