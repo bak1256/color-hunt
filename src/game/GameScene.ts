@@ -2507,6 +2507,8 @@ export class GameScene extends Phaser.Scene {
     private waitingRoomMapText?: HTMLSpanElement;
     private waitingRoomPaintButtons: HTMLButtonElement[] = [];
     private waitingRoomHuntButtons: HTMLButtonElement[] = [];
+    private waitingRoomResizeObserver?: ResizeObserver;
+    private waitingRoomViewportHandler?: () => void;
     private lobbyPanel!: Phaser.GameObjects.Rectangle;
     private lobbyTitleText!: Phaser.GameObjects.Text;
     private lobbyInfoText!: Phaser.GameObjects.Text;
@@ -3471,10 +3473,6 @@ export class GameScene extends Phaser.Scene {
                     this.updateMainLobbyDomPositionBound,
                 );
                 this.destroyMainLobbyDom();
-                window.removeEventListener(
-                    'resize',
-                    this.updateWaitingRoomDomPositionBound,
-                );
                 this.destroyWaitingRoomDom();
 
                 if (
@@ -5397,104 +5395,85 @@ export class GameScene extends Phaser.Scene {
         }
 
         const canvasRect =
-            this.game.canvas
-                .getBoundingClientRect();
+            this.game.canvas.getBoundingClientRect();
 
-        /*
-         * v0.10.10.115:
-         * Controls button must NEVER leave the actual game frame.
-         *
-         * Main lobby:
-         *   inside the canvas top-right control strip, left of BGM.
-         * Waiting room:
-         *   inside the green waiting-room header.
-         * Gameplay:
-         *   inside canvas top-right, below the BGM row.
-         */
         if (
             this.waitingRoomRoot &&
             this.phase === 'lobby' &&
             multiplayerClient.isConnected()
         ) {
+            if (this.controlsHelpButton) {
+                this.controlsHelpButton.style.display =
+                    'none';
+            }
+
             const waitingRect =
-                this.waitingRoomRoot
-                    .getBoundingClientRect();
+                this.waitingRoomRoot.getBoundingClientRect();
 
-            const helpInset =
-                this.mobileControlsEnabled
-                    ? 6
-                    : 8;
-
-            this.controlsHelpRoot.style
-                .setProperty(
-                    '--controls-right',
-                    `${Math.round(
+            this.controlsHelpRoot.style.setProperty(
+                '--controls-right',
+                `${Math.round(
+                    Math.max(
+                        4,
                         window.innerWidth -
-                        waitingRect.right +
-                        helpInset,
-                    )}px`,
-                );
+                            waitingRect.right +
+                            6,
+                    ),
+                )}px`,
+            );
 
-            this.controlsHelpRoot.style
-                .setProperty(
-                    '--controls-top',
-                    `${Math.round(
-                        waitingRect.top +
-                        (
-                            this.mobileControlsEnabled
-                                ? 5
-                                : 7
-                        ),
-                    )}px`,
-                );
+            this.controlsHelpRoot.style.setProperty(
+                '--controls-top',
+                `${Math.round(
+                    waitingRect.top + 38,
+                )}px`,
+            );
 
             return;
+        }
+
+        if (this.controlsHelpButton) {
+            this.controlsHelpButton.style.display =
+                '';
         }
 
         if (
             this.mainLobbyRoot &&
             !multiplayerClient.isConnected()
         ) {
-            this.controlsHelpRoot.style
-                .setProperty(
-                    '--controls-right',
-                    `${Math.round(
-                        window.innerWidth -
-                        canvasRect.right +
-                        104,
-                    )}px`,
-                );
-
-            this.controlsHelpRoot.style
-                .setProperty(
-                    '--controls-top',
-                    `${Math.round(
-                        canvasRect.top +
-                        10,
-                    )}px`,
-                );
-
-            return;
-        }
-
-        this.controlsHelpRoot.style
-            .setProperty(
+            this.controlsHelpRoot.style.setProperty(
                 '--controls-right',
                 `${Math.round(
                     window.innerWidth -
                     canvasRect.right +
-                    10,
+                    104,
                 )}px`,
             );
 
-        this.controlsHelpRoot.style
-            .setProperty(
+            this.controlsHelpRoot.style.setProperty(
                 '--controls-top',
                 `${Math.round(
-                    canvasRect.top +
-                    52,
+                    canvasRect.top + 10,
                 )}px`,
             );
+            return;
+        }
+
+        this.controlsHelpRoot.style.setProperty(
+            '--controls-right',
+            `${Math.round(
+                window.innerWidth -
+                canvasRect.right +
+                10,
+            )}px`,
+        );
+
+        this.controlsHelpRoot.style.setProperty(
+            '--controls-top',
+            `${Math.round(
+                canvasRect.top + 52,
+            )}px`,
+        );
     }
 
     private destroyControlsHelpUi(): void {
@@ -10499,6 +10478,33 @@ export class GameScene extends Phaser.Scene {
         };
 
     private destroyWaitingRoomDom(): void {
+        if (this.waitingRoomViewportHandler) {
+            window.removeEventListener(
+                'resize',
+                this.waitingRoomViewportHandler,
+            );
+            window.removeEventListener(
+                'orientationchange',
+                this.waitingRoomViewportHandler,
+            );
+            window.removeEventListener(
+                'colorhunt:viewportchange',
+                this.waitingRoomViewportHandler,
+            );
+            window.visualViewport?.removeEventListener(
+                'resize',
+                this.waitingRoomViewportHandler,
+            );
+            window.visualViewport?.removeEventListener(
+                'scroll',
+                this.waitingRoomViewportHandler,
+            );
+        }
+
+        this.waitingRoomResizeObserver?.disconnect();
+        this.waitingRoomResizeObserver = undefined;
+        this.waitingRoomViewportHandler = undefined;
+
         this.waitingRoomRoot?.remove();
         this.waitingRoomRoot = undefined;
         this.waitingRoomInfo = undefined;
@@ -10515,82 +10521,110 @@ export class GameScene extends Phaser.Scene {
         const rect =
             this.game.canvas.getBoundingClientRect();
 
+        if (rect.width <= 0 || rect.height <= 0) {
+            return;
+        }
+
         const touch =
             this.mobileControlsEnabled;
+        const aspect =
+            rect.width / Math.max(1, rect.height);
+        const landscapeCanvas =
+            aspect >= 1.45;
 
-        const landscapeLike =
-            rect.width /
-                Math.max(1, rect.height) >
-            1.45;
+        const horizontalInset =
+            Math.max(
+                6,
+                Math.min(
+                    14,
+                    rect.width * 0.012,
+                ),
+            );
 
-        const panelWidthRatio =
+        const verticalInset =
+            Math.max(
+                6,
+                Math.min(
+                    12,
+                    rect.height * 0.018,
+                ),
+            );
+
+        const widthRatio =
             touch
                 ? (
-                    landscapeLike
-                        ? 0.30
+                    landscapeCanvas
+                        ? 0.31
                         : 0.36
                 )
                 : 0.285;
 
-        const rightGap =
-            touch
-                ? Math.max(
-                    6,
-                    rect.width * 0.012,
-                )
-                : rect.width * 0.025;
-
         const panelWidth =
             Math.min(
                 rect.width -
-                    rightGap * 2,
-                rect.width *
-                    panelWidthRatio,
+                    horizontalInset * 2,
+                Math.max(
+                    touch
+                        ? 170
+                        : 250,
+                    Math.min(
+                        touch
+                            ? 360
+                            : 340,
+                        rect.width *
+                            widthRatio,
+                    ),
+                ),
             );
 
+        const maxPanelHeight =
+            rect.height -
+            verticalInset * 2;
+
         const panelHeight =
-            touch
-                ? rect.height * 0.94
-                : rect.height * 0.84;
+            Math.min(
+                maxPanelHeight,
+                rect.height *
+                    (
+                        touch
+                            ? (
+                                landscapeCanvas
+                                    ? 0.92
+                                    : 0.78
+                            )
+                            : 0.84
+                    ),
+            );
+
+        const left =
+            rect.right -
+            horizontalInset -
+            panelWidth;
+
+        const top =
+            rect.top +
+            (
+                rect.height -
+                panelHeight
+            ) / 2;
 
         this.waitingRoomRoot.style.setProperty(
             '--waiting-left',
-            `${Math.round(
-                rect.right -
-                rightGap -
-                panelWidth,
-            )}px`,
+            `${Math.round(left)}px`,
         );
-
         this.waitingRoomRoot.style.setProperty(
             '--waiting-top',
-            `${Math.round(
-                rect.top +
-                (
-                    touch
-                        ? rect.height *
-                            0.03
-                        : rect.height *
-                            0.075
-                ),
-            )}px`,
+            `${Math.round(top)}px`,
         );
-
         this.waitingRoomRoot.style.setProperty(
             '--waiting-width',
             `${Math.round(panelWidth)}px`,
         );
-
         this.waitingRoomRoot.style.setProperty(
             '--waiting-height',
             `${Math.round(panelHeight)}px`,
         );
     }
-
-    private readonly updateWaitingRoomDomPositionBound =
-        (): void => {
-            this.updateWaitingRoomDomPosition();
-        };
 
     private createWaitingRoomDom(): void {
         this.destroyWaitingRoomDom();
@@ -10610,10 +10644,13 @@ export class GameScene extends Phaser.Scene {
         root.innerHTML = `
             <div class="ch-waiting-shell">
                 <div class="ch-waiting-header">
-                    <div>
+                    <div class="ch-waiting-header-copy">
                         <span class="ch-waiting-kicker">${tr('대기방')}</span>
                         <strong>${tr('게임 준비')}</strong>
                     </div>
+                    <button type="button" class="ch-waiting-help-inline">
+                        ? ${this.getControlsHelpCopy().button.replace(/^\?\s*/, '').replace(/^？\s*/, '')}
+                    </button>
                 </div>
 
                 <div class="ch-waiting-info"></div>
@@ -10734,6 +10771,54 @@ export class GameScene extends Phaser.Scene {
                 },
             );
 
+        const inlineHelp =
+            root.querySelector<HTMLButtonElement>(
+                '.ch-waiting-help-inline',
+            );
+
+        const pressInlineHelp =
+            (event: Event): void => {
+                event.preventDefault();
+                event.stopPropagation();
+
+                this.controlsHelpButton?.dispatchEvent(
+                    new PointerEvent(
+                        'pointerdown',
+                        { bubbles: true },
+                    ),
+                );
+            };
+
+        const releaseInlineHelp =
+            (event: Event): void => {
+                event.preventDefault();
+                event.stopPropagation();
+
+                this.controlsHelpButton?.dispatchEvent(
+                    new PointerEvent(
+                        'pointerup',
+                        { bubbles: true },
+                    ),
+                );
+            };
+
+        inlineHelp?.addEventListener(
+            'pointerdown',
+            pressInlineHelp,
+        );
+        inlineHelp?.addEventListener(
+            'pointerup',
+            releaseInlineHelp,
+        );
+        inlineHelp?.addEventListener(
+            'pointercancel',
+            releaseInlineHelp,
+        );
+        inlineHelp?.addEventListener(
+            'pointerleave',
+            releaseInlineHelp,
+        );
+
         root.querySelectorAll<HTMLButtonElement>(
             '[data-map-step]',
         ).forEach(
@@ -10793,11 +10878,54 @@ export class GameScene extends Phaser.Scene {
         this.updateWaitingRoomDom();
         this.updateControlsHelpPosition();
 
+        this.waitingRoomViewportHandler =
+            (): void => {
+                window.requestAnimationFrame(
+                    () => {
+                        this.updateWaitingRoomDomPosition();
+                        this.updateWaitingRoomDom();
+                        this.updateControlsHelpPosition();
+                    },
+                );
+            };
+
         window.addEventListener(
             'resize',
-            this.updateWaitingRoomDomPositionBound,
+            this.waitingRoomViewportHandler,
             { passive: true },
         );
+        window.addEventListener(
+            'orientationchange',
+            this.waitingRoomViewportHandler,
+            { passive: true },
+        );
+        window.addEventListener(
+            'colorhunt:viewportchange',
+            this.waitingRoomViewportHandler,
+        );
+        window.visualViewport?.addEventListener(
+            'resize',
+            this.waitingRoomViewportHandler,
+            { passive: true },
+        );
+        window.visualViewport?.addEventListener(
+            'scroll',
+            this.waitingRoomViewportHandler,
+            { passive: true },
+        );
+
+        if (typeof ResizeObserver !== 'undefined') {
+            this.waitingRoomResizeObserver =
+                new ResizeObserver(
+                    () => {
+                        this.waitingRoomViewportHandler?.();
+                    },
+                );
+
+            this.waitingRoomResizeObserver.observe(
+                this.game.canvas,
+            );
+        }
     }
 
     private updateWaitingRoomDom(): void {
@@ -10925,10 +11053,6 @@ export class GameScene extends Phaser.Scene {
 
     private showMainMenu(): void {
         this.destroyWaitingRoomDom();
-        window.removeEventListener(
-            'resize',
-            this.updateWaitingRoomDomPositionBound,
-        );
         this.refreshDomTranslations();
 
         if (
@@ -12006,10 +12130,6 @@ export class GameScene extends Phaser.Scene {
             }
         } else {
             this.destroyWaitingRoomDom();
-            window.removeEventListener(
-                'resize',
-                this.updateWaitingRoomDomPositionBound,
-            );
         }
 
 
@@ -12366,10 +12486,6 @@ export class GameScene extends Phaser.Scene {
 
         this.hideChatUi(true);
         this.destroyWaitingRoomDom();
-        window.removeEventListener(
-            'resize',
-            this.updateWaitingRoomDomPositionBound,
-        );
 
         this.multiplayerSessionActive = false;
         this.localNetworkPlayerReady = false;
