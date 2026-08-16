@@ -9941,14 +9941,40 @@ export class GameScene extends Phaser.Scene {
              * A round_result packet can arrive slightly earlier/out of order
              * and must never override the final Schema winner.
              */
+            /*
+             * v0.10.10.92:
+             * If the authoritative player Schema says there are no surviving
+             * Hiders, the Hunters have won regardless of an older/stale
+             * winner packet. This mirrors the server-side final resolution.
+             */
+            const roomPlayers =
+                multiplayerClient.getRoom()
+                    ?.state.players;
+
+            const aliveHiderCount =
+                roomPlayers
+                    ? [...roomPlayers.values()]
+                        .filter(
+                            (player) =>
+                                player.role ===
+                                    'hider' &&
+                                player.alive,
+                        )
+                        .length
+                    : -1;
+
             const effectiveWinner =
-                (
-                    schemaWinner === 'hunters' ||
-                    schemaWinner === 'hiders'
-                        ? schemaWinner
-                        : null
-                ) ??
-                this.roundResultWinner;
+                aliveHiderCount === 0
+                    ? 'hunters'
+                    : (
+                        (
+                            schemaWinner === 'hunters' ||
+                            schemaWinner === 'hiders'
+                                ? schemaWinner
+                                : null
+                        ) ??
+                        this.roundResultWinner
+                    );
 
             if (effectiveWinner) {
                 this.roundResultWinner =
