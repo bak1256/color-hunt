@@ -3987,6 +3987,10 @@ export class GameScene extends Phaser.Scene {
                     strokes:
                         NetworkPaintStroke[],
                 ) => {
+                    const localSessionId =
+                        multiplayerClient
+                            .getSessionId();
+
                     /*
                      * v0.10.10.87 MOBILE STABILITY:
                      *
@@ -3999,6 +4003,9 @@ export class GameScene extends Phaser.Scene {
                      * replacement actor/session has not appeared yet are
                      * retried later.
                      */
+                    const recoveredLocalHunterPaint:
+                        NetworkPaintStroke[] = [];
+
                     const applyBatch =
                         (
                             batch:
@@ -4039,10 +4046,6 @@ export class GameScene extends Phaser.Scene {
                                         this.networkPlayerManager
                                             .isLocalHunter()
                                     ) {
-                                        const localSessionId =
-                                            multiplayerClient
-                                                .getSessionId();
-
                                         if (
                                             localSessionId &&
                                             this.networkPlayerManager
@@ -4073,6 +4076,24 @@ export class GameScene extends Phaser.Scene {
                                         return;
                                     }
 
+                                    if (
+                                        this.networkPlayerManager
+                                            .isLocalHunter() &&
+                                        localSessionId &&
+                                        stroke.targetSessionId ===
+                                            localSessionId
+                                    ) {
+                                        recoveredLocalHunterPaint.push(
+                                            {
+                                                ...stroke,
+                                                senderId:
+                                                    localSessionId,
+                                                targetSessionId:
+                                                    localSessionId,
+                                            },
+                                        );
+                                    }
+
                                     this.applyRemotePaintStroke(
                                         stroke,
                                     );
@@ -4097,6 +4118,29 @@ export class GameScene extends Phaser.Scene {
                         applyBatch(
                             strokes,
                         );
+
+                    /*
+                     * This payload is sourced from the same data that just
+                     * succeeded locally, so it no longer depends on whether
+                     * localPaintHistory survived the reconnect.
+                     */
+                    if (
+                        recoveredLocalHunterPaint
+                            .length >
+                            0 &&
+                        this.networkPlayerManager
+                            .isLocalHunter()
+                    ) {
+                        this.time.delayedCall(
+                            250,
+                            () => {
+                                multiplayerClient
+                                    .sendReconnectPaintSnapshot(
+                                        recoveredLocalHunterPaint,
+                                    );
+                            },
+                        );
+                    }
 
                     if (
                         pending.length >
@@ -12655,27 +12699,14 @@ export class GameScene extends Phaser.Scene {
             this.roundResultMessage =
                 hiderWinText;
 
+            /*
+             * v0.10.10.94:
+             * Do not show a second small result banner above the final
+             * victory panel. The central Finished UI is the only result UI.
+             */
             this.guideText
-                .setPosition(
-                    this.gameWidth / 2,
-                    112,
-                )
-                .setOrigin(0.5, 0)
-                .setDepth(5200)
-                .setFontSize(20)
-                .setBackgroundColor(
-                    'rgba(255, 244, 214, 0.96)',
-                )
-                .setPadding(
-                    16,
-                    9,
-                    16,
-                    9,
-                )
-                .setText(
-                    hiderWinText,
-                )
-                .setColor('#1f2937');
+                .setText('')
+                .setVisible(false);
         } else {
             this.networkPlayerManager
                 .clearRevealMarkers();
@@ -12688,26 +12719,8 @@ export class GameScene extends Phaser.Scene {
                 tr('HUNTER 승리!');
 
             this.guideText
-                .setPosition(
-                    this.gameWidth / 2,
-                    112,
-                )
-                .setOrigin(0.5, 0)
-                .setDepth(5200)
-                .setFontSize(20)
-                .setBackgroundColor(
-                    'rgba(255, 244, 214, 0.96)',
-                )
-                .setPadding(
-                    16,
-                    9,
-                    16,
-                    9,
-                )
-                .setText(
-                    this.roundResultMessage,
-                )
-                .setColor('#d32f2f');
+                .setText('')
+                .setVisible(false);
         }
     }
 
