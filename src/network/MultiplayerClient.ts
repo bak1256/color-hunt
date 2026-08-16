@@ -253,6 +253,39 @@ export class MultiplayerClient {
   private snapshotPaintDurationMs = 120_000;
   private snapshotHuntDurationMs = 80_000;
 
+  /*
+   * v0.10.10.73 MOBILE CRITICAL:
+   * lobby_snapshot, Schema and phase_changed can all report the same phase.
+   * Re-running enterLobbyPhase()/enterPaintPhase()/startHunt() for the same
+   * phase is both expensive and destructive (READY gets reset).
+   */
+  private deliveredPhase:
+    NetworkGamePhase | "" = "";
+
+  private emitPhaseChanged(
+    phase: NetworkGamePhase,
+    phaseEndsAt: number,
+  ): void {
+    const normalizedEndsAt =
+      Number.isFinite(phaseEndsAt)
+        ? phaseEndsAt
+        : 0;
+
+    if (phase === this.deliveredPhase) {
+return;
+    }
+
+    this.deliveredPhase = phase;
+this.phaseChangedHandlers.forEach(
+      (handler) => {
+        handler(
+          phase,
+          normalizedEndsAt,
+        );
+      },
+    );
+  }
+
   /* Server epoch -> local epoch offset learned from phase_changed. */
   private serverClockOffsetMs = 0;
   private hasServerClockOffset = false;
@@ -438,8 +471,13 @@ export class MultiplayerClient {
   > {
     await this.disconnect();
 
-    const joinPromise =
-      this.client.joinById<
+    /*
+     * v0.10.10.73 MOBILE CRITICAL:
+     * Never cancel a legitimate mobile join after an arbitrary 5 seconds.
+     * Let the Colyseus SDK own the connection lifecycle.
+     */
+    const room =
+      await this.client.joinById<
         NetworkGameState
       >(
         roomId.trim(),
@@ -452,57 +490,6 @@ export class MultiplayerClient {
             options.password ?? "",
         },
       );
-
-    /*
-     * 로비 목록이 갱신되기 직전에 사라진 방을 누르는 경우,
-     * 일부 환경에서 joinById가 즉시 reject되지 않고 오래 pending될 수 있습니다.
-     * UI가 영원히 "방에 참가하는 중..."에 머물지 않도록 hard timeout을 둡니다.
-     */
-    let timedOut = false;
-
-    const timeoutPromise =
-      new Promise<never>(
-        (_, reject) => {
-          globalThis.setTimeout(
-            () => {
-              timedOut = true;
-              reject(
-                new Error(
-                  "ROOM_JOIN_TIMEOUT_OR_MISSING",
-                ),
-              );
-            },
-            5000,
-          );
-        },
-      );
-
-    let room:
-      Room<NetworkGameState>;
-
-    try {
-      room =
-        await Promise.race([
-          joinPromise,
-          timeoutPromise,
-        ]);
-    } catch (error) {
-      /*
-       * timeout 뒤 아주 늦게 join이 성공하더라도 유령 연결을 남기지 않습니다.
-       */
-      if (timedOut) {
-        void joinPromise
-          .then(
-            (lateRoom) =>
-              lateRoom.leave(),
-          )
-          .catch(() => {
-            // 이미 서버에서 거절된 경우 정리할 것이 없습니다.
-          });
-      }
-
-      throw error;
-    }
 
     this.createdRoomHostSessionId =
       "";
@@ -683,15 +670,11 @@ export class MultiplayerClient {
               serverEndsAt,
             );
 
-      this.phaseChangedHandlers.forEach(
-        (handler) => {
-          handler(
-            snapshotPhase,
-            Number.isFinite(localEndsAt)
-              ? localEndsAt
-              : 0,
-          );
-        },
+      this.emitPhaseChanged(
+        snapshotPhase,
+        Number.isFinite(localEndsAt)
+          ? localEndsAt
+          : 0,
       );
     }
 
@@ -903,8 +886,8 @@ private attachRoom(
     this.snapshotActiveMap = "forest";
     this.snapshotPaintDurationMs = 120_000;
     this.snapshotHuntDurationMs = 80_000;
-
-    this.room = room;
+    this.deliveredPhase = "";
+this.room = room;
     this.callbacks =
       Callbacks.get(room as any);
 
@@ -978,28 +961,23 @@ private attachRoom(
      * 최초 phase 역시 onChange 등록 전에 snapshot으로 도착할 수 있으므로
      * 현재 값을 한 번 즉시 전달합니다.
      */
-    this.phaseChangedHandlers
-      .forEach(
-        (handler) => {
-          try {
-            handler(
-              room.state?.phase ??
-                "lobby",
-              this.localizeServerDeadline(
-                Number(
-                  room.state
-                    ?.phaseEndsAt ?? 0,
-                ),
-              ),
-            );
-          } catch (error) {
-            console.error(
-              "[Chameleon Hunt] Initial phase replay handler failed",
-              error,
-            );
-          }
-        },
+    try {
+      this.emitPhaseChanged(
+        room.state?.phase ??
+          "lobby",
+        this.localizeServerDeadline(
+          Number(
+            room.state
+              ?.phaseEndsAt ?? 0,
+          ),
+        ),
       );
+    } catch (error) {
+      console.error(
+        "[Chameleon Hunt] Initial phase replay handler failed",
+        error,
+      );
+    }
 
     try {
       this.emitConnectionChanged(
@@ -1018,22 +996,14 @@ private attachRoom(
      */
     this.requestLobbySnapshot();
 
+    /* One bounded retry; do not flood a freshly joined mobile client. */
     globalThis.setTimeout(
       () => {
         if (this.room === room) {
           this.requestLobbySnapshot();
         }
       },
-      120,
-    );
-
-    globalThis.setTimeout(
-      () => {
-        if (this.room === room) {
-          this.requestLobbySnapshot();
-        }
-      },
-      450,
+      350,
     );
 
     console.log(
@@ -1220,19 +1190,14 @@ private attachRoom(
               Math.max(0, phaseEndsAt - serverNow)
             : this.localizeServerDeadline(phaseEndsAt);
 
-        this.phaseChangedHandlers
-          .forEach(
-            (handler) => {
-              handler(
-                phase,
-                Number.isFinite(
-                  localPhaseEndsAt,
-                )
-                  ? localPhaseEndsAt
-                  : 0,
-              );
-            },
-          );
+        this.emitPhaseChanged(
+          phase,
+          Number.isFinite(
+            localPhaseEndsAt,
+          )
+            ? localPhaseEndsAt
+            : 0,
+        );
       },
     );
 
@@ -1240,18 +1205,13 @@ private attachRoom(
       callbacks.onChange(
         room.state,
         () => {
-          this.phaseChangedHandlers
-          .forEach(
-            (handler) => {
-              handler(
-                room.state.phase,
-                this.localizeServerDeadline(
-                  Number(
-                    room.state.phaseEndsAt ?? 0,
-                  ),
-                ),
-              );
-            },
+          this.emitPhaseChanged(
+            room.state.phase,
+            this.localizeServerDeadline(
+              Number(
+                room.state.phaseEndsAt ?? 0,
+              ),
+            ),
           );
         },
       );

@@ -2904,7 +2904,7 @@ export class GameScene extends Phaser.Scene {
              * Reconcile authoritative state in the background without
              * blocking touch buttons or the movement joystick.
              */
-            [40, 140, 360, 900].forEach(
+            [180, 750].forEach(
                 (delay) => {
                     this.time.delayedCall(
                         delay,
