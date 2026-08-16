@@ -120,11 +120,19 @@
   let stableGameHeight =
     window.innerHeight;
 
-  const isChatInputFocused = () =>
-    document.activeElement?.classList
-      ?.contains(
+  const isChatInputFocused = () => {
+    const active =
+      document.activeElement;
+
+    return Boolean(
+      active?.classList?.contains(
         'colorhunt-chat__input',
-      ) ?? false;
+      ) &&
+      active.closest?.(
+        '.colorhunt-chat--focused',
+      ),
+    );
+  };
 
   const getKeyboardOffset = () => {
     const viewport =

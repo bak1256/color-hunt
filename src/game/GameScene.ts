@@ -2398,6 +2398,7 @@ export class GameScene extends Phaser.Scene {
         event: KeyboardEvent,
     ) => void;
     private chatViewportHandler?: () => void;
+    private chatFocusArmed = false;
     private readonly chatMessageIds =
         new Set<string>();
     private lobbyPanel!: Phaser.GameObjects.Rectangle;
@@ -3979,8 +3980,48 @@ export class GameScene extends Phaser.Scene {
         );
 
         input.addEventListener(
+            'pointerdown',
+            (event) => {
+                /*
+                 * v0.10.10.102:
+                 * On touch devices, chat may only be focused by directly
+                 * touching the chat input itself. Game joystick/fire pointer
+                 * release must never summon the keyboard.
+                 */
+                this.chatFocusArmed = true;
+                event.stopPropagation();
+            },
+        );
+
+        input.addEventListener(
+            'touchstart',
+            (event) => {
+                this.chatFocusArmed = true;
+                event.stopPropagation();
+            },
+            {
+                passive: true,
+            },
+        );
+
+        input.addEventListener(
             'focus',
             () => {
+                const coarsePointer =
+                    window.matchMedia(
+                        '(pointer: coarse)',
+                    ).matches;
+
+                if (
+                    coarsePointer &&
+                    !this.chatFocusArmed
+                ) {
+                    input.blur();
+                    return;
+                }
+
+                this.chatFocusArmed = false;
+
                 root.classList.add(
                     'colorhunt-chat--focused',
                 );
@@ -3992,6 +4033,8 @@ export class GameScene extends Phaser.Scene {
         input.addEventListener(
             'blur',
             () => {
+                this.chatFocusArmed = false;
+
                 root.classList.remove(
                     'colorhunt-chat--focused',
                 );
@@ -4006,6 +4049,9 @@ export class GameScene extends Phaser.Scene {
                     KeyboardEvent,
             ): void => {
                 if (
+                    window.matchMedia(
+                        '(pointer: coarse)',
+                    ).matches ||
                     !multiplayerClient
                         .isConnected() ||
                     event.key !==
@@ -4069,6 +4115,47 @@ export class GameScene extends Phaser.Scene {
         window.addEventListener(
             'colorhunt:viewportchange',
             this.chatViewportHandler,
+        );
+
+        /*
+         * v0.10.10.102:
+         * Any coarse-pointer interaction outside chat belongs to the game.
+         * It must never leave/restore focus on the text input.
+         */
+        window.addEventListener(
+            'pointerdown',
+            (event) => {
+                if (
+                    !window.matchMedia(
+                        '(pointer: coarse)',
+                    ).matches
+                ) {
+                    return;
+                }
+
+                const target =
+                    event.target;
+
+                if (
+                    target instanceof
+                        Node &&
+                    this.chatRoot?.contains(
+                        target,
+                    )
+                ) {
+                    return;
+                }
+
+                this.chatFocusArmed = false;
+
+                if (
+                    document.activeElement ===
+                        this.chatInput
+                ) {
+                    this.chatInput?.blur();
+                }
+            },
+            true,
         );
 
         this.updateChatKeyboardOffset();
