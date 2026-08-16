@@ -77,6 +77,32 @@ export class GameScene extends Phaser.Scene {
     private readonly gameWidth = 960;
     private readonly gameHeight = 540;
 
+    /*
+     * v0.10.10.97:
+     * Browser chrome/fullscreen/orientation changes can change the physical
+     * viewport without changing the 960x540 logical game world.
+     */
+    private readonly handleMobileViewportChange =
+        (): void => {
+            if (!this.sys.isActive()) {
+                return;
+            }
+
+            this.scale.refresh();
+
+            this.time.delayedCall(
+                80,
+                () => {
+                    if (
+                        this.sys.isActive()
+                    ) {
+                        this.scale.refresh();
+                    }
+                },
+            );
+        };
+
+
     private phase: GamePhase = 'lobby';
 
     /*
@@ -3188,6 +3214,11 @@ export class GameScene extends Phaser.Scene {
 
 
     create(): void {
+        window.addEventListener(
+            'colorhunt:viewportchange',
+            this.handleMobileViewportChange,
+        );
+
         this.cameras.main.setBackgroundColor(
             '#000000',
         );
@@ -3308,6 +3339,11 @@ export class GameScene extends Phaser.Scene {
         this.events.once(
             Phaser.Scenes.Events.SHUTDOWN,
             () => {
+                window.removeEventListener(
+                    'colorhunt:viewportchange',
+                    this.handleMobileViewportChange,
+                );
+
                 this.saveLobbyBgmResumePosition();
             },
         );
