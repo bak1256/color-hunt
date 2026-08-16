@@ -88,3 +88,41 @@
     border-radius: 12px;
   }
 }
+
+
+/* v0.10.10.116 — mobile is game-first */
+html.colorhunt-mobile .app {
+  width: 100vw;
+  height: var(--ch-viewport-height);
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+html.colorhunt-mobile .game-header,
+html.colorhunt-mobile .game-footer {
+  display: none !important;
+}
+
+html.colorhunt-mobile .game-container {
+  width: 100vw;
+  height: var(--ch-viewport-height);
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 0;
+  background: #0d1711;
+  box-shadow: none;
+}
+
+html.colorhunt-mobile .game-container canvas {
+  display: block;
+  max-width: 100vw !important;
+  max-height: var(--ch-viewport-height) !important;
+  margin: auto !important;
+}

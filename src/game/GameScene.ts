@@ -5420,13 +5420,18 @@ export class GameScene extends Phaser.Scene {
                 this.waitingRoomRoot
                     .getBoundingClientRect();
 
+            const helpInset =
+                this.mobileControlsEnabled
+                    ? 6
+                    : 8;
+
             this.controlsHelpRoot.style
                 .setProperty(
                     '--controls-right',
                     `${Math.round(
                         window.innerWidth -
                         waitingRect.right +
-                        8,
+                        helpInset,
                     )}px`,
                 );
 
@@ -5435,7 +5440,11 @@ export class GameScene extends Phaser.Scene {
                     '--controls-top',
                     `${Math.round(
                         waitingRect.top +
-                        7,
+                        (
+                            this.mobileControlsEnabled
+                                ? 5
+                                : 7
+                        ),
                     )}px`,
                 );
 
@@ -10506,21 +10515,75 @@ export class GameScene extends Phaser.Scene {
         const rect =
             this.game.canvas.getBoundingClientRect();
 
+        const touch =
+            this.mobileControlsEnabled;
+
+        const landscapeLike =
+            rect.width /
+                Math.max(1, rect.height) >
+            1.45;
+
+        const panelWidthRatio =
+            touch
+                ? (
+                    landscapeLike
+                        ? 0.30
+                        : 0.36
+                )
+                : 0.285;
+
+        const rightGap =
+            touch
+                ? Math.max(
+                    6,
+                    rect.width * 0.012,
+                )
+                : rect.width * 0.025;
+
+        const panelWidth =
+            Math.min(
+                rect.width -
+                    rightGap * 2,
+                rect.width *
+                    panelWidthRatio,
+            );
+
+        const panelHeight =
+            touch
+                ? rect.height * 0.94
+                : rect.height * 0.84;
+
         this.waitingRoomRoot.style.setProperty(
             '--waiting-left',
-            `${Math.round(rect.left + rect.width * 0.69)}px`,
+            `${Math.round(
+                rect.right -
+                rightGap -
+                panelWidth,
+            )}px`,
         );
+
         this.waitingRoomRoot.style.setProperty(
             '--waiting-top',
-            `${Math.round(rect.top + rect.height * 0.075)}px`,
+            `${Math.round(
+                rect.top +
+                (
+                    touch
+                        ? rect.height *
+                            0.03
+                        : rect.height *
+                            0.075
+                ),
+            )}px`,
         );
+
         this.waitingRoomRoot.style.setProperty(
             '--waiting-width',
-            `${Math.round(rect.width * 0.285)}px`,
+            `${Math.round(panelWidth)}px`,
         );
+
         this.waitingRoomRoot.style.setProperty(
             '--waiting-height',
-            `${Math.round(rect.height * 0.84)}px`,
+            `${Math.round(panelHeight)}px`,
         );
     }
 

@@ -159,19 +159,23 @@
     const shortSide = Math.min(width, height);
     const longSide = Math.max(width, height);
     const portrait = height > width;
+    const aspect =
+      longSide /
+      Math.max(1, shortSide);
 
     /*
-     * v0.10.10.98:
-     * Foldables/tablets must not be blocked just because the viewport is
-     * technically portrait. Large unfolded Fold screens and tablets have
-     * enough physical width to play comfortably.
-     *
-     * Compact portrait = phone-like narrow viewport only.
-     * - <= 720px CSS width while portrait: recommend rotation
-     * - wider portrait viewport: allow play
-     * - very large short side (tablet/fold): allow play
+     * v0.10.10.116:
+     * Near-square large touch viewports are treated as an unfolded Fold/tablet.
+     * Folded/normal phones prefer landscape; unfolded Fold/tablet prefers
+     * portrait, while remaining playable if orientation lock is unavailable.
      */
+    const unfoldedLike =
+      navigator.maxTouchPoints > 0 &&
+      shortSide >= 600 &&
+      aspect <= 1.48;
+
     const largeFormFactor =
+      unfoldedLike ||
       shortSide >= 700 ||
       width >= 760 ||
       (
@@ -185,12 +189,19 @@
       !largeFormFactor &&
       width < 720;
 
+    const preferredOrientation =
+      unfoldedLike
+        ? 'portrait-primary'
+        : 'landscape';
+
     return {
       width,
       height,
       portrait,
       compactPortrait,
       largeFormFactor,
+      unfoldedLike,
+      preferredOrientation,
     };
   };
 
@@ -256,11 +267,10 @@
         viewportProfile();
 
       if (
-        screen.orientation?.lock &&
-        !profile.largeFormFactor
+        screen.orientation?.lock
       ) {
         await screen.orientation.lock(
-          'landscape',
+          profile.preferredOrientation,
         );
       }
     } catch {
@@ -339,6 +349,29 @@
     installButton.hidden = true;
   }
 
+  let lastPreferredOrientation = '';
+
+  async function syncPreferredOrientation(profile) {
+    if (
+      !screen.orientation?.lock ||
+      profile.preferredOrientation ===
+        lastPreferredOrientation
+    ) {
+      return;
+    }
+
+    lastPreferredOrientation =
+      profile.preferredOrientation;
+
+    try {
+      await screen.orientation.lock(
+        profile.preferredOrientation,
+      );
+    } catch {
+      // Normal browser tabs may reject orientation lock. Layout still adapts.
+    }
+  }
+
   function syncViewport() {
     const keyboardOpen =
       isSoftKeyboardOpen();
@@ -412,7 +445,13 @@
       profile.largeFormFactor,
     );
 
+    document.body.classList.toggle(
+      'colorhunt-unfolded',
+      profile.unfoldedLike,
+    );
+
     if (!keyboardOpen) {
+      void syncPreferredOrientation(profile);
       window.dispatchEvent(
         new CustomEvent(
           'colorhunt:viewportchange',
