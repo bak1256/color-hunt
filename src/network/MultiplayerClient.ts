@@ -358,6 +358,14 @@ this.phaseChangedHandlers.forEach(
   private readonly connectionRecoveredHandlers =
     new Set<ConnectionRecoveredHandler>();
 
+  private roomHealthCleanup?: () => void;
+
+  private lastRoomPingAt = 0;
+
+  private connectionIssueNotified = false;
+
+  private lastForcedReconnectAt = 0;
+
   private readonly roundResultHandlers =
     new Set<RoundResultHandler>();
 
@@ -899,7 +907,36 @@ this.phaseChangedHandlers.forEach(
     );
   }
 
-private attachRoom(
+private notifyConnectionIssue(
+    reason?: string,
+  ): void {
+    if (this.connectionIssueNotified) {
+      return;
+    }
+
+    this.connectionIssueNotified = true;
+
+    this.connectionDropHandlers
+      .forEach(
+        (handler) => {
+          handler(reason);
+        },
+      );
+  }
+
+  private clearConnectionIssue(): void {
+    this.connectionIssueNotified = false;
+    this.lastRoomPingAt = Date.now();
+
+    this.connectionRecoveredHandlers
+      .forEach(
+        (handler) => {
+          handler();
+        },
+      );
+  }
+
+  private attachRoom(
     room: Room<NetworkGameState>,
   ): void {
     this.snapshotPlayers.clear();
@@ -915,11 +952,183 @@ this.room = room;
      * Mobile network handoffs can happen before Colyseus' default
      * 5000ms minUptime. Allow recovery after 500ms instead.
      */
-    room.reconnection.minUptime = 500;
-    room.reconnection.maxRetries = 30;
-    room.reconnection.minDelay = 100;
-    room.reconnection.maxDelay = 1000;
-    room.reconnection.maxEnqueuedMessages = 30;
+    room.reconnection.minUptime = 250;
+    room.reconnection.maxRetries = 60;
+    room.reconnection.delay = 50;
+    room.reconnection.minDelay = 50;
+    room.reconnection.maxDelay = 350;
+    room.reconnection.maxEnqueuedMessages = 40;
+    room.reconnection.backoff =
+      (
+        attempt: number,
+        _delay: number,
+      ) =>
+        Math.min(
+          350,
+          50 + attempt * 35,
+        );
+
+    this.roomHealthCleanup?.();
+
+    this.lastRoomPingAt =
+      Date.now();
+    this.connectionIssueNotified =
+      false;
+    this.lastForcedReconnectAt = 0;
+
+    const handleBrowserOffline =
+      (): void => {
+        if (this.room !== room) {
+          return;
+        }
+
+        this.notifyConnectionIssue(
+          "browser_offline",
+        );
+      };
+
+    const handleBrowserOnline =
+      (): void => {
+        if (this.room !== room) {
+          return;
+        }
+
+        /*
+         * Do not claim success here. A fresh successful ping/onReconnect
+         * will clear the reconnecting state.
+         */
+        this.lastRoomPingAt =
+          Math.min(
+            this.lastRoomPingAt,
+            Date.now() - 1200,
+          );
+      };
+
+    globalThis.addEventListener?.(
+      "offline",
+      handleBrowserOffline,
+    );
+
+    globalThis.addEventListener?.(
+      "online",
+      handleBrowserOnline,
+    );
+
+    const healthTimer =
+      globalThis.setInterval(
+        () => {
+          if (this.room !== room) {
+            return;
+          }
+
+          const now =
+            Date.now();
+
+          /*
+           * Skip aggressive watchdog work while a mobile browser tab is
+           * backgrounded. Timers are throttled there and would create
+           * false positives.
+           */
+          if (
+            typeof document !==
+              "undefined" &&
+            document.hidden
+          ) {
+            return;
+          }
+
+          room.ping(
+            () => {
+              if (this.room !== room) {
+                return;
+              }
+
+              const hadIssue =
+                this.connectionIssueNotified;
+
+              this.lastRoomPingAt =
+                Date.now();
+
+              if (
+                hadIssue &&
+                !room.reconnection
+                  .isReconnecting
+              ) {
+                this.clearConnectionIssue();
+
+                /*
+                 * A network switch may recover the same socket without a
+                 * formal onReconnect callback. Still refresh authoritative
+                 * phase/READY state.
+                 */
+                this.requestLobbySnapshot();
+                this.requestPaintReadyState();
+              }
+            },
+          );
+
+          const silentFor =
+            now -
+            this.lastRoomPingAt;
+
+          const activeRound =
+            this.deliveredPhase ===
+              "countdown" ||
+            this.deliveredPhase ===
+              "paint" ||
+            this.deliveredPhase ===
+              "hunt";
+
+          if (
+            activeRound &&
+            silentFor >= 1500
+          ) {
+            this.notifyConnectionIssue(
+              "ping_timeout",
+            );
+          }
+
+          /*
+           * Some mobile Wi-Fi -> cellular switches leave the old TCP socket
+           * half-open for several seconds. Do not wait for the browser's
+           * slow socket timeout: after 2.2s without a server ping, force an
+           * UNCONSENTED leave. Colyseus treats leave(false) as an unexpected
+           * drop and immediately enters its automatic reconnection flow.
+           */
+          if (
+            activeRound &&
+            silentFor >= 2200 &&
+            !room.reconnection
+              .isReconnecting &&
+            now -
+              this.lastForcedReconnectAt >=
+              4000
+          ) {
+            this.lastForcedReconnectAt =
+              now;
+
+            void room.leave(false);
+          }
+        },
+        650,
+      );
+
+    this.roomHealthCleanup =
+      () => {
+        globalThis.clearInterval(
+          healthTimer,
+        );
+
+        globalThis.removeEventListener?.(
+          "offline",
+          handleBrowserOffline,
+        );
+
+        globalThis.removeEventListener?.(
+          "online",
+          handleBrowserOnline,
+        );
+      };
 
     room.onDrop(
       (
@@ -930,12 +1139,9 @@ this.room = room;
           return;
         }
 
-        this.connectionDropHandlers
-          .forEach(
-            (handler) => {
-              handler(reason);
-            },
-          );
+        this.notifyConnectionIssue(
+          reason,
+        );
       },
     );
 
@@ -945,15 +1151,25 @@ this.room = room;
           return;
         }
 
+        /*
+         * Force the authoritative server phase to be applied even when
+         * reconnecting during the same phase.
+         */
+        this.deliveredPhase = "";
+
         this.requestLobbySnapshot();
         this.requestPaintReadyState();
 
-        this.connectionRecoveredHandlers
-          .forEach(
-            (handler) => {
-              handler();
-            },
-          );
+        this.clearConnectionIssue();
+
+        globalThis.setTimeout(
+          () => {
+            if (this.room === room) {
+              this.requestLobbySnapshot();
+            }
+          },
+          180,
+        );
       },
     );
 
@@ -1202,7 +1418,7 @@ this.room = room;
                     },
                   );
               },
-              index * 90,
+              index * 40,
             );
           },
         );
@@ -2133,6 +2349,10 @@ this.room = room;
      * UI/새 join을 WebSocket close handshake가 끝날 때까지 막지 않습니다.
      * 기존 room 참조를 먼저 끊고 leave는 백그라운드로 정리합니다.
      */
+    this.roomHealthCleanup?.();
+    this.roomHealthCleanup =
+      undefined;
+
     this.room = undefined;
     this.callbacks = undefined;
     this.snapshotPlayers.clear();

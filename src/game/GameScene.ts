@@ -1237,16 +1237,15 @@ export class GameScene extends Phaser.Scene {
                 {
                     fontFamily:
                         'monospace',
-                    fontSize:
-                        getLanguage() === 'ja'
-                            ? '9px'
-                            : '10px',
+                    fontSize: '13px',
                     fontStyle: 'bold',
-                    color: '#28445a',
+                    color: '#17384a',
                     backgroundColor:
-                        'rgba(236, 247, 255, 0.94)',
-                    fixedWidth: 220,
-                    fixedHeight: 34,
+                        'rgba(245, 252, 255, 0.97)',
+                    stroke: '#ffffff',
+                    strokeThickness: 2,
+                    fixedWidth: 240,
+                    fixedHeight: 32,
                     align: 'center',
                     padding: {
                         top: 8,
@@ -4062,7 +4061,7 @@ export class GameScene extends Phaser.Scene {
                             this.mobileControlsEnabled
                         ) {
                             this.time.delayedCall(
-                                80,
+                                24,
                                 applyPreset,
                             );
                         } else {
@@ -5366,7 +5365,7 @@ export class GameScene extends Phaser.Scene {
         if (joinedPhase === 'lobby') {
             this.time.delayedCall(
                 this.mobileControlsEnabled
-                    ? 900
+                    ? 450
                     : 120,
                 () => {
                     if (
@@ -5828,7 +5827,7 @@ export class GameScene extends Phaser.Scene {
                 const points =
                     stroke.points;
 
-                if (points.length <= 32) {
+                if (points.length <= 24) {
                     return stroke;
                 }
 
@@ -5836,7 +5835,7 @@ export class GameScene extends Phaser.Scene {
                     Math.max(
                         1,
                         Math.ceil(
-                            points.length / 31,
+                            points.length / 23,
                         ),
                     );
 
@@ -11477,7 +11476,7 @@ export class GameScene extends Phaser.Scene {
         ) {
             this.time.delayedCall(
                 this.mobileControlsEnabled
-                    ? 950
+                    ? 520
                     : 0,
                 () => {
                     if (
@@ -11795,11 +11794,11 @@ export class GameScene extends Phaser.Scene {
         name: string,
     ): string {
         const safeName =
-            name.length > 14
-                ? `${name.slice(0, 13)}…`
-                : name;
+            name.trim();
 
-        return safeName;
+        return safeName.length > 20
+            ? `${safeName.slice(0, 19)}…`
+            : safeName;
     }
 
     private cycleSpectatorView(): void {
