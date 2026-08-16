@@ -89,6 +89,10 @@ export type WeaponStateHandler = (
 export type ResetRoundHandler =
   () => void;
 
+export type PlayerReconnectedHandler = (
+  name: string,
+) => void;
+
 export type NetworkRoundResult = {
   winner: "hunters" | "hiders";
   reason?:
@@ -338,6 +342,9 @@ this.phaseChangedHandlers.forEach(
   private readonly resetRoundHandlers =
     new Set<ResetRoundHandler>();
 
+  private readonly playerReconnectedHandlers =
+    new Set<PlayerReconnectedHandler>();
+
   private readonly roundResultHandlers =
     new Set<RoundResultHandler>();
 
@@ -488,6 +495,8 @@ this.phaseChangedHandlers.forEach(
             ),
           password:
             options.password ?? "",
+          clientKey:
+            this.getStableClientKey(),
         },
       );
 
@@ -1394,6 +1403,23 @@ this.room = room;
       },
     );
 
+    room.onMessage<{
+      name?: string;
+    }>(
+      "player_reconnected",
+      (payload) => {
+        const name =
+          String(payload?.name ?? "Player");
+
+        this.playerReconnectedHandlers
+          .forEach(
+            (handler) => {
+              handler(name);
+            },
+          );
+      },
+    );
+
     room.onMessage(
       "reset_round",
       () => {
@@ -1618,6 +1644,20 @@ this.room = room;
       this.snapshotActiveMap ??
       "forest"
     );
+  }
+
+  onPlayerReconnected(
+    handler: PlayerReconnectedHandler,
+  ): () => void {
+    this.playerReconnectedHandlers.add(
+      handler,
+    );
+
+    return () => {
+      this.playerReconnectedHandlers.delete(
+        handler,
+      );
+    };
   }
 
   sendAvatarPreset(
@@ -2007,6 +2047,42 @@ this.room = room;
         );
       },
     );
+  }
+
+  private getStableClientKey(): string {
+    const storageKey =
+      "chameleon-hunt-client-key";
+
+    try {
+      const existing =
+        localStorage.getItem(
+          storageKey,
+        );
+
+      if (existing) {
+        return existing;
+      }
+
+      const created =
+        typeof crypto !== "undefined" &&
+        typeof crypto.randomUUID ===
+          "function"
+          ? crypto.randomUUID()
+          : `client-${Date.now()}-${Math.random()
+              .toString(36)
+              .slice(2)}`;
+
+      localStorage.setItem(
+        storageKey,
+        created,
+      );
+
+      return created;
+    } catch {
+      return `session-${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2)}`;
+    }
   }
 
   private normalizeName(

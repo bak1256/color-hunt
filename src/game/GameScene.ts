@@ -3986,6 +3986,29 @@ export class GameScene extends Phaser.Scene {
         );
 
         this.networkUnsubscribers.push(
+            multiplayerClient.onPlayerReconnected(
+                (name: string) => {
+                    const template =
+                        tr('{name} 님이 재접속했습니다.');
+
+                    this.showStatus(
+                        template.replace(
+                            '{name}',
+                            name,
+                        ),
+                    );
+
+                    this.time.delayedCall(
+                        1800,
+                        () => {
+                            this.clearStatus();
+                        },
+                    );
+                },
+            ),
+        );
+
+        this.networkUnsubscribers.push(
             multiplayerClient.onAvatarPreset(
                 (
                     preset:
@@ -5283,7 +5306,10 @@ export class GameScene extends Phaser.Scene {
 
         this.updateLobbyUi();
 
-        if (joinedPhase === 'lobby') {
+        if (
+            joinedPhase === 'lobby' &&
+            !this.mobileControlsEnabled
+        ) {
             this.time.delayedCall(
                 120,
                 () => {
@@ -11332,8 +11358,15 @@ export class GameScene extends Phaser.Scene {
         this.updateLobbyUi();
 
         if (
-            multiplayerClient.isConnected()
+            multiplayerClient.isConnected() &&
+            !this.mobileControlsEnabled &&
+            !this.roomTransitionInProgress
         ) {
+            /*
+             * v0.10.10.74 MOBILE CRITICAL:
+             * Large avatar paint presets can block the mobile JS main thread
+             * while the join modal is still releasing input.
+             */
             multiplayerClient
                 .requestAvatarPresets();
 
