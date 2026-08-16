@@ -160,3 +160,14 @@ html.colorhunt-mobile canvas {
     display: none !important;
   }
 }
+
+
+/* v0.10.10.98: unfolded foldables/tablets can play in portrait */
+html.colorhunt-mobile body.colorhunt-large-mobile #colorhunt-orientation-overlay {
+  display: none !important;
+}
+
+html.colorhunt-mobile body.colorhunt-large-mobile canvas {
+  max-width: 100vw !important;
+  max-height: var(--ch-viewport-height) !important;
+}

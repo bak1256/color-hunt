@@ -108,9 +108,44 @@
       window.innerHeight,
   });
 
-  const isPortrait = () => {
+  const viewportProfile = () => {
     const { width, height } = getViewport();
-    return height > width;
+    const shortSide = Math.min(width, height);
+    const longSide = Math.max(width, height);
+    const portrait = height > width;
+
+    /*
+     * v0.10.10.98:
+     * Foldables/tablets must not be blocked just because the viewport is
+     * technically portrait. Large unfolded Fold screens and tablets have
+     * enough physical width to play comfortably.
+     *
+     * Compact portrait = phone-like narrow viewport only.
+     * - <= 720px CSS width while portrait: recommend rotation
+     * - wider portrait viewport: allow play
+     * - very large short side (tablet/fold): allow play
+     */
+    const largeFormFactor =
+      shortSide >= 700 ||
+      width >= 760 ||
+      (
+        navigator.maxTouchPoints > 0 &&
+        longSide >= 1000 &&
+        shortSide >= 620
+      );
+
+    const compactPortrait =
+      portrait &&
+      !largeFormFactor &&
+      width < 720;
+
+    return {
+      width,
+      height,
+      portrait,
+      compactPortrait,
+      largeFormFactor,
+    };
   };
 
   let deferredPrompt = null;
@@ -171,8 +206,12 @@
     }
 
     try {
+      const profile =
+        viewportProfile();
+
       if (
-        screen.orientation?.lock
+        screen.orientation?.lock &&
+        !profile.largeFormFactor
       ) {
         await screen.orientation.lock(
           'landscape',
@@ -255,36 +294,43 @@
   }
 
   function syncViewport() {
-    const viewport = getViewport();
+    const profile =
+      viewportProfile();
 
     document.documentElement.style.setProperty(
       '--ch-viewport-width',
-      `${Math.round(viewport.width)}px`,
+      `${Math.round(profile.width)}px`,
     );
 
     document.documentElement.style.setProperty(
       '--ch-viewport-height',
-      `${Math.round(viewport.height)}px`,
+      `${Math.round(profile.height)}px`,
     );
 
-    const portrait =
-      isPortrait();
-
+    /*
+     * Show the rotate overlay ONLY for narrow phone-like portrait screens.
+     * Large Fold/tablet portrait layouts remain playable.
+     */
     overlay.classList.toggle(
       'ch-visible',
-      portrait,
+      profile.compactPortrait,
     );
 
     fullscreenChip.classList.toggle(
       'ch-visible',
-      !portrait &&
+      !profile.compactPortrait &&
       !standalone &&
       !document.fullscreenElement,
     );
 
     document.body.classList.toggle(
       'colorhunt-landscape',
-      !portrait,
+      !profile.portrait,
+    );
+
+    document.body.classList.toggle(
+      'colorhunt-large-mobile',
+      profile.largeFormFactor,
     );
 
     window.dispatchEvent(
@@ -292,8 +338,16 @@
         'colorhunt:viewportchange',
         {
           detail: {
-            ...viewport,
-            portrait,
+            width:
+              profile.width,
+            height:
+              profile.height,
+            portrait:
+              profile.portrait,
+            compactPortrait:
+              profile.compactPortrait,
+            largeFormFactor:
+              profile.largeFormFactor,
             fullscreen:
               Boolean(
                 document.fullscreenElement,
