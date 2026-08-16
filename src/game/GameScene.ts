@@ -1186,7 +1186,7 @@ export class GameScene extends Phaser.Scene {
         this.spectatorButton =
             this.add.text(
                 this.gameWidth / 2,
-                368,
+                354,
                 this.mobileControlsEnabled
                     ? tr('시야 전환')
                     : tr('TAB · 시야 전환'),
@@ -1232,7 +1232,7 @@ export class GameScene extends Phaser.Scene {
         this.spectatorStatusText =
             this.add.text(
                 this.gameWidth / 2,
-                408,
+                420,
                 '',
                 {
                     fontFamily:
@@ -2040,7 +2040,7 @@ export class GameScene extends Phaser.Scene {
             this.setFixedHudScreenPosition(
                 this.spectatorButton,
                 this.gameWidth / 2,
-                368,
+                354,
             );
 
             if (
@@ -2049,7 +2049,7 @@ export class GameScene extends Phaser.Scene {
                 this.setFixedHudScreenPosition(
                     this.spectatorStatusText,
                     this.gameWidth / 2,
-                    408,
+                    420,
                 );
             }
         }
@@ -13200,8 +13200,8 @@ export class GameScene extends Phaser.Scene {
                     ? 1.5
                     : 1,
                 this.mobileControlsEnabled
-                    ? 7
-                    : 5.5,
+                    ? 8
+                    : 6,
             );
 
         this.paintWorldZoom =
@@ -19348,8 +19348,8 @@ export class GameScene extends Phaser.Scene {
                     .isLocalHunter()
                     ? 1.05
                     : this.mobileControlsEnabled
-                        ? 3.15
-                        : 2.55;
+                        ? 3.85
+                        : 3.15;
 
             this.cameras.main
                 .stopFollow()

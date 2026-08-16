@@ -243,7 +243,7 @@ export type PaintReadyStateHandler = (
 ) => void;
 
 export class MultiplayerClient {
-  private readonly client: Client;
+  private client: Client;
   private readonly serverUrl: string;
   private room?: Room<NetworkGameState>;
   private callbacks?: any;
@@ -942,8 +942,19 @@ private async attemptFreshRejoin(
     this.freshRejoinInFlight = true;
 
     try {
+      /*
+       * v0.10.10.79 HUNTER HANDOFF:
+       * Do not ask the Client instance that is already reconnecting to open
+       * another room. Mobile Hunter traffic can leave that transport stuck
+       * in its reconnect state. Use a completely fresh Client/WebSocket.
+       */
+      const fallbackClient =
+        new Client(
+          this.serverUrl,
+        );
+
       const room =
-        await this.client.joinById<
+        await fallbackClient.joinById<
           NetworkGameState
         >(
           this.lastJoinedRoomId,
@@ -968,6 +979,9 @@ private async attemptFreshRejoin(
         return;
       }
 
+      this.client =
+        fallbackClient;
+
       /*
        * Server v0.10.10.78 transfers the old role/alive/position to this
        * replacement session. attachRoom() then replays the CURRENT phase,
@@ -977,6 +991,23 @@ private async attemptFreshRejoin(
       this.deliveredPhase = "";
       this.requestLobbySnapshot();
       this.requestPaintReadyState();
+
+      [80, 220, 650].forEach(
+        (delay) => {
+          globalThis.setTimeout(
+            () => {
+              if (
+                this.room === room
+              ) {
+                this.deliveredPhase =
+                  "";
+                this.requestLobbySnapshot();
+              }
+            },
+            delay,
+          );
+        },
+      );
 
       try {
         await sourceRoom.leave();
@@ -1084,7 +1115,7 @@ private async attemptFreshRejoin(
           : 0;
 
       if (
-        issueFor >= 3200 &&
+        issueFor >= 1800 &&
         (
           typeof navigator ===
             "undefined" ||
@@ -1318,7 +1349,7 @@ this.manualReconnectInFlight = false;
             this.connectionIssueStartedAt > 0 &&
             now -
               this.connectionIssueStartedAt >=
-              4200 &&
+              2400 &&
             (
               typeof navigator ===
                 "undefined" ||
