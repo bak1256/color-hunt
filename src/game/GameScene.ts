@@ -1895,9 +1895,14 @@ export class GameScene extends Phaser.Scene {
 
                 if (
                     this.phase !== 'hunt' ||
-                    multiplayerClient
-                        .getLocalPlayer()
-                        ?.role !== 'hunter'
+                    (
+                        this.practiceMode !==
+                            'hunter' &&
+                        multiplayerClient
+                            .getLocalPlayer()
+                            ?.role !==
+                            'hunter'
+                    )
                 ) {
                     return;
                 }
@@ -2518,8 +2523,15 @@ export class GameScene extends Phaser.Scene {
                 .getLocalPlayer()
                 ?.role;
 
+        const inLocalPractice =
+            this.practiceMode !==
+            null;
+
         const canMove =
-            inRoom &&
+            (
+                inRoom ||
+                inLocalPractice
+            ) &&
             (
                 this.phase === 'lobby' ||
                 this.phase === 'paint' ||
@@ -2531,7 +2543,12 @@ export class GameScene extends Phaser.Scene {
         const showHunterCombat =
             canMove &&
             this.phase === 'hunt' &&
-            localRole === 'hunter';
+            (
+                localRole ===
+                    'hunter' ||
+                this.practiceMode ===
+                    'hunter'
+            );
 
         this.mobileMoveBase
             ?.setVisible(canMove);
@@ -2833,6 +2850,20 @@ export class GameScene extends Phaser.Scene {
     private lobbyInfoCard!: Phaser.GameObjects.Rectangle;
     private lobbyControlsCard!: Phaser.GameObjects.Rectangle;
     private lobbyFooterDivider!: Phaser.GameObjects.Rectangle;
+
+    /*
+     * Local Practice Ground
+     * - no Colyseus room / no server load
+     * - reuses legacy local Hunter/Hider gameplay actors
+     */
+    private practiceMode:
+        | 'hunter'
+        | 'hider'
+        | null = null;
+    private practiceMap = 'map1';
+    private practiceBotCount = 3;
+    private practiceBotPrecision = 65;
+    private practiceExitButton?: Phaser.GameObjects.Text;
 
     constructor() {
         super('GameScene');
@@ -4039,6 +4070,16 @@ export class GameScene extends Phaser.Scene {
         if (this.phase === 'hunt') {
             if (!multiplayerClient.isConnected()) {
                 this.updateHunterMovement(delta);
+
+                if (
+                    this.practiceMode ===
+                        'hunter' &&
+                    this.mobileControlsEnabled
+                ) {
+                    this.updatePracticeHunterMobileMovement(
+                        delta,
+                    );
+                }
             }
 
             if (
@@ -7475,6 +7516,790 @@ export class GameScene extends Phaser.Scene {
             message;
     }
 
+    private openPracticeGroundModal(): void {
+        this.closeMenuModal();
+        this.input.enabled = false;
+
+        const overlay =
+            document.createElement('div');
+        overlay.className =
+            'colorhunt-practice-overlay';
+
+        const card =
+            document.createElement('div');
+        card.className =
+            'colorhunt-practice-card';
+
+        const mapOptions =
+            Array.from(
+                { length: 11 },
+                (
+                    _,
+                    index,
+                ) => {
+                    const value =
+                        `map${index + 1}`;
+                    return `
+                        <option value="${value}">
+                            MAP ${index + 1}
+                        </option>
+                    `;
+                },
+            ).join('');
+
+        card.innerHTML = `
+            <header class="colorhunt-practice-head">
+                <div>
+                    <small>${tr('BEGINNER PRACTICE')}</small>
+                    <strong>🎯 ${tr('연습장')}</strong>
+                </div>
+                <button type="button" data-practice-close>✕</button>
+            </header>
+
+            <div class="colorhunt-practice-map">
+                <label>
+                    <span>🗺️ ${tr('연습할 맵')}</span>
+                    <select data-practice-map>
+                        ${mapOptions}
+                    </select>
+                </label>
+            </div>
+
+            <section class="colorhunt-practice-mode colorhunt-practice-mode--hunter">
+                <div class="colorhunt-practice-mode-icon">🔦</div>
+                <div class="colorhunt-practice-mode-copy">
+                    <strong>${tr('헌터 연습')}</strong>
+                    <p>${tr('봇 하이더들이 자동으로 위장하고 랜덤한 장소에 숨습니다. 찾아서 샷건으로 맞혀보세요!')}</p>
+
+                    <div class="colorhunt-practice-control">
+                        <label>
+                            <span>${tr('봇 하이더 수')}</span>
+                            <b data-bot-count-value>${this.practiceBotCount}</b>
+                        </label>
+                        <input
+                            data-bot-count
+                            type="range"
+                            min="1"
+                            max="5"
+                            step="1"
+                            value="${this.practiceBotCount}"
+                        >
+                    </div>
+
+                    <div class="colorhunt-practice-control">
+                        <label>
+                            <span>${tr('위장 정밀도')}</span>
+                            <b data-bot-precision-value>${this.practiceBotPrecision}%</b>
+                        </label>
+                        <input
+                            data-bot-precision
+                            type="range"
+                            min="50"
+                            max="80"
+                            step="5"
+                            value="${this.practiceBotPrecision}"
+                        >
+                        <small>${tr('높을수록 봇의 색이 배경과 더 비슷해집니다.')}</small>
+                    </div>
+
+                    <button type="button" class="colorhunt-practice-start" data-practice-hunter>
+                        🔫 ${tr('헌터 연습 시작')}
+                    </button>
+                </div>
+            </section>
+
+            <section class="colorhunt-practice-mode colorhunt-practice-mode--hider">
+                <div class="colorhunt-practice-mode-icon">🎨</div>
+                <div class="colorhunt-practice-mode-copy">
+                    <strong>${tr('하이더 연습')}</strong>
+                    <p>${tr('헌터 없이 자유롭게 움직이며 색칠, 붓, 스포이드와 위장을 연습합니다.')}</p>
+                    <button type="button" class="colorhunt-practice-start colorhunt-practice-start--hider" data-practice-hider>
+                        🌿 ${tr('하이더 연습 시작')}
+                    </button>
+                </div>
+            </section>
+        `;
+
+        overlay.appendChild(
+            card,
+        );
+        document.body.appendChild(
+            overlay,
+        );
+        this.menuModalOverlay =
+            overlay;
+
+        const mapSelect =
+            card.querySelector<
+                HTMLSelectElement
+            >(
+                '[data-practice-map]',
+            );
+
+        if (mapSelect) {
+            mapSelect.value =
+                this.practiceMap;
+        }
+
+        const botCount =
+            card.querySelector<
+                HTMLInputElement
+            >(
+                '[data-bot-count]',
+            );
+        const botCountValue =
+            card.querySelector<
+                HTMLElement
+            >(
+                '[data-bot-count-value]',
+            );
+
+        botCount?.addEventListener(
+            'input',
+            () => {
+                this.practiceBotCount =
+                    Number(
+                        botCount.value,
+                    );
+                if (botCountValue) {
+                    botCountValue.textContent =
+                        String(
+                            this.practiceBotCount,
+                        );
+                }
+            },
+        );
+
+        const precision =
+            card.querySelector<
+                HTMLInputElement
+            >(
+                '[data-bot-precision]',
+            );
+        const precisionValue =
+            card.querySelector<
+                HTMLElement
+            >(
+                '[data-bot-precision-value]',
+            );
+
+        precision?.addEventListener(
+            'input',
+            () => {
+                this.practiceBotPrecision =
+                    Number(
+                        precision.value,
+                    );
+                if (precisionValue) {
+                    precisionValue.textContent =
+                        `${this.practiceBotPrecision}%`;
+                }
+            },
+        );
+
+        const updateMap =
+            (): void => {
+                const selected =
+                    mapSelect?.value ??
+                    'map1';
+
+                if (
+                    /^map(?:[1-9]|1[01])$/
+                        .test(
+                            selected,
+                        )
+                ) {
+                    this.practiceMap =
+                        selected;
+                }
+            };
+
+        mapSelect?.addEventListener(
+            'change',
+            updateMap,
+        );
+
+        card.querySelector(
+            '[data-practice-close]',
+        )?.addEventListener(
+            'click',
+            () => {
+                this.closeMenuModal();
+            },
+        );
+
+        card.querySelector(
+            '[data-practice-hunter]',
+        )?.addEventListener(
+            'click',
+            () => {
+                updateMap();
+                this.closeMenuModal();
+                this.startHunterPractice();
+            },
+        );
+
+        card.querySelector(
+            '[data-practice-hider]',
+        )?.addEventListener(
+            'click',
+            () => {
+                updateMap();
+                this.closeMenuModal();
+                this.startHiderPractice();
+            },
+        );
+    }
+
+    private destroyLocalHiders(): void {
+        this.hiders.forEach(
+            (
+                hider,
+            ) => {
+                this.getAllPartObjects(
+                    hider,
+                ).forEach(
+                    (
+                        object,
+                    ) => {
+                        object.destroy();
+                    },
+                );
+
+                hider.label.destroy();
+                hider.paintTexture.destroy();
+                hider.paintMaskShape.destroy();
+            },
+        );
+
+        this.hiders = [];
+    }
+
+    private rebuildPracticeHiders(
+        count: number,
+    ): void {
+        this.destroyLocalHiders();
+
+        const safeCount =
+            Phaser.Math.Clamp(
+                Math.round(
+                    count,
+                ),
+                1,
+                5,
+            );
+
+        const fallbackPositions = [
+            { x: 260, y: 140 },
+            { x: 700, y: 145 },
+            { x: 500, y: 245 },
+            { x: 250, y: 400 },
+            { x: 710, y: 405 },
+        ];
+
+        this.hiders =
+            fallbackPositions
+                .slice(
+                    0,
+                    safeCount,
+                )
+                .map(
+                    (
+                        position,
+                        index,
+                    ) =>
+                        this.createHider(
+                            position.x,
+                            position.y,
+                            index,
+                        ),
+                );
+    }
+
+    private getPracticeBackgroundColor(
+        worldX: number,
+        worldY: number,
+        precision:
+            number,
+    ): number {
+        const textureKey =
+            this.getBackgroundTextureKey(
+                this.practiceMap,
+            );
+
+        let red = 104;
+        let green = 132;
+        let blue = 92;
+
+        try {
+            const texture =
+                this.textures.get(
+                    textureKey,
+                );
+
+            const source =
+                texture.getSourceImage() as
+                    | HTMLImageElement
+                    | HTMLCanvasElement;
+
+            const sourceWidth =
+                source.width ||
+                this.gameWidth;
+            const sourceHeight =
+                source.height ||
+                this.gameHeight;
+
+            const px =
+                Phaser.Math.Clamp(
+                    Math.round(
+                        worldX /
+                            this.gameWidth *
+                            (
+                                sourceWidth -
+                                1
+                            ),
+                    ),
+                    0,
+                    Math.max(
+                        0,
+                        sourceWidth -
+                            1,
+                    ),
+                );
+
+            const py =
+                Phaser.Math.Clamp(
+                    Math.round(
+                        worldY /
+                            this.gameHeight *
+                            (
+                                sourceHeight -
+                                1
+                            ),
+                    ),
+                    0,
+                    Math.max(
+                        0,
+                        sourceHeight -
+                            1,
+                    ),
+                );
+
+            const sampleCanvas =
+                document.createElement(
+                    'canvas',
+                );
+
+            sampleCanvas.width = 1;
+            sampleCanvas.height = 1;
+
+            const sampleContext =
+                sampleCanvas
+                    .getContext(
+                        '2d',
+                        {
+                            willReadFrequently:
+                                true,
+                        },
+                    );
+
+            if (sampleContext) {
+                sampleContext.drawImage(
+                    source,
+                    px,
+                    py,
+                    1,
+                    1,
+                    0,
+                    0,
+                    1,
+                    1,
+                );
+
+                const data =
+                    sampleContext
+                        .getImageData(
+                            0,
+                            0,
+                            1,
+                            1,
+                        )
+                        .data;
+
+                red = data[0];
+                green = data[1];
+                blue = data[2];
+            }
+        } catch {
+            // Safe fallback palette when browser blocks pixel extraction.
+        }
+
+        const normalized =
+            Phaser.Math.Clamp(
+                precision,
+                50,
+                80,
+            ) /
+            100;
+
+        const noise =
+            Math.round(
+                (
+                    1 -
+                    normalized
+                ) *
+                135,
+            );
+
+        const applyNoise =
+            (
+                value:
+                    number,
+            ): number =>
+                Phaser.Math.Clamp(
+                    value +
+                    Phaser.Math.Between(
+                        -noise,
+                        noise,
+                    ),
+                    18,
+                    238,
+                );
+
+        red = applyNoise(red);
+        green = applyNoise(green);
+        blue = applyNoise(blue);
+
+        return (
+            red <<
+                16 |
+            green <<
+                8 |
+            blue
+        );
+    }
+
+    private prepareHunterPracticeBots(): void {
+        const safePaddingX = 82;
+        const safePaddingTop = 92;
+        const safePaddingBottom = 72;
+
+        this.hiders.forEach(
+            (
+                hider,
+                index,
+            ) => {
+                hider.alive = true;
+
+                /*
+                 * Higher precision also gives the bot a few more candidate
+                 * hiding spots. It is deliberately simple, readable AI:
+                 * choose random candidates, prefer farther positions from
+                 * the Hunter start, then camouflage to the sampled backdrop.
+                 */
+                const candidateCount =
+                    3 +
+                    Math.round(
+                        (
+                            this.practiceBotPrecision -
+                            50
+                        ) /
+                            10,
+                    );
+
+                let best =
+                    new Phaser.Math.Vector2(
+                        Phaser.Math.Between(
+                            260,
+                            this.gameWidth -
+                                safePaddingX,
+                        ),
+                        Phaser.Math.Between(
+                            safePaddingTop,
+                            this.gameHeight -
+                                safePaddingBottom,
+                        ),
+                    );
+
+                let bestScore = -1;
+
+                for (
+                    let candidate = 0;
+                    candidate <
+                    candidateCount;
+                    candidate += 1
+                ) {
+                    const point =
+                        new Phaser.Math.Vector2(
+                            Phaser.Math.Between(
+                                235,
+                                this.gameWidth -
+                                    safePaddingX,
+                            ),
+                            Phaser.Math.Between(
+                                safePaddingTop,
+                                this.gameHeight -
+                                    safePaddingBottom,
+                            ),
+                        );
+
+                    const hunterDistance =
+                        Phaser.Math.Distance.Between(
+                            100,
+                            this.gameHeight /
+                                2,
+                            point.x,
+                            point.y,
+                        );
+
+                    const edgeBonus =
+                        Math.min(
+                            point.x,
+                            this.gameWidth -
+                                point.x,
+                            point.y,
+                            this.gameHeight -
+                                point.y,
+                        );
+
+                    const score =
+                        hunterDistance -
+                        edgeBonus *
+                            0.25 +
+                        Phaser.Math.Between(
+                            -35,
+                            35,
+                        );
+
+                    if (
+                        score >
+                        bestScore
+                    ) {
+                        bestScore =
+                            score;
+                        best =
+                            point;
+                    }
+                }
+
+                this.applyHiderMovement(
+                    hider,
+                    best.x -
+                        hider.centerX,
+                    best.y -
+                        hider.centerY,
+                );
+
+                const color =
+                    this.getPracticeBackgroundColor(
+                        hider.centerX,
+                        hider.centerY,
+                        this.practiceBotPrecision,
+                    );
+
+                hider.paintTexture
+                    .clear()
+                    .fill(
+                        color,
+                        1,
+                    )
+                    .setVisible(
+                        true,
+                    )
+                    .setAlpha(
+                        1,
+                    );
+
+                this.setHiderVisible(
+                    hider,
+                    true,
+                );
+
+                hider.label
+                    .setText(
+                        `${tr('BOT')} ${index + 1}`,
+                    )
+                    .setVisible(
+                        false,
+                    );
+            },
+        );
+    }
+
+    private createPracticeExitButton(): void {
+        this.practiceExitButton
+            ?.destroy();
+
+        this.practiceExitButton =
+            this.add.text(
+                this.gameWidth -
+                    16,
+                16,
+                `← ${tr('연습 종료')}`,
+                {
+                    fontFamily:
+                        'monospace',
+                    fontSize:
+                        this.mobileControlsEnabled
+                            ? '12px'
+                            : '13px',
+                    fontStyle:
+                        'bold',
+                    color:
+                        '#35523d',
+                    backgroundColor:
+                        '#fff9e8',
+                    padding: {
+                        x: 10,
+                        y: 7,
+                    },
+                },
+            )
+                .setOrigin(
+                    1,
+                    0,
+                )
+                .setScrollFactor(
+                    0,
+                )
+                .setDepth(
+                    9000,
+                )
+                .setInteractive({
+                    useHandCursor:
+                        true,
+                });
+
+        this.practiceExitButton.on(
+            'pointerdown',
+            () => {
+                this.exitPracticeMode();
+            },
+        );
+    }
+
+    private exitPracticeMode(): void {
+        this.practiceMode =
+            null;
+
+        this.practiceExitButton
+            ?.destroy();
+        this.practiceExitButton =
+            undefined;
+
+        this.resetGameplayCamera();
+        this.resetPaintWorldZoom();
+        this.finishActivePaintStroke();
+        this.isPainting = false;
+
+        this.rebuildPracticeHiders(
+            3,
+        );
+
+        this.enterLobbyPhase();
+        this.hideAllWaitingRoomUi();
+        this.showMainMenu();
+    }
+
+    private startHunterPractice(): void {
+        if (
+            multiplayerClient
+                .isConnected()
+        ) {
+            return;
+        }
+
+        this.practiceMode =
+            'hunter';
+
+        this.destroyMainLobbyDom();
+        this.clearMainMenuObjects();
+        this.hideChatUi(
+            true,
+        );
+
+        this.rebuildPracticeHiders(
+            this.practiceBotCount,
+        );
+
+        this.syncMapBackground();
+        this.prepareHunterPracticeBots();
+
+        /*
+         * startHunt() intentionally transitions from local Paint -> Hunt.
+         * Set the local phase directly to avoid flashing the paint palette.
+         */
+        this.phase =
+            'paint';
+        this.huntDuration =
+            120;
+
+        this.startHunt();
+        this.createPracticeExitButton();
+
+        this.showStatus(
+            tr('연습 시작! 위장한 봇을 모두 찾아보세요.'),
+        );
+    }
+
+    private startHiderPractice(): void {
+        if (
+            multiplayerClient
+                .isConnected()
+        ) {
+            return;
+        }
+
+        this.practiceMode =
+            'hider';
+
+        this.destroyMainLobbyDom();
+        this.clearMainMenuObjects();
+        this.hideChatUi(
+            true,
+        );
+
+        this.rebuildPracticeHiders(
+            1,
+        );
+
+        const hider =
+            this.hiders[0];
+
+        if (hider) {
+            this.applyHiderMovement(
+                hider,
+                this.gameWidth /
+                    2 -
+                    hider.centerX,
+                this.gameHeight /
+                    2 -
+                    hider.centerY,
+            );
+        }
+
+        this.syncMapBackground();
+
+        /*
+         * Reuse the game's real local Hider paint interface, but practice
+         * itself has no timer. updateRoundTimer() skips while in this mode.
+         */
+        this.paintDuration =
+            3600;
+        this.enterPaintPhase();
+        this.timerText
+            .setText('')
+            .setVisible(
+                false,
+            );
+
+        this.createPracticeExitButton();
+
+        this.showStatus(
+            tr('자유 연습 · 원하는 만큼 움직이고 색칠해보세요.'),
+        );
+    }
+
     private openCreateRoomModal(
         isPrivate: boolean,
     ): void {
@@ -10745,6 +11570,14 @@ export class GameScene extends Phaser.Scene {
                         </span>
                     </button>
 
+                    <button type="button" class="ch-lobby-action ch-lobby-action--practice">
+                        <span class="ch-lobby-action-icon">🎯</span>
+                        <span>
+                            <strong>${tr('연습장')}</strong>
+                            <small>${tr('처음이라면 여기서 헌터와 하이더를 연습해보세요')}</small>
+                        </span>
+                    </button>
+
                     <div class="ch-lobby-guide">
                         <div class="ch-lobby-guide-mascot">🍄</div>
                         <div>
@@ -10848,6 +11681,17 @@ export class GameScene extends Phaser.Scene {
                 'click',
                 () => {
                     this.openPrivateJoinModal();
+                },
+            );
+
+        root
+            .querySelector(
+                '.ch-lobby-action--practice',
+            )
+            ?.addEventListener(
+                'click',
+                () => {
+                    this.openPracticeGroundModal();
                 },
             );
 
@@ -12725,9 +13569,13 @@ export class GameScene extends Phaser.Scene {
         const room =
             multiplayerClient.getRoom();
 
-        let mapName = 'forest';
+        let mapName =
+            this.practiceMode
+                ? this.practiceMap
+                : 'forest';
 
         if (
+            !this.practiceMode &&
             room &&
             this.phase === 'lobby'
         ) {
@@ -12744,6 +13592,7 @@ export class GameScene extends Phaser.Scene {
                     ? 'forest'
                     : selected;
         } else if (
+            !this.practiceMode &&
             room &&
             (
                 this.phase === 'countdown' ||
@@ -16735,6 +17584,69 @@ export class GameScene extends Phaser.Scene {
         if (this.isHunterTouchingObstacle()) {
             this.player.setPosition(previousX, previousY);
         }
+
+        this.updateHunterObjects();
+    }
+
+    private updatePracticeHunterMobileMovement(
+        delta: number,
+    ): void {
+        if (
+            this.mobileMovePointerId >=
+                0 &&
+            !this.isMobilePointerActuallyDown(
+                this.mobileMovePointerId,
+            )
+        ) {
+            this.resetMobileMoveControl();
+        }
+
+        const vector =
+            new Phaser.Math.Vector2(
+                this.mobileMoveX,
+                this.mobileMoveY,
+            );
+
+        if (
+            vector.lengthSq() <=
+            0.0001
+        ) {
+            return;
+        }
+
+        if (
+            vector.lengthSq() >
+            1
+        ) {
+            vector.normalize();
+        }
+
+        const distance =
+            this.playerSpeed *
+            (
+                delta /
+                1000
+            );
+
+        this.player.x =
+            Phaser.Math.Clamp(
+                this.player.x +
+                    vector.x *
+                        distance,
+                18,
+                this.gameWidth -
+                    18,
+            );
+
+        this.player.y =
+            Phaser.Math.Clamp(
+                this.player.y +
+                    vector.y *
+                        distance,
+                32,
+                this.gameHeight -
+                    32,
+            );
 
         this.updateHunterObjects();
     }
@@ -22174,8 +23086,12 @@ export class GameScene extends Phaser.Scene {
 
         const usingMobileAim =
             this.mobileControlsEnabled &&
-            this.networkPlayerManager
-                .canLocalControlHunter() &&
+            (
+                this.practiceMode ===
+                    'hunter' ||
+                this.networkPlayerManager
+                    .canLocalControlHunter()
+            ) &&
             this.mobileAimHasDirection;
 
         const angle =
@@ -22429,8 +23345,12 @@ export class GameScene extends Phaser.Scene {
             aimAngleOverride ??
             (
                 this.mobileControlsEnabled &&
-                this.networkPlayerManager
-                    .canLocalControlHunter() &&
+                (
+                    this.practiceMode ===
+                        'hunter' ||
+                    this.networkPlayerManager
+                        .canLocalControlHunter()
+                ) &&
                 this.mobileAimHasDirection
                     ? this.mobileAimAngle
                     : Phaser.Math.Angle.Between(
@@ -23381,6 +24301,15 @@ export class GameScene extends Phaser.Scene {
 
     private updateRoundTimer(): void {
         if (
+            this.practiceMode ===
+                'hider' &&
+            this.phase ===
+                'paint'
+        ) {
+            return;
+        }
+
+        if (
             this.phase !== 'paint' &&
             this.phase !== 'hunt' &&
             this.phase !== 'finished'
@@ -24003,6 +24932,15 @@ export class GameScene extends Phaser.Scene {
         );
 
         this.input.setDefaultCursor('default');
+
+        if (
+            this.practiceMode ===
+            'hunter'
+        ) {
+            this.showStatus(
+                tr('연습 성공! 모든 봇을 찾았습니다. 연습 종료를 누르면 로비로 돌아갑니다.'),
+            );
+        }
     }
 
     private showHiderVictory(): void {

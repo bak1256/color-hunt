@@ -3565,3 +3565,256 @@ html.colorhunt-mobile body.colorhunt-unfolded {
     overflow: hidden !important;
   }
 }
+
+
+/* ============================================================
+   v0.10.10.131 — Practice Ground
+   ============================================================ */
+.colorhunt-practice-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  box-sizing: border-box;
+  background: rgba(47, 72, 53, .36);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "Noto Sans KR", "Noto Sans JP", sans-serif;
+}
+
+.colorhunt-practice-card {
+  width: min(620px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 12px;
+  border: 2px solid #75a66e;
+  border-radius: 16px;
+  background: #fff9e8;
+  color: #35523d;
+  box-shadow: 0 18px 60px rgba(25, 49, 31, .32);
+}
+
+.colorhunt-practice-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 3px 10px;
+}
+
+.colorhunt-practice-head small {
+  display: block;
+  color: #7d907a;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .08em;
+}
+
+.colorhunt-practice-head strong {
+  display: block;
+  margin-top: 2px;
+  font-size: 20px;
+  line-height: 1.05;
+}
+
+.colorhunt-practice-head button {
+  width: 34px;
+  height: 34px;
+  border: 1px solid #cbdac5;
+  border-radius: 9px;
+  background: #f4f7e9;
+  color: #55705b;
+  font-weight: 900;
+}
+
+.colorhunt-practice-map {
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  border: 1px solid #d5dfc6;
+  border-radius: 10px;
+  background: #f8f4dc;
+}
+
+.colorhunt-practice-map label {
+  display: grid;
+  grid-template-columns: minmax(130px, .7fr) 1fr;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.colorhunt-practice-map select {
+  min-height: 36px;
+  padding: 0 9px;
+  border: 1px solid #9db79a;
+  border-radius: 8px;
+  background: #fff;
+  color: #35523d;
+  font-weight: 800;
+}
+
+.colorhunt-practice-mode {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 10px;
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid #cddcc5;
+  border-radius: 12px;
+  background: #fffdf4;
+}
+
+.colorhunt-practice-mode--hunter {
+  border-color: #e1c17a;
+  background: #fff8df;
+}
+
+.colorhunt-practice-mode--hider {
+  border-color: #aad0ae;
+  background: #eff8ea;
+}
+
+.colorhunt-practice-mode-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: rgba(255,255,255,.75);
+  font-size: 24px;
+}
+
+.colorhunt-practice-mode-copy > strong {
+  font-size: 15px;
+}
+
+.colorhunt-practice-mode-copy > p {
+  margin: 3px 0 8px;
+  color: #637164;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.colorhunt-practice-control {
+  margin: 6px 0;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(255,255,255,.72);
+}
+
+.colorhunt-practice-control label {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.colorhunt-practice-control input {
+  width: 100%;
+  margin: 5px 0 0;
+  accent-color: #67966c;
+}
+
+.colorhunt-practice-control small {
+  display: block;
+  margin-top: 2px;
+  color: #7a8176;
+  font-size: 9px;
+}
+
+.colorhunt-practice-start {
+  width: 100%;
+  min-height: 38px;
+  margin-top: 6px;
+  border: 0;
+  border-radius: 9px;
+  background: #d8963f;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.colorhunt-practice-start--hider {
+  background: #5f9a69;
+}
+
+.ch-lobby-action--practice {
+  border-color: #d6b66b !important;
+  background: linear-gradient(180deg, #fff9df, #f8edc2) !important;
+}
+
+@media (pointer: coarse) {
+  .colorhunt-practice-card {
+    width: min(680px, calc(100vw - 14px));
+    padding: 8px;
+  }
+
+  .colorhunt-practice-head {
+    padding-bottom: 6px;
+  }
+
+  .colorhunt-practice-head strong {
+    font-size: 15px;
+  }
+
+  .colorhunt-practice-map {
+    padding: 6px 8px;
+  }
+
+  .colorhunt-practice-map label {
+    grid-template-columns: 100px 1fr;
+    font-size: 9px;
+  }
+
+  .colorhunt-practice-map select {
+    min-height: 31px;
+    font-size: 9px;
+  }
+
+  .colorhunt-practice-mode {
+    grid-template-columns: 36px minmax(0, 1fr);
+    gap: 7px;
+    padding: 7px;
+  }
+
+  .colorhunt-practice-mode-icon {
+    width: 34px;
+    height: 34px;
+    font-size: 19px;
+  }
+
+  .colorhunt-practice-mode-copy > strong {
+    font-size: 11px;
+  }
+
+  .colorhunt-practice-mode-copy > p {
+    margin-bottom: 5px;
+    font-size: 8px;
+  }
+
+  .colorhunt-practice-control {
+    margin: 4px 0;
+    padding: 4px 6px;
+  }
+
+  .colorhunt-practice-control label {
+    font-size: 8px;
+  }
+
+  .colorhunt-practice-control small {
+    font-size: 7px;
+  }
+
+  .colorhunt-practice-start {
+    min-height: 32px;
+    font-size: 9px;
+  }
+}
