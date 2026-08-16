@@ -4086,7 +4086,7 @@ export class GameScene extends Phaser.Scene {
                             this.mobileControlsEnabled
                         ) {
                             this.time.delayedCall(
-                                24,
+                                120,
                                 applyPreset,
                             );
                         } else {
@@ -5390,7 +5390,7 @@ export class GameScene extends Phaser.Scene {
         if (joinedPhase === 'lobby') {
             this.time.delayedCall(
                 this.mobileControlsEnabled
-                    ? 450
+                    ? 1400
                     : 120,
                 () => {
                     if (
@@ -11455,7 +11455,7 @@ export class GameScene extends Phaser.Scene {
         ) {
             this.time.delayedCall(
                 this.mobileControlsEnabled
-                    ? 520
+                    ? 1500
                     : 0,
                 () => {
                     if (
@@ -13200,8 +13200,8 @@ export class GameScene extends Phaser.Scene {
                     ? 1.5
                     : 1,
                 this.mobileControlsEnabled
-                    ? 6
-                    : 5,
+                    ? 7
+                    : 5.5,
             );
 
         this.paintWorldZoom =
@@ -19336,10 +19336,20 @@ export class GameScene extends Phaser.Scene {
         if (
             this.isMultiplayerSession()
         ) {
+            /*
+             * v0.10.10.78:
+             * Hider painting is the core customization interaction.
+             * Make the character as large as practical while fixed HUD/palette
+             * remain screen-space UI. Hunter customization still applies its
+             * dedicated 1.05 camera override later.
+             */
             this.paintWorldZoom =
-                this.mobileControlsEnabled
-                    ? 2.35
-                    : this.gameplayCameraZoom;
+                this.networkPlayerManager
+                    .isLocalHunter()
+                    ? 1.05
+                    : this.mobileControlsEnabled
+                        ? 3.15
+                        : 2.55;
 
             this.cameras.main
                 .stopFollow()

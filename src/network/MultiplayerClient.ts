@@ -368,6 +368,14 @@ this.phaseChangedHandlers.forEach(
 
   private lastManualReconnectAt = 0;
 
+  private connectionIssueStartedAt = 0;
+
+  private lastJoinedRoomId = "";
+
+  private lastJoinOptions?: JoinRoomOptions;
+
+  private freshRejoinInFlight = false;
+
   private readonly roundResultHandlers =
     new Set<RoundResultHandler>();
 
@@ -499,6 +507,16 @@ this.phaseChangedHandlers.forEach(
   ): Promise<
     Room<NetworkGameState>
   > {
+    this.lastJoinedRoomId =
+      roomId.trim();
+
+    this.lastJoinOptions = {
+      playerName:
+        options.playerName,
+      password:
+        options.password ?? "",
+    };
+
     await this.disconnect();
 
     /*
@@ -909,7 +927,72 @@ this.phaseChangedHandlers.forEach(
     );
   }
 
-private async attemptManualReconnect(
+private async attemptFreshRejoin(
+    sourceRoom: Room<NetworkGameState>,
+  ): Promise<void> {
+    if (
+      this.room !== sourceRoom ||
+      this.freshRejoinInFlight ||
+      !this.lastJoinedRoomId ||
+      !this.lastJoinOptions
+    ) {
+      return;
+    }
+
+    this.freshRejoinInFlight = true;
+
+    try {
+      const room =
+        await this.client.joinById<
+          NetworkGameState
+        >(
+          this.lastJoinedRoomId,
+          {
+            name:
+              this.normalizeName(
+                this.lastJoinOptions
+                  .playerName,
+              ),
+            password:
+              this.lastJoinOptions
+                .password ?? "",
+            clientKey:
+              this.getStableClientKey(),
+            reconnectFallback:
+              true,
+          },
+        );
+
+      if (this.room !== sourceRoom) {
+        await room.leave();
+        return;
+      }
+
+      /*
+       * Server v0.10.10.78 transfers the old role/alive/position to this
+       * replacement session. attachRoom() then replays the CURRENT phase,
+       * including Finished/Lobby if the match ended while offline.
+       */
+      this.attachRoom(room);
+      this.deliveredPhase = "";
+      this.requestLobbySnapshot();
+      this.requestPaintReadyState();
+
+      try {
+        await sourceRoom.leave();
+      } catch {
+        // The old half-open transport may already be dead.
+      }
+
+      this.clearConnectionIssue();
+    } catch {
+      // Keep retrying through the watchdog while network is available.
+    } finally {
+      this.freshRejoinInFlight = false;
+    }
+  }
+
+  private async attemptManualReconnect(
     sourceRoom: Room<NetworkGameState>,
   ): Promise<void> {
     if (
@@ -990,10 +1073,28 @@ private async attemptManualReconnect(
       this.clearConnectionIssue();
     } catch {
       /*
-       * The server may not have noticed the old socket drop yet.
-       * The health loop will retry shortly while the 30-second server
-       * reconnection reservation is active.
+       * If token recovery cannot complete quickly after a network handoff,
+       * make a fresh connection using the same browser clientKey. The server
+       * transfers the authoritative role/state from the old ghost session.
        */
+      const issueFor =
+        this.connectionIssueStartedAt > 0
+          ? Date.now() -
+            this.connectionIssueStartedAt
+          : 0;
+
+      if (
+        issueFor >= 3200 &&
+        (
+          typeof navigator ===
+            "undefined" ||
+          navigator.onLine
+        )
+      ) {
+        void this.attemptFreshRejoin(
+          sourceRoom,
+        );
+      }
     } finally {
       this.manualReconnectInFlight =
         false;
@@ -1008,6 +1109,8 @@ private async attemptManualReconnect(
     }
 
     this.connectionIssueNotified = true;
+    this.connectionIssueStartedAt =
+      Date.now();
 
     this.connectionDropHandlers
       .forEach(
@@ -1019,6 +1122,7 @@ private async attemptManualReconnect(
 
   private clearConnectionIssue(): void {
     this.connectionIssueNotified = false;
+    this.connectionIssueStartedAt = 0;
     this.lastRoomPingAt = Date.now();
 
     this.connectionRecoveredHandlers
@@ -1205,6 +1309,23 @@ this.manualReconnectInFlight = false;
               450
           ) {
             void this.attemptManualReconnect(
+              room,
+            );
+          }
+
+          if (
+            activeRound &&
+            this.connectionIssueStartedAt > 0 &&
+            now -
+              this.connectionIssueStartedAt >=
+              4200 &&
+            (
+              typeof navigator ===
+                "undefined" ||
+              navigator.onLine
+            )
+          ) {
+            void this.attemptFreshRejoin(
               room,
             );
           }
@@ -1535,7 +1656,7 @@ this.manualReconnectInFlight = false;
                     },
                   );
               },
-              index * 40,
+              index * 120,
             );
           },
         );

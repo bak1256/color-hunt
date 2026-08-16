@@ -2112,7 +2112,7 @@ export class NetworkPlayerManager {
   applyLobbyAvatarPresetProgressive(
     sessionId: string,
     strokes: NetworkPaintStroke[],
-    pointsPerFrame = 180,
+    pointsPerFrame = 48,
   ): void {
     const view =
       this.players.get(
@@ -2226,7 +2226,7 @@ export class NetworkPlayerManager {
           commands.length
         ) {
           this.scene.time.delayedCall(
-            0,
+            16,
             drawBatch,
           );
         }
