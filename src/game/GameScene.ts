@@ -10073,9 +10073,13 @@ export class GameScene extends Phaser.Scene {
             </div>
             <div class="colorhunt-hider-share-actions">
                 <button type="button" data-hider-share>📤 ${tr('이미지 + 게임 링크 공유')}</button>
+                <button type="button" data-hider-copy-link>🔗 ${tr('게임 링크 복사')}</button>
                 <button type="button" data-hider-download>⬇ ${tr('이미지 저장')}</button>
                 <button type="button" data-hider-back>🎯 ${tr('연습장으로 돌아가기')}</button>
             </div>
+            <small class="colorhunt-hider-share-note">
+                ${tr('공유 앱에서 링크가 빠지면 자동 복사된 링크를 붙여넣어 주세요.')}
+            </small>
         `;
 
         overlay.appendChild(
@@ -10115,6 +10119,15 @@ export class GameScene extends Phaser.Scene {
         );
 
         card.querySelector(
+            '[data-hider-copy-link]',
+        )?.addEventListener(
+            'click',
+            () => {
+                void this.copyPracticeGameLink();
+            },
+        );
+
+        card.querySelector(
             '[data-hider-download]',
         )?.addEventListener(
             'click',
@@ -10139,6 +10152,81 @@ export class GameScene extends Phaser.Scene {
         );
     }
 
+    private async copyPracticeGameLink(): Promise<boolean> {
+        const shareUrl =
+            this.getPracticeShareUrl();
+
+        try {
+            await navigator.clipboard
+                .writeText(
+                    shareUrl,
+                );
+
+            this.showStatus(
+                tr('게임 링크를 복사했습니다!'),
+            );
+
+            return true;
+        } catch {
+            /*
+             * Clipboard API may be blocked in some in-app browsers.
+             * execCommand is intentionally kept as a last-resort fallback.
+             */
+            try {
+                const input =
+                    document.createElement(
+                        'textarea',
+                    );
+
+                input.value =
+                    shareUrl;
+                input.setAttribute(
+                    'readonly',
+                    '',
+                );
+
+                Object.assign(
+                    input.style,
+                    {
+                        position:
+                            'fixed',
+                        opacity:
+                            '0',
+                        pointerEvents:
+                            'none',
+                    },
+                );
+
+                document.body.appendChild(
+                    input,
+                );
+
+                input.select();
+                input.setSelectionRange(
+                    0,
+                    input.value.length,
+                );
+
+                const copied =
+                    document.execCommand(
+                        'copy',
+                    );
+
+                input.remove();
+
+                if (copied) {
+                    this.showStatus(
+                        tr('게임 링크를 복사했습니다!'),
+                    );
+                }
+
+                return copied;
+            } catch {
+                return false;
+            }
+        }
+    }
+
     private async shareHiderPracticeRecord(
         blob:
             Blob,
@@ -10160,9 +10248,20 @@ export class GameScene extends Phaser.Scene {
                 },
             );
 
-        const text =
-            `${tr('Color Hunt에서 만든 내 위장이에요!')}\n` +
-            shareUrl;
+        const inviteText =
+            tr('내 위장 어때? Color Hunt에서 직접 해보기 👇');
+
+        /*
+         * Important Kakao / mobile-browser fallback:
+         * some share targets accept the PNG but silently discard text/url.
+         * Copy the playable URL BEFORE opening the native share sheet so the
+         * player can paste it immediately even if the target app drops it.
+         */
+        const linkBackedUp =
+            await this.copyPracticeGameLink();
+
+        const textWithUrl =
+            `${inviteText}\n${shareUrl}`;
 
         try {
             if (
@@ -10176,24 +10275,77 @@ export class GameScene extends Phaser.Scene {
                     })
                 )
             ) {
-                await navigator.share({
-                    title:
-                        'Color Hunt',
-                    text,
-                    files: [
-                        file,
-                    ],
-                });
+                /*
+                 * First try the richest Web Share payload. Browsers/targets
+                 * that support it get a real clickable URL plus the image.
+                 */
+                try {
+                    await navigator.share({
+                        title:
+                            'Color Hunt',
+                        text:
+                            textWithUrl,
+                        url:
+                            shareUrl,
+                        files: [
+                            file,
+                        ],
+                    });
 
-                return;
+                    if (linkBackedUp) {
+                        this.showStatus(
+                            tr('공유 완료 · 게임 링크도 복사되어 있어요!'),
+                        );
+                    }
+
+                    return;
+                } catch (
+                    richShareError
+                ) {
+                    if (
+                        richShareError instanceof
+                            DOMException &&
+                        richShareError.name ===
+                            'AbortError'
+                    ) {
+                        return;
+                    }
+
+                    /*
+                     * Some Android/WebView implementations reject url+files.
+                     * Retry with the widely-supported files+text payload.
+                     * URL still exists inside text and in the clipboard.
+                     */
+                    await navigator.share({
+                        title:
+                            'Color Hunt',
+                        text:
+                            textWithUrl,
+                        files: [
+                            file,
+                        ],
+                    });
+
+                    if (linkBackedUp) {
+                        this.showStatus(
+                            tr('공유 완료 · 게임 링크도 복사되어 있어요!'),
+                        );
+                    }
+
+                    return;
+                }
             }
 
             if (navigator.share) {
+                /*
+                 * No file sharing support: share a native clickable URL and
+                 * save the image separately.
+                 */
                 await navigator.share({
                     title:
                         'Color Hunt',
                     text:
-                        tr('Color Hunt에서 만든 내 위장이에요!'),
+                        inviteText,
                     url:
                         shareUrl,
                 });
@@ -10218,23 +10370,18 @@ export class GameScene extends Phaser.Scene {
         }
 
         /*
-         * Desktop / unsupported browser fallback:
-         * save PNG and copy the playable game URL.
+         * Desktop / unsupported browser:
+         * save PNG and keep the URL in clipboard.
          */
         this.downloadHiderPracticeRecord(
             blob,
         );
 
-        try {
-            await navigator.clipboard
-                .writeText(
-                    shareUrl,
-                );
-
+        if (linkBackedUp) {
             this.showStatus(
                 tr('이미지를 저장하고 게임 링크를 복사했습니다!'),
             );
-        } catch {
+        } else {
             this.showStatus(
                 tr('이미지를 저장했습니다.'),
             );

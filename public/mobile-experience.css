@@ -4609,3 +4609,31 @@ html.colorhunt-mobile body.colorhunt-unfolded {
     font-size: 7px;
   }
 }
+
+
+/* ============================================================
+   v0.10.10.146 — share link reliability
+   ============================================================ */
+
+.colorhunt-hider-share-actions button[data-hider-copy-link] {
+  border-color: #76a987;
+  background: #e7f3df;
+  color: #315b3d;
+}
+
+.colorhunt-hider-share-note {
+  display: block;
+  margin: 7px auto 0;
+  max-width: 360px;
+  color: #7b867d;
+  font-size: 7px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+@media (pointer: coarse) {
+  .colorhunt-hider-share-note {
+    max-width: 300px;
+    font-size: 6px;
+  }
+}

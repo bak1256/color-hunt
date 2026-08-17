@@ -5,6 +5,11 @@ const STORAGE_KEY = 'chameleon-hunt-language';
 type Dict = Record<string, string>;
 
 const ja: Dict = {
+  "게임 링크 복사": "ゲームリンクをコピー",
+  "게임 링크를 복사했습니다!": "ゲームリンクをコピーしました！",
+  "공유 앱에서 링크가 빠지면 자동 복사된 링크를 붙여넣어 주세요.": "共有アプリでリンクが消えた場合は、自動コピーされたリンクを貼り付けてください。",
+  "내 위장 어때? Color Hunt에서 직접 해보기 👇": "この擬態どう？ Color Huntで遊んでみて👇",
+  "공유 완료 · 게임 링크도 복사되어 있어요!": "共有完了 · ゲームリンクもコピー済みです！",
   "위장 제작 시간": "擬態制作タイム",
   "첫 붓질부터 기록": "最初の一筆から計測",
   "완성!": "完成！",
@@ -185,6 +190,11 @@ const ja: Dict = {
 };
 
 const en: Dict = {
+  "게임 링크 복사": "Copy Game Link",
+  "게임 링크를 복사했습니다!": "Game link copied!",
+  "공유 앱에서 링크가 빠지면 자동 복사된 링크를 붙여넣어 주세요.": "If the share app drops the link, paste the automatically copied game link.",
+  "내 위장 어때? Color Hunt에서 직접 해보기 👇": "How's my camouflage? Try Color Hunt 👇",
+  "공유 완료 · 게임 링크도 복사되어 있어요!": "Shared · the game link is copied too!",
   "위장 제작 시간": "Camouflage Time",
   "첫 붓질부터 기록": "Starts with first stroke",
   "완성!": "Done!",
@@ -367,6 +377,11 @@ const en: Dict = {
 };
 
 const zh: Dict = {
+  "게임 링크 복사": "复制游戏链接",
+  "게임 링크를 복사했습니다!": "游戏链接已复制！",
+  "공유 앱에서 링크가 빠지면 자동 복사된 링크를 붙여넣어 주세요.": "如果分享应用没有附带链接，请粘贴已自动复制的游戏链接。",
+  "내 위장 어때? Color Hunt에서 직접 해보기 👇": "我的伪装怎么样？来试试 Color Hunt 👇",
+  "공유 완료 · 게임 링크도 복사되어 있어요!": "分享完成 · 游戏链接也已复制！",
   "위장 제작 시간": "伪装制作时间",
   "첫 붓질부터 기록": "从第一笔开始计时",
   "완성!": "完成！",
