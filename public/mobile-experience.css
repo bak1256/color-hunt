@@ -5201,3 +5201,72 @@ body:has(.colorhunt-main-lobby) .colorhunt-controls-help {
     font-size: clamp(8px, 2vw, 11px) !important;
   }
 }
+
+
+/* ============================================================
+   v0.10.10.158 HOTFIX — Never allow GAME START title vertical
+   ============================================================ */
+
+/*
+ * v157 introduced a flex title row, but an older mobile/fold rule can shrink
+ * the h2 down to roughly one glyph wide. Korean then wraps one character per
+ * line ("게/임/시/작/하/기"). Give the title real horizontal ownership and
+ * force it to remain a normal horizontal heading.
+ */
+.ch-lobby-actions-title-row {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  gap: 8px !important;
+}
+
+.ch-lobby-actions-title-row h2 {
+  display: block !important;
+  width: auto !important;
+  min-width: max-content !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+  white-space: nowrap !important;
+  word-break: keep-all !important;
+  overflow-wrap: normal !important;
+  line-height: 1.15 !important;
+}
+
+.ch-lobby-inline-controls {
+  justify-self: end !important;
+  width: auto !important;
+  max-width: min(44vw, 150px) !important;
+  white-space: normal !important;
+  word-break: keep-all !important;
+}
+
+/*
+ * Fold / narrow action column:
+ * if both labels cannot coexist, put Controls on the next line instead of
+ * crushing the GAME START heading into a vertical stack.
+ */
+@media (pointer: coarse) and (max-width: 760px) {
+  .ch-lobby-actions-title-row {
+    grid-template-columns: minmax(0, 1fr) auto !important;
+  }
+
+  .ch-lobby-actions-title-row h2 {
+    font-size: clamp(15px, 4vw, 21px) !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .ch-lobby-actions-title-row {
+    grid-template-columns: 1fr !important;
+    gap: 5px !important;
+  }
+
+  .ch-lobby-inline-controls {
+    justify-self: start !important;
+    max-width: 100% !important;
+  }
+}
