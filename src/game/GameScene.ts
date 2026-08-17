@@ -1702,6 +1702,17 @@ export class GameScene extends Phaser.Scene {
                     );
                 }
 
+                if (
+                    this.mobileFirePointerId >=
+                        0 &&
+                    !this.isMobilePointerActuallyDown(
+                        this.mobileFirePointerId,
+                    )
+                ) {
+                    this.mobileFirePointerId =
+                        -1;
+                }
+
                 /*
                  * v0.10.10.95:
                  * FIRE and AIM touch areas used to overlap. A press on the
@@ -1766,12 +1777,37 @@ export class GameScene extends Phaser.Scene {
                     return;
                 }
 
+                const localCanAimAsHunter =
+                    this.phase ===
+                        'hunt' &&
+                    (
+                        this.practiceMode ===
+                            'hunter' ||
+                        multiplayerClient
+                            .getLocalPlayer()
+                            ?.role ===
+                            'hunter'
+                    );
+
                 if (
-                    multiplayerClient
-                        .getLocalPlayer()
-                        ?.role === 'hunter' &&
-                    this.phase === 'hunt'
+                    localCanAimAsHunter
                 ) {
+                    /*
+                     * Lost pointer-up events used to leave AIM owned by a
+                     * dead pointer, making the next drag rotate only partly
+                     * or not at all. Reclaim it before accepting a new finger.
+                     */
+                    if (
+                        this.mobileAimPointerId >=
+                            0 &&
+                        !this.isMobilePointerActuallyDown(
+                            this.mobileAimPointerId,
+                        )
+                    ) {
+                        this.mobileAimPointerId =
+                            -1;
+                    }
+
                     const aimDistance =
                         Phaser.Math.Distance.Between(
                             pointer.x,
@@ -1784,7 +1820,11 @@ export class GameScene extends Phaser.Scene {
                         this.mobileAimBase?.visible &&
                         aimDistance <=
                             this.mobileJoystickRadius *
-                            1.55
+                            1.55 &&
+                        pointer.id !==
+                            this.mobileMovePointerId &&
+                        pointer.id !==
+                            this.mobileFirePointerId
                     ) {
                         this.mobileAimPointerId =
                             pointer.id;
@@ -1977,6 +2017,7 @@ export class GameScene extends Phaser.Scene {
 
                 this.fireShotgun(
                     this.mobileAimAngle,
+                    true,
                 );
             },
         );
@@ -1990,40 +2031,56 @@ export class GameScene extends Phaser.Scene {
             (
                 event?: Event,
             ): void => {
-                const trackedPointerId =
-                    this.mobileMovePointerId;
+                const releaseStalePointers =
+                    (): void => {
+                        if (
+                            this.mobileMovePointerId >=
+                                0 &&
+                            !this.isMobilePointerActuallyDown(
+                                this.mobileMovePointerId,
+                            )
+                        ) {
+                            this.resetMobileMoveControl();
+                        }
 
-                if (
-                    trackedPointerId <
-                    0
-                ) {
-                    return;
-                }
+                        if (
+                            this.mobileAimPointerId >=
+                                0 &&
+                            !this.isMobilePointerActuallyDown(
+                                this.mobileAimPointerId,
+                            )
+                        ) {
+                            this.mobileAimPointerId =
+                                -1;
+                        }
+
+                        if (
+                            this.mobileFirePointerId >=
+                                0 &&
+                            !this.isMobilePointerActuallyDown(
+                                this.mobileFirePointerId,
+                            )
+                        ) {
+                            this.mobileFirePointerId =
+                                -1;
+                        }
+                    };
 
                 if (
                     event instanceof
                         PointerEvent
                 ) {
                     window.requestAnimationFrame(
-                        () => {
-                            if (
-                                this.mobileMovePointerId !==
-                                    trackedPointerId ||
-                                this.isMobilePointerActuallyDown(
-                                    trackedPointerId,
-                                )
-                            ) {
-                                return;
-                            }
-
-                            this.resetMobileMoveControl();
-                        },
+                        releaseStalePointers,
                     );
-
                     return;
                 }
 
                 this.resetMobileMoveControl();
+                this.mobileAimPointerId =
+                    -1;
+                this.mobileFirePointerId =
+                    -1;
             };
 
         this.mobileVisibilitySafetyHandler =
@@ -2032,6 +2089,12 @@ export class GameScene extends Phaser.Scene {
                     document.hidden
                 ) {
                     this.resetMobileMoveControl();
+                    this.mobileAimPointerId =
+                        -1;
+                    this.mobileFirePointerId =
+                        -1;
+                    this.mobileTouchPoints
+                        .clear();
                 }
             };
 
@@ -2520,7 +2583,22 @@ export class GameScene extends Phaser.Scene {
                 ),
             );
 
-        if (length >= 6) {
+        if (
+            length >=
+                3 ||
+            (
+                kind ===
+                    'aim' &&
+                this.mobileAimHasDirection &&
+                length >
+                    0.5
+            )
+        ) {
+            /*
+             * atan2 covers -PI..PI continuously: a true 360° stick.
+             * Lower dead-zone prevents the old "stuck quadrant" feeling
+             * when the finger crosses near the joystick center.
+             */
             this.mobileAimAngle =
                 Math.atan2(
                     normalizedY,
@@ -25267,7 +25345,21 @@ export class GameScene extends Phaser.Scene {
 
     private fireShotgun(
         aimAngleOverride?: number,
+        explicitMobileFire =
+            false,
     ): void {
+        /*
+         * Mobile contract is strict:
+         * only the red FIRE button may create a shot. Any accidental Phaser
+         * world pointerdown / synthetic mouse event / stale touch is ignored.
+         */
+        if (
+            this.mobileControlsEnabled &&
+            !explicitMobileFire
+        ) {
+            return;
+        }
+
         /*
          * POINTER_DOWN 이외의 경로/phase 전환 직후 이벤트가 들어와도
          * Hider는 절대로 shotgun SFX/발사 로직에 진입하지 않습니다.
