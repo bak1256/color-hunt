@@ -25569,11 +25569,22 @@ export class GameScene extends Phaser.Scene {
      */
 
     private createAimObjects(): void {
+        /*
+         * HOTFIX v0.10.10.152
+         *
+         * Hiders render at depth 120 and their camouflage at 122.
+         * The old local Hunter aimLine used depth 20, so when the line
+         * crossed a hidden Hider it disappeared BEHIND the body and
+         * unintentionally revealed the exact hiding silhouette.
+         *
+         * Keep aiming visuals above every gameplay character/paint layer,
+         * but far below fixed HUD (3000+ / 6000+).
+         */
         this.aimLine = this.add.graphics();
-        this.aimLine.setDepth(20);
+        this.aimLine.setDepth(180);
 
         this.crosshair = this.add.graphics();
-        this.crosshair.setDepth(100);
+        this.crosshair.setDepth(181);
     }
 
     private updateAim(): void {
@@ -25681,7 +25692,13 @@ export class GameScene extends Phaser.Scene {
             }
         }
 
-        this.aimLine.clear();
+        this.aimLine
+            .setDepth(180)
+            .clear();
+
+        this.crosshair
+            .setDepth(181);
+
         this.aimLine.lineStyle(
             2,
             0xffffff,

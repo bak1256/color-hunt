@@ -760,7 +760,7 @@ export class NetworkPlayerManager {
         ) as Phaser.GameObjects.Container,
       aimGraphics:
         this.scene.add.graphics()
-          .setDepth(170)
+          .setDepth(180)
           .setVisible(false),
       revealMarker: undefined,
       targetX: player.x,
@@ -986,7 +986,7 @@ export class NetworkPlayerManager {
 
       view.aimGraphics?.setDepth(
         player.role === "hunter"
-          ? 170
+          ? 180
           : 118,
       );
 
@@ -3301,6 +3301,7 @@ export class NetworkPlayerManager {
     }
 
     graphics
+      .setDepth(180)
       .setVisible(true)
       .clear()
       .lineStyle(
