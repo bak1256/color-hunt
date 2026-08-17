@@ -1218,11 +1218,11 @@ export class GameScene extends Phaser.Scene {
 
         this.survivalHudText
             .setText(
-                `⌛ ${survivalRemainingSeconds}s`,
+                `${survivalRemainingSeconds}`,
             )
             .setPosition(
                 hourglassX,
-                70,
+                66,
             )
             .setOrigin(
                 0.5,
@@ -9349,7 +9349,33 @@ export class GameScene extends Phaser.Scene {
         this.practiceStartedAt =
             Date.now();
 
+        /*
+         * Practice must use the exact selected Hunt duration BEFORE startHunt
+         * creates phaseEndTime. Previously startHunt still used the normal
+         * single-player huntDuration, so the survival HUD could count the
+         * wrong clock / appear to have no useful remaining-time display.
+         */
+        this.huntDuration =
+            this.practiceHuntDuration;
+
         this.startHunt();
+
+        /*
+         * Keep the same authoritative clock used by the real match HUD.
+         * No second practice-only timer: phaseEndTime drives both hourglass
+         * sand and the numeric remaining-seconds label.
+         */
+        this.phaseEndTime =
+            this.time.now +
+            this.practiceHuntDuration *
+                1000;
+
+        this.hudPhaseDurationMs =
+            Math.max(
+                1,
+                this.practiceHuntDuration *
+                    1000,
+            );
 
         this.hunterReserve =
             this.practiceHunterMaxReserve;
@@ -9363,13 +9389,6 @@ export class GameScene extends Phaser.Scene {
             0;
 
         this.syncHunterPracticeVisuals();
-
-        this.hudPhaseDurationMs =
-            Math.max(
-                1,
-                this.practiceHuntDuration *
-                    1000,
-            );
 
         this.updateSurvivalHud();
 
