@@ -690,11 +690,94 @@ this.phaseChangedHandlers.forEach(
     PublicRoomInfo[]
   > {
     /*
-     * v0.10.10.159 GHOST ROOM HOTFIX
+     * v0.10.10.161 ROOM DIRECTORY SOURCE-OF-TRUTH HOTFIX
      *
-     * Never allow browser/CDN caching for the room directory.
-     * A cached /api/rooms response can outlive the actual Colyseus room and
-     * show "4 / 10" even after every client has already left.
+     * Rooms are created through Colyseus matchmaking, therefore the room
+     * browser must query that SAME matchmaking registry first.
+     *
+     * The previous design created through Colyseus but listed through a
+     * separate custom /api/rooms route. If that route lagged, cached its own
+     * data, or queried a different process, newly-created rooms disappeared
+     * while already-disposed rooms could remain as "ghost rooms".
+     */
+    const matchmakingClient =
+      this.client as unknown as {
+        getAvailableRooms?: (
+          roomName?: string,
+        ) => Promise<
+          Array<{
+            roomId?: string;
+            clients?: number;
+            maxClients?: number;
+            metadata?: PublicRoomInfo["metadata"];
+          }>
+        >;
+      };
+
+    if (
+      typeof matchmakingClient
+        .getAvailableRooms ===
+      "function"
+    ) {
+      try {
+        const available =
+          await matchmakingClient
+            .getAvailableRooms(
+              "chameleon_hunt",
+            );
+
+        const rooms =
+          available
+            .filter(
+              (room) =>
+                Boolean(
+                  room.roomId,
+                ),
+            )
+            .map(
+              (room) => ({
+                roomId:
+                  String(
+                    room.roomId,
+                  ),
+                clients:
+                  Math.max(
+                    0,
+                    Number(
+                      room.clients,
+                    ) || 0,
+                  ),
+                maxClients:
+                  Math.max(
+                    1,
+                    Number(
+                      room.maxClients,
+                    ) || 10,
+                  ),
+                metadata:
+                  room.metadata,
+              }),
+            );
+
+        console.log(
+          "[Chameleon Hunt] Authoritative matchmaking rooms",
+          rooms,
+        );
+
+        return rooms;
+      } catch (
+        matchmakingError
+      ) {
+        console.warn(
+          "[Chameleon Hunt] Matchmaking room query failed; falling back to /api/rooms",
+          matchmakingError,
+        );
+      }
+    }
+
+    /*
+     * Compatibility fallback for deployments whose Colyseus client build
+     * doesn't expose getAvailableRooms(). Never cache this response.
      */
     const cacheBuster =
       Date.now();
@@ -705,10 +788,13 @@ this.phaseChangedHandlers.forEach(
         method: "GET",
         headers: {
           Accept: "application/json",
-          "Cache-Control": "no-cache, no-store, must-revalidate",
-          Pragma: "no-cache",
+          "Cache-Control":
+            "no-cache, no-store, must-revalidate",
+          Pragma:
+            "no-cache",
         },
-        cache: "no-store",
+        cache:
+          "no-store",
       },
     );
 
@@ -739,7 +825,7 @@ this.phaseChangedHandlers.forEach(
                 0,
                 Number(
                   room.clients,
-                ),
+                ) || 0,
               ),
             maxClients:
               Math.max(
@@ -752,7 +838,7 @@ this.phaseChangedHandlers.forEach(
         );
 
     console.log(
-      "[Chameleon Hunt] Fresh public rooms from API",
+      "[Chameleon Hunt] Fallback API rooms",
       rooms,
     );
 
