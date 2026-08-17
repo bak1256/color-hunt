@@ -267,6 +267,13 @@ export class GameScene extends Phaser.Scene {
     private disconnectNoticeText!: Phaser.GameObjects.Text;
     private disconnectNoticeEvent?: Phaser.Time.TimerEvent;
     private paintReadyButton?: Phaser.GameObjects.Text;
+
+    /*
+     * v0.10.10.179
+     * READY is a DOM HUD now. Phaser camera zoom must NEVER own its position.
+     */
+    private paintReadyDomButton?: HTMLButtonElement;
+
     private localPaintReady = false;
     private allHidersPaintReady = false;
     private paintReadyCount = 0;
@@ -283,6 +290,116 @@ export class GameScene extends Phaser.Scene {
     private hunterCamoColors: number[] = [];
     private paintZoomText!: Phaser.GameObjects.Text;
     private paintControlHelpText!: Phaser.GameObjects.Text;
+
+    private handlePaintReadyAction(): void {
+        if (
+            this.phase !== 'paint' ||
+            !multiplayerClient.isConnected()
+        ) {
+            return;
+        }
+
+        const stateRole =
+            multiplayerClient
+                .getLocalPlayer()
+                ?.role;
+
+        const role =
+            stateRole ??
+            (
+                this.networkPlayerManager
+                    ?.isLocalHunter()
+                    ? 'hunter'
+                    : this.networkPlayerManager
+                        ?.isLocalHider()
+                        ? 'hider'
+                        : undefined
+            );
+
+        if (role === 'hider') {
+            this.localPaintReady =
+                !this.localPaintReady;
+
+            multiplayerClient
+                .sendPaintReady(
+                    this.localPaintReady,
+                );
+
+            this.time.delayedCall(
+                80,
+                () => {
+                    if (
+                        this.phase ===
+                            'paint'
+                    ) {
+                        multiplayerClient
+                            .requestPaintReadyState();
+                    }
+                },
+            );
+        } else if (
+            role === 'hunter' &&
+            this.allHidersPaintReady
+        ) {
+            multiplayerClient
+                .sendEarlyStartHunt();
+        }
+
+        this.updatePaintReadyButton();
+    }
+
+    private createPaintReadyDomButton(): void {
+        this.paintReadyDomButton
+            ?.remove();
+
+        const button =
+            document.createElement(
+                'button',
+            );
+
+        button.type =
+            'button';
+        button.className =
+            'colorhunt-paint-ready-fixed';
+        button.hidden =
+            true;
+
+        button.addEventListener(
+            'pointerdown',
+            (
+                event,
+            ) => {
+                event.preventDefault();
+                event.stopPropagation();
+            },
+        );
+
+        button.addEventListener(
+            'click',
+            (
+                event,
+            ) => {
+                event.preventDefault();
+                event.stopPropagation();
+                this.handlePaintReadyAction();
+            },
+        );
+
+        document.body.appendChild(
+            button,
+        );
+
+        this.paintReadyDomButton =
+            button;
+    }
+
+    private destroyPaintReadyDomButton(): void {
+        this.paintReadyDomButton
+            ?.remove();
+
+        this.paintReadyDomButton =
+            undefined;
+    }
 
     private createSurvivalHud(): void {
         this.survivalHudGraphics =
@@ -418,65 +535,15 @@ export class GameScene extends Phaser.Scene {
                     useHandCursor: true,
                 });
 
-        this.paintReadyButton.on(
-            'pointerdown',
-            () => {
-                if (
-                    this.phase !== 'paint' ||
-                    !multiplayerClient.isConnected()
-                ) {
-                    return;
-                }
+        /*
+         * Legacy Phaser button remains as a hidden fallback only.
+         * The visible control is the DOM-fixed button created below.
+         */
+        this.paintReadyButton
+            .setVisible(false)
+            .disableInteractive();
 
-                const stateRole =
-                    multiplayerClient
-                        .getLocalPlayer()
-                        ?.role;
-
-                const role =
-                    stateRole ??
-                    (
-                        this.networkPlayerManager
-                            ?.isLocalHunter()
-                            ? 'hunter'
-                            : this.networkPlayerManager
-                                ?.isLocalHider()
-                                ? 'hider'
-                                : undefined
-                    );
-
-                if (role === 'hider') {
-                    this.localPaintReady =
-                        !this.localPaintReady;
-
-                    multiplayerClient
-                        .sendPaintReady(
-                            this.localPaintReady,
-                        );
-
-                    this.time.delayedCall(
-                        80,
-                        () => {
-                            if (
-                                this.phase ===
-                                'paint'
-                            ) {
-                                multiplayerClient
-                                    .requestPaintReadyState();
-                            }
-                        },
-                    );
-                } else if (
-                    role === 'hunter' &&
-                    this.allHidersPaintReady
-                ) {
-                    multiplayerClient
-                        .sendEarlyStartHunt();
-                }
-
-                this.updatePaintReadyButton();
-            },
-        );
+        this.createPaintReadyDomButton();
     }
 
     private showPlayerDisconnectNotice(
@@ -533,8 +600,21 @@ export class GameScene extends Phaser.Scene {
     }
 
     private updatePaintReadyButton(): void {
-        const button =
+        const legacyButton =
             this.paintReadyButton;
+
+        /*
+         * v0.10.10.179:
+         * Never render READY through Phaser. Keeping this object hidden means
+         * no camera transform can make it jump during Paint zoom.
+         */
+        legacyButton
+            ?.setVisible(
+                false,
+            );
+
+        const button =
+            this.paintReadyDomButton;
 
         if (!button) {
             return;
@@ -565,116 +645,95 @@ export class GameScene extends Phaser.Scene {
                 role === 'hunter'
             );
 
-        button.setVisible(visible);
+        button.hidden =
+            !visible;
 
         if (!visible) {
             return;
         }
 
         /*
-         * v0.10.10.175
-         * READY UI must never cover the character being painted.
-         *
-         * During Paint the local Hider/Hunter is camera-centered, so place
-         * the button beside the character instead of on top of it. Prefer the
-         * right side; if a narrow/mobile viewport would push the translated
-         * button outside the safe edge, automatically flip it to the left.
-         *
-         * Keep using fixed-screen coordinates so Paint camera zoom does not
-         * drag the button back over the character.
+         * TRUE screen position:
+         * derive only from the canvas DOM rectangle, never from Phaser camera
+         * zoom / scroll / character scale.
          */
-        const readyButtonHalfWidth =
-            (
-                this.mobileControlsEnabled
-                    ? 122
-                    : 138
-            ) /
-            2;
+        const rect =
+            this.game.canvas
+                .getBoundingClientRect();
 
-        /*
-         * v0.10.10.176:
-         * Character body is roughly 80px wide before Paint zoom. Leave a
-         * generous empty gap so the READY card never touches the silhouette.
-         */
-        const characterSideGap =
+        const compactWidth =
             this.mobileControlsEnabled
-                ? 150
-                : 160;
+                ? 122
+                : 138;
 
-        const preferredReadyX =
-            this.gameWidth /
-                2 +
-            characterSideGap;
+        const normalizedSideX =
+            this.mobileControlsEnabled
+                ? 0.72
+                : 0.70;
 
-        const readySafeMargin =
-            14;
+        const candidateCenterX =
+            rect.left +
+            rect.width *
+                normalizedSideX;
 
-        const readyX =
-            preferredReadyX +
-                readyButtonHalfWidth +
-                readySafeMargin <=
-                    this.gameWidth
-                ? preferredReadyX
-                : this.gameWidth /
+        const rightEdge =
+            candidateCenterX +
+            compactWidth /
+                2;
+
+        const safeInset =
+            12;
+
+        let centerX =
+            candidateCenterX;
+
+        if (
+            rightEdge >
+                window.innerWidth -
+                    safeInset
+        ) {
+            centerX =
+                rect.left +
+                rect.width *
+                    (
+                        1 -
+                        normalizedSideX
+                    );
+        }
+
+        centerX =
+            Phaser.Math.Clamp(
+                centerX,
+                compactWidth /
+                    2 +
+                    safeInset,
+                window.innerWidth -
+                    compactWidth /
                     2 -
-                    characterSideGap;
-
-        const readyY =
-            this.gameHeight /
-                2 +
-            (
-                this.mobileControlsEnabled
-                    ? 4
-                    : 8
+                    safeInset,
             );
+
+        const centerY =
+            rect.top +
+            rect.height *
+                0.51;
+
+        button.style.left =
+            `${Math.round(
+                centerX,
+            )}px`;
+
+        button.style.top =
+            `${Math.round(
+                centerY,
+            )}px`;
 
         /*
-         * v0.10.10.178 TRUE SCREEN ANCHOR
-         *
-         * Phaser camera zoom still transforms GameObjects even when their
-         * scrollFactor is 0. That is why v177 could visibly slide around.
-         *
-         * Treat READY as a HUD object instead:
-         *   1) convert the desired SCREEN pixel to a camera world point,
-         *   2) let the button scroll with the camera (scrollFactor 1),
-         *   3) inverse-scale it so camera zoom cannot resize it.
-         *
-         * updatePaintReadyButton() runs continuously, so this re-anchors the
-         * button every update even while Paint zoom/pan is changing.
+         * Never show misleading 0/0 merely because READY state packet was
+         * missed. Schema count is display fallback only.
          */
-        const paintCamera =
-            this.cameras.main;
-
-        const readyWorldPoint =
-            paintCamera.getWorldPoint(
-                readyX,
-                readyY,
-            );
-
-        const inverseCameraZoom =
-            1 /
-            Math.max(
-                0.01,
-                paintCamera.zoom,
-            );
-
-        button
-            .setScrollFactor(1)
-            .setPosition(
-                readyWorldPoint.x,
-                readyWorldPoint.y,
-            )
-            .setScale(
-                inverseCameraZoom,
-            );
-
-        /*
-         * Never show misleading 0/0 merely because the READY packet was
-         * missed. Derive the currently connected Hider count from Schema as
-         * a display fallback; the SERVER still decides whether early start
-         * is actually allowed.
-         */
-        let schemaHiderCount = 0;
+        let schemaHiderCount =
+            0;
 
         multiplayerClient
             .getRoom()
@@ -687,9 +746,10 @@ export class GameScene extends Phaser.Scene {
                 ) => {
                     if (
                         player.role ===
-                        'hider'
+                            'hider'
                     ) {
-                        schemaHiderCount += 1;
+                        schemaHiderCount +=
+                            1;
                     }
                 },
             );
@@ -701,38 +761,99 @@ export class GameScene extends Phaser.Scene {
             );
 
         if (role === 'hider') {
-            button
-                .setText(
-                    this.localPaintReady
-                        ? `✓ ${tr('준비 완료')}`
-                        : tr('준비 완료'),
-                )
-                .setBackgroundColor(
-                    this.localPaintReady
-                        ? '#7b8794'
-                        : '#4f9d69',
-                )
-                .setAlpha(1);
+            button.classList
+                .remove(
+                    'is-hunter-waiting',
+                    'is-hunter-ready',
+                );
+
+            button.classList
+                .toggle(
+                    'is-ready',
+                    this.localPaintReady,
+                );
+
+            button.replaceChildren();
+
+            const label =
+                document.createElement(
+                    'span',
+                );
+
+            label.textContent =
+                this.localPaintReady
+                    ? `✓ ${tr('준비 완료')}`
+                    : tr('준비 완료');
+
+            button.appendChild(
+                label,
+            );
 
             return;
         }
 
-        button
-            .setText(
-                this.allHidersPaintReady
-                    ? `▶ ${tr('바로 찾기 시작')}`
-                    : `${tr('하이더 준비 대기')}\n${this.paintReadyCount}/${shownHiderCount}`,
-            )
-            .setBackgroundColor(
-                this.allHidersPaintReady
-                    ? '#e45b4f'
-                    : '#68737d',
-            )
-            .setAlpha(
-                this.allHidersPaintReady
-                    ? 1
-                    : 0.88,
+        button.classList
+            .remove(
+                'is-ready',
             );
+
+        button.classList
+            .toggle(
+                'is-hunter-ready',
+                this.allHidersPaintReady,
+            );
+
+        button.classList
+            .toggle(
+                'is-hunter-waiting',
+                !this.allHidersPaintReady,
+            );
+
+        button.replaceChildren();
+
+        if (
+            this.allHidersPaintReady
+        ) {
+            const label =
+                document.createElement(
+                    'span',
+                );
+
+            label.textContent =
+                `▶ ${tr('바로 찾기 시작')}`;
+
+            button.appendChild(
+                label,
+            );
+            return;
+        }
+
+        const label =
+            document.createElement(
+                'span',
+            );
+
+        label.className =
+            'colorhunt-paint-ready-fixed__label';
+
+        label.textContent =
+            tr('하이더 준비 대기');
+
+        const count =
+            document.createElement(
+                'strong',
+            );
+
+        count.className =
+            'colorhunt-paint-ready-fixed__count';
+
+        count.textContent =
+            `${this.paintReadyCount}/${shownHiderCount}`;
+
+        button.append(
+            label,
+            count,
+        );
     }
 
     private updateSurvivalHud(): void {
@@ -4001,6 +4122,7 @@ export class GameScene extends Phaser.Scene {
                 this.destroyChatUi();
                 this.destroyControlsHelpUi();
                 this.destroyMobilePaintDock();
+                this.destroyPaintReadyDomButton();
                 window.removeEventListener(
                     'resize',
                     this.updateMainLobbyDomPositionBound,
@@ -24072,8 +24194,33 @@ export class GameScene extends Phaser.Scene {
                         return;
                     }
 
+                    /*
+                     * v0.10.10.179 PC FIRE STABILITY
+                     *
+                     * POINTER_DOWN already tells us a press happened.
+                     * Some browsers/mice can report leftButtonDown() false
+                     * during very fast clicks, so trust the native event's
+                     * `button === 0` first and keep Phaser as fallback.
+                     */
+                    const nativeEvent =
+                        pointer.event;
+
+                    const nativeLeftClick =
+                        (
+                            nativeEvent instanceof
+                                MouseEvent ||
+                            nativeEvent instanceof
+                                PointerEvent
+                        ) &&
+                        nativeEvent.button ===
+                            0;
+
+                    const isLeftClick =
+                        nativeLeftClick ||
+                        pointer.leftButtonDown();
+
                     if (
-                        pointer.leftButtonDown() &&
+                        isLeftClick &&
                         (
                             !this.isMultiplayerSession() ||
                             this.networkPlayerManager
