@@ -559,14 +559,60 @@ export class GameScene extends Phaser.Scene {
         }
 
         /*
-         * READY UI always sits immediately above the paint palette.
-         * Keep it in fixed-screen coordinates even while Paint camera is
-         * zoomed for Hider/Hunter customization.
+         * v0.10.10.175
+         * READY UI must never cover the character being painted.
+         *
+         * During Paint the local Hider/Hunter is camera-centered, so place
+         * the button beside the character instead of on top of it. Prefer the
+         * right side; if a narrow/mobile viewport would push the translated
+         * button outside the safe edge, automatically flip it to the left.
+         *
+         * Keep using fixed-screen coordinates so Paint camera zoom does not
+         * drag the button back over the character.
          */
+        const readyButtonHalfWidth =
+            Math.max(
+                58,
+                button.displayWidth /
+                    2,
+            );
+
+        const characterSideGap =
+            this.mobileControlsEnabled
+                ? 108
+                : 118;
+
+        const preferredReadyX =
+            this.gameWidth /
+                2 +
+            characterSideGap;
+
+        const readySafeMargin =
+            14;
+
+        const readyX =
+            preferredReadyX +
+                readyButtonHalfWidth +
+                readySafeMargin <=
+                    this.gameWidth
+                ? preferredReadyX
+                : this.gameWidth /
+                    2 -
+                    characterSideGap;
+
+        const readyY =
+            this.gameHeight /
+                2 +
+            (
+                this.mobileControlsEnabled
+                    ? 4
+                    : 8
+            );
+
         this.setFixedHudScreenPosition(
             button,
-            this.gameWidth / 2,
-            this.gameHeight - 160,
+            readyX,
+            readyY,
         );
 
         /*
