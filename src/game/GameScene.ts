@@ -2430,6 +2430,12 @@ export class GameScene extends Phaser.Scene {
                 this.isPainting = false;
             }
 
+            /*
+             * A deliberate two-finger pinch owns input now; give up the
+             * single-finger paint capture before zooming.
+             */
+            this.releaseMobilePaintPointer();
+
             if (
                 this.mobilePendingPaintPointerId >= 0
             ) {
@@ -3026,6 +3032,17 @@ export class GameScene extends Phaser.Scene {
     private mobilePinchDistance = 0;
     private mobilePinchActive = false;
     private mobilePendingPaintPointerId = -1;
+
+    /*
+     * v0.10.10.174
+     * Once a mobile paint stroke starts on the game canvas, keep that native
+     * pointer captured by the canvas until finger-up. Without capture, moving
+     * the finger over the DOM paint palette retargets pointer events to the
+     * palette and Phaser stops receiving POINTER_MOVE, visually cutting the
+     * stroke in half.
+     */
+    private mobilePaintCapturedNativePointerId = -1;
+
     private mobilePendingPaintStartScreen?: Phaser.Math.Vector2;
     private mobilePendingPaintStartWorld?: Phaser.Math.Vector2;
     private eyedropperArmed = false;
@@ -23584,6 +23601,96 @@ export class GameScene extends Phaser.Scene {
         }
     }
 
+    private captureMobilePaintPointer(
+        pointer: Phaser.Input.Pointer,
+    ): void {
+        if (
+            !this.mobileControlsEnabled
+        ) {
+            return;
+        }
+
+        const nativeEvent =
+            pointer.event;
+
+        if (
+            !(nativeEvent instanceof PointerEvent)
+        ) {
+            return;
+        }
+
+        const nativePointerId =
+            nativeEvent.pointerId;
+
+        try {
+            if (
+                !this.game.canvas.hasPointerCapture(
+                    nativePointerId,
+                )
+            ) {
+                this.game.canvas.setPointerCapture(
+                    nativePointerId,
+                );
+            }
+
+            this.mobilePaintCapturedNativePointerId =
+                nativePointerId;
+        } catch {
+            /*
+             * Pointer capture can be unavailable in a few embedded WebViews.
+             * Painting still falls back to the previous behavior there.
+             */
+        }
+    }
+
+    private releaseMobilePaintPointer(
+        pointer?:
+            Phaser.Input.Pointer,
+    ): void {
+        let nativePointerId =
+            this.mobilePaintCapturedNativePointerId;
+
+        const nativeEvent =
+            pointer?.event;
+
+        if (
+            nativeEvent instanceof
+                PointerEvent
+        ) {
+            nativePointerId =
+                nativeEvent.pointerId;
+        }
+
+        if (
+            nativePointerId <
+                0
+        ) {
+            return;
+        }
+
+        try {
+            if (
+                this.game.canvas.hasPointerCapture(
+                    nativePointerId,
+                )
+            ) {
+                this.game.canvas.releasePointerCapture(
+                    nativePointerId,
+                );
+            }
+        } catch {
+            // Safe no-op on browsers that already released the pointer.
+        }
+
+        if (
+            nativePointerId ===
+                this.mobilePaintCapturedNativePointerId
+        ) {
+            this.mobilePaintCapturedNativePointerId =
+                -1;
+        }
+    }
+
     private beginMobilePaintAfterDrag(
         pointer: Phaser.Input.Pointer,
     ): boolean {
@@ -24049,6 +24156,15 @@ export class GameScene extends Phaser.Scene {
                         this.finishActivePaintStroke();
                         this.isPainting = false;
 
+                        /*
+                         * Capture NOW, while pointerdown still belongs to the
+                         * canvas. From this point until finger-up, crossing
+                         * over the DOM palette must not steal the drag.
+                         */
+                        this.captureMobilePaintPointer(
+                            pointer,
+                        );
+
                         this.mobilePendingPaintPointerId =
                             pointer.id;
 
@@ -24346,6 +24462,15 @@ export class GameScene extends Phaser.Scene {
                 pointer:
                     Phaser.Input.Pointer,
             ) => {
+                /*
+                 * v0.10.10.174: release canvas capture only after Phaser has
+                 * received the final pointer-up, so the stroke remains
+                 * continuous even if the finger finishes above the palette.
+                 */
+                this.releaseMobilePaintPointer(
+                    pointer,
+                );
+
                 if (
                     this.eyedropperArmed &&
                     pointer.id ===
@@ -24454,6 +24579,10 @@ export class GameScene extends Phaser.Scene {
                 pointer:
                     Phaser.Input.Pointer,
             ) => {
+                this.releaseMobilePaintPointer(
+                    pointer,
+                );
+
                 if (
                     pointer.id ===
                         this.mobilePendingPaintPointerId
