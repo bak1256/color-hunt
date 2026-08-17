@@ -385,20 +385,29 @@ export class GameScene extends Phaser.Scene {
                 tr('준비 완료'),
                 {
                     fontFamily: 'Arial, sans-serif',
-                    fontSize: '16px',
+                    fontSize: '13px',
                     fontStyle: 'bold',
                     color: '#ffffff',
                     backgroundColor: '#4f9d69',
                     padding: {
-                        x: 18,
-                        y: 9,
+                        x: 10,
+                        y: 6,
                     },
+                    align: 'center',
+                    lineSpacing: 1,
                 },
             )
                 .setOrigin(0.5)
                 .setScrollFactor(0)
                 .setDepth(6020)
-                .setFixedSize(250, 38)
+                .setFixedSize(
+                    this.mobileControlsEnabled
+                        ? 122
+                        : 138,
+                    this.mobileControlsEnabled
+                        ? 48
+                        : 50,
+                )
                 .setAlign('center')
                 .setVisible(false)
                 .setInteractive({
@@ -571,16 +580,22 @@ export class GameScene extends Phaser.Scene {
          * drag the button back over the character.
          */
         const readyButtonHalfWidth =
-            Math.max(
-                58,
-                button.displayWidth /
-                    2,
-            );
+            (
+                this.mobileControlsEnabled
+                    ? 122
+                    : 138
+            ) /
+            2;
 
+        /*
+         * v0.10.10.176:
+         * Character body is roughly 80px wide before Paint zoom. Leave a
+         * generous empty gap so the READY card never touches the silhouette.
+         */
         const characterSideGap =
             this.mobileControlsEnabled
-                ? 108
-                : 118;
+                ? 150
+                : 160;
 
         const preferredReadyX =
             this.gameWidth /
@@ -651,7 +666,7 @@ export class GameScene extends Phaser.Scene {
             button
                 .setText(
                     this.localPaintReady
-                        ? tr('준비 취소')
+                        ? `✓ ${tr('준비 완료')}`
                         : tr('준비 완료'),
                 )
                 .setBackgroundColor(
@@ -667,9 +682,8 @@ export class GameScene extends Phaser.Scene {
         button
             .setText(
                 this.allHidersPaintReady
-                    ? tr('바로 찾기 시작')
-                    : tr('하이더 준비 대기') +
-                        ` ${this.paintReadyCount}/${shownHiderCount}`,
+                    ? `▶ ${tr('바로 찾기 시작')}`
+                    : `${tr('하이더 준비 대기')}\n${this.paintReadyCount}/${shownHiderCount}`,
             )
             .setBackgroundColor(
                 this.allHidersPaintReady
