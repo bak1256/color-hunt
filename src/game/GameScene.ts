@@ -1436,10 +1436,12 @@ export class GameScene extends Phaser.Scene {
             );
 
         /*
-         * v0.10.10.170
-         * Hunter Practice used to explicitly hide the numeric timer.
-         * Keep it directly BELOW the Hider / hourglass / Hunter icon row so
-         * it can never be clipped by the top edge of the canvas.
+         * v0.10.10.187 HOTFIX
+         *
+         * Practice timer must NEVER sit above/inside the icon row.
+         * The icons end around y=61, so give Practice its own large timer
+         * badge well BELOW them. This is deliberately independent from the
+         * Hider/hourglass/Hunter layout.
          */
         const isHunterPractice =
             this.practiceMode ===
@@ -1447,12 +1449,14 @@ export class GameScene extends Phaser.Scene {
 
         this.survivalHudText
             .setText(
-                `${survivalRemainingSeconds}`,
+                isHunterPractice
+                    ? `⏱ ${survivalRemainingSeconds}s`
+                    : `${survivalRemainingSeconds}`,
             )
             .setPosition(
                 hourglassX,
                 isHunterPractice
-                    ? 70
+                    ? 82
                     : 66,
             )
             .setOrigin(
@@ -1463,8 +1467,8 @@ export class GameScene extends Phaser.Scene {
                 isHunterPractice
                     ? (
                         this.mobileControlsEnabled
-                            ? 15
-                            : 17
+                            ? 18
+                            : 21
                     )
                     : (
                         this.mobileControlsEnabled
@@ -1474,10 +1478,10 @@ export class GameScene extends Phaser.Scene {
             )
             .setPadding(
                 isHunterPractice
-                    ? 11
+                    ? 14
                     : 12,
                 isHunterPractice
-                    ? 5
+                    ? 7
                     : 5,
             )
             .setColor(
