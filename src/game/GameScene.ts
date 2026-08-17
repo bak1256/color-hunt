@@ -17462,15 +17462,47 @@ export class GameScene extends Phaser.Scene {
                     ? '#d32f2f'
                     : '#1f2937';
 
-            this.countdownText
-                .setFontSize(48)
-                .setColor(victoryColor)
-                .setText(
-                    [
+            /*
+             * v0.10.10.186:
+             * Ammo depletion belongs INSIDE the normal Finished UI. Do not
+             * create a second floating result/status box.
+             *
+             * Phaser Text is single-color, so when ammo is the finish reason
+             * the complete result card uses the strong red finish color.
+             */
+            const ammoDepletedHiderWin =
+                effectiveWinner === 'hiders' &&
+                this.roundEndedByAmmoDepletion;
+
+            const finalResultLines =
+                ammoDepletedHiderWin
+                    ? [
+                        tr('탄약 소진!'),
                         victoryText,
                         tr('게임 종료'),
                         String(remaining),
-                    ].join('\n'),
+                    ]
+                    : [
+                        victoryText,
+                        tr('게임 종료'),
+                        String(remaining),
+                    ];
+
+            this.countdownText
+                .setFontSize(
+                    ammoDepletedHiderWin
+                        ? 46
+                        : 48,
+                )
+                .setColor(
+                    ammoDepletedHiderWin
+                        ? '#d32f2f'
+                        : victoryColor,
+                )
+                .setText(
+                    finalResultLines.join(
+                        '\n',
+                    ),
                 );
 
             this.timerText
@@ -20265,11 +20297,14 @@ export class GameScene extends Phaser.Scene {
             .setText('')
             .setVisible(false);
 
-        if (!this.roundEndedByAmmoDepletion) {
-            this.statusText
-                .setText('')
-                .setVisible(false);
-        }
+        /*
+         * v0.10.10.186:
+         * Final result reason is rendered by countdownText. Clear the earlier
+         * transient ammo notification so the screen has ONE result panel.
+         */
+        this.statusText
+            .setText('')
+            .setVisible(false);
 
         this.survivalHudGraphics
             ?.setVisible(false);
@@ -20318,33 +20353,7 @@ export class GameScene extends Phaser.Scene {
                 .setText('')
                 .setVisible(false);
         }
-        /*
-         * v0.10.10.185: explain the sudden Hider victory without replacing
-         * the existing final victory UI.
-         */
-        if (
-            result.winner === 'hiders' &&
-            this.roundEndedByAmmoDepletion
-        ) {
-            this.statusText
-                .setText(tr('탄약 소진!'))
-                .setPosition(
-                    this.gameWidth / 2,
-                    this.gameHeight / 2 - 105,
-                )
-                .setOrigin(0.5)
-                .setScrollFactor(0)
-                .setDepth(26000)
-                .setFontSize(28)
-                .setFontStyle('bold')
-                .setColor('#ef233c')
-                .setBackgroundColor(
-                    'rgba(255,255,255,0.94)',
-                )
-                .setPadding(14, 7)
-                .setVisible(true)
-                .setAlpha(1);
-        }
+
 
     }
 
