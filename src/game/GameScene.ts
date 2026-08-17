@@ -5878,7 +5878,19 @@ export class GameScene extends Phaser.Scene {
             !multiplayerClient.isConnected()
         ) {
             /*
-             * Main lobby has ONE immutable anchor: the canvas top-right.
+             * Main lobby now owns an inline Controls button next to
+             * "게임 시작하기". Keep the old floating trigger hidden so there
+             * is exactly ONE obvious place to open help.
+             */
+            if (
+                this.controlsHelpButton
+            ) {
+                this.controlsHelpButton.style.display =
+                    'none';
+            }
+
+            /*
+             * The panel itself still uses this root and safe canvas anchor.
              * When Fold/unfold/orientation changes canvasRect is recalculated,
              * but no device-specific offset can push this button elsewhere.
              */
@@ -13855,7 +13867,13 @@ export class GameScene extends Phaser.Scene {
                 </section>
 
                 <section class="ch-lobby-actions">
-                    <h2>🎮 ${tr('게임 시작하기')}</h2>
+                    <div class="ch-lobby-actions-title-row">
+                        <h2>🎮 ${tr('게임 시작하기')}</h2>
+                        <button
+                            type="button"
+                            class="ch-lobby-inline-controls"
+                        >${this.getControlsHelpCopy().button}</button>
+                    </div>
 
                     <div class="ch-lobby-profile-card">
                         <div class="ch-lobby-avatar-frame">
@@ -13963,6 +13981,73 @@ export class GameScene extends Phaser.Scene {
                     );
                 },
             );
+
+        const inlineControlsButton =
+            root.querySelector<
+                HTMLButtonElement
+            >(
+                '.ch-lobby-inline-controls',
+            );
+
+        if (
+            inlineControlsButton
+        ) {
+            const forwardControlsEvent =
+                (
+                    type:
+                        'pointerdown' |
+                        'pointerup' |
+                        'pointercancel' |
+                        'pointerleave',
+                ) =>
+                (
+                    event:
+                        Event,
+                ): void => {
+                    event.preventDefault();
+                    event.stopPropagation();
+
+                    this.controlsHelpButton
+                        ?.dispatchEvent(
+                            new PointerEvent(
+                                type,
+                                {
+                                    bubbles:
+                                        true,
+                                    cancelable:
+                                        true,
+                                    pointerType:
+                                        'touch',
+                                },
+                            ),
+                        );
+                };
+
+            inlineControlsButton.addEventListener(
+                'pointerdown',
+                forwardControlsEvent(
+                    'pointerdown',
+                ),
+            );
+            inlineControlsButton.addEventListener(
+                'pointerup',
+                forwardControlsEvent(
+                    'pointerup',
+                ),
+            );
+            inlineControlsButton.addEventListener(
+                'pointercancel',
+                forwardControlsEvent(
+                    'pointercancel',
+                ),
+            );
+            inlineControlsButton.addEventListener(
+                'pointerleave',
+                forwardControlsEvent(
+                    'pointerleave',
+                ),
+            );
+        }
 
         root
             .querySelector(

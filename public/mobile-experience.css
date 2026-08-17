@@ -4956,3 +4956,248 @@ body:has(.colorhunt-main-lobby) .colorhunt-controls-help {
     border-width: 4px;
   }
 }
+
+
+/* ============================================================
+   v0.10.10.157 — Lobby inline Controls + readable Practice type
+   ============================================================ */
+
+.ch-lobby-actions-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  margin-bottom: 4px;
+}
+
+.ch-lobby-actions-title-row h2 {
+  min-width: 0;
+  margin: 0 !important;
+}
+
+.ch-lobby-inline-controls {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 48%;
+  min-height: 30px;
+  padding: 5px 9px;
+  border: 1px solid #88a47f;
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, #fffdf0 0%, #e7efd9 100%);
+  color: #45604a;
+  font-family:
+    ui-monospace, "SFMono-Regular", "Cascadia Code",
+    "Noto Sans KR", "Noto Sans JP", monospace;
+  font-size: clamp(9px, 1.1vw, 12px);
+  font-weight: 950;
+  line-height: 1.15;
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.75),
+    0 2px 0 rgba(60,88,62,.12);
+  touch-action: manipulation;
+}
+
+.ch-lobby-inline-controls:active {
+  transform: translateY(1px);
+}
+
+/*
+ * Practice typography:
+ * Increase readability without assuming Korean-length labels.
+ * min-width:0 + wrapping prevents Japanese/English/Chinese from breaking
+ * the card/grid when the copy is longer.
+ */
+.colorhunt-practice-card {
+  font-size: clamp(11px, 1.35vw, 14px);
+}
+
+.colorhunt-practice-head > div,
+.colorhunt-practice-map label,
+.colorhunt-practice-mode-copy,
+.colorhunt-practice-control,
+.colorhunt-practice-difficulty-row {
+  min-width: 0;
+}
+
+.colorhunt-practice-head small {
+  font-size: clamp(9px, 1vw, 11px) !important;
+  line-height: 1.2;
+}
+
+.colorhunt-practice-head strong {
+  font-size: clamp(18px, 2vw, 23px) !important;
+  line-height: 1.15;
+}
+
+.colorhunt-practice-head button {
+  min-width: 34px;
+  min-height: 34px;
+  font-size: clamp(14px, 1.5vw, 18px) !important;
+}
+
+.colorhunt-practice-map span,
+.colorhunt-practice-time-title,
+.colorhunt-practice-control label {
+  font-size: clamp(11px, 1.3vw, 14px) !important;
+  line-height: 1.25;
+}
+
+.colorhunt-practice-map select {
+  min-height: 38px;
+  font-size: clamp(11px, 1.25vw, 14px) !important;
+  white-space: normal;
+  text-overflow: ellipsis;
+}
+
+.colorhunt-practice-time-title b,
+.colorhunt-practice-control label b {
+  flex: 0 0 auto;
+  font-size: clamp(11px, 1.25vw, 14px) !important;
+}
+
+.colorhunt-practice-time-buttons button {
+  min-height: 36px !important;
+  font-size: clamp(10px, 1.2vw, 13px) !important;
+}
+
+.colorhunt-practice-ranking > strong {
+  font-size: clamp(10px, 1.15vw, 13px) !important;
+}
+
+.colorhunt-practice-ranking > span {
+  font-size: clamp(9px, 1.05vw, 12px) !important;
+}
+
+.colorhunt-practice-ranking > div {
+  grid-template-columns:
+    minmax(20px, auto)
+    minmax(68px, auto)
+    minmax(0, 1fr) !important;
+  gap: 5px;
+  min-height: 24px;
+  font-size: clamp(9px, 1.05vw, 12px) !important;
+}
+
+.colorhunt-practice-ranking > div small {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.colorhunt-practice-mode-copy > strong {
+  display: block;
+  font-size: clamp(14px, 1.55vw, 18px) !important;
+  line-height: 1.2;
+}
+
+.colorhunt-practice-mode-copy > p {
+  margin-top: 4px;
+  font-size: clamp(10px, 1.15vw, 13px) !important;
+  line-height: 1.45 !important;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.colorhunt-practice-control label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.colorhunt-practice-control label > span {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.colorhunt-practice-difficulty-row > small {
+  font-size: clamp(9px, 1vw, 12px) !important;
+  line-height: 1.35;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.colorhunt-practice-difficulty-row > b {
+  font-size: clamp(8px, .95vw, 11px) !important;
+}
+
+.colorhunt-practice-start {
+  min-height: 40px !important;
+  padding-inline: 10px;
+  font-size: clamp(11px, 1.3vw, 14px) !important;
+  line-height: 1.2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* Mobile/Fold: readable, but not so large that translated text destroys layout. */
+@media (pointer: coarse), (max-width: 900px) {
+  .ch-lobby-actions-title-row {
+    gap: 5px;
+  }
+
+  .ch-lobby-inline-controls {
+    max-width: 46%;
+    min-height: 28px;
+    padding: 4px 6px;
+    font-size: clamp(8px, 2.25vw, 11px);
+  }
+
+  .colorhunt-practice-card {
+    font-size: clamp(10px, 2.45vw, 13px) !important;
+  }
+
+  .colorhunt-practice-head small {
+    font-size: clamp(8px, 2vw, 10px) !important;
+  }
+
+  .colorhunt-practice-head strong {
+    font-size: clamp(16px, 4vw, 21px) !important;
+  }
+
+  .colorhunt-practice-map span,
+  .colorhunt-practice-time-title,
+  .colorhunt-practice-control label {
+    font-size: clamp(10px, 2.55vw, 13px) !important;
+  }
+
+  .colorhunt-practice-map select,
+  .colorhunt-practice-time-title b,
+  .colorhunt-practice-control label b {
+    font-size: clamp(10px, 2.45vw, 13px) !important;
+  }
+
+  .colorhunt-practice-time-buttons button {
+    min-height: 34px !important;
+    font-size: clamp(9px, 2.35vw, 12px) !important;
+  }
+
+  .colorhunt-practice-mode-copy > strong {
+    font-size: clamp(13px, 3.2vw, 17px) !important;
+  }
+
+  .colorhunt-practice-mode-copy > p {
+    font-size: clamp(9px, 2.3vw, 12px) !important;
+  }
+
+  .colorhunt-practice-difficulty-row > small {
+    font-size: clamp(8px, 2.1vw, 11px) !important;
+  }
+
+  .colorhunt-practice-start {
+    min-height: 38px !important;
+    font-size: clamp(10px, 2.55vw, 13px) !important;
+  }
+
+  .colorhunt-practice-ranking > strong,
+  .colorhunt-practice-ranking > span,
+  .colorhunt-practice-ranking > div {
+    font-size: clamp(8px, 2vw, 11px) !important;
+  }
+}
