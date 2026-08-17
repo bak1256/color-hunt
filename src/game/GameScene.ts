@@ -23952,7 +23952,11 @@ export class GameScene extends Phaser.Scene {
 
                 if (
                     this.phase === 'paint' &&
-                    this.isMultiplayerSession() &&
+                    (
+                        this.isMultiplayerSession() ||
+                        this.practiceMode ===
+                            'hider'
+                    ) &&
                     this.isPainting &&
                     this.straightLineStart &&
                     this.straightLineModeActive
@@ -24012,6 +24016,62 @@ export class GameScene extends Phaser.Scene {
                 ) {
                     this.clearMobilePendingPaint();
                     this.isPainting = false;
+                    return;
+                }
+
+                /*
+                 * v0.10.10.163
+                 * Shift-line preview may extend to the canvas edge. If the
+                 * pointer is released just outside the canvas, commit the
+                 * line using the last known pointer position instead of
+                 * discarding the preview-only stroke.
+                 */
+                if (
+                    this.phase ===
+                        'paint' &&
+                    (
+                        this.isMultiplayerSession() ||
+                        this.practiceMode ===
+                            'hider'
+                    ) &&
+                    this.isPainting &&
+                    this.straightLineStart &&
+                    this.straightLineModeActive
+                ) {
+                    const target =
+                        this.getPaintInputWorldPoint(
+                            pointer,
+                        );
+
+                    const endPoint =
+                        this.networkPlayerManager
+                            .paintLocalPlayer(
+                                target.x,
+                                target.y,
+                                this.brushTextureKey,
+                                this.paintColor,
+                                this.brushSize,
+                                this.brushShape,
+                            );
+
+                    if (
+                        endPoint
+                    ) {
+                        this.interpolateActivePaintStroke(
+                            endPoint,
+                        );
+                    }
+
+                    this.straightLineStart =
+                        undefined;
+                    this.straightLineStartWorld =
+                        undefined;
+                    this.straightLineModeActive =
+                        false;
+                    this.clearStraightLinePreview();
+                    this.isPainting =
+                        false;
+                    this.finishActivePaintStroke();
                 }
             },
         );
