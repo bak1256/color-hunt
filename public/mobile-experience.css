@@ -4684,3 +4684,47 @@ body:has(.colorhunt-main-lobby) .colorhunt-controls-help {
     font-size: 8px;
   }
 }
+
+
+/* ============================================================
+   v0.10.10.154 — clearer Hunter difficulty + share record emphasis
+   ============================================================ */
+
+.colorhunt-hider-share-record {
+  display: grid;
+  place-items: center;
+  gap: 2px;
+  margin: 9px auto 3px;
+  padding: 8px 12px;
+  width: min(88%, 300px);
+  border: 1px solid #b9ccb5;
+  border-radius: 12px;
+  background: rgba(255,255,255,.78);
+}
+
+.colorhunt-hider-share-record small {
+  color: #738176;
+  font-size: 8px;
+  font-weight: 900;
+}
+
+.colorhunt-hider-share-record strong {
+  color: #31553a;
+  font-size: 22px;
+  font-weight: 950;
+  line-height: 1;
+}
+
+@media (pointer: coarse) {
+  .colorhunt-hider-share-record {
+    padding: 6px 9px;
+  }
+
+  .colorhunt-hider-share-record small {
+    font-size: 6px;
+  }
+
+  .colorhunt-hider-share-record strong {
+    font-size: 16px;
+  }
+}

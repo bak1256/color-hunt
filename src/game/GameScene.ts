@@ -9960,10 +9960,39 @@ export class GameScene extends Phaser.Scene {
         context.stroke();
 
         /*
-         * Minimal footer. No timer, no challenge text, no empty block.
+         * Hider record should also feel worth sharing.
+         * The painting time is now a large, readable achievement element,
+         * while the image remains the hero of the card.
          */
+        const recordTime =
+            this.formatPracticeTime(
+                _elapsedMs,
+            );
+
+        context.fillStyle =
+            'rgba(255,255,255,.72)';
+        context.font =
+            '900 24px Arial, sans-serif';
+        context.textAlign =
+            'left';
+        context.fillText(
+            tr('위장 제작 기록'),
+            58,
+            1192,
+        );
+
+        context.fillStyle =
+            '#ffffff';
+        context.font =
+            '900 58px Arial, sans-serif';
+        context.fillText(
+            recordTime,
+            58,
+            1250,
+        );
+
         const footerY =
-            1238;
+            1302;
 
         context.fillStyle =
             'rgba(255,255,255,.96)';
@@ -10005,22 +10034,6 @@ export class GameScene extends Phaser.Scene {
             width -
                 58,
             footerY,
-        );
-
-        /*
-         * Small brand marker at the very bottom, intentionally compact.
-         */
-        context.textAlign =
-            'left';
-        context.font =
-            '700 19px Arial, sans-serif';
-        context.fillStyle =
-            'rgba(255,255,255,.58)';
-
-        context.fillText(
-            'CAMOUFLAGE RECORD',
-            58,
-            1290,
         );
 
         return await new Promise<
@@ -10112,6 +10125,10 @@ export class GameScene extends Phaser.Scene {
             <h2>🎨 ${tr('위장 완성!')}</h2>
             <p>${tr('친구에게 내 위장을 보여주고 Color Hunt에 초대해보세요.')}</p>
             <img alt="Color Hunt Hider Record" src="${previewUrl}">
+            <div class="colorhunt-hider-share-record">
+                <small>${tr('위장 제작 기록')}</small>
+                <strong>⏱ ${this.formatPracticeTime(elapsedMs)}</strong>
+            </div>
             <div class="colorhunt-hider-share-meta">
                 <span>🗺 ${this.getMapDisplayName(this.practiceMap)}</span>
             </div>
@@ -28190,11 +28207,11 @@ export class GameScene extends Phaser.Scene {
         context.fillStyle =
             '#ffffff';
         context.font =
-            '900 154px Arial, sans-serif';
+            '900 196px Arial, sans-serif';
         context.fillText(
             timeText,
-            56,
-            285,
+            52,
+            300,
         );
 
         const rank =
@@ -28617,9 +28634,19 @@ export class GameScene extends Phaser.Scene {
         context.font =
             '900 34px Arial, sans-serif';
         context.fillText(
-            `${this.getMapDisplayName(this.practiceMap)} · ${this.practiceBotCount} BOT · ${this.practiceBotPrecision}%`,
+            `${this.getMapDisplayName(this.practiceMap)} · ${this.practiceBotCount} BOT`,
             62,
             990,
+        );
+
+        context.fillStyle =
+            '#ffef9c';
+        context.font =
+            '900 31px Arial, sans-serif';
+        context.fillText(
+            `${tr('위장 난이도')}  ${this.practiceBotPrecision}%`,
+            62,
+            1032,
         );
 
         context.fillStyle =
@@ -28629,7 +28656,7 @@ export class GameScene extends Phaser.Scene {
         context.fillText(
             `🏆 ${this.practiceHuntDuration}s TOP 5`,
             62,
-            1040,
+            1074,
         );
 
         const records =
@@ -28648,9 +28675,9 @@ export class GameScene extends Phaser.Scene {
                     index,
                 ) => {
                     const y =
-                        1088 +
+                        1118 +
                         index *
-                            40;
+                            36;
 
                     context.fillStyle =
                         index ===
@@ -28995,7 +29022,7 @@ ${shareUrl}`,
             <div class="colorhunt-practice-result-meta">
                 <span>${this.practiceHuntDuration}s</span>
                 <span>${this.practiceBotCount} BOT</span>
-                <span>${this.practiceBotPrecision}%</span>
+                <span>${tr('위장 난이도')} ${this.practiceBotPrecision}%</span>
             </div>
 
             <div class="colorhunt-practice-result-ranking">

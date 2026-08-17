@@ -5,6 +5,8 @@ const STORAGE_KEY = 'chameleon-hunt-language';
 type Dict = Record<string, string>;
 
 const ja: Dict = {
+  "위장 난이도": "擬態難易度",
+  "위장 제작 기록": "擬態制作記録",
   "헌터 기록 공유": "ハンター記録を共有",
   "내 헌터 기록을 깨봐! Color Hunt에서 도전하기 👇": "このハンター記録を破れる？ Color Huntで挑戦してみて👇",
   "랜덤": "ランダム",
@@ -204,6 +206,8 @@ const ja: Dict = {
 };
 
 const en: Dict = {
+  "위장 난이도": "Camo Difficulty",
+  "위장 제작 기록": "Camouflage Time",
   "헌터 기록 공유": "Share Hunter Record",
   "내 헌터 기록을 깨봐! Color Hunt에서 도전하기 👇": "Can you beat my Hunter record? Try Color Hunt 👇",
   "랜덤": "Random",
@@ -405,6 +409,8 @@ const en: Dict = {
 };
 
 const zh: Dict = {
+  "위장 난이도": "伪装难度",
+  "위장 제작 기록": "伪装制作记录",
   "헌터 기록 공유": "分享猎人记录",
   "내 헌터 기록을 깨봐! Color Hunt에서 도전하기 👇": "能打破我的猎人记录吗？来挑战 Color Hunt 👇",
   "랜덤": "随机",
