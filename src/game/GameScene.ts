@@ -1207,9 +1207,42 @@ export class GameScene extends Phaser.Scene {
             x += spacing;
         }
 
+        const survivalRemainingSeconds =
+            Math.max(
+                0,
+                Math.ceil(
+                    remainingMs /
+                    1000,
+                ),
+            );
+
         this.survivalHudText
-            .setText('')
-            .setVisible(false);
+            .setText(
+                `⌛ ${survivalRemainingSeconds}s`,
+            )
+            .setPosition(
+                hourglassX,
+                70,
+            )
+            .setOrigin(
+                0.5,
+                0,
+            )
+            .setFontSize(
+                this.mobileControlsEnabled
+                    ? 12
+                    : 14,
+            )
+            .setColor(
+                survivalRemainingSeconds <=
+                    10
+                    ? '#ff6b5f'
+                    : '#ffffff',
+            )
+            .setBackgroundColor(
+                'rgba(17,24,39,0.78)',
+            )
+            .setVisible(true);
 
         const hiderLabelX =
             hiderFirstX -
@@ -2934,6 +2967,16 @@ export class GameScene extends Phaser.Scene {
         2_500;
     private readonly practiceHunterMoveSpeed =
         125;
+
+    /*
+     * Hider Practice record-shot flow.
+     * Timer starts on the first REAL paint pixel, not when the mode opens.
+     */
+    private practiceHiderPaintStartedAt =
+        0;
+    private practiceHiderRecordBar?: HTMLDivElement;
+    private practiceHiderRecordTime?: HTMLSpanElement;
+    private practiceHiderRecordTimer?: number;
 
     private getPracticeBotSessionId(
         index: number,
@@ -9120,6 +9163,8 @@ export class GameScene extends Phaser.Scene {
         reopenPractice =
             true,
     ): void {
+        this.destroyPracticeHiderRecordBar();
+
         this.networkPlayerManager
             .clearPracticePlayers();
 
@@ -9248,6 +9293,727 @@ export class GameScene extends Phaser.Scene {
 
         this.showStatus(
             tr('연습 시작! 위장한 봇을 모두 찾아보세요.'),
+        );
+    }
+
+    private markPracticeHiderPaintStarted(): void {
+        if (
+            this.practiceMode !==
+                'hider' ||
+            this.practiceHiderPaintStartedAt >
+                0
+        ) {
+            return;
+        }
+
+        this.practiceHiderPaintStartedAt =
+            performance.now();
+
+        this.updatePracticeHiderRecordClock();
+    }
+
+    private updatePracticeHiderRecordClock(): void {
+        if (
+            !this.practiceHiderRecordTime
+        ) {
+            return;
+        }
+
+        const elapsed =
+            this.practiceHiderPaintStartedAt >
+                0
+                ? performance.now() -
+                    this.practiceHiderPaintStartedAt
+                : 0;
+
+        this.practiceHiderRecordTime.textContent =
+            this.practiceHiderPaintStartedAt >
+                0
+                ? this.formatPracticeTime(
+                    elapsed,
+                )
+                : tr('첫 붓질부터 기록');
+    }
+
+    private destroyPracticeHiderRecordBar(): void {
+        if (
+            this.practiceHiderRecordTimer !==
+                undefined
+        ) {
+            window.clearInterval(
+                this.practiceHiderRecordTimer,
+            );
+
+            this.practiceHiderRecordTimer =
+                undefined;
+        }
+
+        this.practiceHiderRecordBar
+            ?.remove();
+
+        this.practiceHiderRecordBar =
+            undefined;
+        this.practiceHiderRecordTime =
+            undefined;
+        this.practiceHiderPaintStartedAt =
+            0;
+    }
+
+    private createPracticeHiderRecordBar(): void {
+        this.destroyPracticeHiderRecordBar();
+
+        const root =
+            document.createElement(
+                'div',
+            );
+
+        root.className =
+            'colorhunt-hider-record-bar';
+
+        const timeWrap =
+            document.createElement(
+                'div',
+            );
+        timeWrap.className =
+            'colorhunt-hider-record-time';
+
+        const label =
+            document.createElement(
+                'small',
+            );
+        label.textContent =
+            `🎨 ${tr('위장 제작 시간')}`;
+
+        const time =
+            document.createElement(
+                'span',
+            );
+        time.textContent =
+            tr('첫 붓질부터 기록');
+
+        const finish =
+            document.createElement(
+                'button',
+            );
+        finish.type =
+            'button';
+        finish.className =
+            'colorhunt-hider-record-finish';
+        finish.textContent =
+            `✓ ${tr('완성!')}`;
+
+        timeWrap.append(
+            label,
+            time,
+        );
+
+        root.append(
+            timeWrap,
+            finish,
+        );
+
+        document.body.appendChild(
+            root,
+        );
+
+        this.practiceHiderRecordBar =
+            root;
+        this.practiceHiderRecordTime =
+            time;
+
+        const position =
+            (): void => {
+                if (
+                    this.practiceHiderRecordBar !==
+                        root
+                ) {
+                    return;
+                }
+
+                const rect =
+                    this.game.canvas
+                        .getBoundingClientRect();
+
+                root.style.setProperty(
+                    '--hider-record-left',
+                    `${Math.round(
+                        rect.left +
+                        rect.width /
+                            2,
+                    )}px`,
+                );
+
+                root.style.setProperty(
+                    '--hider-record-top',
+                    `${Math.round(
+                        rect.top +
+                        10,
+                    )}px`,
+                );
+
+                root.style.setProperty(
+                    '--hider-record-width',
+                    `${Math.round(
+                        Math.min(
+                            rect.width -
+                                220,
+                            430,
+                        ),
+                    )}px`,
+                );
+            };
+
+        finish.addEventListener(
+            'click',
+            (
+                event,
+            ) => {
+                event.preventDefault();
+                event.stopPropagation();
+
+                void this.completeHiderPracticeRecord();
+            },
+        );
+
+        this.practiceHiderRecordTimer =
+            window.setInterval(
+                () => {
+                    this.updatePracticeHiderRecordClock();
+                    position();
+                },
+                100,
+            );
+
+        position();
+        this.updatePracticeHiderRecordClock();
+    }
+
+    private getPracticeShareUrl(): string {
+        const url =
+            new URL(
+                window.location.href,
+            );
+
+        url.search =
+            '';
+        url.hash =
+            '';
+
+        return url.toString();
+    }
+
+    private async createHiderPracticeShareBlob(
+        elapsedMs:
+            number,
+    ): Promise<Blob | null> {
+        /*
+         * 1080 x 1350 = the common 4:5 Instagram portrait size.
+         * It also previews cleanly in messenger apps without creating an
+         * excessively tall Story-only image.
+         */
+        const width =
+            1080;
+        const height =
+            1350;
+
+        const canvas =
+            document.createElement(
+                'canvas',
+            );
+        canvas.width =
+            width;
+        canvas.height =
+            height;
+
+        const context =
+            canvas.getContext(
+                '2d',
+            );
+
+        if (!context) {
+            return null;
+        }
+
+        context.imageSmoothingEnabled =
+            false;
+
+        /*
+         * Warm/light palette matches the current lobby and practice UI.
+         */
+        const gradient =
+            context.createLinearGradient(
+                0,
+                0,
+                0,
+                height,
+            );
+
+        gradient.addColorStop(
+            0,
+            '#fff9df',
+        );
+        gradient.addColorStop(
+            1,
+            '#dcefd7',
+        );
+
+        context.fillStyle =
+            gradient;
+        context.fillRect(
+            0,
+            0,
+            width,
+            height,
+        );
+
+        context.fillStyle =
+            '#34523c';
+        context.font =
+            '900 54px Arial, sans-serif';
+        context.fillText(
+            'COLOR HUNT',
+            70,
+            86,
+        );
+
+        context.fillStyle =
+            '#6b7b6d';
+        context.font =
+            '700 25px Arial, sans-serif';
+        context.fillText(
+            'HIDER CAMOUFLAGE RECORD',
+            72,
+            126,
+        );
+
+        /*
+         * Capture the real current game view. DOM controls are deliberately
+         * outside Phaser canvas, so the record contains the map and painted
+         * character without palette/finish/exit buttons.
+         */
+        const shotX =
+            70;
+        const shotY =
+            175;
+        const shotW =
+            940;
+        const shotH =
+            940 *
+            (
+                this.gameHeight /
+                this.gameWidth
+            );
+
+        context.save();
+
+        context.beginPath();
+        context.roundRect(
+            shotX,
+            shotY,
+            shotW,
+            shotH,
+            28,
+        );
+        context.clip();
+
+        context.drawImage(
+            this.game.canvas,
+            0,
+            0,
+            this.game.canvas.width,
+            this.game.canvas.height,
+            shotX,
+            shotY,
+            shotW,
+            shotH,
+        );
+
+        context.restore();
+
+        context.strokeStyle =
+            '#6f9b73';
+        context.lineWidth =
+            7;
+        context.beginPath();
+        context.roundRect(
+            shotX,
+            shotY,
+            shotW,
+            shotH,
+            28,
+        );
+        context.stroke();
+
+        const infoY =
+            shotY +
+            shotH +
+            78;
+
+        context.fillStyle =
+            '#34523c';
+        context.font =
+            '900 38px Arial, sans-serif';
+
+        context.fillText(
+            `🎨 ${this.formatPracticeTime(
+                elapsedMs,
+            )}`,
+            72,
+            infoY,
+        );
+
+        context.textAlign =
+            'right';
+
+        context.fillText(
+            this.practiceMap.toUpperCase(),
+            width -
+                72,
+            infoY,
+        );
+
+        context.textAlign =
+            'left';
+
+        context.fillStyle =
+            '#596b5d';
+        context.font =
+            '700 25px Arial, sans-serif';
+
+        context.fillText(
+            'Can you hide better?',
+            72,
+            infoY +
+                54,
+        );
+
+        context.fillStyle =
+            '#4f865a';
+        context.font =
+            '900 29px Arial, sans-serif';
+
+        const shareUrl =
+            this.getPracticeShareUrl();
+
+        /*
+         * Keep the visible URL compact; actual share payload contains the
+         * full URL.
+         */
+        let host =
+            shareUrl;
+
+        try {
+            host =
+                new URL(
+                    shareUrl,
+                ).host;
+        } catch {
+            // use the string as-is
+        }
+
+        context.fillText(
+            host,
+            72,
+            height -
+                64,
+        );
+
+        return await new Promise<
+            Blob | null
+        >(
+            (
+                resolve,
+            ) => {
+                canvas.toBlob(
+                    resolve,
+                    'image/png',
+                    1,
+                );
+            },
+        );
+    }
+
+    private async completeHiderPracticeRecord(): Promise<void> {
+        if (
+            this.practiceMode !==
+                'hider'
+        ) {
+            return;
+        }
+
+        /*
+         * A player may press Complete without drawing. Keep the result valid
+         * but display 0.00s rather than inventing a start time.
+         */
+        const elapsedMs =
+            this.practiceHiderPaintStartedAt >
+                0
+                ? Math.max(
+                    1,
+                    performance.now() -
+                        this.practiceHiderPaintStartedAt,
+                )
+                : 0;
+
+        const blob =
+            await this.createHiderPracticeShareBlob(
+                elapsedMs,
+            );
+
+        if (!blob) {
+            this.showStatus(
+                tr('기록 이미지를 만들 수 없습니다.'),
+            );
+            return;
+        }
+
+        this.showHiderPracticeShareModal(
+            blob,
+            elapsedMs,
+        );
+    }
+
+    private showHiderPracticeShareModal(
+        blob:
+            Blob,
+        elapsedMs:
+            number,
+    ): void {
+        this.closeMenuModal();
+
+        const overlay =
+            document.createElement(
+                'div',
+            );
+        overlay.className =
+            'colorhunt-hider-share-overlay';
+
+        const card =
+            document.createElement(
+                'div',
+            );
+        card.className =
+            'colorhunt-hider-share-card';
+
+        const previewUrl =
+            URL.createObjectURL(
+                blob,
+            );
+
+        card.innerHTML = `
+            <div class="colorhunt-hider-share-kicker">
+                ${tr('HIDER RECORD')}
+            </div>
+            <h2>🎨 ${tr('위장 완성!')}</h2>
+            <p>${tr('친구에게 내 위장을 보여주고 Color Hunt에 초대해보세요.')}</p>
+            <img alt="Color Hunt Hider Record" src="${previewUrl}">
+            <div class="colorhunt-hider-share-meta">
+                <span>⏱ ${this.formatPracticeTime(elapsedMs)}</span>
+                <span>🗺 ${this.practiceMap.toUpperCase()}</span>
+            </div>
+            <div class="colorhunt-hider-share-actions">
+                <button type="button" data-hider-share>📤 ${tr('이미지 + 게임 링크 공유')}</button>
+                <button type="button" data-hider-download>⬇ ${tr('이미지 저장')}</button>
+                <button type="button" data-hider-back>🎯 ${tr('연습장으로 돌아가기')}</button>
+            </div>
+        `;
+
+        overlay.appendChild(
+            card,
+        );
+        document.body.appendChild(
+            overlay,
+        );
+
+        this.menuModalOverlay =
+            overlay;
+        this.input.enabled =
+            false;
+
+        const cleanupUrl =
+            (): void => {
+                window.setTimeout(
+                    () => {
+                        URL.revokeObjectURL(
+                            previewUrl,
+                        );
+                    },
+                    500,
+                );
+            };
+
+        card.querySelector(
+            '[data-hider-share]',
+        )?.addEventListener(
+            'click',
+            () => {
+                void this.shareHiderPracticeRecord(
+                    blob,
+                    elapsedMs,
+                );
+            },
+        );
+
+        card.querySelector(
+            '[data-hider-download]',
+        )?.addEventListener(
+            'click',
+            () => {
+                this.downloadHiderPracticeRecord(
+                    blob,
+                );
+            },
+        );
+
+        card.querySelector(
+            '[data-hider-back]',
+        )?.addEventListener(
+            'click',
+            () => {
+                cleanupUrl();
+                this.closeMenuModal();
+                this.exitPracticeMode(
+                    true,
+                );
+            },
+        );
+    }
+
+    private async shareHiderPracticeRecord(
+        blob:
+            Blob,
+        elapsedMs:
+            number,
+    ): Promise<void> {
+        const shareUrl =
+            this.getPracticeShareUrl();
+
+        const file =
+            new File(
+                [
+                    blob,
+                ],
+                `color-hunt-hider-${Date.now()}.png`,
+                {
+                    type:
+                        'image/png',
+                },
+            );
+
+        const text =
+            `${tr('Color Hunt에서 만든 내 위장이에요!')} ` +
+            `${this.formatPracticeTime(elapsedMs)}\n` +
+            shareUrl;
+
+        try {
+            if (
+                navigator.share &&
+                (
+                    !navigator.canShare ||
+                    navigator.canShare({
+                        files: [
+                            file,
+                        ],
+                    })
+                )
+            ) {
+                await navigator.share({
+                    title:
+                        'Color Hunt',
+                    text,
+                    files: [
+                        file,
+                    ],
+                });
+
+                return;
+            }
+
+            if (navigator.share) {
+                await navigator.share({
+                    title:
+                        'Color Hunt',
+                    text:
+                        tr('Color Hunt에서 만든 내 위장이에요!'),
+                    url:
+                        shareUrl,
+                });
+
+                this.downloadHiderPracticeRecord(
+                    blob,
+                );
+
+                return;
+            }
+        } catch (
+            error
+        ) {
+            if (
+                error instanceof
+                    DOMException &&
+                error.name ===
+                    'AbortError'
+            ) {
+                return;
+            }
+        }
+
+        /*
+         * Desktop / unsupported browser fallback:
+         * save PNG and copy the playable game URL.
+         */
+        this.downloadHiderPracticeRecord(
+            blob,
+        );
+
+        try {
+            await navigator.clipboard
+                .writeText(
+                    shareUrl,
+                );
+
+            this.showStatus(
+                tr('이미지를 저장하고 게임 링크를 복사했습니다!'),
+            );
+        } catch {
+            this.showStatus(
+                tr('이미지를 저장했습니다.'),
+            );
+        }
+    }
+
+    private downloadHiderPracticeRecord(
+        blob:
+            Blob,
+    ): void {
+        const url =
+            URL.createObjectURL(
+                blob,
+            );
+
+        const anchor =
+            document.createElement(
+                'a',
+            );
+
+        anchor.href =
+            url;
+        anchor.download =
+            `color-hunt-hider-${Date.now()}.png`;
+
+        document.body.appendChild(
+            anchor,
+        );
+        anchor.click();
+        anchor.remove();
+
+        window.setTimeout(
+            () => {
+                URL.revokeObjectURL(
+                    url,
+                );
+            },
+            1_000,
         );
     }
 
@@ -9387,6 +10153,7 @@ export class GameScene extends Phaser.Scene {
             );
 
         this.createPracticeExitButton();
+        this.createPracticeHiderRecordBar();
 
         this.showStatus(
             tr('자유 연습 · 본게임과 같은 이동·색칠·확대·스포이드 조작을 연습해보세요.'),
@@ -22805,6 +23572,13 @@ export class GameScene extends Phaser.Scene {
             y: nextY,
         };
 
+        if (
+            this.practiceMode ===
+                'hider'
+        ) {
+            this.markPracticeHiderPaintStarted();
+        }
+
         this.activeStrokePoints.push(
             recordedPoint,
         );
@@ -25619,7 +26393,9 @@ export class GameScene extends Phaser.Scene {
 
     private updateTargetText(): void {
         if (
-            this.isMultiplayerSession()
+            this.isMultiplayerSession() ||
+            this.practiceMode !==
+                null
         ) {
             this.targetText
                 .setText('')
@@ -25627,9 +26403,11 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
-        this.targetText.setText(
-            tr(`HIDERS ${this.getAliveHiderCount()} / ${this.hiders.length}`),
-        );
+        this.targetText
+            .setText(
+                tr(`HIDERS ${this.getAliveHiderCount()} / ${this.hiders.length}`),
+            )
+            .setVisible(true);
     }
 
     private updatePaintHud(): void {
@@ -26249,6 +27027,8 @@ export class GameScene extends Phaser.Scene {
 
         this.targetText.setVisible(
             !this.isMultiplayerSession() &&
+            this.practiceMode ===
+                null &&
             localIsHunter,
         );
 
@@ -26270,6 +27050,7 @@ export class GameScene extends Phaser.Scene {
         won:
             boolean,
     ): void {
+        this.destroyPracticeHiderRecordBar();
         if (
             this.menuModalOverlay
                 ?.classList.contains(

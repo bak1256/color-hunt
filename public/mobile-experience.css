@@ -4387,3 +4387,225 @@ html.colorhunt-mobile body.colorhunt-unfolded {
     font-size: 6.5px;
   }
 }
+
+
+/* ============================================================
+   v0.10.10.140 — Hunter numeric timer + Hider record/share
+   ============================================================ */
+
+.colorhunt-hider-record-bar {
+  position: fixed;
+  top: var(--hider-record-top, 12px);
+  left: var(--hider-record-left, 50%);
+  z-index: 2147483490;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: max(220px, var(--hider-record-width, 420px));
+  max-width: calc(100vw - 230px);
+  min-height: 42px;
+  padding: 5px 6px 5px 12px;
+  box-sizing: border-box;
+  transform: translateX(-50%);
+  border: 2px solid #6f9b73;
+  border-radius: 10px;
+  background:
+    linear-gradient(180deg, rgba(255,253,240,.97), rgba(232,242,218,.97));
+  color: #35523d;
+  font-family:
+    ui-monospace, "SFMono-Regular", "Cascadia Code",
+    "Noto Sans KR", "Noto Sans JP", monospace;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.78),
+    0 4px 16px rgba(38,64,43,.18);
+  pointer-events: auto;
+}
+
+.colorhunt-hider-record-time {
+  min-width: 0;
+}
+
+.colorhunt-hider-record-time small {
+  display: block;
+  color: #6d7b6e;
+  font-size: 8px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.colorhunt-hider-record-time span {
+  display: block;
+  margin-top: 2px;
+  color: #31553a;
+  font-size: 14px;
+  font-weight: 950;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.colorhunt-hider-record-finish {
+  flex: 0 0 auto;
+  min-width: 92px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid #4f865a;
+  border-radius: 8px;
+  background: #63a16e;
+  color: #fff;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 950;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.28),
+    0 2px 0 rgba(50,89,58,.16);
+}
+
+.colorhunt-hider-record-finish:active {
+  transform: translateY(1px);
+}
+
+.colorhunt-hider-share-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483642;
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  box-sizing: border-box;
+  background: rgba(33,55,39,.50);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.colorhunt-hider-share-card {
+  width: min(460px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  padding: 14px;
+  box-sizing: border-box;
+  border: 2px solid #6f9b73;
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, #fffdf0 0%, #e9f2dc 100%);
+  color: #35523d;
+  text-align: center;
+  font-family:
+    ui-monospace, "SFMono-Regular", "Cascadia Code",
+    "Noto Sans KR", "Noto Sans JP", monospace;
+  box-shadow:
+    0 8px 0 rgba(50,82,55,.12),
+    0 24px 70px rgba(25,49,31,.34);
+}
+
+.colorhunt-hider-share-kicker {
+  color: #748176;
+  font-size: 8px;
+  font-weight: 950;
+  letter-spacing: .12em;
+}
+
+.colorhunt-hider-share-card h2 {
+  margin: 4px 0;
+  color: #31553a;
+  font-size: 20px;
+}
+
+.colorhunt-hider-share-card p {
+  margin: 4px auto 10px;
+  max-width: 380px;
+  color: #69766b;
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+.colorhunt-hider-share-card img {
+  display: block;
+  width: min(100%, 310px);
+  margin: 0 auto;
+  border: 2px solid #b9ccb5;
+  border-radius: 10px;
+  background: #f5f1dc;
+}
+
+.colorhunt-hider-share-meta {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.colorhunt-hider-share-meta span {
+  padding: 5px 8px;
+  border: 1px solid #c5d5c0;
+  border-radius: 999px;
+  background: rgba(255,255,255,.72);
+  color: #4e6653;
+  font-size: 8px;
+  font-weight: 900;
+}
+
+.colorhunt-hider-share-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.colorhunt-hider-share-actions button {
+  min-height: 36px;
+  padding: 0 8px;
+  border: 1px solid #7ea181;
+  border-radius: 8px;
+  background: #f9f8e8;
+  color: #3f6046;
+  font: inherit;
+  font-size: 8px;
+  font-weight: 950;
+}
+
+.colorhunt-hider-share-actions button[data-hider-share] {
+  background: #63a16e;
+  color: #fff;
+}
+
+.colorhunt-hider-share-actions button[data-hider-back] {
+  grid-column: 1 / -1;
+}
+
+@media (pointer: coarse) {
+  .colorhunt-hider-record-bar {
+    max-width: calc(100vw - 190px);
+    min-height: 36px;
+    padding: 4px 5px 4px 8px;
+  }
+
+  .colorhunt-hider-record-time small {
+    font-size: 6px;
+  }
+
+  .colorhunt-hider-record-time span {
+    font-size: 10px;
+  }
+
+  .colorhunt-hider-record-finish {
+    min-width: 66px;
+    min-height: 28px;
+    padding: 0 6px;
+    font-size: 7px;
+  }
+
+  .colorhunt-hider-share-card {
+    padding: 9px;
+  }
+
+  .colorhunt-hider-share-card h2 {
+    font-size: 15px;
+  }
+
+  .colorhunt-hider-share-card p,
+  .colorhunt-hider-share-actions button,
+  .colorhunt-hider-share-meta span {
+    font-size: 7px;
+  }
+}

@@ -5,6 +5,18 @@ const STORAGE_KEY = 'chameleon-hunt-language';
 type Dict = Record<string, string>;
 
 const ja: Dict = {
+  "위장 제작 시간": "擬態制作タイム",
+  "첫 붓질부터 기록": "最初の一筆から計測",
+  "완성!": "完成！",
+  "기록 이미지를 만들 수 없습니다.": "記録画像を作成できません。",
+  "HIDER RECORD": "HIDER RECORD",
+  "위장 완성!": "擬態完成！",
+  "친구에게 내 위장을 보여주고 Color Hunt에 초대해보세요.": "友達に擬態を見せて、Color Huntに誘ってみましょう。",
+  "이미지 + 게임 링크 공유": "画像＋ゲームリンクを共有",
+  "이미지 저장": "画像を保存",
+  "Color Hunt에서 만든 내 위장이에요!": "Color Huntで作った擬態です！",
+  "이미지를 저장하고 게임 링크를 복사했습니다!": "画像を保存し、ゲームリンクをコピーしました！",
+  "이미지를 저장했습니다.": "画像を保存しました。",
   "핵어려움": "超激ムズ",
   "헌터 연습 시간": "ハンター練習時間",
   "시간별 TOP 5": "時間別 TOP 5",
@@ -173,6 +185,18 @@ const ja: Dict = {
 };
 
 const en: Dict = {
+  "위장 제작 시간": "Camouflage Time",
+  "첫 붓질부터 기록": "Starts with first stroke",
+  "완성!": "Done!",
+  "기록 이미지를 만들 수 없습니다.": "Could not create the record image.",
+  "HIDER RECORD": "HIDER RECORD",
+  "위장 완성!": "Camouflage Complete!",
+  "친구에게 내 위장을 보여주고 Color Hunt에 초대해보세요.": "Show your camouflage to friends and invite them to Color Hunt.",
+  "이미지 + 게임 링크 공유": "Share Image + Game Link",
+  "이미지 저장": "Save Image",
+  "Color Hunt에서 만든 내 위장이에요!": "Here is my Color Hunt camouflage!",
+  "이미지를 저장하고 게임 링크를 복사했습니다!": "Saved the image and copied the game link!",
+  "이미지를 저장했습니다.": "Saved the image.",
   "핵어려움": "EXTREME",
   "헌터 연습 시간": "Hunter Practice Time",
   "시간별 TOP 5": "TOP 5 by Time",
@@ -343,6 +367,18 @@ const en: Dict = {
 };
 
 const zh: Dict = {
+  "위장 제작 시간": "伪装制作时间",
+  "첫 붓질부터 기록": "从第一笔开始计时",
+  "완성!": "完成！",
+  "기록 이미지를 만들 수 없습니다.": "无法生成记录图片。",
+  "HIDER RECORD": "HIDER RECORD",
+  "위장 완성!": "伪装完成！",
+  "친구에게 내 위장을 보여주고 Color Hunt에 초대해보세요.": "把你的伪装分享给朋友，并邀请他们来玩 Color Hunt。",
+  "이미지 + 게임 링크 공유": "分享图片＋游戏链接",
+  "이미지 저장": "保存图片",
+  "Color Hunt에서 만든 내 위장이에요!": "这是我在 Color Hunt 做的伪装！",
+  "이미지를 저장하고 게임 링크를 복사했습니다!": "图片已保存，游戏链接已复制！",
+  "이미지를 저장했습니다.": "图片已保存。",
   "핵어려움": "地狱难度",
   "헌터 연습 시간": "猎人练习时间",
   "시간별 TOP 5": "按时间 TOP 5",
