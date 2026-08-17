@@ -3115,6 +3115,7 @@ export class GameScene extends Phaser.Scene {
     private readonly hunterAimSendInterval = 50;
     private readonly gameplayCameraZoom = 1.65;
     private roundResultWinner: 'hunters' | 'hiders' | null = null;
+    private roundEndedByAmmoDepletion = false;
     private roundReturnLobbyButton?: Phaser.GameObjects.Text;
     private lastPhaseRecoveryAt = 0;
     private phaseExpiredSince = 0;
@@ -7011,9 +7012,10 @@ export class GameScene extends Phaser.Scene {
         this.networkUnsubscribers.push(
             multiplayerClient.onHuntersOutOfAmmo(
                 (_message: string) => {
+                    this.roundEndedByAmmoDepletion = true;
                     this.statusText
                         .setText(
-                            tr('헌터의 탄약이 모두 소진되었습니다. HIDER 승리!'),
+                            tr('탄약 소진! HIDER 승리!'),
                         )
                         .setVisible(true)
                         .setAlpha(1);
@@ -20263,9 +20265,11 @@ export class GameScene extends Phaser.Scene {
             .setText('')
             .setVisible(false);
 
-        this.statusText
-            .setText('')
-            .setVisible(false);
+        if (!this.roundEndedByAmmoDepletion) {
+            this.statusText
+                .setText('')
+                .setVisible(false);
+        }
 
         this.survivalHudGraphics
             ?.setVisible(false);
@@ -20314,6 +20318,34 @@ export class GameScene extends Phaser.Scene {
                 .setText('')
                 .setVisible(false);
         }
+        /*
+         * v0.10.10.185: explain the sudden Hider victory without replacing
+         * the existing final victory UI.
+         */
+        if (
+            result.winner === 'hiders' &&
+            this.roundEndedByAmmoDepletion
+        ) {
+            this.statusText
+                .setText(tr('탄약 소진!'))
+                .setPosition(
+                    this.gameWidth / 2,
+                    this.gameHeight / 2 - 105,
+                )
+                .setOrigin(0.5)
+                .setScrollFactor(0)
+                .setDepth(26000)
+                .setFontSize(28)
+                .setFontStyle('bold')
+                .setColor('#ef233c')
+                .setBackgroundColor(
+                    'rgba(255,255,255,0.94)',
+                )
+                .setPadding(14, 7)
+                .setVisible(true)
+                .setAlpha(1);
+        }
+
     }
 
     private applyNetworkPhase(
@@ -20357,6 +20389,7 @@ export class GameScene extends Phaser.Scene {
             this.spectatorCycleIndex = -1;
 
             this.roundResultWinner = null;
+            this.roundEndedByAmmoDepletion = false;
     
             this.guideText
                 .setPosition(
