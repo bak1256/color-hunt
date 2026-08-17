@@ -9666,14 +9666,9 @@ export class GameScene extends Phaser.Scene {
     }
 
     private async createHiderPracticeShareBlob(
-        elapsedMs:
+        _elapsedMs:
             number,
     ): Promise<Blob | null> {
-        /*
-         * 1080 x 1350 = the common 4:5 Instagram portrait size.
-         * It also previews cleanly in messenger apps without creating an
-         * excessively tall Story-only image.
-         */
         const gameSnapshot =
             await this.captureGameCanvasForShare();
 
@@ -9681,6 +9676,14 @@ export class GameScene extends Phaser.Scene {
             return null;
         }
 
+        /*
+         * Modern social-share poster:
+         * - 1080 x 1350 (4:5)
+         * - image-first composition
+         * - no elapsed time
+         * - no taunting copy
+         * - almost no dead whitespace
+         */
         const width =
             1080;
         const height =
@@ -9690,6 +9693,7 @@ export class GameScene extends Phaser.Scene {
             document.createElement(
                 'canvas',
             );
+
         canvas.width =
             width;
         canvas.height =
@@ -9705,12 +9709,27 @@ export class GameScene extends Phaser.Scene {
         }
 
         context.imageSmoothingEnabled =
-            false;
+            true;
+        context.imageSmoothingQuality =
+            'high';
 
         /*
-         * Warm/light palette matches the current lobby and practice UI.
+         * Background uses the captured frame itself, blurred and darkened,
+         * so every card automatically matches the selected map.
          */
-        const gradient =
+        context.save();
+        context.filter =
+            'blur(36px) saturate(1.18) brightness(.78)';
+        context.drawImage(
+            gameSnapshot,
+            -80,
+            -80,
+            width + 160,
+            height + 160,
+        );
+        context.restore();
+
+        const wash =
             context.createLinearGradient(
                 0,
                 0,
@@ -9718,17 +9737,21 @@ export class GameScene extends Phaser.Scene {
                 height,
             );
 
-        gradient.addColorStop(
+        wash.addColorStop(
             0,
-            '#fff9df',
+            'rgba(15,28,19,.28)',
         );
-        gradient.addColorStop(
+        wash.addColorStop(
+            0.60,
+            'rgba(15,28,19,.08)',
+        );
+        wash.addColorStop(
             1,
-            '#dcefd7',
+            'rgba(9,18,12,.68)',
         );
 
         context.fillStyle =
-            gradient;
+            wash;
         context.fillRect(
             0,
             0,
@@ -9736,141 +9759,184 @@ export class GameScene extends Phaser.Scene {
             height,
         );
 
+        /*
+         * Compact editorial header.
+         */
         context.fillStyle =
-            '#34523c';
+            'rgba(255,255,255,.92)';
         context.font =
-            '900 54px Arial, sans-serif';
+            '900 24px Arial, sans-serif';
+        context.letterSpacing =
+            '4px';
         context.fillText(
             'COLOR HUNT',
-            70,
-            86,
+            58,
+            64,
         );
 
-        context.fillStyle =
-            '#6b7b6d';
         context.font =
-            '700 25px Arial, sans-serif';
+            '900 58px Arial, sans-serif';
+        context.letterSpacing =
+            '0px';
         context.fillText(
-            'HIDER CAMOUFLAGE RECORD',
-            72,
+            'HIDER CAMOUFLAGE',
+            56,
             126,
         );
 
         /*
-         * Capture the real current game view. DOM controls are deliberately
-         * outside Phaser canvas, so the record contains the map and painted
-         * character without palette/finish/exit buttons.
+         * Main visual fills nearly the whole poster.
+         * Crop slightly to make the character/map the hero of the card.
          */
-        const shotX =
-            70;
-        const shotY =
-            175;
-        const shotW =
-            940;
-        const shotH =
-            940 *
-            (
-                this.gameHeight /
-                this.gameWidth
-            );
+        const frameX =
+            44;
+        const frameY =
+            162;
+        const frameW =
+            width -
+            frameX *
+                2;
+        const frameH =
+            1020;
+
+        const sourceW =
+            gameSnapshot.naturalWidth ||
+            gameSnapshot.width;
+        const sourceH =
+            gameSnapshot.naturalHeight ||
+            gameSnapshot.height;
+
+        const targetRatio =
+            frameW /
+            frameH;
+        const sourceRatio =
+            sourceW /
+            sourceH;
+
+        let sx = 0;
+        let sy = 0;
+        let sw = sourceW;
+        let sh = sourceH;
+
+        if (
+            sourceRatio >
+            targetRatio
+        ) {
+            sw =
+                sourceH *
+                targetRatio;
+            sx =
+                (
+                    sourceW -
+                    sw
+                ) /
+                2;
+        } else {
+            sh =
+                sourceW /
+                targetRatio;
+            sy =
+                (
+                    sourceH -
+                    sh
+                ) /
+                2;
+        }
 
         context.save();
 
         context.beginPath();
         context.roundRect(
-            shotX,
-            shotY,
-            shotW,
-            shotH,
-            28,
+            frameX,
+            frameY,
+            frameW,
+            frameH,
+            34,
         );
         context.clip();
 
         context.drawImage(
             gameSnapshot,
+            sx,
+            sy,
+            sw,
+            sh,
+            frameX,
+            frameY,
+            frameW,
+            frameH,
+        );
+
+        /*
+         * Slight lower vignette keeps footer labels readable.
+         */
+        const frameShade =
+            context.createLinearGradient(
+                0,
+                frameY +
+                    frameH *
+                    0.68,
+                0,
+                frameY +
+                    frameH,
+            );
+
+        frameShade.addColorStop(
             0,
-            0,
-            gameSnapshot.naturalWidth ||
-                gameSnapshot.width,
-            gameSnapshot.naturalHeight ||
-                gameSnapshot.height,
-            shotX,
-            shotY,
-            shotW,
-            shotH,
+            'rgba(0,0,0,0)',
+        );
+        frameShade.addColorStop(
+            1,
+            'rgba(0,0,0,.34)',
+        );
+
+        context.fillStyle =
+            frameShade;
+        context.fillRect(
+            frameX,
+            frameY,
+            frameW,
+            frameH,
         );
 
         context.restore();
 
         context.strokeStyle =
-            '#6f9b73';
+            'rgba(255,255,255,.72)';
         context.lineWidth =
-            7;
+            4;
         context.beginPath();
         context.roundRect(
-            shotX,
-            shotY,
-            shotW,
-            shotH,
-            28,
+            frameX,
+            frameY,
+            frameW,
+            frameH,
+            34,
         );
         context.stroke();
 
-        const infoY =
-            shotY +
-            shotH +
-            78;
+        /*
+         * Minimal footer. No timer, no challenge text, no empty block.
+         */
+        const footerY =
+            1238;
 
         context.fillStyle =
-            '#34523c';
+            'rgba(255,255,255,.96)';
         context.font =
-            '900 38px Arial, sans-serif';
-
-        context.fillText(
-            `🎨 ${this.formatPracticeTime(
-                elapsedMs,
-            )}`,
-            72,
-            infoY,
-        );
-
-        context.textAlign =
-            'right';
-
-        context.fillText(
-            this.practiceMap.toUpperCase(),
-            width -
-                72,
-            infoY,
-        );
-
+            '900 31px Arial, sans-serif';
         context.textAlign =
             'left';
 
-        context.fillStyle =
-            '#596b5d';
-        context.font =
-            '700 25px Arial, sans-serif';
-
         context.fillText(
-            'Can you hide better?',
-            72,
-            infoY +
-                54,
+            this.practiceMap.toUpperCase(),
+            58,
+            footerY,
         );
-
-        context.fillStyle =
-            '#4f865a';
-        context.font =
-            '900 29px Arial, sans-serif';
 
         const shareUrl =
             this.getPracticeShareUrl();
 
-        /*
-         * Keep the visible URL compact; actual share payload contains the
-         * full URL.
-         */
         let host =
             shareUrl;
 
@@ -9880,14 +9946,37 @@ export class GameScene extends Phaser.Scene {
                     shareUrl,
                 ).host;
         } catch {
-            // use the string as-is
+            // Keep the full string as a safe fallback.
         }
+
+        context.textAlign =
+            'right';
+        context.font =
+            '800 25px Arial, sans-serif';
+        context.fillStyle =
+            'rgba(255,255,255,.80)';
 
         context.fillText(
             host,
-            72,
-            height -
-                64,
+            width -
+                58,
+            footerY,
+        );
+
+        /*
+         * Small brand marker at the very bottom, intentionally compact.
+         */
+        context.textAlign =
+            'left';
+        context.font =
+            '700 19px Arial, sans-serif';
+        context.fillStyle =
+            'rgba(255,255,255,.58)';
+
+        context.fillText(
+            'CAMOUFLAGE RECORD',
+            58,
+            1290,
         );
 
         return await new Promise<
@@ -9980,7 +10069,6 @@ export class GameScene extends Phaser.Scene {
             <p>${tr('친구에게 내 위장을 보여주고 Color Hunt에 초대해보세요.')}</p>
             <img alt="Color Hunt Hider Record" src="${previewUrl}">
             <div class="colorhunt-hider-share-meta">
-                <span>⏱ ${this.formatPracticeTime(elapsedMs)}</span>
                 <span>🗺 ${this.practiceMap.toUpperCase()}</span>
             </div>
             <div class="colorhunt-hider-share-actions">
@@ -10054,7 +10142,7 @@ export class GameScene extends Phaser.Scene {
     private async shareHiderPracticeRecord(
         blob:
             Blob,
-        elapsedMs:
+        _elapsedMs:
             number,
     ): Promise<void> {
         const shareUrl =
@@ -10073,8 +10161,7 @@ export class GameScene extends Phaser.Scene {
             );
 
         const text =
-            `${tr('Color Hunt에서 만든 내 위장이에요!')} ` +
-            `${this.formatPracticeTime(elapsedMs)}\n` +
+            `${tr('Color Hunt에서 만든 내 위장이에요!')}\n` +
             shareUrl;
 
         try {
