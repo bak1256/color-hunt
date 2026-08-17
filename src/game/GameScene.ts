@@ -23961,6 +23961,19 @@ export class GameScene extends Phaser.Scene {
                     this.straightLineStart &&
                     this.straightLineModeActive
                 ) {
+                    /*
+                     * v0.10.10.164:
+                     * A Shift-line is a real first paint action too. Its
+                     * preview intentionally stamps nothing, so start the
+                     * Hider record the instant the line is committed.
+                     */
+                    if (
+                        this.practiceMode ===
+                            'hider'
+                    ) {
+                        this.markPracticeHiderPaintStarted();
+                    }
+
                     const target =
                         this.getPaintInputWorldPoint(
                             pointer,
@@ -24038,6 +24051,13 @@ export class GameScene extends Phaser.Scene {
                     this.straightLineStart &&
                     this.straightLineModeActive
                 ) {
+                    if (
+                        this.practiceMode ===
+                            'hider'
+                    ) {
+                        this.markPracticeHiderPaintStarted();
+                    }
+
                     const target =
                         this.getPaintInputWorldPoint(
                             pointer,
@@ -24407,7 +24427,13 @@ export class GameScene extends Phaser.Scene {
 
     private finishActivePaintStroke(): void {
         const completedTarget =
-            this.activeStrokeTargetSessionId;
+            this.activeStrokeTargetSessionId ||
+            (
+                this.practiceMode ===
+                    'hider'
+                    ? this.practiceHiderSessionId
+                    : ''
+            );
 
         if (
             multiplayerClient.isConnected() &&
@@ -24479,7 +24505,10 @@ export class GameScene extends Phaser.Scene {
 
     private rebuildLocalPaintFromHistory(): void {
         const sessionId =
-            multiplayerClient.getSessionId();
+            this.practiceMode ===
+                'hider'
+                ? this.practiceHiderSessionId
+                : multiplayerClient.getSessionId();
 
         if (!sessionId) {
             return;
@@ -24528,10 +24557,14 @@ export class GameScene extends Phaser.Scene {
             },
         );
 
-        multiplayerClient
-            .sendPaintStroke(
-                resetStroke,
-            );
+        if (
+            this.isMultiplayerSession()
+        ) {
+            multiplayerClient
+                .sendPaintStroke(
+                    resetStroke,
+                );
+        }
 
         this.localPaintHistory.forEach(
             (stroke) => {
@@ -24549,10 +24582,14 @@ export class GameScene extends Phaser.Scene {
                     },
                 );
 
-                multiplayerClient
-                    .sendPaintStroke(
-                        stroke,
-                    );
+                if (
+                    this.isMultiplayerSession()
+                ) {
+                    multiplayerClient
+                        .sendPaintStroke(
+                            stroke,
+                        );
+                }
             },
         );
     }
@@ -24560,7 +24597,11 @@ export class GameScene extends Phaser.Scene {
     private undoLastPaintStroke(): void {
         if (
             this.phase !== 'paint' ||
-            !this.isMultiplayerSession()
+            (
+                !this.isMultiplayerSession() &&
+                this.practiceMode !==
+                    'hider'
+            )
         ) {
             return;
         }
@@ -24598,7 +24639,11 @@ export class GameScene extends Phaser.Scene {
     private redoLastPaintStroke(): void {
         if (
             this.phase !== 'paint' ||
-            !this.isMultiplayerSession()
+            (
+                !this.isMultiplayerSession() &&
+                this.practiceMode !==
+                    'hider'
+            )
         ) {
             return;
         }
