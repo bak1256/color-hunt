@@ -646,7 +646,11 @@ export class GameScene extends Phaser.Scene {
         }
 
         const visible =
-            this.isMultiplayerSession() &&
+            (
+                this.isMultiplayerSession() ||
+                this.practiceMode ===
+                    'hunter'
+            ) &&
             (
                 this.phase === 'countdown' ||
                 this.phase === 'paint' ||
@@ -672,28 +676,59 @@ export class GameScene extends Phaser.Scene {
         const room =
             multiplayerClient.getRoom();
 
-        if (!room?.state?.players) {
-            return;
-        }
-
         const hiders:
-            NetworkPlayerState[] = [];
+            Array<{
+                alive:
+                    boolean;
+            }> = [];
 
         let hunterCount = 0;
 
-        room.state.players.forEach(
-            (player: NetworkPlayerState) => {
-                if (
-                    player.role === 'hunter'
-                ) {
-                    hunterCount += 1;
-                } else if (
-                    player.role === 'hider'
-                ) {
-                    hiders.push(player);
-                }
-            },
-        );
+        if (
+            this.practiceMode ===
+                'hunter'
+        ) {
+            this.hiders.forEach(
+                (
+                    hider,
+                ) => {
+                    hiders.push({
+                        alive:
+                            hider.alive,
+                    });
+                },
+            );
+
+            hunterCount =
+                1;
+        } else {
+            if (!room?.state?.players) {
+                return;
+            }
+
+            room.state.players.forEach(
+                (
+                    player:
+                        NetworkPlayerState,
+                ) => {
+                    if (
+                        player.role ===
+                            'hunter'
+                    ) {
+                        hunterCount +=
+                            1;
+                    } else if (
+                        player.role ===
+                            'hider'
+                    ) {
+                        hiders.push({
+                            alive:
+                                player.alive,
+                        });
+                    }
+                },
+            );
+        }
 
         const hourglassWidth = 42;
         const hourglassGap = 14;
@@ -9186,6 +9221,15 @@ export class GameScene extends Phaser.Scene {
             0;
 
         this.syncHunterPracticeVisuals();
+
+        this.hudPhaseDurationMs =
+            Math.max(
+                1,
+                this.practiceHuntDuration *
+                    1000,
+            );
+
+        this.updateSurvivalHud();
 
         this.resetGameplayCamera();
 
@@ -25077,6 +25121,13 @@ export class GameScene extends Phaser.Scene {
         });
 
         this.updateTargetText();
+
+        if (
+            this.practiceMode ===
+                'hunter'
+        ) {
+            this.updateSurvivalHud();
+        }
     }
 
     private reload(): void {
@@ -25670,11 +25721,19 @@ export class GameScene extends Phaser.Scene {
                     );
             }
         } else {
+            const usePracticeSurvivalHud =
+                this.practiceMode ===
+                    'hunter';
+
             this.timerText
-                .setVisible(true)
+                .setVisible(
+                    !usePracticeSurvivalHud,
+                )
                 .setDepth(3200)
                 .setText(
-                    tr(`TIME ${remainingSeconds}`),
+                    usePracticeSurvivalHud
+                        ? ''
+                        : tr(`TIME ${remainingSeconds}`),
                 );
         }
 
