@@ -28528,35 +28528,14 @@ export class GameScene extends Phaser.Scene {
                     'hunter'
             ) {
                 /*
-                 * Keep it directly under the real top survival HUD, clear of
-                 * the hourglass/icons and independent from world camera zoom.
+                 * v0.10.10.190:
+                 * Hunter Practice now uses ONLY the compact survival timer
+                 * badge (⏱ 76s). The legacy TIME 76 box was a duplicate and
+                 * cluttered the center of the screen.
                  */
                 this.timerText
-                    .setOrigin(
-                        0.5,
-                        0,
-                    )
-                    .setFontSize(
-                        this.mobileControlsEnabled
-                            ? 20
-                            : 22,
-                    )
-                    .setBackgroundColor(
-                        'rgba(255, 244, 214, 0.94)',
-                    )
-                    .setDepth(26020);
-
-                /*
-                 * Same true-screen anchoring as survivalHudText. Put this
-                 * lower than the icon row and below the compact survival
-                 * timer badge so at least one clear countdown is impossible
-                 * to miss.
-                 */
-                this.setFixedHudScreenPosition(
-                    this.timerText,
-                    this.gameWidth / 2,
-                    122,
-                );
+                    .setText('')
+                    .setVisible(false);
             }
         }
 
