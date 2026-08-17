@@ -2876,6 +2876,30 @@ export class GameScene extends Phaser.Scene {
     private readonly practiceHiderSessionId =
         'practice-local-hider';
 
+    private practiceHuntDuration =
+        80;
+    private practiceStartedAt =
+        0;
+    private readonly practiceRankingStorageKey =
+        'colorhunt-practice-ranking-v1';
+
+    /*
+     * Keep Practice Hunter weapon behavior identical to current server.
+     * MyRoom.ts:
+     * max reserve 12 / heat +34 / cool 0.025 per ms /
+     * overheat 2500ms / shot cooldown already 450ms in GameScene.
+     */
+    private readonly practiceHunterMaxReserve =
+        12;
+    private readonly practiceHeatPerShot =
+        34;
+    private readonly practiceHeatCooldownPerMs =
+        0.025;
+    private readonly practiceOverheatDurationMs =
+        2_500;
+    private readonly practiceHunterMoveSpeed =
+        125;
+
     private getPracticeBotSessionId(
         index: number,
     ): string {
@@ -7544,6 +7568,217 @@ export class GameScene extends Phaser.Scene {
             message;
     }
 
+    private getPracticeRankings(
+        duration:
+            number,
+    ): Array<{
+        elapsedMs:
+            number;
+        botCount:
+            number;
+        precision:
+            number;
+        at:
+            number;
+    }> {
+        try {
+            const raw =
+                localStorage.getItem(
+                    this.practiceRankingStorageKey,
+                );
+
+            if (!raw) {
+                return [];
+            }
+
+            const parsed =
+                JSON.parse(
+                    raw,
+                ) as Record<
+                    string,
+                    Array<{
+                        elapsedMs:
+                            number;
+                        botCount:
+                            number;
+                        precision:
+                            number;
+                        at:
+                            number;
+                    }>
+                >;
+
+            const list =
+                parsed[
+                    String(
+                        duration,
+                    )
+                ];
+
+            if (
+                !Array.isArray(
+                    list,
+                )
+            ) {
+                return [];
+            }
+
+            return list
+                .filter(
+                    (
+                        record,
+                    ) =>
+                        Number.isFinite(
+                            record.elapsedMs,
+                        ) &&
+                        record.elapsedMs >
+                            0,
+                )
+                .sort(
+                    (
+                        a,
+                        b,
+                    ) =>
+                        a.elapsedMs -
+                        b.elapsedMs,
+                )
+                .slice(
+                    0,
+                    5,
+                );
+        } catch {
+            return [];
+        }
+    }
+
+    private savePracticeRanking(
+        elapsedMs:
+            number,
+    ): void {
+        if (
+            !Number.isFinite(
+                elapsedMs,
+            ) ||
+            elapsedMs <=
+                0
+        ) {
+            return;
+        }
+
+        try {
+            const raw =
+                localStorage.getItem(
+                    this.practiceRankingStorageKey,
+                );
+
+            const parsed =
+                raw
+                    ? JSON.parse(
+                        raw,
+                    ) as Record<
+                        string,
+                        Array<{
+                            elapsedMs:
+                                number;
+                            botCount:
+                                number;
+                            precision:
+                                number;
+                            at:
+                                number;
+                        }>
+                    >
+                    : {};
+
+            const key =
+                String(
+                    this.practiceHuntDuration,
+                );
+
+            const current =
+                Array.isArray(
+                    parsed[key],
+                )
+                    ? parsed[key]
+                    : [];
+
+            current.push({
+                elapsedMs:
+                    Math.round(
+                        elapsedMs,
+                    ),
+                botCount:
+                    this.practiceBotCount,
+                precision:
+                    this.practiceBotPrecision,
+                at:
+                    Date.now(),
+            });
+
+            parsed[key] =
+                current
+                    .sort(
+                        (
+                            a,
+                            b,
+                        ) =>
+                            a.elapsedMs -
+                            b.elapsedMs,
+                    )
+                    .slice(
+                        0,
+                        5,
+                    );
+
+            localStorage.setItem(
+                this.practiceRankingStorageKey,
+                JSON.stringify(
+                    parsed,
+                ),
+            );
+        } catch {
+            // Ranking is optional; gameplay must never fail on storage errors.
+        }
+    }
+
+    private formatPracticeTime(
+        elapsedMs:
+            number,
+    ): string {
+        const safeMs =
+            Math.max(
+                0,
+                Math.round(
+                    elapsedMs,
+                ),
+            );
+
+        const totalSeconds =
+            safeMs /
+            1000;
+
+        const minutes =
+            Math.floor(
+                totalSeconds /
+                60,
+            );
+
+        const seconds =
+            totalSeconds -
+            minutes *
+                60;
+
+        return minutes >
+            0
+            ? `${minutes}:${seconds
+                .toFixed(2)
+                .padStart(
+                    5,
+                    '0',
+                )}`
+            : `${seconds.toFixed(2)}s`;
+    }
+
     private openPracticeGroundModal(): void {
         this.closeMenuModal();
         this.input.enabled = false;
@@ -7591,6 +7826,30 @@ export class GameScene extends Phaser.Scene {
                         ${mapOptions}
                     </select>
                 </label>
+            </div>
+
+            <div class="colorhunt-practice-time">
+                <div class="colorhunt-practice-time-title">
+                    <span>⏱️ ${tr('헌터 연습 시간')}</span>
+                    <b data-practice-time-value>${this.practiceHuntDuration}s</b>
+                </div>
+                <div class="colorhunt-practice-time-buttons">
+                    ${[80, 100, 120].map(
+                        (seconds) => `
+                            <button
+                                type="button"
+                                data-practice-time="${seconds}"
+                                class="${
+                                    seconds ===
+                                    this.practiceHuntDuration
+                                        ? 'is-active'
+                                        : ''
+                                }"
+                            >${seconds}s</button>
+                        `,
+                    ).join('')}
+                </div>
+                <div class="colorhunt-practice-ranking" data-practice-ranking></div>
             </div>
 
             <section class="colorhunt-practice-mode colorhunt-practice-mode--hunter">
@@ -7668,6 +7927,140 @@ export class GameScene extends Phaser.Scene {
             mapSelect.value =
                 this.practiceMap;
         }
+
+        const rankingRoot =
+            card.querySelector<
+                HTMLElement
+            >(
+                '[data-practice-ranking]',
+            );
+
+        const timeValue =
+            card.querySelector<
+                HTMLElement
+            >(
+                '[data-practice-time-value]',
+            );
+
+        const refreshPracticeRanking =
+            (): void => {
+                if (!rankingRoot) {
+                    return;
+                }
+
+                const records =
+                    this.getPracticeRankings(
+                        this.practiceHuntDuration,
+                    );
+
+                rankingRoot.replaceChildren();
+
+                const title =
+                    document.createElement(
+                        'strong',
+                    );
+                title.textContent =
+                    `🏆 ${tr('시간별 TOP 5')}`;
+
+                rankingRoot.appendChild(
+                    title,
+                );
+
+                if (
+                    records.length ===
+                    0
+                ) {
+                    const empty =
+                        document.createElement(
+                            'span',
+                        );
+                    empty.textContent =
+                        tr('아직 기록이 없습니다.');
+                    rankingRoot.appendChild(
+                        empty,
+                    );
+                    return;
+                }
+
+                records.forEach(
+                    (
+                        record,
+                        index,
+                    ) => {
+                        const row =
+                            document.createElement(
+                                'div',
+                            );
+
+                        row.innerHTML =
+                            `<b>${index + 1}</b><span>${this.formatPracticeTime(record.elapsedMs)}</span><small>${record.botCount} BOT · ${record.precision}%</small>`;
+
+                        rankingRoot.appendChild(
+                            row,
+                        );
+                    },
+                );
+            };
+
+        card.querySelectorAll<
+            HTMLButtonElement
+        >(
+            '[data-practice-time]',
+        ).forEach(
+            (
+                button,
+            ) => {
+                button.addEventListener(
+                    'click',
+                    () => {
+                        const seconds =
+                            Number(
+                                button.dataset
+                                    .practiceTime,
+                            );
+
+                        if (
+                            ![
+                                80,
+                                100,
+                                120,
+                            ].includes(
+                                seconds,
+                            )
+                        ) {
+                            return;
+                        }
+
+                        this.practiceHuntDuration =
+                            seconds;
+
+                        timeValue &&
+                            (
+                                timeValue.textContent =
+                                    `${seconds}s`
+                            );
+
+                        card.querySelectorAll(
+                            '[data-practice-time]',
+                        ).forEach(
+                            (
+                                item,
+                            ) => {
+                                item.classList.toggle(
+                                    'is-active',
+                                    item ===
+                                        button,
+                                );
+                            },
+                        );
+
+                        refreshPracticeRanking();
+                    },
+                );
+            },
+        );
+
+        refreshPracticeRanking();
 
         const botCount =
             card.querySelector<
@@ -8141,14 +8534,7 @@ export class GameScene extends Phaser.Scene {
                  * hiding, matching a beginner "find the camouflage" drill.
                  */
                 const candidateCount =
-                    4 +
-                    Math.round(
-                        (
-                            this.practiceBotPrecision -
-                            50
-                        ) /
-                            10,
-                    );
+                    22;
 
                 let best =
                     new Phaser.Math.Vector2(
@@ -8166,6 +8552,22 @@ export class GameScene extends Phaser.Scene {
 
                 let bestScore =
                     -Infinity;
+
+                const alreadyPlaced =
+                    this.hiders
+                        .slice(
+                            0,
+                            index,
+                        )
+                        .map(
+                            (
+                                placed,
+                            ) =>
+                                new Phaser.Math.Vector2(
+                                    placed.centerX,
+                                    placed.centerY,
+                                ),
+                        );
 
                 for (
                     let candidate = 0;
@@ -8196,15 +8598,52 @@ export class GameScene extends Phaser.Scene {
                             point.y,
                         );
 
-                    const randomness =
-                        Phaser.Math.Between(
-                            -55,
-                            55,
-                        );
+                    const nearestBotDistance =
+                        alreadyPlaced.length >
+                            0
+                            ? Math.min(
+                                ...alreadyPlaced.map(
+                                    (
+                                        placed,
+                                    ) =>
+                                        Phaser.Math.Distance.Between(
+                                            point.x,
+                                            point.y,
+                                            placed.x,
+                                            placed.y,
+                                        ),
+                                ),
+                            )
+                            : 999;
+
+                    /*
+                     * Strongly reject clumped positions.
+                     * 175px minimum separation makes five bots spread over
+                     * distinct areas instead of forming one cluster.
+                     */
+                    const separationPenalty =
+                        nearestBotDistance <
+                            175
+                            ? (
+                                175 -
+                                nearestBotDistance
+                            ) *
+                            8
+                            : 0;
 
                     const score =
-                        hunterDistance +
-                        randomness;
+                        hunterDistance *
+                            0.45 +
+                        Math.min(
+                            nearestBotDistance,
+                            260,
+                        ) *
+                            1.7 -
+                        separationPenalty +
+                        Phaser.Math.Between(
+                            -25,
+                            25,
+                        );
 
                     if (
                         score >
@@ -8549,7 +8988,10 @@ export class GameScene extends Phaser.Scene {
         );
     }
 
-    private exitPracticeMode(): void {
+    private exitPracticeMode(
+        reopenPractice =
+            true,
+    ): void {
         this.networkPlayerManager
             .clearPracticePlayers();
 
@@ -8573,6 +9015,22 @@ export class GameScene extends Phaser.Scene {
         this.enterLobbyPhase();
         this.hideAllWaitingRoomUi();
         this.showMainMenu();
+
+        if (
+            reopenPractice
+        ) {
+            this.time.delayedCall(
+                0,
+                () => {
+                    if (
+                        !multiplayerClient
+                            .isConnected()
+                    ) {
+                        this.openPracticeGroundModal();
+                    }
+                },
+            );
+        }
     }
 
     private startHunterPractice(): void {
@@ -8606,9 +9064,33 @@ export class GameScene extends Phaser.Scene {
         this.phase =
             'paint';
         this.huntDuration =
-            120;
+            this.practiceHuntDuration;
+
+        this.hunterReserve =
+            this.practiceHunterMaxReserve;
+        this.hunterMaxReserve =
+            this.practiceHunterMaxReserve;
+        this.weaponHeat =
+            0;
+        this.weaponHeatUpdatedAt =
+            Date.now();
+        this.weaponOverheatedUntil =
+            0;
+        this.practiceStartedAt =
+            Date.now();
 
         this.startHunt();
+
+        this.hunterReserve =
+            this.practiceHunterMaxReserve;
+        this.hunterMaxReserve =
+            this.practiceHunterMaxReserve;
+        this.weaponHeat =
+            0;
+        this.weaponHeatUpdatedAt =
+            Date.now();
+        this.weaponOverheatedUntil =
+            0;
 
         this.syncHunterPracticeVisuals();
 
@@ -14870,10 +15352,18 @@ export class GameScene extends Phaser.Scene {
             localRole === 'hunter';
 
         const visible =
-            multiplayerClient
-                .isConnected() &&
+            (
+                multiplayerClient
+                    .isConnected() ||
+                this.practiceMode ===
+                    'hunter'
+            ) &&
             this.phase === 'hunt' &&
-            localIsHunter;
+            (
+                localIsHunter ||
+                this.practiceMode ===
+                    'hunter'
+            );
 
         this.hunterWeaponHudContainer
             ?.setVisible(visible);
@@ -14883,7 +15373,9 @@ export class GameScene extends Phaser.Scene {
          * 완전히 사용하지 않습니다.
          */
         if (
-            this.isMultiplayerSession()
+            this.isMultiplayerSession() ||
+            this.practiceMode ===
+                'hunter'
         ) {
             this.ammoText
                 ?.setVisible(false);
@@ -14909,7 +15401,13 @@ export class GameScene extends Phaser.Scene {
         const estimatedHeat =
             Phaser.Math.Clamp(
                 this.weaponHeat -
-                    elapsed * 0.025,
+                    elapsed *
+                    (
+                        this.practiceMode ===
+                            'hunter'
+                            ? this.practiceHeatCooldownPerMs
+                            : 0.025
+                    ),
                 0,
                 100,
             );
@@ -18101,7 +18599,16 @@ export class GameScene extends Phaser.Scene {
         ).normalize();
 
         const distance =
-            this.playerSpeed * (delta / 1000);
+            (
+                this.practiceMode ===
+                    'hunter'
+                    ? this.practiceHunterMoveSpeed
+                    : this.playerSpeed
+            ) *
+            (
+                delta /
+                1000
+            );
 
         const previousX = this.player.x;
         const previousY = this.player.y;
@@ -18162,7 +18669,7 @@ export class GameScene extends Phaser.Scene {
         }
 
         const distance =
-            this.playerSpeed *
+            this.practiceHunterMoveSpeed *
             (
                 delta /
                 1000
@@ -23893,8 +24400,13 @@ export class GameScene extends Phaser.Scene {
         }
 
         if (
-            this.isMultiplayerSession() &&
-            this.hunterReserve <= 0
+            (
+                this.isMultiplayerSession() ||
+                this.practiceMode ===
+                    'hunter'
+            ) &&
+            this.hunterReserve <=
+                0
         ) {
             this.showStatus(
                 tr('탄약 소진 · 남은 시간 동안 수색하세요'),
@@ -23903,7 +24415,9 @@ export class GameScene extends Phaser.Scene {
         }
 
         if (
-            multiplayerClient.isConnected()
+            multiplayerClient.isConnected() ||
+            this.practiceMode ===
+                'hunter'
         ) {
             if (
                 Date.now() <
@@ -23913,6 +24427,55 @@ export class GameScene extends Phaser.Scene {
                     tr('샷건이 과열되었습니다'),
                 );
                 return;
+            }
+
+            if (
+                this.practiceMode ===
+                    'hunter'
+            ) {
+                const now =
+                    Date.now();
+
+                const cooledHeat =
+                    Phaser.Math.Clamp(
+                        this.weaponHeat -
+                            Math.max(
+                                0,
+                                now -
+                                    this.weaponHeatUpdatedAt,
+                            ) *
+                            this.practiceHeatCooldownPerMs,
+                        0,
+                        100,
+                    );
+
+                this.hunterReserve =
+                    Math.max(
+                        0,
+                        this.hunterReserve -
+                            1,
+                    );
+
+                this.weaponHeat =
+                    Math.min(
+                        100,
+                        cooledHeat +
+                            this.practiceHeatPerShot,
+                    );
+
+                if (
+                    this.weaponHeat >=
+                    100
+                ) {
+                    this.weaponOverheatedUntil =
+                        now +
+                        this.practiceOverheatDurationMs;
+                }
+
+                this.weaponHeatUpdatedAt =
+                    now;
+
+                this.updateWeaponHeatHud();
             }
         } else {
             if (this.isReloading) {
@@ -24041,6 +24604,8 @@ export class GameScene extends Phaser.Scene {
 
         if (
             !multiplayerClient.isConnected() &&
+            this.practiceMode !==
+                'hunter' &&
             this.ammo === 0
         ) {
             this.showStatus(
@@ -25531,7 +26096,150 @@ export class GameScene extends Phaser.Scene {
         this.input.setDefaultCursor('none');
     }
 
+    private showPracticeResult(
+        won:
+            boolean,
+    ): void {
+        const elapsedMs =
+            this.practiceStartedAt >
+                0
+                ? Math.max(
+                    1,
+                    Date.now() -
+                        this.practiceStartedAt,
+                )
+                : 0;
+
+        if (
+            won &&
+            elapsedMs >
+                0
+        ) {
+            this.savePracticeRanking(
+                elapsedMs,
+            );
+        }
+
+        this.canShoot =
+            false;
+        this.clearAllAimingVisuals();
+        this.stopAllBgm();
+        this.practiceExitButton
+            ?.setVisible(
+                false,
+            );
+
+        this.closeMenuModal();
+
+        const overlay =
+            document.createElement(
+                'div',
+            );
+        overlay.className =
+            'colorhunt-practice-result-overlay';
+
+        const card =
+            document.createElement(
+                'div',
+            );
+        card.className =
+            `colorhunt-practice-result-card ${
+                won
+                    ? 'is-win'
+                    : 'is-timeup'
+            }`;
+
+        const records =
+            this.getPracticeRankings(
+                this.practiceHuntDuration,
+            );
+
+        const rankingHtml =
+            records.length >
+                0
+                ? records
+                    .map(
+                        (
+                            record,
+                            index,
+                        ) =>
+                            `<div class="colorhunt-practice-result-rank"><b>${index + 1}</b><span>${this.formatPracticeTime(record.elapsedMs)}</span><small>${record.botCount} BOT · ${record.precision}%</small></div>`,
+                    )
+                    .join('')
+                : `<div class="colorhunt-practice-result-empty">${tr('아직 기록이 없습니다.')}</div>`;
+
+        card.innerHTML = `
+            <div class="colorhunt-practice-result-kicker">
+                ${tr('PRACTICE RESULT')}
+            </div>
+            <div class="colorhunt-practice-result-icon">
+                ${won ? '🏆' : '⏱️'}
+            </div>
+            <h2>
+                ${won ? tr('헌터 연습 성공!') : tr('연습 시간 종료')}
+            </h2>
+            <p>
+                ${
+                    won
+                        ? `${tr('모든 봇을 찾았습니다.')} · ${this.formatPracticeTime(elapsedMs)}`
+                        : tr('시간 안에 모든 봇을 찾지 못했습니다.')
+                }
+            </p>
+
+            <div class="colorhunt-practice-result-meta">
+                <span>${this.practiceHuntDuration}s</span>
+                <span>${this.practiceBotCount} BOT</span>
+                <span>${this.practiceBotPrecision}%</span>
+            </div>
+
+            <div class="colorhunt-practice-result-ranking">
+                <strong>🏆 ${this.practiceHuntDuration}s · ${tr('TOP 5')}</strong>
+                ${rankingHtml}
+            </div>
+
+            <button type="button" data-practice-return>
+                🎯 ${tr('연습장으로 돌아가기')}
+            </button>
+        `;
+
+        overlay.appendChild(
+            card,
+        );
+        document.body.appendChild(
+            overlay,
+        );
+
+        this.menuModalOverlay =
+            overlay;
+        this.input.enabled =
+            false;
+
+        card.querySelector(
+            '[data-practice-return]',
+        )?.addEventListener(
+            'click',
+            () => {
+                this.closeMenuModal();
+                this.exitPracticeMode(
+                    true,
+                );
+            },
+        );
+    }
+
     private showHunterVictory(): void {
+        if (
+            this.practiceMode ===
+                'hunter'
+        ) {
+            this.phase =
+                'hunterVictory';
+            this.showPracticeResult(
+                true,
+            );
+            return;
+        }
+
         if (this.isMultiplayerSession()) {
             return;
         }
@@ -25577,17 +26285,21 @@ export class GameScene extends Phaser.Scene {
 
         this.input.setDefaultCursor('default');
 
-        if (
-            this.practiceMode ===
-            'hunter'
-        ) {
-            this.showStatus(
-                tr('연습 성공! 모든 봇을 찾았습니다. 연습 종료를 누르면 로비로 돌아갑니다.'),
-            );
-        }
     }
 
     private showHiderVictory(): void {
+        if (
+            this.practiceMode ===
+                'hunter'
+        ) {
+            this.phase =
+                'hiderVictory';
+            this.showPracticeResult(
+                false,
+            );
+            return;
+        }
+
         if (
             this.isMultiplayerSession()
         ) {

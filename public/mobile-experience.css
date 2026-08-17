@@ -3997,3 +3997,288 @@ html.colorhunt-mobile body.colorhunt-unfolded {
   box-shadow:
     inset 0 1px 2px rgba(34,60,40,.12);
 }
+
+
+/* ============================================================
+   v0.10.10.136 — Practice Ground production-rules polish
+   ============================================================ */
+
+.colorhunt-practice-time {
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  border: 1px solid #cfdcc8;
+  border-radius: 10px;
+  background: #f7f6e7;
+}
+
+.colorhunt-practice-time-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: #45624b;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.colorhunt-practice-time-title b {
+  min-width: 46px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: #dfeede;
+  color: #31553a;
+  text-align: center;
+}
+
+.colorhunt-practice-time-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+  margin-top: 6px;
+}
+
+.colorhunt-practice-time-buttons button {
+  min-height: 32px;
+  border: 1px solid #aebfa7;
+  border-radius: 7px;
+  background: #fffdf3;
+  color: #536a58;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.colorhunt-practice-time-buttons button.is-active {
+  border-color: #579267;
+  background: #68a875;
+  color: #fff;
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,.25),
+    0 2px 0 rgba(49,88,56,.15);
+}
+
+.colorhunt-practice-ranking {
+  display: grid;
+  gap: 3px;
+  margin-top: 7px;
+  padding-top: 6px;
+  border-top: 1px dashed #c8d5c2;
+}
+
+.colorhunt-practice-ranking > strong {
+  color: #49604d;
+  font-size: 9px;
+}
+
+.colorhunt-practice-ranking > span {
+  color: #879087;
+  font-size: 8px;
+}
+
+.colorhunt-practice-ranking > div {
+  display: grid;
+  grid-template-columns: 20px 72px minmax(0, 1fr);
+  align-items: center;
+  gap: 4px;
+  min-height: 20px;
+  padding: 2px 5px;
+  border-radius: 5px;
+  background: rgba(255,255,255,.65);
+  font-size: 8px;
+}
+
+.colorhunt-practice-ranking > div b {
+  color: #4c7d56;
+}
+
+.colorhunt-practice-ranking > div span {
+  font-weight: 900;
+  color: #344f3a;
+}
+
+.colorhunt-practice-ranking > div small {
+  color: #7b887c;
+  text-align: right;
+}
+
+.colorhunt-practice-result-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483640;
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  box-sizing: border-box;
+  background: rgba(33,55,39,.48);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.colorhunt-practice-result-card {
+  width: min(430px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 16px;
+  border: 2px solid #73a47a;
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, #fffdf0 0%, #eff4df 100%);
+  color: #35523d;
+  text-align: center;
+  font-family:
+    ui-monospace, "SFMono-Regular", "Cascadia Code",
+    "Noto Sans KR", "Noto Sans JP", monospace;
+  box-shadow:
+    0 8px 0 rgba(50,82,55,.12),
+    0 24px 70px rgba(25,49,31,.34);
+}
+
+.colorhunt-practice-result-card.is-timeup {
+  border-color: #c9a86b;
+  background:
+    linear-gradient(180deg, #fff9e8 0%, #f1ead6 100%);
+}
+
+.colorhunt-practice-result-kicker {
+  color: #718073;
+  font-size: 9px;
+  font-weight: 950;
+  letter-spacing: .11em;
+}
+
+.colorhunt-practice-result-icon {
+  margin: 7px 0 2px;
+  font-size: 34px;
+}
+
+.colorhunt-practice-result-card h2 {
+  margin: 3px 0;
+  color: #31553a;
+  font-size: 21px;
+  line-height: 1.1;
+}
+
+.colorhunt-practice-result-card p {
+  margin: 5px 0 10px;
+  color: #617064;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.colorhunt-practice-result-meta {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+  margin-bottom: 10px;
+}
+
+.colorhunt-practice-result-meta span {
+  padding: 6px 4px;
+  border: 1px solid #cad8c5;
+  border-radius: 7px;
+  background: rgba(255,255,255,.72);
+  color: #47634d;
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.colorhunt-practice-result-ranking {
+  display: grid;
+  gap: 4px;
+  padding: 9px;
+  border: 1px solid #cad8c5;
+  border-radius: 10px;
+  background: rgba(255,255,255,.62);
+  text-align: left;
+}
+
+.colorhunt-practice-result-ranking > strong {
+  margin-bottom: 2px;
+  color: #46614c;
+  font-size: 10px;
+}
+
+.colorhunt-practice-result-rank {
+  display: grid;
+  grid-template-columns: 22px 76px 1fr;
+  align-items: center;
+  gap: 5px;
+  min-height: 24px;
+  padding: 2px 5px;
+  border-radius: 6px;
+  background: #f5f6e8;
+  font-size: 9px;
+}
+
+.colorhunt-practice-result-rank b {
+  color: #4d855a;
+}
+
+.colorhunt-practice-result-rank span {
+  font-weight: 950;
+}
+
+.colorhunt-practice-result-rank small {
+  color: #79847a;
+  text-align: right;
+}
+
+.colorhunt-practice-result-empty {
+  padding: 8px;
+  color: #8b938b;
+  font-size: 9px;
+  text-align: center;
+}
+
+.colorhunt-practice-result-card > button {
+  width: 100%;
+  min-height: 40px;
+  margin-top: 10px;
+  border: 1px solid #4f855b;
+  border-radius: 9px;
+  background: #63a16e;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 950;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.28),
+    0 3px 0 rgba(50,89,58,.15);
+}
+
+@media (pointer: coarse) {
+  .colorhunt-practice-time {
+    padding: 5px 7px;
+  }
+
+  .colorhunt-practice-time-title {
+    font-size: 8px;
+  }
+
+  .colorhunt-practice-time-buttons button {
+    min-height: 29px;
+    font-size: 8px;
+  }
+
+  .colorhunt-practice-ranking > div {
+    grid-template-columns: 16px 58px minmax(0,1fr);
+    font-size: 7px;
+  }
+
+  .colorhunt-practice-result-card {
+    padding: 11px;
+  }
+
+  .colorhunt-practice-result-card h2 {
+    font-size: 16px;
+  }
+
+  .colorhunt-practice-result-icon {
+    font-size: 28px;
+  }
+
+  .colorhunt-practice-result-card p,
+  .colorhunt-practice-result-meta span,
+  .colorhunt-practice-result-rank {
+    font-size: 8px;
+  }
+}

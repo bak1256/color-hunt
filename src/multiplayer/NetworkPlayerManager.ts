@@ -367,47 +367,13 @@ export class NetworkPlayerManager {
       return;
     }
 
-    const textureKey =
-      [
-        "practice-full-camo",
-        sessionId,
-        this.scene.time.now,
-        Math.floor(
-          Math.random() *
-          1_000_000,
-        ),
-      ].join("-");
-
-    const canvasTexture =
-      this.scene.textures.createCanvas(
-        textureKey,
-        80,
-        120,
-      );
-
-    if (!canvasTexture) {
-      return;
-    }
-
-    this.practicePaintTextureKeys.add(
-      textureKey,
-    );
-
-    const context =
-      canvasTexture.getContext();
-
-    context.clearRect(
-      0,
-      0,
-      80,
-      120,
-    );
-
-    const image =
-      context.createImageData(
-        80,
-        120,
-      );
+    /*
+     * Use the EXACT same masked pixel stamper as real player painting.
+     * This guarantees 100% coverage of every paintable head/body/arm/leg
+     * pixel and cannot silently fail like RenderTexture.draw(CanvasTexture)
+     * did on some browsers.
+     */
+    view.paintLayer.texture.clear();
 
     for (
       let y = 0;
@@ -432,59 +398,19 @@ export class NetworkPlayerManager {
           colorAt(
             x,
             y,
-          ) >>> 0;
+          );
 
-        const index =
-          (
-            y *
-            80 +
-            x
-          ) *
-          4;
-
-        image.data[index] =
-          (
-            color >>
-            16
-          ) &
-          0xff;
-        image.data[
-          index + 1
-        ] =
-          (
-            color >>
-            8
-          ) &
-          0xff;
-        image.data[
-          index + 2
-        ] =
-          color &
-          0xff;
-        image.data[
-          index + 3
-        ] =
-          255;
+        this.stampMaskedPaintBrush(
+          view,
+          x,
+          y,
+          color,
+          1,
+          "square",
+          false,
+        );
       }
     }
-
-    context.putImageData(
-      image,
-      0,
-      0,
-    );
-
-    canvasTexture.refresh();
-
-    view.paintLayer.texture
-      .clear()
-      .draw(
-        textureKey,
-        0,
-        0,
-      )
-      .setVisible(true)
-      .setAlpha(1);
 
     this.renderPaintTexture(
       view.paintLayer.texture,
@@ -494,6 +420,16 @@ export class NetworkPlayerManager {
       view,
       true,
     );
+
+    view.paintLayer.texture
+      .setVisible(true)
+      .setAlpha(1)
+      .setDepth(
+        view.role ===
+          "hunter"
+          ? 162
+          : 122,
+      );
   }
 
   syncPlayersFromCurrentRoom(): void {

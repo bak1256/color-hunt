@@ -5,6 +5,16 @@ const STORAGE_KEY = 'chameleon-hunt-language';
 type Dict = Record<string, string>;
 
 const ja: Dict = {
+  "헌터 연습 시간": "ハンター練習時間",
+  "시간별 TOP 5": "時間別 TOP 5",
+  "아직 기록이 없습니다.": "まだ記録がありません。",
+  "PRACTICE RESULT": "PRACTICE RESULT",
+  "헌터 연습 성공!": "ハンター練習成功！",
+  "연습 시간 종료": "練習時間終了",
+  "모든 봇을 찾았습니다.": "すべてのBOTを発見しました。",
+  "시간 안에 모든 봇을 찾지 못했습니다.": "時間内にすべてのBOTを見つけられませんでした。",
+  "TOP 5": "TOP 5",
+  "연습장으로 돌아가기": "練習場に戻る",
   "자유 연습 · 본게임과 같은 이동·색칠·확대·스포이드 조작을 연습해보세요.": "自由練習 · 本番と同じ移動・色塗り・ズーム・スポイト操作を練習できます。",
   "초보 추천": "初心者おすすめ",
   "연습장": "練習場",
@@ -162,6 +172,16 @@ const ja: Dict = {
 };
 
 const en: Dict = {
+  "헌터 연습 시간": "Hunter Practice Time",
+  "시간별 TOP 5": "TOP 5 by Time",
+  "아직 기록이 없습니다.": "No records yet.",
+  "PRACTICE RESULT": "PRACTICE RESULT",
+  "헌터 연습 성공!": "Hunter Practice Complete!",
+  "연습 시간 종료": "Practice Time Up",
+  "모든 봇을 찾았습니다.": "You found every bot.",
+  "시간 안에 모든 봇을 찾지 못했습니다.": "You did not find every bot before time ran out.",
+  "TOP 5": "TOP 5",
+  "연습장으로 돌아가기": "Back to Practice Ground",
   "자유 연습 · 본게임과 같은 이동·색칠·확대·스포이드 조작을 연습해보세요.": "Free practice · train with the same movement, painting, zoom and eyedropper controls as a real match.",
   "초보 추천": "BEGINNER PICK",
   "연습장": "Practice Ground",
@@ -321,6 +341,16 @@ const en: Dict = {
 };
 
 const zh: Dict = {
+  "헌터 연습 시간": "猎人练习时间",
+  "시간별 TOP 5": "按时间 TOP 5",
+  "아직 기록이 없습니다.": "暂无记录。",
+  "PRACTICE RESULT": "PRACTICE RESULT",
+  "헌터 연습 성공!": "猎人练习成功！",
+  "연습 시간 종료": "练习时间结束",
+  "모든 봇을 찾았습니다.": "已找到所有机器人。",
+  "시간 안에 모든 봇을 찾지 못했습니다.": "未能在时间内找到所有机器人。",
+  "TOP 5": "TOP 5",
+  "연습장으로 돌아가기": "返回练习场",
   "자유 연습 · 본게임과 같은 이동·색칠·확대·스포이드 조작을 연습해보세요.": "自由练习 · 使用与正式比赛相同的移动、涂色、缩放和吸管操作进行练习。",
   "초보 추천": "新手推荐",
   "연습장": "练习场",
