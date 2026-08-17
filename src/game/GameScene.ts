@@ -2901,6 +2901,14 @@ export class GameScene extends Phaser.Scene {
     private currentStrokeHistoryPoints: NetworkPaintPoint[] = [];
     private localPaintHistory: NetworkPaintStroke[] = [];
     private redoPaintHistory: NetworkPaintStroke[] = [];
+
+    /*
+     * v0.10.10.168
+     * Undo/Redo used to synchronously clear + replay EVERY paint point on
+     * every click. Rapid taps could queue several full reconstructions in the
+     * same frame and freeze the browser. Coalesce them into one rebuild.
+     */
+    private paintHistoryRebuildTimer?: number;
     private lobbyAvatarPreset: NetworkPaintStroke[] = [];
     private readonly lobbyAvatarPresetStorageKey =
         'chameleon-hunt-avatar-preset-v1';
@@ -10115,17 +10123,34 @@ export class GameScene extends Phaser.Scene {
                 _elapsedMs,
             );
 
-        context.fillStyle =
-            'rgba(255,255,255,.72)';
-        context.font =
-            '900 24px Arial, sans-serif';
+        /*
+         * v0.10.10.168 SHARE CARD READABILITY
+         * Keep the label away from the decorative border and put it directly
+         * beside the achievement time. The map name gets its own large,
+         * bottom-right signature position.
+         */
+        const recordBaselineY =
+            1238;
+
         context.textAlign =
             'left';
+        context.textBaseline =
+            'alphabetic';
+
+        context.fillStyle =
+            'rgba(255,255,255,.88)';
+        context.font =
+            '900 34px Arial, sans-serif';
         context.fillText(
             tr('위장 제작 기록'),
             58,
-            1192,
+            recordBaselineY,
         );
+
+        const recordLabelWidth =
+            context.measureText(
+                tr('위장 제작 기록'),
+            ).width;
 
         context.fillStyle =
             '#ffffff';
@@ -10133,23 +10158,29 @@ export class GameScene extends Phaser.Scene {
             '900 58px Arial, sans-serif';
         context.fillText(
             recordTime,
-            58,
-            1250,
+            Math.min(
+                560,
+                58 +
+                    recordLabelWidth +
+                    28,
+            ),
+            recordBaselineY,
         );
 
         const footerY =
-            1302;
+            1306;
 
         context.fillStyle =
-            'rgba(255,255,255,.96)';
+            'rgba(255,255,255,.98)';
         context.font =
-            '900 31px Arial, sans-serif';
+            '900 36px Arial, sans-serif';
         context.textAlign =
-            'left';
+            'right';
 
         context.fillText(
-            this.getMapDisplayName(this.practiceMap),
-            58,
+            `🗺 ${this.getMapDisplayName(this.practiceMap)}`,
+            width -
+                58,
             footerY,
         );
 
@@ -10169,16 +10200,15 @@ export class GameScene extends Phaser.Scene {
         }
 
         context.textAlign =
-            'right';
+            'left';
         context.font =
-            '800 25px Arial, sans-serif';
+            '800 21px Arial, sans-serif';
         context.fillStyle =
-            'rgba(255,255,255,.80)';
+            'rgba(255,255,255,.68)';
 
         context.fillText(
             host,
-            width -
-                58,
+            58,
             footerY,
         );
 
@@ -24683,6 +24713,32 @@ export class GameScene extends Phaser.Scene {
         );
     }
 
+    private schedulePaintHistoryRebuild(): void {
+        if (
+            this.paintHistoryRebuildTimer !==
+            undefined
+        ) {
+            window.clearTimeout(
+                this.paintHistoryRebuildTimer,
+            );
+        }
+
+        /*
+         * 42 ms is short enough to feel instant, but long enough to collapse
+         * button mashing into a single expensive texture reconstruction.
+         */
+        this.paintHistoryRebuildTimer =
+            window.setTimeout(
+                () => {
+                    this.paintHistoryRebuildTimer =
+                        undefined;
+
+                    this.rebuildLocalPaintFromHistory();
+                },
+                42,
+            );
+    }
+
     private undoLastPaintStroke(): void {
         if (
             this.phase !== 'paint' ||
@@ -24718,7 +24774,7 @@ export class GameScene extends Phaser.Scene {
             this.redoPaintHistory.shift();
         }
 
-        this.rebuildLocalPaintFromHistory();
+        this.schedulePaintHistoryRebuild();
 
         this.showStatus(
             tr('한 단계 되돌렸습니다.'),
@@ -24759,7 +24815,7 @@ export class GameScene extends Phaser.Scene {
          * Rebuild and broadcast the same complete paint state used by Undo,
          * so Redo is visible on every connected player's screen as well.
          */
-        this.rebuildLocalPaintFromHistory();
+        this.schedulePaintHistoryRebuild();
 
         this.showStatus(
             tr('한 단계 다시 실행했습니다.'),
