@@ -26004,7 +26004,10 @@ export class GameScene extends Phaser.Scene {
                 );
 
             if (
-                hitHiders.size > 0
+                hitHiders.size >
+                    0 &&
+                this.practiceMode !==
+                    'hunter'
             ) {
                 this.showHitMarker();
             }
@@ -26348,6 +26351,240 @@ export class GameScene extends Phaser.Scene {
         });
     }
 
+    private showPracticeHunterHitEffect(
+        hider:
+            Hider,
+    ): void {
+        /*
+         * Reuse the real-match Hunter confirmation sound.
+         * Practice has no server shot event, so applyNetworkShot() never
+         * reaches this branch unless we explicitly mirror it here.
+         */
+        this.hunterHitConfirmSound
+            ?.play();
+
+        /*
+         * The victim-side hit sound is also useful in solo training and
+         * gives the shot a stronger, game-identical impact layer.
+         */
+        this.hitSound
+            ?.play();
+
+        const x =
+            hider.centerX;
+        const y =
+            hider.centerY;
+
+        /*
+         * Mobile activePointer is often the FIRE button, so the normal
+         * showHitMarker() can appear near the UI instead of the victim.
+         * Draw the same X-style hit marker at the actual bot coordinate.
+         */
+        const marker =
+            this.add.graphics()
+                .setDepth(
+                    1800,
+                );
+
+        const inner =
+            7;
+        const outer =
+            18;
+
+        marker.lineStyle(
+            4,
+            0xffffff,
+            1,
+        );
+
+        marker.lineBetween(
+            x -
+                outer,
+            y -
+                outer,
+            x -
+                inner,
+            y -
+                inner,
+        );
+        marker.lineBetween(
+            x +
+                inner,
+            y +
+                inner,
+            x +
+                outer,
+            y +
+                outer,
+        );
+        marker.lineBetween(
+            x +
+                outer,
+            y -
+                outer,
+            x +
+                inner,
+            y -
+                inner,
+        );
+        marker.lineBetween(
+            x -
+                inner,
+            y +
+                inner,
+            x -
+                outer,
+            y +
+                outer,
+        );
+
+        /*
+         * Short red/white impact pulse around the production Hider.
+         */
+        const impact =
+            this.add.circle(
+                x,
+                y,
+                24,
+                0xff5b57,
+                0.28,
+            )
+                .setStrokeStyle(
+                    4,
+                    0xffffff,
+                    0.95,
+                )
+                .setDepth(
+                    1799,
+                );
+
+        this.tweens.add({
+            targets:
+                marker,
+            alpha:
+                0,
+            scale:
+                1.3,
+            duration:
+                190,
+            ease:
+                'Quad.easeOut',
+            onComplete:
+                () => {
+                    marker.destroy();
+                },
+        });
+
+        this.tweens.add({
+            targets:
+                impact,
+            alpha:
+                0,
+            scale:
+                1.65,
+            duration:
+                220,
+            ease:
+                'Quad.easeOut',
+            onComplete:
+                () => {
+                    impact.destroy();
+                },
+        });
+
+        /*
+         * Small pixel fragments make the camouflage "pop" when discovered
+         * without changing any hit/gameplay logic.
+         */
+        for (
+            let index = 0;
+            index <
+            8;
+            index += 1
+        ) {
+            const angle =
+                (
+                    Math.PI *
+                    2 *
+                    index
+                ) /
+                8 +
+                Phaser.Math.FloatBetween(
+                    -0.18,
+                    0.18,
+                );
+
+            const distance =
+                Phaser.Math.Between(
+                    22,
+                    42,
+                );
+
+            const particle =
+                this.add.rectangle(
+                    x,
+                    y,
+                    Phaser.Math.Between(
+                        3,
+                        6,
+                    ),
+                    Phaser.Math.Between(
+                        3,
+                        6,
+                    ),
+                    index %
+                        2 ===
+                        0
+                        ? 0xffffff
+                        : 0xff6b64,
+                    0.95,
+                )
+                    .setDepth(
+                        1801,
+                    );
+
+            this.tweens.add({
+                targets:
+                    particle,
+                x:
+                    x +
+                    Math.cos(
+                        angle,
+                    ) *
+                    distance,
+                y:
+                    y +
+                    Math.sin(
+                        angle,
+                    ) *
+                    distance,
+                alpha:
+                    0,
+                scale:
+                    0.4,
+                duration:
+                    Phaser.Math.Between(
+                        180,
+                        260,
+                    ),
+                ease:
+                    'Quad.easeOut',
+                onComplete:
+                    () => {
+                        particle.destroy();
+                    },
+            });
+        }
+
+        /*
+         * Real network shots shake the camera on impact as well.
+         */
+        this.cameras.main.shake(
+            90,
+            0.0055,
+        );
+    }
+
     private hitHider(hider: Hider): void {
         if (!hider.alive) {
             return;
@@ -26359,6 +26596,10 @@ export class GameScene extends Phaser.Scene {
             this.practiceMode ===
                 'hunter'
         ) {
+            this.showPracticeHunterHitEffect(
+                hider,
+            );
+
             const index =
                 this.hiders.indexOf(
                     hider,
