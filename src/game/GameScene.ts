@@ -17719,9 +17719,9 @@ export class GameScene extends Phaser.Scene {
          * makes "gun won't fire" clearly distinguishable from input failure.
          */
         const barX = 42;
-        const barY = 29;
+        const barY = 27;
         const barWidth = 174;
-        const barHeight = 14;
+        const barHeight = 18;
 
         this.hunterHeatGraphics.clear();
 
@@ -17836,21 +17836,28 @@ export class GameScene extends Phaser.Scene {
             estimatedHeat >=
                 92;
 
+        this.hunterHeatLabel
+            .setText(
+                `HEAT ${Math.round(
+                    estimatedHeat,
+                )}%`,
+            );
+
         this.hunterOverheatLabel
             .setText(
                 overheated
-                    ? `⚠ ${tr('과열! 잠시 기다리세요')}`
+                    ? `⚠ ${tr('과열! 발사 불가')}`
                     : heatCritical
                         ? `⚠ ${tr('과열 직전!')}`
                         : heatDanger
-                            ? tr('열 상승 중')
+                            ? `⚠ ${tr('열 상승')}`
                             : '',
             )
             .setColor(
                 overheated ||
                 heatCritical
                     ? '#d32f2f'
-                    : '#b36b00',
+                    : '#9a5b00',
             )
             .setVisible(
                 overheated ||
@@ -17871,6 +17878,24 @@ export class GameScene extends Phaser.Scene {
                 )
             )
         ) {
+            this.statusText
+                .setDepth(
+                    26000,
+                )
+                .setFontSize(
+                    22,
+                )
+                .setColor(
+                    '#ffffff',
+                )
+                .setBackgroundColor(
+                    'rgba(190, 28, 28, 0.96)',
+                )
+                .setPadding(
+                    14,
+                    9,
+                );
+
             this.showStatus(
                 `⚠ ${tr('샷건 과열! 잠시 식힌 후 발사하세요')}`,
             );
@@ -28137,7 +28162,9 @@ export class GameScene extends Phaser.Scene {
                         'monospace',
                     fontSize: '13px',
                     fontStyle: 'bold',
-                    color: '#334139',
+                    color: '#17211c',
+                    stroke: '#ffffff',
+                    strokeThickness: 3,
                 },
             )
                 .setOrigin(0, 0.5);
@@ -28153,6 +28180,8 @@ export class GameScene extends Phaser.Scene {
                     fontSize: '12px',
                     fontStyle: 'bold',
                     color: '#d32f2f',
+                    stroke: '#ffffff',
+                    strokeThickness: 4,
                 },
             )
                 .setOrigin(1, 0.5);
@@ -28163,20 +28192,20 @@ export class GameScene extends Phaser.Scene {
                 25,
                 230,
                 66,
-                0xfff4d6,
-                0.9,
+                0xfff8e8,
+                0.985,
             )
                 .setOrigin(0.5)
                 .setStrokeStyle(
+                    3,
+                    0xffffff,
                     1,
-                    0x8d8066,
-                    0.75,
                 );
 
         this.hunterWeaponHudContainer =
             this.add.container(
                 18,
-                76,
+                18,
                 [
                     weaponHudBackground,
                     this.hunterAmmoGraphics,
@@ -28185,7 +28214,11 @@ export class GameScene extends Phaser.Scene {
                     this.hunterOverheatLabel,
                 ],
             )
-                .setDepth(5000)
+                /*
+                 * v0.10.10.184:
+                 * Keep weapon feedback above every darkness / vision layer.
+                 */
+                .setDepth(25000)
                 .setScrollFactor(0)
                 .setVisible(false);
 
