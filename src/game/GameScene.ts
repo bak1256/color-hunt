@@ -27092,7 +27092,7 @@ export class GameScene extends Phaser.Scene {
                 this.weaponOverheatedUntil
             ) {
                 this.showStatus(
-                    tr('샷건이 과열되었습니다'),
+                    `⚠ ${tr('샷건 과열! 잠시 식힌 후 발사하세요')}`,
                 );
                 return;
             }
@@ -27273,8 +27273,15 @@ export class GameScene extends Phaser.Scene {
                 this.hunterReserve <=
                     0
             ) {
+                /*
+                 * v0.10.10.189:
+                 * Practice teaches the same finite-ammo rule as multiplayer.
+                 * Once the final shell has actually been fired, end practice
+                 * immediately with an explicit ammo-depletion reason.
+                 */
                 this.showPracticeResult(
                     false,
+                    'ammo',
                 );
                 return;
             }
@@ -30130,6 +30137,10 @@ ${shareUrl}`,
     private showPracticeResult(
         won:
             boolean,
+        reason:
+            'time' |
+            'ammo' =
+                'time',
     ): void {
         this.destroyPracticeHiderRecordBar();
         if (
@@ -30194,7 +30205,9 @@ ${shareUrl}`,
             `colorhunt-practice-result-card ${
                 won
                     ? 'is-win'
-                    : 'is-timeup'
+                    : reason === 'ammo'
+                        ? 'is-ammo'
+                        : 'is-timeup'
             }`;
 
         const records =
@@ -30221,16 +30234,24 @@ ${shareUrl}`,
                 ${tr('PRACTICE RESULT')}
             </div>
             <div class="colorhunt-practice-result-icon">
-                ${won ? '🏆' : '⏱️'}
+                ${won ? '🏆' : reason === 'ammo' ? '🔴' : '⏱️'}
             </div>
             <h2>
-                ${won ? tr('헌터 연습 성공!') : tr('연습 시간 종료')}
+                ${
+                    won
+                        ? tr('헌터 연습 성공!')
+                        : reason === 'ammo'
+                            ? tr('탄약 소진! 연습 종료')
+                            : tr('연습 시간 종료')
+                }
             </h2>
             <p>
                 ${
                     won
                         ? `${tr('모든 봇을 찾았습니다.')} · ${this.formatPracticeTime(elapsedMs)}`
-                        : tr('시간 안에 모든 봇을 찾지 못했습니다.')
+                        : reason === 'ammo'
+                            ? tr('모든 탄약을 사용했습니다. 다시 연습해서 탄약 관리와 과열 타이밍을 익혀보세요.')
+                            : tr('시간 안에 모든 봇을 찾지 못했습니다.')
                 }
             </p>
 

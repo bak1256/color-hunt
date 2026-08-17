@@ -6073,3 +6073,17 @@ body:has(.colorhunt-main-lobby) .colorhunt-controls-help {
     max-height: min(var(--chat-panel-max-height), 176px) !important;
   }
 }
+
+
+/* v0.10.10.189 — Hunter Practice ammo-depletion result */
+.colorhunt-practice-result-card.is-ammo {
+  border-color: rgba(198, 40, 40, 0.72);
+}
+
+.colorhunt-practice-result-card.is-ammo h2 {
+  color: #c62828;
+}
+
+.colorhunt-practice-result-card.is-ammo .colorhunt-practice-result-icon {
+  filter: drop-shadow(0 3px 8px rgba(198, 40, 40, 0.28));
+}
