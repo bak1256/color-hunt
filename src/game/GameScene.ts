@@ -1216,25 +1216,50 @@ export class GameScene extends Phaser.Scene {
                 ),
             );
 
+        /*
+         * v0.10.10.170
+         * Hunter Practice used to explicitly hide the numeric timer.
+         * Keep it directly BELOW the Hider / hourglass / Hunter icon row so
+         * it can never be clipped by the top edge of the canvas.
+         */
+        const isHunterPractice =
+            this.practiceMode ===
+                'hunter';
+
         this.survivalHudText
             .setText(
-                this.practiceMode ===
-                    'hunter'
-                    ? ''
-                    : `${survivalRemainingSeconds}`,
+                `${survivalRemainingSeconds}`,
             )
             .setPosition(
                 hourglassX,
-                66,
+                isHunterPractice
+                    ? 70
+                    : 66,
             )
             .setOrigin(
                 0.5,
                 0,
             )
             .setFontSize(
-                this.mobileControlsEnabled
-                    ? 12
-                    : 14,
+                isHunterPractice
+                    ? (
+                        this.mobileControlsEnabled
+                            ? 15
+                            : 17
+                    )
+                    : (
+                        this.mobileControlsEnabled
+                            ? 12
+                            : 14
+                    ),
+            )
+            .setPadding(
+                isHunterPractice
+                    ? 11
+                    : 12,
+                isHunterPractice
+                    ? 5
+                    : 5,
             )
             .setColor(
                 survivalRemainingSeconds <=
@@ -1243,11 +1268,10 @@ export class GameScene extends Phaser.Scene {
                     : '#ffffff',
             )
             .setBackgroundColor(
-                'rgba(17,24,39,0.78)',
+                'rgba(17,24,39,0.86)',
             )
             .setVisible(
-                this.practiceMode !==
-                    'hunter',
+                true,
             );
 
         const hiderLabelX =

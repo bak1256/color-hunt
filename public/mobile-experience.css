@@ -5538,3 +5538,94 @@ body:has(.colorhunt-main-lobby) .colorhunt-controls-help {
     pointer-events: none !important;
   }
 }
+
+
+/* ============================================================
+   v0.10.10.170 — Lobby guide containment
+   ============================================================ */
+
+/*
+ * The guide copy grew after the readability pass, while an older 40px
+ * minimum remained. Give the card a real fixed slot and prevent its second
+ * line from leaking into the language footer.
+ */
+.colorhunt-main-lobby .ch-lobby-actions {
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+.colorhunt-main-lobby .ch-lobby-guide {
+  flex: 0 0 50px !important;
+  min-height: 50px !important;
+  max-height: 50px !important;
+  grid-template-columns: 42px minmax(0, 1fr) !important;
+  gap: 7px !important;
+  padding: 5px 8px !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+}
+
+.colorhunt-main-lobby .ch-lobby-guide > div:last-child {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.colorhunt-main-lobby .ch-lobby-guide strong {
+  margin: 0 !important;
+  font-size: clamp(9px, 1vw, 12px) !important;
+  line-height: 1.08 !important;
+  white-space: normal !important;
+  word-break: keep-all !important;
+  overflow-wrap: anywhere !important;
+}
+
+.colorhunt-main-lobby .ch-lobby-guide span {
+  margin-top: 3px !important;
+  font-size: clamp(7px, .82vw, 10px) !important;
+  line-height: 1.16 !important;
+  white-space: normal !important;
+  word-break: keep-all !important;
+  overflow-wrap: anywhere !important;
+}
+
+.colorhunt-main-lobby .ch-lobby-guide-mascot {
+  font-size: 27px !important;
+  line-height: 1 !important;
+}
+
+/*
+ * Short desktop/Fold landscape screens need a few extra pixels. Take them
+ * from the decorative guide, not from the primary room/action buttons.
+ */
+@media (max-height: 650px) {
+  .colorhunt-main-lobby .ch-lobby-actions {
+    gap: 4px !important;
+    padding-top: 7px !important;
+    padding-bottom: 5px !important;
+  }
+
+  .colorhunt-main-lobby .ch-lobby-guide {
+    flex-basis: 45px !important;
+    min-height: 45px !important;
+    max-height: 45px !important;
+  }
+
+  .colorhunt-main-lobby .ch-lobby-guide span {
+    font-size: clamp(6px, .72vw, 8px) !important;
+    line-height: 1.08 !important;
+  }
+}
+
+@media (pointer: coarse), (max-width: 900px) {
+  html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-guide {
+    flex: 0 0 42px !important;
+    min-height: 42px !important;
+    max-height: 42px !important;
+    grid-template-columns: 30px minmax(0, 1fr) !important;
+    padding: 4px 6px !important;
+  }
+
+  html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-guide-mascot {
+    font-size: 21px !important;
+  }
+}
