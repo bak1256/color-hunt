@@ -5871,21 +5871,40 @@ export class GameScene extends Phaser.Scene {
             this.mainLobbyRoot &&
             !multiplayerClient.isConnected()
         ) {
+            /*
+             * Main lobby has ONE immutable anchor: the canvas top-right.
+             * When Fold/unfold/orientation changes canvasRect is recalculated,
+             * but no device-specific offset can push this button elsewhere.
+             */
+            const rightInset =
+                Math.max(
+                    8,
+                    window.innerWidth -
+                        canvasRect.right +
+                        12,
+                );
+
+            const topInset =
+                Math.max(
+                    8,
+                    canvasRect.top +
+                        12,
+                );
+
             this.controlsHelpRoot.style.setProperty(
                 '--controls-right',
                 `${Math.round(
-                    window.innerWidth -
-                    canvasRect.right +
-                    104,
+                    rightInset,
                 )}px`,
             );
 
             this.controlsHelpRoot.style.setProperty(
                 '--controls-top',
                 `${Math.round(
-                    canvasRect.top + 10,
+                    topInset,
                 )}px`,
             );
+
             return;
         }
 
@@ -7960,7 +7979,7 @@ export class GameScene extends Phaser.Scene {
                         `map${index + 1}`;
                     return `
                         <option value="${value}">
-                            MAP ${index + 1}
+                            ${this.getMapDisplayName(value)}
                         </option>
                     `;
                 },
@@ -9929,7 +9948,7 @@ export class GameScene extends Phaser.Scene {
             'left';
 
         context.fillText(
-            this.practiceMap.toUpperCase(),
+            this.getMapDisplayName(this.practiceMap),
             58,
             footerY,
         );
@@ -10069,7 +10088,7 @@ export class GameScene extends Phaser.Scene {
             <p>${tr('친구에게 내 위장을 보여주고 Color Hunt에 초대해보세요.')}</p>
             <img alt="Color Hunt Hider Record" src="${previewUrl}">
             <div class="colorhunt-hider-share-meta">
-                <span>🗺 ${this.practiceMap.toUpperCase()}</span>
+                <span>🗺 ${this.getMapDisplayName(this.practiceMap)}</span>
             </div>
             <div class="colorhunt-hider-share-actions">
                 <button type="button" data-hider-share>📤 ${tr('이미지 + 게임 링크 공유')}</button>
@@ -14761,9 +14780,9 @@ export class GameScene extends Phaser.Scene {
 
         if (this.waitingRoomMapText) {
             this.waitingRoomMapText.textContent =
-                map === 'random'
-                    ? 'RANDOM'
-                    : map.toUpperCase();
+                this.getMapDisplayName(
+                    map,
+                );
         }
 
         const paint =
@@ -14997,7 +15016,9 @@ export class GameScene extends Phaser.Scene {
                             key:
                                 'random',
                             label:
-                                'RANDOM',
+                                this.getMapDisplayName(
+                                    'random',
+                                ),
                             /*
                              * RANDOM has no fixed map before game start.
                              * Use the forest/map1 preview as a neutral preview,
@@ -15019,7 +15040,9 @@ export class GameScene extends Phaser.Scene {
                             key:
                                 'random',
                             label:
-                                'RANDOM',
+                                this.getMapDisplayName(
+                                    'random',
+                                ),
                             thumbnail:
                                 '/assets/backgrounds/map1.png',
                         };
@@ -15038,7 +15061,9 @@ export class GameScene extends Phaser.Scene {
                         key:
                             rawSelected,
                         label:
-                            `MAP ${mapNumber}`,
+                            this.getMapDisplayName(
+                                rawSelected,
+                            ),
                         thumbnail:
                             `/assets/backgrounds/map${mapNumber}.png`,
                     };
@@ -15817,6 +15842,65 @@ export class GameScene extends Phaser.Scene {
             );
     }
 
+    private getMapDisplayName(
+        mapName:
+            string,
+    ): string {
+        const normalized =
+            mapName
+                .trim()
+                .toLowerCase();
+
+        if (
+            normalized ===
+                'random'
+        ) {
+            return tr(
+                '랜덤',
+            );
+        }
+
+        const labels:
+            Record<
+                string,
+                string
+            > = {
+                map1:
+                    '색의 나라',
+                map2:
+                    '판타지 마을',
+                map3:
+                    '컴퓨터 세상',
+                map4:
+                    '꿈의 나라',
+                map5:
+                    '미술관',
+                map6:
+                    '놀이동산',
+                map7:
+                    '그래피티 세상',
+                map8:
+                    '방의 세상',
+                map9:
+                    '마네킹 세상',
+                map10:
+                    '낙서 세상',
+                map11:
+                    '무지개 세상',
+            };
+
+        const key =
+            labels[
+                normalized
+            ];
+
+        return key
+            ? tr(
+                key,
+            )
+            : mapName;
+    }
+
     private getBackgroundTextureKey(
         mapName: string,
     ): string {
@@ -15931,16 +16015,10 @@ export class GameScene extends Phaser.Scene {
             multiplayerClient
                 .getSelectedMap();
 
-        const index =
-            this.selectableMaps
-                .indexOf(selected);
-
         const label =
-            selected === 'random'
-                ? tr('MAP  RANDOM')
-                : tr(
-                    `MAP  ${Math.max(1, index)} / 11`,
-                );
+            this.getMapDisplayName(
+                selected,
+            );
 
         this.mapSelectorPanel
             .setVisible(visible);
@@ -16059,17 +16137,12 @@ export class GameScene extends Phaser.Scene {
                     tr(tr(`ROOM  ${roomId}`)),
                     tr(tr(`TITLE  ${multiplayerClient.getRoom()?.state.roomTitle ?? '-'}`)),
                     tr(tr(`PLAYERS  ${this.networkPlayerCount} / 10`)),
-                    tr(
-                        `MAP  ${
+                    `${tr('맵')}  ${
+                        this.getMapDisplayName(
                             multiplayerClient
-                                .getSelectedMap() ===
-                                'random'
-                                ? 'RANDOM'
-                                : multiplayerClient
-                                    .getSelectedMap()
-                                    .toUpperCase()
-                        }`,
-                    ),
+                                .getSelectedMap(),
+                        )
+                    }`,
                 ].join('\n');
 
         const hasLobbyInfo =

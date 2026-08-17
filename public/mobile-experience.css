@@ -4637,3 +4637,18 @@ html.colorhunt-mobile body.colorhunt-unfolded {
     font-size: 6px;
   }
 }
+
+
+/* ============================================================
+   v0.10.10.147 — Fold-safe lobby controls-help anchor
+   ============================================================ */
+
+body:has(.colorhunt-main-lobby) .colorhunt-controls-help {
+  left: auto !important;
+  bottom: auto !important;
+  right: var(--controls-right, 12px) !important;
+  top: var(--controls-top, 12px) !important;
+  transform: none !important;
+  box-sizing: border-box;
+  max-width: min(280px, calc(100vw - 24px));
+}
