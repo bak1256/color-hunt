@@ -1453,12 +1453,6 @@ export class GameScene extends Phaser.Scene {
                     ? `⏱ ${survivalRemainingSeconds}s`
                     : `${survivalRemainingSeconds}`,
             )
-            .setPosition(
-                hourglassX,
-                isHunterPractice
-                    ? 82
-                    : 66,
-            )
             .setOrigin(
                 0.5,
                 0,
@@ -1496,6 +1490,29 @@ export class GameScene extends Phaser.Scene {
             .setVisible(
                 true,
             );
+
+        if (isHunterPractice) {
+            /*
+             * v0.10.10.188:
+             * Practice camera is zoomed. Raw setPosition(x, 82) gets zoomed
+             * AGAIN and visually flies upward. Convert the desired SCREEN
+             * pixel back through the camera so the badge is truly fixed.
+             */
+            this.setFixedHudScreenPosition(
+                this.survivalHudText,
+                this.gameWidth / 2,
+                88,
+            );
+
+            this.survivalHudText
+                .setDepth(26010);
+        } else {
+            this.survivalHudText
+                .setPosition(
+                    hourglassX,
+                    66,
+                );
+        }
 
         const hiderLabelX =
             hiderFirstX -
@@ -28508,11 +28525,6 @@ export class GameScene extends Phaser.Scene {
                  * the hourglass/icons and independent from world camera zoom.
                  */
                 this.timerText
-                    .setPosition(
-                        this.gameWidth /
-                            2,
-                        88,
-                    )
                     .setOrigin(
                         0.5,
                         0,
@@ -28524,7 +28536,20 @@ export class GameScene extends Phaser.Scene {
                     )
                     .setBackgroundColor(
                         'rgba(255, 244, 214, 0.94)',
-                    );
+                    )
+                    .setDepth(26020);
+
+                /*
+                 * Same true-screen anchoring as survivalHudText. Put this
+                 * lower than the icon row and below the compact survival
+                 * timer badge so at least one clear countdown is impossible
+                 * to miss.
+                 */
+                this.setFixedHudScreenPosition(
+                    this.timerText,
+                    this.gameWidth / 2,
+                    122,
+                );
             }
         }
 
