@@ -3953,3 +3953,47 @@ html.colorhunt-mobile body.colorhunt-unfolded {
     touch-action: none;
   }
 }
+
+
+/* ============================================================
+   v0.10.10.134 — Practice Ground production-UI unification
+   ============================================================ */
+
+.colorhunt-practice-card,
+.colorhunt-practice-card button,
+.colorhunt-practice-card select,
+.colorhunt-practice-card input {
+  font-family:
+    ui-monospace, "SFMono-Regular", "Cascadia Code",
+    "Noto Sans KR", "Noto Sans JP", monospace;
+}
+
+.colorhunt-practice-card {
+  border-color: #6f9b73;
+  background:
+    linear-gradient(180deg, #fffdf0 0%, #f4f2dc 100%);
+}
+
+.colorhunt-practice-mode {
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,.62);
+}
+
+.colorhunt-practice-start,
+.colorhunt-practice-head button,
+.colorhunt-practice-map select {
+  border: 1px solid rgba(70,104,73,.28);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.7),
+    0 2px 0 rgba(65,91,65,.12);
+}
+
+.colorhunt-practice-start {
+  letter-spacing: .01em;
+}
+
+.colorhunt-practice-start:active {
+  transform: translateY(1px);
+  box-shadow:
+    inset 0 1px 2px rgba(34,60,40,.12);
+}

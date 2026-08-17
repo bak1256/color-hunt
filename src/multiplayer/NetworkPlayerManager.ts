@@ -54,6 +54,30 @@ export class NetworkPlayerManager {
   private readonly players =
     new Map<string, NetworkPlayerView>();
 
+  /*
+   * v0.10.10.134 Practice Ground:
+   * A local-only session id lets Practice reuse the exact production
+   * character renderer / paint mask / movement code without a Colyseus room.
+   */
+  private practiceLocalSessionId = "";
+  private readonly practiceSessionIds =
+    new Set<string>();
+  private readonly practicePaintTextureKeys =
+    new Set<string>();
+
+  private getEffectiveLocalSessionId():
+    string | undefined {
+    return (
+      this.practiceLocalSessionId ||
+      multiplayerClient.getSessionId()
+    );
+  }
+
+  getLocalSessionId():
+    string | undefined {
+    return this.getEffectiveLocalSessionId();
+  }
+
 
   private localX = 480;
   private localY = 270;
@@ -109,6 +133,24 @@ export class NetworkPlayerManager {
     });
 
     this.players.clear();
+
+    this.practicePaintTextureKeys.forEach(
+      (textureKey) => {
+        if (
+          this.scene.textures.exists(
+            textureKey,
+          )
+        ) {
+          this.scene.textures.remove(
+            textureKey,
+          );
+        }
+      },
+    );
+    this.practicePaintTextureKeys.clear();
+    this.practiceSessionIds.clear();
+    this.practiceLocalSessionId = "";
+
     this.lobbyPresetRenderTokens.clear();
     this.lobbyPresetAppliedSignatures.clear();
     this.lobbyPresetRenderingSignatures.clear();
@@ -121,6 +163,337 @@ export class NetworkPlayerManager {
     this.localWasMoving = false;
     this.lastAuthoritativeSyncAt = 0;
     this.recentSentPositions = [];
+  }
+
+  beginPracticeLocalPlayer(
+    sessionId: string,
+    player: NetworkPlayerState,
+  ): void {
+    this.practiceLocalSessionId =
+      sessionId;
+    this.practiceSessionIds.add(
+      sessionId,
+    );
+
+    this.addPlayer(
+      sessionId,
+      player,
+    );
+
+    const view =
+      this.players.get(
+        sessionId,
+      );
+
+    if (view) {
+      this.localX =
+        view.container.x;
+      this.localY =
+        view.container.y;
+      this.localMovementInitialized =
+        true;
+      view.nameText.setVisible(
+        false,
+      );
+    }
+  }
+
+  addPracticePlayer(
+    sessionId: string,
+    player: NetworkPlayerState,
+  ): void {
+    this.practiceSessionIds.add(
+      sessionId,
+    );
+
+    this.addPlayer(
+      sessionId,
+      player,
+    );
+
+    this.players.get(
+      sessionId,
+    )?.nameText.setVisible(
+      false,
+    );
+  }
+
+  clearPracticePlayers(): void {
+    [
+      ...this.practiceSessionIds,
+    ].forEach(
+      (sessionId) => {
+        this.removePlayer(
+          sessionId,
+        );
+      },
+    );
+
+    this.practiceSessionIds.clear();
+    this.practiceLocalSessionId =
+      "";
+
+    this.practicePaintTextureKeys.forEach(
+      (textureKey) => {
+        if (
+          this.scene.textures.exists(
+            textureKey,
+          )
+        ) {
+          this.scene.textures.remove(
+            textureKey,
+          );
+        }
+      },
+    );
+
+    this.practicePaintTextureKeys.clear();
+  }
+
+  setPracticePlayerPosition(
+    sessionId: string,
+    x: number,
+    y: number,
+  ): void {
+    const view =
+      this.players.get(
+        sessionId,
+      );
+
+    if (!view) {
+      return;
+    }
+
+    view.targetX = x;
+    view.targetY = y;
+
+    if (
+      sessionId ===
+      this.practiceLocalSessionId
+    ) {
+      this.localX = x;
+      this.localY = y;
+    }
+
+    this.setViewPosition(
+      view,
+      x,
+      y,
+    );
+  }
+
+  setPracticePlayerAlive(
+    sessionId: string,
+    alive: boolean,
+  ): void {
+    const view =
+      this.players.get(
+        sessionId,
+      );
+
+    if (!view) {
+      return;
+    }
+
+    view.alive = alive;
+
+    view.container
+      .setVisible(alive)
+      .setAlpha(
+        alive
+          ? 1
+          : 0,
+      );
+
+    view.paintLayer?.texture
+      .setVisible(alive)
+      .setAlpha(
+        alive
+          ? 1
+          : 0,
+      );
+
+    view.gun?.setVisible(
+      alive &&
+      view.role ===
+        "hunter",
+    );
+  }
+
+  setPracticePlayerVisible(
+    sessionId: string,
+    visible: boolean,
+  ): void {
+    const view =
+      this.players.get(
+        sessionId,
+      );
+
+    if (!view) {
+      return;
+    }
+
+    view.container.setVisible(
+      visible,
+    );
+    view.paintLayer?.texture
+      .setVisible(
+        visible,
+      );
+    view.gun?.setVisible(
+      visible &&
+      view.role ===
+        "hunter",
+    );
+    view.nameText.setVisible(
+      false,
+    );
+  }
+
+  applyPracticeFullCamouflage(
+    sessionId: string,
+    colorAt:
+      (
+        textureX: number,
+        textureY: number,
+      ) => number,
+  ): void {
+    const view =
+      this.players.get(
+        sessionId,
+      );
+
+    if (!view?.paintLayer) {
+      return;
+    }
+
+    const textureKey =
+      [
+        "practice-full-camo",
+        sessionId,
+        this.scene.time.now,
+        Math.floor(
+          Math.random() *
+          1_000_000,
+        ),
+      ].join("-");
+
+    const canvasTexture =
+      this.scene.textures.createCanvas(
+        textureKey,
+        80,
+        120,
+      );
+
+    if (!canvasTexture) {
+      return;
+    }
+
+    this.practicePaintTextureKeys.add(
+      textureKey,
+    );
+
+    const context =
+      canvasTexture.getContext();
+
+    context.clearRect(
+      0,
+      0,
+      80,
+      120,
+    );
+
+    const image =
+      context.createImageData(
+        80,
+        120,
+      );
+
+    for (
+      let y = 0;
+      y < 120;
+      y += 1
+    ) {
+      for (
+        let x = 0;
+        x < 80;
+        x += 1
+      ) {
+        if (
+          !this.isPaintPixelInsideCharacter(
+            x,
+            y,
+          )
+        ) {
+          continue;
+        }
+
+        const color =
+          colorAt(
+            x,
+            y,
+          ) >>> 0;
+
+        const index =
+          (
+            y *
+            80 +
+            x
+          ) *
+          4;
+
+        image.data[index] =
+          (
+            color >>
+            16
+          ) &
+          0xff;
+        image.data[
+          index + 1
+        ] =
+          (
+            color >>
+            8
+          ) &
+          0xff;
+        image.data[
+          index + 2
+        ] =
+          color &
+          0xff;
+        image.data[
+          index + 3
+        ] =
+          255;
+      }
+    }
+
+    context.putImageData(
+      image,
+      0,
+      0,
+    );
+
+    canvasTexture.refresh();
+
+    view.paintLayer.texture
+      .clear()
+      .draw(
+        textureKey,
+        0,
+        0,
+      )
+      .setVisible(true)
+      .setAlpha(1);
+
+    this.renderPaintTexture(
+      view.paintLayer.texture,
+    );
+
+    this.syncPaintLayerPosition(
+      view,
+      true,
+    );
   }
 
   syncPlayersFromCurrentRoom(): void {
@@ -162,7 +535,7 @@ export class NetworkPlayerManager {
     );
 
     const localSessionId =
-      multiplayerClient.getSessionId();
+      this.getEffectiveLocalSessionId();
 
     [...this.players.keys()]
       .forEach(
@@ -312,7 +685,7 @@ export class NetworkPlayerManager {
 
         const isLocal =
           sessionId ===
-          multiplayerClient.getSessionId();
+          this.getEffectiveLocalSessionId();
 
         /*
          * Online lobby:
@@ -403,7 +776,7 @@ export class NetworkPlayerManager {
 
     const isLocal =
       sessionId ===
-      multiplayerClient.getSessionId();
+      this.getEffectiveLocalSessionId();
 
     const container = this.createPlayerContainer(
       player,
@@ -567,7 +940,7 @@ export class NetworkPlayerManager {
 
     const isRemote =
       sessionId !==
-      multiplayerClient.getSessionId();
+      this.getEffectiveLocalSessionId();
 
     if (
       isRemote &&
@@ -655,7 +1028,7 @@ export class NetworkPlayerManager {
 
       if (
         sessionId ===
-        multiplayerClient.getSessionId()
+        this.getEffectiveLocalSessionId()
       ) {
         this.localX = player.x;
         this.localY = player.y;
@@ -737,7 +1110,7 @@ export class NetworkPlayerManager {
 
     if (
       sessionId ===
-      multiplayerClient.getSessionId() &&
+      this.getEffectiveLocalSessionId() &&
       !view.customizationMode
     ) {
       /*
@@ -916,7 +1289,7 @@ export class NetworkPlayerManager {
      * same x/y the server uses for shotgun hit detection.
      */
     const localSessionId =
-      multiplayerClient.getSessionId();
+      this.getEffectiveLocalSessionId();
 
     room.state.players?.forEach?.(
       (
@@ -1004,7 +1377,7 @@ export class NetworkPlayerManager {
     delta: number,
   ): void {
     const sessionId =
-      multiplayerClient.getSessionId();
+      this.getEffectiveLocalSessionId();
 
     if (!sessionId) {
       return;
@@ -1033,10 +1406,12 @@ export class NetworkPlayerManager {
          * final rendered coordinate immediately so the server hit position
          * and every remote Hunter settle on exactly the same point.
          */
-        multiplayerClient.sendMove(
-          this.localX,
-          this.localY,
-        );
+        if (!this.practiceLocalSessionId) {
+          multiplayerClient.sendMove(
+            this.localX,
+            this.localY,
+          );
+        }
 
         this.rememberSentPosition(
           this.localX,
@@ -1138,10 +1513,12 @@ export class NetworkPlayerManager {
     ) {
       this.lastSendTime = now;
 
-      multiplayerClient.sendMove(
-        this.localX,
-        this.localY,
-      );
+      if (!this.practiceLocalSessionId) {
+        multiplayerClient.sendMove(
+          this.localX,
+          this.localY,
+        );
+      }
 
       this.rememberSentPosition(
         this.localX,
@@ -1152,7 +1529,7 @@ export class NetworkPlayerManager {
 
   update(delta = 16): void {
     const localSessionId =
-      multiplayerClient.getSessionId();
+      this.getEffectiveLocalSessionId();
 
     this.players.forEach(
       (view, sessionId) => {
@@ -1463,7 +1840,7 @@ export class NetworkPlayerManager {
 
   isLocalCustomizationMode(): boolean {
     const sessionId =
-      multiplayerClient.getSessionId();
+      this.getEffectiveLocalSessionId();
 
     if (!sessionId) {
       return false;
@@ -1477,7 +1854,7 @@ export class NetworkPlayerManager {
 
   getLocalRole(): NetworkPlayerRole | null {
     const sessionId =
-      multiplayerClient.getSessionId();
+      this.getEffectiveLocalSessionId();
 
     if (!sessionId) {
       return null;
@@ -1490,6 +1867,13 @@ export class NetworkPlayerManager {
   }
 
   canLocalControlHunter(): boolean {
+    if (this.practiceLocalSessionId) {
+      return (
+        this.getLocalRole() ===
+        "hunter"
+      );
+    }
+
     return (
       this.getLocalRole() ===
         "hunter" &&
@@ -1520,7 +1904,7 @@ export class NetworkPlayerManager {
     | Phaser.GameObjects.Container
     | null {
     const sessionId =
-      multiplayerClient.getSessionId();
+      this.getEffectiveLocalSessionId();
 
     if (!sessionId) {
       return null;
@@ -1538,7 +1922,7 @@ export class NetworkPlayerManager {
 
   snapLocalPlayerToAuthoritativePosition(): void {
     const sessionId =
-      multiplayerClient.getSessionId();
+      this.getEffectiveLocalSessionId();
 
     if (!sessionId) {
       return;
@@ -1645,7 +2029,7 @@ export class NetworkPlayerManager {
     | Phaser.Math.Vector2
     | null {
     const sessionId =
-      multiplayerClient.getSessionId();
+      this.getEffectiveLocalSessionId();
 
     if (!sessionId) {
       return null;
@@ -1665,6 +2049,13 @@ export class NetworkPlayerManager {
   }
 
   isLocalHider(): boolean {
+    if (this.practiceLocalSessionId) {
+      return (
+        this.getLocalRole() ===
+        "hider"
+      );
+    }
+
     return (
       multiplayerClient.getLocalPlayer()
         ?.role === "hider"
@@ -1683,7 +2074,7 @@ export class NetworkPlayerManager {
       }
     | null {
     const sessionId =
-      multiplayerClient.getSessionId();
+      this.getEffectiveLocalSessionId();
 
     if (!sessionId) {
       return null;
@@ -1720,7 +2111,7 @@ export class NetworkPlayerManager {
 
   getLocalPlayerVisualScale(): number {
     const sessionId =
-      multiplayerClient.getSessionId();
+      this.getEffectiveLocalSessionId();
 
     if (!sessionId) {
       return 1;
@@ -1968,7 +2359,7 @@ export class NetworkPlayerManager {
     shape: NetworkBrushShape,
   ): NetworkPaintPoint | null {
     const sessionId =
-      multiplayerClient.getSessionId();
+      this.getEffectiveLocalSessionId();
 
     if (!sessionId) {
       return null;
@@ -2092,7 +2483,7 @@ export class NetworkPlayerManager {
     shape: NetworkBrushShape,
   ): void {
     const sessionId =
-      multiplayerClient.getSessionId();
+      this.getEffectiveLocalSessionId();
 
     if (!sessionId) {
       return;
@@ -2538,7 +2929,7 @@ export class NetworkPlayerManager {
     enabled: boolean,
   ): void {
     const sessionId =
-      multiplayerClient.getSessionId();
+      this.getEffectiveLocalSessionId();
 
     if (!sessionId) {
       return;
@@ -2613,7 +3004,7 @@ export class NetworkPlayerManager {
     zoom: number,
   ): number {
     const sessionId =
-      multiplayerClient.getSessionId();
+      this.getEffectiveLocalSessionId();
 
     if (!sessionId) {
       return 1;
@@ -2675,7 +3066,7 @@ export class NetworkPlayerManager {
 
   getLocalPaintZoom(): number {
     const sessionId =
-      multiplayerClient.getSessionId();
+      this.getEffectiveLocalSessionId();
 
     if (!sessionId) {
       return 1;
@@ -2689,7 +3080,7 @@ export class NetworkPlayerManager {
 
   resetLocalPaintZoom(): void {
     const sessionId =
-      multiplayerClient.getSessionId();
+      this.getEffectiveLocalSessionId();
 
     if (!sessionId) {
       return;
@@ -2783,7 +3174,7 @@ export class NetworkPlayerManager {
 
   normalizeLocalPlayerForGameplay(): void {
     const sessionId =
-      multiplayerClient.getSessionId();
+      this.getEffectiveLocalSessionId();
 
     if (!sessionId) {
       return;
@@ -2870,7 +3261,7 @@ export class NetworkPlayerManager {
 
   showOnlyLocalPlayer(): void {
     const localSessionId =
-      multiplayerClient.getSessionId();
+      this.getEffectiveLocalSessionId();
 
     this.players.forEach(
       (view, sessionId) => {
@@ -3626,7 +4017,7 @@ export class NetworkPlayerManager {
 
       if (
         view.sessionId ===
-        multiplayerClient.getSessionId()
+        this.getEffectiveLocalSessionId()
       ) {
         this.localX = snappedX;
         this.localY = snappedY;
@@ -3742,7 +4133,7 @@ export class NetworkPlayerManager {
 
         const isLocal =
           view.sessionId ===
-          multiplayerClient.getSessionId();
+          this.getEffectiveLocalSessionId();
 
         this.scene.sound.play(
           "footstep",
@@ -3793,7 +4184,7 @@ export class NetworkPlayerManager {
        */
       const isLocal =
         view.sessionId ===
-        multiplayerClient.getSessionId();
+        this.getEffectiveLocalSessionId();
 
       this.scene.sound.play(
         "footstep",
