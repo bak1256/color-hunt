@@ -3818,3 +3818,115 @@ html.colorhunt-mobile body.colorhunt-unfolded {
     font-size: 9px;
   }
 }
+
+
+/* ============================================================
+   v0.10.10.132 — Practice Ground CTA emphasis
+   ============================================================ */
+
+.ch-lobby-action--practice {
+  position: relative;
+  overflow: hidden;
+  border: 2px solid #5f9a69 !important;
+  background:
+    linear-gradient(180deg, #dff5d8 0%, #c8e9c5 100%) !important;
+  color: #244b31 !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,.72),
+    0 3px 0 rgba(70,118,75,.18),
+    0 8px 18px rgba(67,113,72,.16) !important;
+}
+
+.ch-lobby-action--practice::after {
+  content: "";
+  position: absolute;
+  top: -24px;
+  right: -24px;
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.34);
+  pointer-events: none;
+}
+
+.ch-lobby-action--practice .ch-lobby-action-icon {
+  background: #fff7c9 !important;
+  color: #3f6f49 !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(118,151,86,.20);
+}
+
+.ch-lobby-practice-copy {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas:
+    "badge title"
+    "desc desc";
+  align-items: center;
+  column-gap: 6px;
+  row-gap: 2px;
+  min-width: 0;
+}
+
+.ch-lobby-practice-badge {
+  grid-area: badge;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #3f7f4d;
+  color: #ffffff;
+  font-size: 8px;
+  font-weight: 950;
+  line-height: 1;
+  white-space: nowrap;
+  box-shadow: 0 1px 0 rgba(0,0,0,.08);
+}
+
+.ch-lobby-action--practice strong {
+  grid-area: title;
+  color: #23472e !important;
+  font-size: 14px !important;
+  font-weight: 950 !important;
+  line-height: 1.05 !important;
+}
+
+.ch-lobby-action--practice small {
+  grid-area: desc;
+  color: #49614d !important;
+  font-size: 9px !important;
+  font-weight: 800 !important;
+  line-height: 1.15 !important;
+}
+
+.ch-lobby-action--practice:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.02);
+}
+
+@media (pointer: coarse) {
+  .ch-lobby-action--practice {
+    border-width: 2px !important;
+  }
+
+  .ch-lobby-practice-copy {
+    column-gap: 4px;
+    row-gap: 1px;
+  }
+
+  .ch-lobby-practice-badge {
+    min-height: 15px;
+    padding: 0 5px;
+    font-size: 6.5px;
+  }
+
+  .ch-lobby-action--practice strong {
+    font-size: 10px !important;
+  }
+
+  .ch-lobby-action--practice small {
+    font-size: 7px !important;
+  }
+}

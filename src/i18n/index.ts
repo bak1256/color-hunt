@@ -5,6 +5,7 @@ const STORAGE_KEY = 'chameleon-hunt-language';
 type Dict = Record<string, string>;
 
 const ja: Dict = {
+  "초보 추천": "初心者おすすめ",
   "연습장": "練習場",
   "BEGINNER PRACTICE": "BEGINNER PRACTICE",
   "처음이라면 여기서 헌터와 하이더를 연습해보세요": "初めてなら、ここでハンターとハイダーを練習できます",
@@ -160,6 +161,7 @@ const ja: Dict = {
 };
 
 const en: Dict = {
+  "초보 추천": "BEGINNER PICK",
   "연습장": "Practice Ground",
   "BEGINNER PRACTICE": "BEGINNER PRACTICE",
   "처음이라면 여기서 헌터와 하이더를 연습해보세요": "New here? Practice Hunter and Hider basics first",
@@ -317,6 +319,7 @@ const en: Dict = {
 };
 
 const zh: Dict = {
+  "초보 추천": "新手推荐",
   "연습장": "练习场",
   "BEGINNER PRACTICE": "BEGINNER PRACTICE",
   "처음이라면 여기서 헌터와 하이더를 연습해보세요": "第一次玩的话，可以先在这里练习猎人和躲藏者",

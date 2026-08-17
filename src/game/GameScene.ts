@@ -11572,7 +11572,8 @@ export class GameScene extends Phaser.Scene {
 
                     <button type="button" class="ch-lobby-action ch-lobby-action--practice">
                         <span class="ch-lobby-action-icon">🎯</span>
-                        <span>
+                        <span class="ch-lobby-practice-copy">
+                            <span class="ch-lobby-practice-badge">${tr('초보 추천')}</span>
                             <strong>${tr('연습장')}</strong>
                             <small>${tr('처음이라면 여기서 헌터와 하이더를 연습해보세요')}</small>
                         </span>
