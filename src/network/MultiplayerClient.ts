@@ -689,13 +689,26 @@ this.phaseChangedHandlers.forEach(
   async listPublicRooms(): Promise<
     PublicRoomInfo[]
   > {
+    /*
+     * v0.10.10.159 GHOST ROOM HOTFIX
+     *
+     * Never allow browser/CDN caching for the room directory.
+     * A cached /api/rooms response can outlive the actual Colyseus room and
+     * show "4 / 10" even after every client has already left.
+     */
+    const cacheBuster =
+      Date.now();
+
     const response = await fetch(
-      `${this.serverUrl}/api/rooms`,
+      `${this.serverUrl}/api/rooms?_=${cacheBuster}`,
       {
         method: "GET",
         headers: {
           Accept: "application/json",
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
         },
+        cache: "no-store",
       },
     );
 
@@ -711,10 +724,43 @@ this.phaseChangedHandlers.forEach(
       };
 
     const rooms =
-      payload.rooms ?? [];
+      (payload.rooms ?? [])
+        .filter(
+          (room) =>
+            Boolean(
+              room?.roomId,
+            ) &&
+            Number.isFinite(
+              Number(
+                room.clients,
+              ),
+            ) &&
+            Number(
+              room.clients,
+            ) > 0,
+        )
+        .map(
+          (room) => ({
+            ...room,
+            clients:
+              Math.max(
+                0,
+                Number(
+                  room.clients,
+                ),
+              ),
+            maxClients:
+              Math.max(
+                1,
+                Number(
+                  room.maxClients,
+                ) || 10,
+              ),
+          }),
+        );
 
     console.log(
-      "[Chameleon Hunt] Public rooms from API",
+      "[Chameleon Hunt] Fresh public rooms from API",
       rooms,
     );
 

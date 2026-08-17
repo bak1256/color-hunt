@@ -7361,7 +7361,15 @@ export class GameScene extends Phaser.Scene {
         window.setTimeout(
             () => {
                 if (!this.menuModalOverlay) {
-                    this.input.enabled = true;
+                    this.input.enabled =
+                        true;
+
+                    if (
+                        this.input.keyboard
+                    ) {
+                        this.input.keyboard.enabled =
+                            true;
+                    }
                 }
             },
             120,
@@ -7412,8 +7420,20 @@ export class GameScene extends Phaser.Scene {
         /*
          * Modal is a true input modal: while it exists, the Phaser scene
          * underneath is completely non-interactive.
+         *
+         * IMPORTANT: disabling InputPlugin alone does NOT stop Phaser's
+         * KeyboardPlugin from consuming registered WASD keys at the browser
+         * level. That is why letters such as A / W could disappear while
+         * typing a room name. Disable the keyboard plugin explicitly.
          */
         this.input.enabled = false;
+
+        if (
+            this.input.keyboard
+        ) {
+            this.input.keyboard.enabled =
+                false;
+        }
 
         const overlay =
             document.createElement('div');
@@ -7534,6 +7554,30 @@ export class GameScene extends Phaser.Scene {
                 input.placeholder =
                     field.placeholder ?? '';
                 input.autocomplete = 'off';
+
+                /*
+                 * Native typing wins over every game shortcut.
+                 * Do NOT preventDefault here: A/W/space/etc must still be
+                 * inserted normally into the text field.
+                 */
+                [
+                    'keydown',
+                    'keyup',
+                    'keypress',
+                ].forEach(
+                    (
+                        eventName,
+                    ) => {
+                        input.addEventListener(
+                            eventName,
+                            (
+                                event,
+                            ) => {
+                                event.stopPropagation();
+                            },
+                        );
+                    },
+                );
 
                 Object.assign(
                     input.style,
@@ -7690,6 +7734,14 @@ export class GameScene extends Phaser.Scene {
         busy: boolean,
         message = '',
     ): void {
+        if (
+            this.menuModalOverlay &&
+            this.input.keyboard
+        ) {
+            this.input.keyboard.enabled =
+                false;
+        }
+
         const form =
             this.menuModalOverlay
                 ?.querySelector('form');
@@ -15083,7 +15135,14 @@ export class GameScene extends Phaser.Scene {
                     ) =>
                         room.metadata
                             ?.isPrivate !==
-                        true,
+                            true &&
+                        Boolean(
+                            room.roomId,
+                        ) &&
+                        Number(
+                            room.clients,
+                        ) >
+                            0,
                 );
 
             if (
