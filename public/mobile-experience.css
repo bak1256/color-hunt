@@ -5629,3 +5629,95 @@ body:has(.colorhunt-main-lobby) .colorhunt-controls-help {
     font-size: 21px !important;
   }
 }
+
+
+/* ============================================================
+   v0.10.10.171 — Practice scrollbar ALWAYS visible on mobile
+   ============================================================ */
+
+@media (pointer: coarse), (max-width: 900px) {
+  /*
+   * Do not wait for the first scroll gesture.
+   * The custom scrollbar is a permanent visual affordance while the
+   * Practice modal is open.
+   */
+  .colorhunt-practice-scroll-affordance,
+  .colorhunt-practice-scroll-affordance:not(.is-scrollable) {
+    display: grid !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+  }
+
+  .colorhunt-practice-scroll-affordance {
+    width: 44px !important;
+    right: max(8px, env(safe-area-inset-right)) !important;
+    border: 3px solid #4f8258 !important;
+    background: rgba(248, 252, 234, .99) !important;
+    box-shadow:
+      0 5px 14px rgba(31, 72, 40, .34),
+      inset 0 1px 0 rgba(255,255,255,.92) !important;
+  }
+
+  .colorhunt-practice-scroll-affordance__arrow {
+    display: block !important;
+    opacity: 1 !important;
+    font-size: 24px !important;
+    color: #28683a !important;
+  }
+
+  .colorhunt-practice-scroll-affordance__label {
+    display: block !important;
+    opacity: 1 !important;
+    color: #315f3d !important;
+    font-size: 10px !important;
+    font-weight: 950 !important;
+  }
+
+  .colorhunt-practice-scroll-affordance__track {
+    display: block !important;
+    width: 17px !important;
+    height: 136px !important;
+    background: #d8e8c5 !important;
+    border: 2px solid #779b70 !important;
+  }
+
+  .colorhunt-practice-scroll-affordance__track i {
+    display: block !important;
+    opacity: 1 !important;
+    width: 9px !important;
+    height: 44px !important;
+    background:
+      linear-gradient(
+        180deg,
+        #74c982 0%,
+        #2e743f 100%
+      ) !important;
+  }
+
+  /*
+   * Even on a tall phone where only a tiny amount of overflow exists,
+   * keep the affordance visible. We prefer an obvious scrollbar over a
+   * hidden "maybe scrollable" interface.
+   */
+  .colorhunt-practice-scroll-affordance:not(.is-scrollable) {
+    filter: saturate(.82);
+  }
+}
+
+/* Fold landscape: even more obvious without covering the modal content. */
+@media (pointer: coarse) and (orientation: landscape) and (max-height: 650px) {
+  .colorhunt-practice-scroll-affordance,
+  .colorhunt-practice-scroll-affordance:not(.is-scrollable) {
+    width: 46px !important;
+    opacity: 1 !important;
+  }
+
+  .colorhunt-practice-scroll-affordance__track {
+    height: 145px !important;
+  }
+
+  .colorhunt-practice-scroll-affordance__track i {
+    height: 48px !important;
+  }
+}
