@@ -1218,7 +1218,10 @@ export class GameScene extends Phaser.Scene {
 
         this.survivalHudText
             .setText(
-                `${survivalRemainingSeconds}`,
+                this.practiceMode ===
+                    'hunter'
+                    ? ''
+                    : `${survivalRemainingSeconds}`,
             )
             .setPosition(
                 hourglassX,
@@ -1242,7 +1245,10 @@ export class GameScene extends Phaser.Scene {
             .setBackgroundColor(
                 'rgba(17,24,39,0.78)',
             )
-            .setVisible(true);
+            .setVisible(
+                this.practiceMode !==
+                    'hunter',
+            );
 
         const hiderLabelX =
             hiderFirstX -
@@ -27269,20 +27275,50 @@ export class GameScene extends Phaser.Scene {
                     );
             }
         } else {
-            const usePracticeSurvivalHud =
-                this.practiceMode ===
-                    'hunter';
-
+            /*
+             * HOTFIX v0.10.10.153:
+             * Hunter Practice now uses the SAME Hunt countdown text object
+             * as the real game. The previous branch hid timerText in Practice
+             * and relied on survivalHudText only, which could disappear after
+             * camera/fixed-HUD compensation on some devices.
+             *
+             * One clock (phaseEndTime) -> one visible TIME n countdown.
+             */
             this.timerText
-                .setVisible(
-                    !usePracticeSurvivalHud,
-                )
-                .setDepth(3200)
+                .setVisible(true)
+                .setDepth(6200)
+                .setScrollFactor(0)
                 .setText(
-                    usePracticeSurvivalHud
-                        ? ''
-                        : tr(`TIME ${remainingSeconds}`),
+                    tr(`TIME ${remainingSeconds}`),
                 );
+
+            if (
+                this.practiceMode ===
+                    'hunter'
+            ) {
+                /*
+                 * Keep it directly under the real top survival HUD, clear of
+                 * the hourglass/icons and independent from world camera zoom.
+                 */
+                this.timerText
+                    .setPosition(
+                        this.gameWidth /
+                            2,
+                        88,
+                    )
+                    .setOrigin(
+                        0.5,
+                        0,
+                    )
+                    .setFontSize(
+                        this.mobileControlsEnabled
+                            ? 20
+                            : 22,
+                    )
+                    .setBackgroundColor(
+                        'rgba(255, 244, 214, 0.94)',
+                    );
+            }
         }
 
         this.timerText.setColor(
