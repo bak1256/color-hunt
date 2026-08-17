@@ -624,8 +624,18 @@ export class GameScene extends Phaser.Scene {
                     : 8
             );
 
-        this.setFixedHudScreenPosition(
-            button,
+        /*
+         * v0.10.10.177 HOTFIX
+         *
+         * paintReadyButton already has setScrollFactor(0), therefore its
+         * position is screen-space. Applying setFixedHudScreenPosition()
+         * again compensated for camera zoom a second time and made the
+         * button visibly slide around whenever Paint zoom changed.
+         *
+         * Keep this UI in raw screen coordinates instead. Character / brush
+         * zoom may change freely; this button never moves.
+         */
+        button.setPosition(
             readyX,
             readyY,
         );
