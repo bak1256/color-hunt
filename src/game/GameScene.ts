@@ -374,7 +374,11 @@ export class GameScene extends Phaser.Scene {
                 },
             )
                 .setOrigin(0.5)
-                .setScrollFactor(0)
+                /*
+                 * v178: READY is anchored through camera.getWorldPoint()
+                 * every update; it intentionally uses scrollFactor 1.
+                 */
+                .setScrollFactor(1)
                 .setDepth(6020)
                 .setVisible(false);
 
@@ -625,20 +629,44 @@ export class GameScene extends Phaser.Scene {
             );
 
         /*
-         * v0.10.10.177 HOTFIX
+         * v0.10.10.178 TRUE SCREEN ANCHOR
          *
-         * paintReadyButton already has setScrollFactor(0), therefore its
-         * position is screen-space. Applying setFixedHudScreenPosition()
-         * again compensated for camera zoom a second time and made the
-         * button visibly slide around whenever Paint zoom changed.
+         * Phaser camera zoom still transforms GameObjects even when their
+         * scrollFactor is 0. That is why v177 could visibly slide around.
          *
-         * Keep this UI in raw screen coordinates instead. Character / brush
-         * zoom may change freely; this button never moves.
+         * Treat READY as a HUD object instead:
+         *   1) convert the desired SCREEN pixel to a camera world point,
+         *   2) let the button scroll with the camera (scrollFactor 1),
+         *   3) inverse-scale it so camera zoom cannot resize it.
+         *
+         * updatePaintReadyButton() runs continuously, so this re-anchors the
+         * button every update even while Paint zoom/pan is changing.
          */
-        button.setPosition(
-            readyX,
-            readyY,
-        );
+        const paintCamera =
+            this.cameras.main;
+
+        const readyWorldPoint =
+            paintCamera.getWorldPoint(
+                readyX,
+                readyY,
+            );
+
+        const inverseCameraZoom =
+            1 /
+            Math.max(
+                0.01,
+                paintCamera.zoom,
+            );
+
+        button
+            .setScrollFactor(1)
+            .setPosition(
+                readyWorldPoint.x,
+                readyWorldPoint.y,
+            )
+            .setScale(
+                inverseCameraZoom,
+            );
 
         /*
          * Never show misleading 0/0 merely because the READY packet was
