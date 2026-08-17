@@ -7421,10 +7421,8 @@ export class GameScene extends Phaser.Scene {
          * Modal is a true input modal: while it exists, the Phaser scene
          * underneath is completely non-interactive.
          *
-         * IMPORTANT: disabling InputPlugin alone does NOT stop Phaser's
-         * KeyboardPlugin from consuming registered WASD keys at the browser
-         * level. That is why letters such as A / W could disappear while
-         * typing a room name. Disable the keyboard plugin explicitly.
+         * Disable Phaser's KeyboardPlugin too so registered WASD controls
+         * cannot consume A/W while typing a room name/password/nickname.
          */
         this.input.enabled = false;
 
@@ -7555,11 +7553,6 @@ export class GameScene extends Phaser.Scene {
                     field.placeholder ?? '';
                 input.autocomplete = 'off';
 
-                /*
-                 * Native typing wins over every game shortcut.
-                 * Do NOT preventDefault here: A/W/space/etc must still be
-                 * inserted normally into the text field.
-                 */
                 [
                     'keydown',
                     'keyup',
@@ -15135,10 +15128,7 @@ export class GameScene extends Phaser.Scene {
                     ) =>
                         room.metadata
                             ?.isPrivate !==
-                            true &&
-                        Boolean(
-                            room.roomId,
-                        ),
+                        true,
                 );
 
             if (
@@ -15306,17 +15296,7 @@ export class GameScene extends Phaser.Scene {
                             </span>
 
                             <span class="ch-lobby-room-count">
-                                ${
-                                    Math.max(
-                                        Number(
-                                            room.clients,
-                                        ) || 0,
-                                        Number(
-                                            room.metadata
-                                                ?.playerCount,
-                                        ) || 0,
-                                    )
-                                } / ${room.maxClients}
+                                ${room.clients} / ${room.maxClients}
                             </span>
 
                             <span class="ch-lobby-room-status ${
