@@ -2864,6 +2864,8 @@ export class GameScene extends Phaser.Scene {
     private practiceBotCount = 3;
     private practiceBotPrecision = 65;
     private practiceExitButton?: Phaser.GameObjects.Text;
+    private readonly practiceBotTextureKeys =
+        new Set<string>();
 
     constructor() {
         super('GameScene');
@@ -7654,19 +7656,49 @@ export class GameScene extends Phaser.Scene {
                 '[data-bot-count-value]',
             );
 
-        botCount?.addEventListener(
-            'input',
-            () => {
+        const commitBotCount =
+            (): void => {
+                if (!botCount) {
+                    return;
+                }
+
                 this.practiceBotCount =
-                    Number(
-                        botCount.value,
+                    Phaser.Math.Clamp(
+                        Math.round(
+                            Number(
+                                botCount.value,
+                            ),
+                        ),
+                        1,
+                        5,
                     );
+
+                botCount.value =
+                    String(
+                        this.practiceBotCount,
+                    );
+
                 if (botCountValue) {
                     botCountValue.textContent =
                         String(
                             this.practiceBotCount,
                         );
                 }
+            };
+
+        [
+            'input',
+            'change',
+            'pointerup',
+            'touchend',
+        ].forEach(
+            (
+                eventName,
+            ) => {
+                botCount?.addEventListener(
+                    eventName,
+                    commitBotCount,
+                );
             },
         );
 
@@ -7683,17 +7715,49 @@ export class GameScene extends Phaser.Scene {
                 '[data-bot-precision-value]',
             );
 
-        precision?.addEventListener(
-            'input',
-            () => {
+        const commitPrecision =
+            (): void => {
+                if (!precision) {
+                    return;
+                }
+
                 this.practiceBotPrecision =
-                    Number(
-                        precision.value,
+                    Phaser.Math.Clamp(
+                        Math.round(
+                            Number(
+                                precision.value,
+                            ) /
+                            5,
+                        ) *
+                            5,
+                        50,
+                        80,
                     );
+
+                precision.value =
+                    String(
+                        this.practiceBotPrecision,
+                    );
+
                 if (precisionValue) {
                     precisionValue.textContent =
                         `${this.practiceBotPrecision}%`;
                 }
+            };
+
+        [
+            'input',
+            'change',
+            'pointerup',
+            'touchend',
+        ].forEach(
+            (
+                eventName,
+            ) => {
+                precision?.addEventListener(
+                    eventName,
+                    commitPrecision,
+                );
             },
         );
 
@@ -7733,6 +7797,8 @@ export class GameScene extends Phaser.Scene {
         )?.addEventListener(
             'click',
             () => {
+                commitBotCount();
+                commitPrecision();
                 updateMap();
                 this.closeMenuModal();
                 this.startHunterPractice();
@@ -7752,6 +7818,8 @@ export class GameScene extends Phaser.Scene {
     }
 
     private destroyLocalHiders(): void {
+        this.clearPracticeBotTextures();
+
         this.hiders.forEach(
             (
                 hider,
@@ -7816,20 +7884,20 @@ export class GameScene extends Phaser.Scene {
                 );
     }
 
-    private getPracticeBackgroundColor(
-        worldX: number,
-        worldY: number,
-        precision:
-            number,
-    ): number {
+    private createPracticeBackgroundSampler():
+        | {
+            data:
+                Uint8ClampedArray;
+            width:
+                number;
+            height:
+                number;
+        }
+        | null {
         const textureKey =
             this.getBackgroundTextureKey(
                 this.practiceMap,
             );
-
-        let red = 104;
-        let green = 132;
-        let blue = 92;
 
         try {
             const texture =
@@ -7842,147 +7910,433 @@ export class GameScene extends Phaser.Scene {
                     | HTMLImageElement
                     | HTMLCanvasElement;
 
-            const sourceWidth =
-                source.width ||
-                this.gameWidth;
-            const sourceHeight =
-                source.height ||
-                this.gameHeight;
-
-            const px =
-                Phaser.Math.Clamp(
-                    Math.round(
-                        worldX /
-                            this.gameWidth *
-                            (
-                                sourceWidth -
-                                1
-                            ),
-                    ),
-                    0,
-                    Math.max(
-                        0,
-                        sourceWidth -
-                            1,
-                    ),
-                );
-
-            const py =
-                Phaser.Math.Clamp(
-                    Math.round(
-                        worldY /
-                            this.gameHeight *
-                            (
-                                sourceHeight -
-                                1
-                            ),
-                    ),
-                    0,
-                    Math.max(
-                        0,
-                        sourceHeight -
-                            1,
-                    ),
-                );
-
-            const sampleCanvas =
+            const canvas =
                 document.createElement(
                     'canvas',
                 );
 
-            sampleCanvas.width = 1;
-            sampleCanvas.height = 1;
+            canvas.width =
+                this.gameWidth;
+            canvas.height =
+                this.gameHeight;
 
-            const sampleContext =
-                sampleCanvas
-                    .getContext(
-                        '2d',
-                        {
-                            willReadFrequently:
-                                true,
-                        },
-                    );
-
-            if (sampleContext) {
-                sampleContext.drawImage(
-                    source,
-                    px,
-                    py,
-                    1,
-                    1,
-                    0,
-                    0,
-                    1,
-                    1,
+            const context =
+                canvas.getContext(
+                    '2d',
+                    {
+                        willReadFrequently:
+                            true,
+                    },
                 );
 
-                const data =
-                    sampleContext
-                        .getImageData(
-                            0,
-                            0,
-                            1,
-                            1,
-                        )
-                        .data;
-
-                red = data[0];
-                green = data[1];
-                blue = data[2];
+            if (!context) {
+                return null;
             }
-        } catch {
-            // Safe fallback palette when browser blocks pixel extraction.
-        }
 
-        const normalized =
-            Phaser.Math.Clamp(
-                precision,
-                50,
-                80,
-            ) /
-            100;
+            context.imageSmoothingEnabled =
+                true;
 
-        const noise =
-            Math.round(
-                (
-                    1 -
-                    normalized
-                ) *
-                135,
+            context.drawImage(
+                source,
+                0,
+                0,
+                this.gameWidth,
+                this.gameHeight,
             );
 
-        const applyNoise =
-            (
-                value:
-                    number,
-            ): number =>
-                Phaser.Math.Clamp(
-                    value +
-                    Phaser.Math.Between(
-                        -noise,
-                        noise,
-                    ),
-                    18,
-                    238,
+            const image =
+                context.getImageData(
+                    0,
+                    0,
+                    this.gameWidth,
+                    this.gameHeight,
                 );
 
-        red = applyNoise(red);
-        green = applyNoise(green);
-        blue = applyNoise(blue);
+            return {
+                data:
+                    image.data,
+                width:
+                    image.width,
+                height:
+                    image.height,
+            };
+        } catch (
+            error
+        ) {
+            console.warn(
+                '[Color Hunt] Practice background sampling fallback',
+                error,
+            );
 
-        return (
-            red <<
-                16 |
-            green <<
-                8 |
-            blue
+            return null;
+        }
+    }
+
+    private samplePracticeBackgroundRgb(
+        sampler:
+            {
+                data:
+                    Uint8ClampedArray;
+                width:
+                    number;
+                height:
+                    number;
+            } |
+            null,
+        worldX:
+            number,
+        worldY:
+            number,
+    ): {
+        r:
+            number;
+        g:
+            number;
+        b:
+            number;
+    } {
+        if (!sampler) {
+            return {
+                r: 103,
+                g: 132,
+                b: 92,
+            };
+        }
+
+        const x =
+            Phaser.Math.Clamp(
+                Math.round(
+                    worldX,
+                ),
+                0,
+                sampler.width -
+                    1,
+            );
+
+        const y =
+            Phaser.Math.Clamp(
+                Math.round(
+                    worldY,
+                ),
+                0,
+                sampler.height -
+                    1,
+            );
+
+        const offset =
+            (
+                y *
+                    sampler.width +
+                x
+            ) *
+            4;
+
+        return {
+            r:
+                sampler.data[
+                    offset
+                ],
+            g:
+                sampler.data[
+                    offset +
+                    1
+                ],
+            b:
+                sampler.data[
+                    offset +
+                    2
+                ],
+        };
+    }
+
+    private paintPracticeBotFromBackground(
+        hider:
+            Hider,
+        botIndex:
+            number,
+        sampler:
+            {
+                data:
+                    Uint8ClampedArray;
+                width:
+                    number;
+                height:
+                    number;
+            } |
+            null,
+    ): void {
+        const textureWidth =
+            Math.round(
+                hider.paintTexture
+                    .width,
+            );
+
+        const textureHeight =
+            Math.round(
+                hider.paintTexture
+                    .height,
+            );
+
+        const textureKey =
+            [
+                'practice-bot-camo',
+                this.practiceMap,
+                botIndex,
+                Date.now(),
+                Phaser.Math.Between(
+                    1000,
+                    9999,
+                ),
+            ].join(
+                '-',
+            );
+
+        const canvasTexture =
+            this.textures.createCanvas(
+                textureKey,
+                textureWidth,
+                textureHeight,
+            ) as unknown as {
+                context:
+                    CanvasRenderingContext2D;
+                refresh:
+                    () => void;
+            };
+
+        this.practiceBotTextureKeys.add(
+            textureKey,
         );
+
+        const context =
+            canvasTexture.context;
+
+        const image =
+            context.createImageData(
+                textureWidth,
+                textureHeight,
+            );
+
+        const data =
+            image.data;
+
+        const normalizedPrecision =
+            Phaser.Math.Clamp(
+                this.practiceBotPrecision,
+                50,
+                80,
+            );
+
+        /*
+         * 50% -> visibly imperfect paint.
+         * 80% -> closely reproduces the local backdrop.
+         */
+        const maxError =
+            Phaser.Math.Linear(
+                52,
+                10,
+                (
+                    normalizedPrecision -
+                    50
+                ) /
+                    30,
+            );
+
+        for (
+            let localY = 0;
+            localY <
+            textureHeight;
+            localY += 1
+        ) {
+            for (
+                let localX = 0;
+                localX <
+                textureWidth;
+                localX += 1
+            ) {
+                const worldX =
+                    hider.paintTexture.x +
+                    localX;
+
+                const worldY =
+                    hider.paintTexture.y +
+                    localY;
+
+                const sampled =
+                    this.samplePracticeBackgroundRgb(
+                        sampler,
+                        worldX,
+                        worldY,
+                    );
+
+                /*
+                 * Group error into 5x5 blocks so camouflage looks hand-painted
+                 * rather than like random static.
+                 */
+                const blockX =
+                    Math.floor(
+                        localX /
+                        5,
+                    );
+
+                const blockY =
+                    Math.floor(
+                        localY /
+                        5,
+                    );
+
+                const seed =
+                    (
+                        (
+                            blockX *
+                                73856093
+                        ) ^
+                        (
+                            blockY *
+                                19349663
+                        ) ^
+                        (
+                            (
+                                botIndex +
+                                1
+                            ) *
+                            83492791
+                        )
+                    ) >>>
+                    0;
+
+                const signed =
+                    (
+                        (
+                            seed %
+                            1000
+                        ) /
+                            999 *
+                            2 -
+                        1
+                    );
+
+                const error =
+                    signed *
+                    maxError;
+
+                const pixelIndex =
+                    (
+                        localY *
+                            textureWidth +
+                        localX
+                    ) *
+                    4;
+
+                data[
+                    pixelIndex
+                ] =
+                    Phaser.Math.Clamp(
+                        Math.round(
+                            sampled.r +
+                            error,
+                        ),
+                        0,
+                        255,
+                    );
+
+                data[
+                    pixelIndex +
+                        1
+                ] =
+                    Phaser.Math.Clamp(
+                        Math.round(
+                            sampled.g +
+                            error *
+                                0.82,
+                        ),
+                        0,
+                        255,
+                    );
+
+                data[
+                    pixelIndex +
+                        2
+                ] =
+                    Phaser.Math.Clamp(
+                        Math.round(
+                            sampled.b +
+                            error *
+                                0.70,
+                        ),
+                        0,
+                        255,
+                    );
+
+                data[
+                    pixelIndex +
+                        3
+                ] =
+                    255;
+            }
+        }
+
+        context.putImageData(
+            image,
+            0,
+            0,
+        );
+
+        canvasTexture.refresh();
+
+        hider.paintTexture
+            .clear()
+            .draw(
+                textureKey,
+                0,
+                0,
+            )
+            .setVisible(
+                true,
+            )
+            .setAlpha(
+                1,
+            );
+
+        (
+            hider.paintTexture as
+                unknown as {
+                    render?:
+                        () => void;
+                }
+        ).render?.();
+    }
+
+    private clearPracticeBotTextures(): void {
+        this.practiceBotTextureKeys
+            .forEach(
+                (
+                    textureKey,
+                ) => {
+                    if (
+                        this.textures.exists(
+                            textureKey,
+                        )
+                    ) {
+                        this.textures.remove(
+                            textureKey,
+                        );
+                    }
+                },
+            );
+
+        this.practiceBotTextureKeys
+            .clear();
     }
 
     private prepareHunterPracticeBots(): void {
         const safePaddingX = 82;
         const safePaddingTop = 92;
         const safePaddingBottom = 72;
+
+        this.clearPracticeBotTextures();
+
+        const sampler =
+            this.createPracticeBackgroundSampler();
 
         this.hiders.forEach(
             (
@@ -8090,30 +8444,24 @@ export class GameScene extends Phaser.Scene {
                         hider.centerY,
                 );
 
-                const color =
-                    this.getPracticeBackgroundColor(
-                        hider.centerX,
-                        hider.centerY,
-                        this.practiceBotPrecision,
-                    );
+                this.paintPracticeBotFromBackground(
+                    hider,
+                    index,
+                    sampler,
+                );
+
+                this.setHiderVisible(
+                    hider,
+                    true,
+                );
 
                 hider.paintTexture
-                    .clear()
-                    .fill(
-                        color,
-                        1,
-                    )
                     .setVisible(
                         true,
                     )
                     .setAlpha(
                         1,
                     );
-
-                this.setHiderVisible(
-                    hider,
-                    true,
-                );
 
                 hider.label
                     .setText(
@@ -8235,6 +8583,20 @@ export class GameScene extends Phaser.Scene {
             120;
 
         this.startHunt();
+
+        this.resetGameplayCamera();
+
+        this.cameras.main
+            .setZoom(
+                this.gameplayCameraZoom,
+            );
+
+        this.applyFixedHudForZoom(
+            this.gameplayCameraZoom,
+        );
+
+        this.ensureGameplayCameraFollow();
+
         this.createPracticeExitButton();
 
         this.showStatus(
@@ -15535,20 +15897,33 @@ export class GameScene extends Phaser.Scene {
     ): void {
         if (
             this.phase !== 'hunt' ||
-            !this.isMultiplayerSession()
+            (
+                !this.isMultiplayerSession() &&
+                this.practiceMode !==
+                    'hunter'
+            )
         ) {
             this.hideHuntTensionUi();
             return;
         }
 
         const localRole =
-            this.networkPlayerManager
-                .getLocalRole();
+            this.practiceMode ===
+                'hunter'
+                ? 'hunter'
+                : this.networkPlayerManager
+                    .getLocalRole();
 
         if (localRole === 'hunter') {
             const hunterPosition =
-                this.networkPlayerManager
-                    .getLocalPlayerPosition();
+                this.practiceMode ===
+                    'hunter'
+                    ? new Phaser.Math.Vector2(
+                        this.player.x,
+                        this.player.y,
+                    )
+                    : this.networkPlayerManager
+                        .getLocalPlayerPosition();
 
             if (hunterPosition) {
                 this.drawHunterFocusVision(
@@ -15576,16 +15951,29 @@ export class GameScene extends Phaser.Scene {
             this.hidePointText
                 .setVisible(false);
 
+            const showMinimap =
+                this.practiceMode !==
+                'hunter';
+
             this.hunterMinimapPanel
-                .setVisible(true);
+                .setVisible(
+                    showMinimap,
+                );
 
             this.hunterMinimapText
-                .setVisible(true);
+                .setVisible(
+                    showMinimap,
+                );
 
             this.hunterMinimapMarker
-                .setVisible(true);
+                .setVisible(
+                    showMinimap,
+                );
 
-            this.updateHunterMinimap();
+            if (showMinimap) {
+                this.updateHunterMinimap();
+            }
+
             return;
         }
 
@@ -16824,7 +17212,46 @@ export class GameScene extends Phaser.Scene {
 
     private ensureGameplayCameraFollow(): void {
         if (
-            this.phase !== 'hunt' ||
+            this.phase !== 'hunt'
+        ) {
+            return;
+        }
+
+        if (
+            this.practiceMode ===
+            'hunter'
+        ) {
+            const camera =
+                this.cameras.main;
+
+            if (
+                Math.abs(
+                    camera.zoom -
+                    this.gameplayCameraZoom
+                ) >
+                0.001
+            ) {
+                this.applyFixedHudForZoom(
+                    this.gameplayCameraZoom,
+                );
+
+                camera.setZoom(
+                    this.gameplayCameraZoom,
+                );
+            }
+
+            camera
+                .stopFollow()
+                .removeBounds()
+                .centerOn(
+                    this.player.x,
+                    this.player.y,
+                );
+
+            return;
+        }
+
+        if (
             !this.isMultiplayerSession()
         ) {
             return;

@@ -3930,3 +3930,26 @@ html.colorhunt-mobile body.colorhunt-unfolded {
     font-size: 7px !important;
   }
 }
+
+
+/* ============================================================
+   v0.10.10.133 — real camouflage + reliable practice sliders
+   ============================================================ */
+
+.colorhunt-practice-control input[type="range"] {
+  box-sizing: border-box;
+  width: 100%;
+  height: 30px;
+  margin: 3px 0 1px;
+  padding: 0;
+  cursor: pointer;
+  touch-action: pan-x;
+}
+
+@media (pointer: coarse) {
+  .colorhunt-practice-control input[type="range"] {
+    height: 38px;
+    margin: 1px 0;
+    touch-action: none;
+  }
+}
