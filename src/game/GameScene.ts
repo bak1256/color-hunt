@@ -8151,6 +8151,95 @@ export class GameScene extends Phaser.Scene {
         overlay.appendChild(
             card,
         );
+
+        /*
+         * v0.10.10.165
+         * Mobile browsers often auto-hide their native scrollbar until the
+         * first swipe. Add a persistent, non-interactive scroll affordance
+         * OUTSIDE the scrolling card so beginners can immediately see that
+         * more Practice options continue below.
+         */
+        const scrollAffordance =
+            document.createElement(
+                'div',
+            );
+
+        scrollAffordance.className =
+            'colorhunt-practice-scroll-affordance';
+
+        scrollAffordance.innerHTML = `
+            <span class="colorhunt-practice-scroll-affordance__arrow">↓</span>
+            <span class="colorhunt-practice-scroll-affordance__label">SCROLL</span>
+            <span class="colorhunt-practice-scroll-affordance__track">
+                <i></i>
+            </span>
+        `;
+
+        overlay.appendChild(
+            scrollAffordance,
+        );
+
+        const syncPracticeScrollAffordance =
+            (): void => {
+                const maxScroll =
+                    Math.max(
+                        0,
+                        card.scrollHeight -
+                            card.clientHeight,
+                    );
+
+                const ratio =
+                    maxScroll >
+                        0
+                        ? Phaser.Math.Clamp(
+                            card.scrollTop /
+                                maxScroll,
+                            0,
+                            1,
+                        )
+                        : 0;
+
+                const thumb =
+                    scrollAffordance
+                        .querySelector<
+                            HTMLElement
+                        >(
+                            '.colorhunt-practice-scroll-affordance__track i',
+                        );
+
+                if (
+                    thumb
+                ) {
+                    thumb.style.transform =
+                        `translateY(${ratio * 72}px)`;
+                }
+
+                scrollAffordance.classList
+                    .toggle(
+                        'is-scrollable',
+                        maxScroll >
+                            8,
+                    );
+            };
+
+        card.addEventListener(
+            'scroll',
+            syncPracticeScrollAffordance,
+            {
+                passive:
+                    true,
+            },
+        );
+
+        requestAnimationFrame(
+            syncPracticeScrollAffordance,
+        );
+
+        window.setTimeout(
+            syncPracticeScrollAffordance,
+            120,
+        );
+
         document.body.appendChild(
             overlay,
         );

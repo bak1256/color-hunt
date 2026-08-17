@@ -5333,3 +5333,139 @@ body:has(.colorhunt-main-lobby) .colorhunt-controls-help {
     border-width: 5px !important;
   }
 }
+
+
+/* ============================================================
+   v0.10.10.165 — ALWAYS-VISIBLE Practice scroll affordance
+   ============================================================ */
+
+/*
+ * Native Android/Samsung/Chrome scrollbars may auto-hide before the first
+ * gesture. This is a separate visual rail, so it is visible immediately.
+ */
+.colorhunt-practice-scroll-affordance {
+  display: none;
+}
+
+@media (pointer: coarse), (max-width: 900px) {
+  .colorhunt-practice-overlay {
+    position: fixed !important;
+  }
+
+  .colorhunt-practice-scroll-affordance {
+    position: fixed;
+    z-index: 10040;
+    top: 50%;
+    right: max(7px, env(safe-area-inset-right));
+    transform: translateY(-50%);
+    display: grid;
+    justify-items: center;
+    gap: 5px;
+    width: 34px;
+    padding: 8px 4px 9px;
+    box-sizing: border-box;
+    border: 2px solid #5d8d63;
+    border-radius: 999px;
+    background: rgba(246, 250, 231, .98);
+    box-shadow:
+      0 4px 12px rgba(38, 74, 45, .24),
+      inset 0 1px 0 rgba(255,255,255,.85);
+    pointer-events: none;
+    opacity: .96;
+  }
+
+  .colorhunt-practice-scroll-affordance__arrow {
+    color: #2f7040;
+    font-size: 20px;
+    font-weight: 950;
+    line-height: .9;
+    animation: colorhunt-practice-scroll-arrow 1.05s ease-in-out infinite;
+  }
+
+  .colorhunt-practice-scroll-affordance__label {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    color: #3b6744;
+    font-size: 9px;
+    font-weight: 950;
+    line-height: 1;
+    letter-spacing: .08em;
+  }
+
+  .colorhunt-practice-scroll-affordance__track {
+    position: relative;
+    display: block;
+    width: 12px;
+    height: 116px;
+    overflow: hidden;
+    border: 1px solid #8dab83;
+    border-radius: 999px;
+    background: #dce8ca;
+    box-shadow:
+      inset 0 1px 3px rgba(53, 88, 57, .18);
+  }
+
+  .colorhunt-practice-scroll-affordance__track i {
+    position: absolute;
+    top: 5px;
+    left: 2px;
+    display: block;
+    width: 6px;
+    height: 34px;
+    border-radius: 999px;
+    background:
+      linear-gradient(
+        180deg,
+        #70bd7e 0%,
+        #2f7040 100%
+      );
+    box-shadow:
+      0 1px 2px rgba(28, 72, 36, .28);
+    transition: transform 80ms linear;
+  }
+
+  /*
+   * If there happens to be no overflow on an unusually tall device, don't
+   * falsely advertise scrolling.
+   */
+  .colorhunt-practice-scroll-affordance:not(.is-scrollable) {
+    opacity: 0;
+  }
+
+  @keyframes colorhunt-practice-scroll-arrow {
+    0%, 100% {
+      transform: translateY(0);
+    }
+
+    50% {
+      transform: translateY(4px);
+    }
+  }
+}
+
+/* Fold landscape: make the indicator even harder to miss. */
+@media (pointer: coarse) and (orientation: landscape) and (max-height: 650px) {
+  .colorhunt-practice-scroll-affordance {
+    width: 38px;
+    right: max(6px, env(safe-area-inset-right));
+    padding-block: 7px;
+  }
+
+  .colorhunt-practice-scroll-affordance__track {
+    width: 14px;
+    height: 132px;
+  }
+
+  .colorhunt-practice-scroll-affordance__track i {
+    width: 8px;
+    height: 40px;
+  }
+
+  .colorhunt-practice-scroll-affordance__arrow {
+    font-size: 23px;
+  }
+
+  .colorhunt-practice-scroll-affordance__label {
+    font-size: 10px;
+  }
+}
