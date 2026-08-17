@@ -5,6 +5,8 @@ const STORAGE_KEY = 'chameleon-hunt-language';
 type Dict = Record<string, string>;
 
 const ja: Dict = {
+  "헌터 기록 공유": "ハンター記録を共有",
+  "내 헌터 기록을 깨봐! Color Hunt에서 도전하기 👇": "このハンター記録を破れる？ Color Huntで挑戦してみて👇",
   "랜덤": "ランダム",
   "색의 나라": "色の国",
   "판타지 마을": "ファンタジー村",
@@ -202,6 +204,8 @@ const ja: Dict = {
 };
 
 const en: Dict = {
+  "헌터 기록 공유": "Share Hunter Record",
+  "내 헌터 기록을 깨봐! Color Hunt에서 도전하기 👇": "Can you beat my Hunter record? Try Color Hunt 👇",
   "랜덤": "Random",
   "색의 나라": "Land of Colors",
   "판타지 마을": "Fantasy Village",
@@ -401,6 +405,8 @@ const en: Dict = {
 };
 
 const zh: Dict = {
+  "헌터 기록 공유": "分享猎人记录",
+  "내 헌터 기록을 깨봐! Color Hunt에서 도전하기 👇": "能打破我的猎人记录吗？来挑战 Color Hunt 👇",
   "랜덤": "随机",
   "색의 나라": "色彩之国",
   "판타지 마을": "幻想村庄",

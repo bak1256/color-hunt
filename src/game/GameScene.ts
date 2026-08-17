@@ -27539,6 +27539,609 @@ export class GameScene extends Phaser.Scene {
         this.input.setDefaultCursor('none');
     }
 
+    private getPracticeRankingPosition(
+        elapsedMs:
+            number,
+    ): number | null {
+        const records =
+            this.getPracticeRankings(
+                this.practiceHuntDuration,
+            );
+
+        const index =
+            records.findIndex(
+                (
+                    record,
+                ) =>
+                    Math.abs(
+                        record.elapsedMs -
+                            elapsedMs,
+                    ) <=
+                        1 &&
+                    record.botCount ===
+                        this.practiceBotCount &&
+                    record.precision ===
+                        this.practiceBotPrecision,
+            );
+
+        return index >=
+            0
+            ? index +
+                1
+            : null;
+    }
+
+    private async createHunterPracticeShareBlob(
+        elapsedMs:
+            number,
+    ): Promise<Blob | null> {
+        const width =
+            1080;
+        const height =
+            1350;
+
+        const canvas =
+            document.createElement(
+                'canvas',
+            );
+
+        canvas.width =
+            width;
+        canvas.height =
+            height;
+
+        const context =
+            canvas.getContext(
+                '2d',
+            );
+
+        if (!context) {
+            return null;
+        }
+
+        context.imageSmoothingEnabled =
+            true;
+        context.imageSmoothingQuality =
+            'high';
+
+        const background =
+            context.createLinearGradient(
+                0,
+                0,
+                width,
+                height,
+            );
+
+        background.addColorStop(
+            0,
+            '#102118',
+        );
+        background.addColorStop(
+            0.55,
+            '#193625',
+        );
+        background.addColorStop(
+            1,
+            '#0c1711',
+        );
+
+        context.fillStyle =
+            background;
+        context.fillRect(
+            0,
+            0,
+            width,
+            height,
+        );
+
+        /*
+         * Soft spotlight / modern speedrun-card feel.
+         */
+        const glow =
+            context.createRadialGradient(
+                width *
+                    0.72,
+                height *
+                    0.10,
+                20,
+                width *
+                    0.72,
+                height *
+                    0.10,
+                720,
+            );
+
+        glow.addColorStop(
+            0,
+            'rgba(111,220,128,.22)',
+        );
+        glow.addColorStop(
+            1,
+            'rgba(111,220,128,0)',
+        );
+
+        context.fillStyle =
+            glow;
+        context.fillRect(
+            0,
+            0,
+            width,
+            height,
+        );
+
+        context.fillStyle =
+            '#b8d8bd';
+        context.font =
+            '900 26px Arial, sans-serif';
+        context.letterSpacing =
+            '4px';
+        context.fillText(
+            'COLOR HUNT',
+            64,
+            74,
+        );
+
+        context.fillStyle =
+            '#ffffff';
+        context.font =
+            '900 58px Arial, sans-serif';
+        context.letterSpacing =
+            '0px';
+        context.fillText(
+            'HUNTER CHALLENGE',
+            62,
+            145,
+        );
+
+        context.fillStyle =
+            '#7be58c';
+        context.font =
+            '900 38px Arial, sans-serif';
+        context.fillText(
+            'CLEAR',
+            64,
+            218,
+        );
+
+        const timeText =
+            this.formatPracticeTime(
+                elapsedMs,
+            );
+
+        context.fillStyle =
+            '#ffffff';
+        context.font =
+            '900 112px Arial, sans-serif';
+        context.fillText(
+            timeText,
+            62,
+            350,
+        );
+
+        const rank =
+            this.getPracticeRankingPosition(
+                elapsedMs,
+            );
+
+        if (rank) {
+            context.fillStyle =
+                '#ffdf70';
+            context.font =
+                '900 42px Arial, sans-serif';
+            context.fillText(
+                `#${rank}`,
+                66,
+                410,
+            );
+        }
+
+        if (
+            this.practiceBotPrecision >=
+                85
+        ) {
+            context.fillStyle =
+                '#d83d3d';
+            context.beginPath();
+            context.roundRect(
+                64,
+                450,
+                250,
+                54,
+                27,
+            );
+            context.fill();
+
+            context.fillStyle =
+                '#ffffff';
+            context.font =
+                '900 24px Arial, sans-serif';
+            context.fillText(
+                `🔥 ${tr('핵어려움')}`,
+                88,
+                486,
+            );
+        }
+
+        const statsY =
+            this.practiceBotPrecision >=
+                85
+                ? 555
+                : 485;
+
+        const statLabels = [
+            [
+                tr('맵'),
+                this.getMapDisplayName(
+                    this.practiceMap,
+                ),
+            ],
+            [
+                tr('봇 하이더 수'),
+                `${this.practiceBotCount}`,
+            ],
+            [
+                tr('위장 정밀도'),
+                `${this.practiceBotPrecision}%`,
+            ],
+            [
+                tr('헌터 연습 시간'),
+                `${this.practiceHuntDuration}s`,
+            ],
+        ];
+
+        statLabels.forEach(
+            (
+                [
+                    label,
+                    value,
+                ],
+                index,
+            ) => {
+                const y =
+                    statsY +
+                    index *
+                        74;
+
+                context.fillStyle =
+                    'rgba(255,255,255,.08)';
+                context.beginPath();
+                context.roundRect(
+                    64,
+                    y,
+                    width -
+                        128,
+                    56,
+                    14,
+                );
+                context.fill();
+
+                context.fillStyle =
+                    '#99b89f';
+                context.font =
+                    '800 20px Arial, sans-serif';
+                context.fillText(
+                    label,
+                    88,
+                    y +
+                        35,
+                );
+
+                context.textAlign =
+                    'right';
+                context.fillStyle =
+                    '#ffffff';
+                context.font =
+                    '900 24px Arial, sans-serif';
+                context.fillText(
+                    value,
+                    width -
+                        88,
+                    y +
+                        35,
+                );
+                context.textAlign =
+                    'left';
+            },
+        );
+
+        const rankingY =
+            statsY +
+            statLabels.length *
+                74 +
+            22;
+
+        context.fillStyle =
+            '#ffffff';
+        context.font =
+            '900 28px Arial, sans-serif';
+        context.fillText(
+            `🏆 ${this.practiceHuntDuration}s TOP 5`,
+            64,
+            rankingY,
+        );
+
+        const records =
+            this.getPracticeRankings(
+                this.practiceHuntDuration,
+            );
+
+        records.forEach(
+            (
+                record,
+                index,
+            ) => {
+                const y =
+                    rankingY +
+                    52 +
+                    index *
+                        52;
+
+                context.fillStyle =
+                    index ===
+                        0
+                        ? '#ffdf70'
+                        : '#d8e6db';
+
+                context.font =
+                    '900 22px Arial, sans-serif';
+                context.fillText(
+                    `#${index + 1}`,
+                    72,
+                    y,
+                );
+
+                context.fillStyle =
+                    '#ffffff';
+                context.font =
+                    '900 24px Arial, sans-serif';
+                context.fillText(
+                    this.formatPracticeTime(
+                        record.elapsedMs,
+                    ),
+                    150,
+                    y,
+                );
+
+                context.textAlign =
+                    'right';
+                context.fillStyle =
+                    '#9eb5a3';
+                context.font =
+                    '800 18px Arial, sans-serif';
+                context.fillText(
+                    `${record.botCount} BOT · ${record.precision}%`,
+                    width -
+                        70,
+                    y,
+                );
+                context.textAlign =
+                    'left';
+            },
+        );
+
+        const shareUrl =
+            this.getPracticeShareUrl();
+
+        let host =
+            shareUrl;
+
+        try {
+            host =
+                new URL(
+                    shareUrl,
+                ).host;
+        } catch {
+            // Keep full string.
+        }
+
+        context.fillStyle =
+            '#7be58c';
+        context.font =
+            '900 27px Arial, sans-serif';
+        context.fillText(
+            host,
+            64,
+            height -
+                66,
+        );
+
+        context.textAlign =
+            'right';
+        context.fillStyle =
+            '#8ba392';
+        context.font =
+            '800 18px Arial, sans-serif';
+        context.fillText(
+            'HUNTER SPEED RECORD',
+            width -
+                64,
+            height -
+                68,
+        );
+
+        return await new Promise<
+            Blob | null
+        >(
+            (
+                resolve,
+            ) => {
+                canvas.toBlob(
+                    resolve,
+                    'image/png',
+                    1,
+                );
+            },
+        );
+    }
+
+    private async shareHunterPracticeRecord(
+        elapsedMs:
+            number,
+    ): Promise<void> {
+        const blob =
+            await this.createHunterPracticeShareBlob(
+                elapsedMs,
+            );
+
+        if (!blob) {
+            this.showStatus(
+                tr('기록 이미지를 만들 수 없습니다.'),
+            );
+            return;
+        }
+
+        const shareUrl =
+            this.getPracticeShareUrl();
+
+        const file =
+            new File(
+                [
+                    blob,
+                ],
+                `color-hunt-hunter-${Date.now()}.png`,
+                {
+                    type:
+                        'image/png',
+                },
+            );
+
+        const text =
+            `${tr('내 헌터 기록을 깨봐! Color Hunt에서 도전하기 👇')}\n${shareUrl}`;
+
+        const copied =
+            await this.copyPracticeGameLink();
+
+        try {
+            if (
+                navigator.share &&
+                (
+                    !navigator.canShare ||
+                    navigator.canShare({
+                        files: [
+                            file,
+                        ],
+                    })
+                )
+            ) {
+                try {
+                    await navigator.share({
+                        title:
+                            'Color Hunt',
+                        text,
+                        url:
+                            shareUrl,
+                        files: [
+                            file,
+                        ],
+                    });
+
+                    if (copied) {
+                        this.showStatus(
+                            tr('공유 완료 · 게임 링크도 복사되어 있어요!'),
+                        );
+                    }
+
+                    return;
+                } catch (
+                    richShareError
+                ) {
+                    if (
+                        richShareError instanceof
+                            DOMException &&
+                        richShareError.name ===
+                            'AbortError'
+                    ) {
+                        return;
+                    }
+
+                    await navigator.share({
+                        title:
+                            'Color Hunt',
+                        text,
+                        files: [
+                            file,
+                        ],
+                    });
+
+                    return;
+                }
+            }
+
+            if (navigator.share) {
+                await navigator.share({
+                    title:
+                        'Color Hunt',
+                    text:
+                        tr('내 헌터 기록을 깨봐! Color Hunt에서 도전하기 👇'),
+                    url:
+                        shareUrl,
+                });
+
+                this.downloadHunterPracticeRecord(
+                    blob,
+                );
+
+                return;
+            }
+        } catch (
+            error
+        ) {
+            if (
+                error instanceof
+                    DOMException &&
+                error.name ===
+                    'AbortError'
+            ) {
+                return;
+            }
+        }
+
+        this.downloadHunterPracticeRecord(
+            blob,
+        );
+
+        this.showStatus(
+            copied
+                ? tr('이미지를 저장하고 게임 링크를 복사했습니다!')
+                : tr('이미지를 저장했습니다.'),
+        );
+    }
+
+    private downloadHunterPracticeRecord(
+        blob:
+            Blob,
+    ): void {
+        const url =
+            URL.createObjectURL(
+                blob,
+            );
+
+        const anchor =
+            document.createElement(
+                'a',
+            );
+
+        anchor.href =
+            url;
+        anchor.download =
+            `color-hunt-hunter-${Date.now()}.png`;
+
+        document.body.appendChild(
+            anchor,
+        );
+        anchor.click();
+        anchor.remove();
+
+        window.setTimeout(
+            () => {
+                URL.revokeObjectURL(
+                    url,
+                );
+            },
+            1_000,
+        );
+    }
+
     private showPracticeResult(
         won:
             boolean,
@@ -27657,6 +28260,14 @@ export class GameScene extends Phaser.Scene {
                 ${rankingHtml}
             </div>
 
+            ${
+                won
+                    ? `<button type="button" class="colorhunt-practice-result-share" data-practice-share>
+                        📤 ${tr('헌터 기록 공유')}
+                    </button>`
+                    : ''
+            }
+
             <button type="button" data-practice-return>
                 🎯 ${tr('연습장으로 돌아가기')}
             </button>
@@ -27673,6 +28284,17 @@ export class GameScene extends Phaser.Scene {
             overlay;
         this.input.enabled =
             false;
+
+        card.querySelector(
+            '[data-practice-share]',
+        )?.addEventListener(
+            'click',
+            () => {
+                void this.shareHunterPracticeRecord(
+                    elapsedMs,
+                );
+            },
+        );
 
         card.querySelector(
             '[data-practice-return]',
