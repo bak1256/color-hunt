@@ -27864,6 +27864,221 @@ export class GameScene extends Phaser.Scene {
         context.imageSmoothingQuality =
             'high';
 
+        /*
+         * Build the REAL selected map at the same 960x540 logical size used
+         * in-game. We then reconstruct every bot with the same paint
+         * silhouette, hide coordinate and precision formula used by Practice.
+         */
+        const mapTextureKey =
+            this.getBackgroundTextureKey(
+                this.practiceMap,
+            );
+
+        const mapTexture =
+            this.textures.get(
+                mapTextureKey,
+            );
+
+        const mapSource =
+            mapTexture.getSourceImage() as
+                CanvasImageSource;
+
+        const mapCanvas =
+            document.createElement(
+                'canvas',
+            );
+
+        mapCanvas.width =
+            this.gameWidth;
+        mapCanvas.height =
+            this.gameHeight;
+
+        const mapContext =
+            mapCanvas.getContext(
+                '2d',
+                {
+                    willReadFrequently:
+                        true,
+                },
+            );
+
+        if (!mapContext) {
+            return null;
+        }
+
+        mapContext.imageSmoothingEnabled =
+            true;
+
+        mapContext.drawImage(
+            mapSource,
+            0,
+            0,
+            this.gameWidth,
+            this.gameHeight,
+        );
+
+        const mapPixels =
+            mapContext.getImageData(
+                0,
+                0,
+                this.gameWidth,
+                this.gameHeight,
+            );
+
+        const sampleMapColor =
+            (
+                worldX:
+                    number,
+                worldY:
+                    number,
+            ): {
+                r:
+                    number;
+                g:
+                    number;
+                b:
+                    number;
+            } => {
+                const x =
+                    Phaser.Math.Clamp(
+                        Math.round(
+                            worldX,
+                        ),
+                        0,
+                        this.gameWidth -
+                            1,
+                    );
+
+                const y =
+                    Phaser.Math.Clamp(
+                        Math.round(
+                            worldY,
+                        ),
+                        0,
+                        this.gameHeight -
+                            1,
+                    );
+
+                const offset =
+                    (
+                        y *
+                            this.gameWidth +
+                        x
+                    ) *
+                    4;
+
+                return {
+                    r:
+                        mapPixels.data[
+                            offset
+                        ],
+                    g:
+                        mapPixels.data[
+                            offset +
+                                1
+                        ],
+                    b:
+                        mapPixels.data[
+                            offset +
+                                2
+                        ],
+                };
+            };
+
+        const isPaintPixelInsideCharacter =
+            (
+                textureX:
+                    number,
+                textureY:
+                    number,
+            ): boolean => {
+                const x =
+                    Math.round(
+                        textureX,
+                    );
+                const y =
+                    Math.round(
+                        textureY,
+                    );
+
+                const headDx =
+                    x -
+                    40;
+                const headDy =
+                    y -
+                    48;
+
+                const insideHead =
+                    headDx *
+                        headDx +
+                    headDy *
+                        headDy <=
+                    12 *
+                        12;
+
+                const insideBody =
+                    x >=
+                        31 &&
+                    x <=
+                        48 &&
+                    y >=
+                        55 &&
+                    y <=
+                        78;
+
+                const insideLeftArm =
+                    x >=
+                        24 &&
+                    x <=
+                        31 &&
+                    y >=
+                        57 &&
+                    y <=
+                        74;
+
+                const insideRightArm =
+                    x >=
+                        48 &&
+                    x <=
+                        55 &&
+                    y >=
+                        57 &&
+                    y <=
+                        74;
+
+                const insideLeftLeg =
+                    x >=
+                        31 &&
+                    x <=
+                        38 &&
+                    y >=
+                        75 &&
+                    y <=
+                        88;
+
+                const insideRightLeg =
+                    x >=
+                        41 &&
+                    x <=
+                        48 &&
+                    y >=
+                        75 &&
+                    y <=
+                        88;
+
+                return (
+                    insideHead ||
+                    insideBody ||
+                    insideLeftArm ||
+                    insideRightArm ||
+                    insideLeftLeg ||
+                    insideRightLeg
+                );
+            };
+
+        /*
+         * Dark frame + huge, brag-worthy clear time.
+         */
         const background =
             context.createLinearGradient(
                 0,
@@ -27874,15 +28089,15 @@ export class GameScene extends Phaser.Scene {
 
         background.addColorStop(
             0,
-            '#102118',
+            '#0d1c14',
         );
         background.addColorStop(
             0.55,
-            '#193625',
+            '#173423',
         );
         background.addColorStop(
             1,
-            '#0c1711',
+            '#08110d',
         );
 
         context.fillStyle =
@@ -27894,73 +28109,24 @@ export class GameScene extends Phaser.Scene {
             height,
         );
 
-        /*
-         * Soft spotlight / modern speedrun-card feel.
-         */
-        const glow =
-            context.createRadialGradient(
-                width *
-                    0.72,
-                height *
-                    0.10,
-                20,
-                width *
-                    0.72,
-                height *
-                    0.10,
-                720,
-            );
-
-        glow.addColorStop(
-            0,
-            'rgba(111,220,128,.22)',
-        );
-        glow.addColorStop(
-            1,
-            'rgba(111,220,128,0)',
-        );
-
         context.fillStyle =
-            glow;
-        context.fillRect(
-            0,
-            0,
-            width,
-            height,
-        );
-
-        context.fillStyle =
-            '#b8d8bd';
+            '#a8cfad';
         context.font =
-            '900 26px Arial, sans-serif';
-        context.letterSpacing =
-            '4px';
+            '900 24px Arial, sans-serif';
         context.fillText(
-            'COLOR HUNT',
-            64,
-            74,
+            'COLOR HUNT · HUNTER CHALLENGE',
+            60,
+            58,
         );
 
         context.fillStyle =
             '#ffffff';
         context.font =
-            '900 58px Arial, sans-serif';
-        context.letterSpacing =
-            '0px';
+            '900 52px Arial, sans-serif';
         context.fillText(
-            'HUNTER CHALLENGE',
-            62,
-            145,
-        );
-
-        context.fillStyle =
-            '#7be58c';
-        context.font =
-            '900 38px Arial, sans-serif';
-        context.fillText(
-            'CLEAR',
-            64,
-            218,
+            tr('헌터 연습 성공!'),
+            60,
+            124,
         );
 
         const timeText =
@@ -27971,11 +28137,11 @@ export class GameScene extends Phaser.Scene {
         context.fillStyle =
             '#ffffff';
         context.font =
-            '900 112px Arial, sans-serif';
+            '900 154px Arial, sans-serif';
         context.fillText(
             timeText,
-            62,
-            350,
+            56,
+            285,
         );
 
         const rank =
@@ -27987,11 +28153,11 @@ export class GameScene extends Phaser.Scene {
             context.fillStyle =
                 '#ffdf70';
             context.font =
-                '900 42px Arial, sans-serif';
+                '900 58px Arial, sans-serif';
             context.fillText(
                 `#${rank}`,
-                66,
-                410,
+                62,
+                350,
             );
         }
 
@@ -28003,121 +28169,414 @@ export class GameScene extends Phaser.Scene {
                 '#d83d3d';
             context.beginPath();
             context.roundRect(
-                64,
-                450,
+                width -
+                    314,
+                300,
                 250,
-                54,
-                27,
+                60,
+                30,
             );
             context.fill();
 
             context.fillStyle =
                 '#ffffff';
             context.font =
-                '900 24px Arial, sans-serif';
+                '900 25px Arial, sans-serif';
             context.fillText(
                 `🔥 ${tr('핵어려움')}`,
-                88,
-                486,
+                width -
+                    285,
+                340,
             );
         }
 
-        const statsY =
-            this.practiceBotPrecision >=
-                85
-                ? 555
-                : 485;
+        /*
+         * The actual map is the hero of the card.
+         */
+        const frameX =
+            60;
+        const frameY =
+            390;
+        const frameW =
+            960;
+        const frameH =
+            540;
 
-        const statLabels = [
-            [
-                tr('맵'),
-                this.getMapDisplayName(
-                    this.practiceMap,
-                ),
-            ],
-            [
-                tr('봇 하이더 수'),
-                `${this.practiceBotCount}`,
-            ],
-            [
-                tr('위장 정밀도'),
-                `${this.practiceBotPrecision}%`,
-            ],
-            [
-                tr('헌터 연습 시간'),
-                `${this.practiceHuntDuration}s`,
-            ],
-        ];
+        context.save();
 
-        statLabels.forEach(
+        context.beginPath();
+        context.roundRect(
+            frameX,
+            frameY,
+            frameW,
+            frameH,
+            28,
+        );
+        context.clip();
+
+        context.drawImage(
+            mapCanvas,
+            0,
+            0,
+            this.gameWidth,
+            this.gameHeight,
+            frameX,
+            frameY,
+            frameW,
+            frameH,
+        );
+
+        /*
+         * Recreate every hidden bot exactly from its final hide coordinate.
+         * Coverage is always 100%; precision only changes color error.
+         */
+        this.hiders.forEach(
             (
-                [
-                    label,
-                    value,
-                ],
-                index,
+                hider,
+                botIndex,
             ) => {
-                const y =
-                    statsY +
-                    index *
-                        74;
+                const botCanvas =
+                    document.createElement(
+                        'canvas',
+                    );
 
-                context.fillStyle =
-                    'rgba(255,255,255,.08)';
+                botCanvas.width =
+                    80;
+                botCanvas.height =
+                    120;
+
+                const botContext =
+                    botCanvas.getContext(
+                        '2d',
+                    );
+
+                if (!botContext) {
+                    return;
+                }
+
+                const image =
+                    botContext.createImageData(
+                        80,
+                        120,
+                    );
+
+                const ratio =
+                    (
+                        this.practiceBotPrecision -
+                        50
+                    ) /
+                    45;
+
+                const maxError =
+                    Phaser.Math.Linear(
+                        58,
+                        2,
+                        Phaser.Math.Clamp(
+                            ratio,
+                            0,
+                            1,
+                        ),
+                    );
+
+                for (
+                    let textureY = 0;
+                    textureY <
+                    120;
+                    textureY += 1
+                ) {
+                    for (
+                        let textureX = 0;
+                        textureX <
+                        80;
+                        textureX += 1
+                    ) {
+                        if (
+                            !isPaintPixelInsideCharacter(
+                                textureX,
+                                textureY,
+                            )
+                        ) {
+                            continue;
+                        }
+
+                        const worldX =
+                            hider.centerX +
+                            (
+                                textureX -
+                                40
+                            );
+
+                        const worldY =
+                            hider.centerY +
+                            (
+                                textureY -
+                                60
+                            );
+
+                        const sampled =
+                            sampleMapColor(
+                                worldX,
+                                worldY,
+                            );
+
+                        const blockX =
+                            Math.floor(
+                                textureX /
+                                4,
+                            );
+
+                        const blockY =
+                            Math.floor(
+                                textureY /
+                                4,
+                            );
+
+                        const seed =
+                            (
+                                (
+                                    blockX *
+                                    73856093
+                                ) ^
+                                (
+                                    blockY *
+                                    19349663
+                                ) ^
+                                (
+                                    (
+                                        botIndex +
+                                        1
+                                    ) *
+                                    83492791
+                                )
+                            ) >>>
+                            0;
+
+                        const error =
+                            (
+                                (
+                                    seed %
+                                    1001
+                                ) /
+                                500 -
+                                1
+                            ) *
+                            maxError;
+
+                        const r =
+                            Phaser.Math.Clamp(
+                                Math.round(
+                                    sampled.r +
+                                    error,
+                                ),
+                                0,
+                                255,
+                            );
+
+                        const green =
+                            Phaser.Math.Clamp(
+                                Math.round(
+                                    sampled.g +
+                                    error *
+                                        0.82,
+                                ),
+                                0,
+                                255,
+                            );
+
+                        const b =
+                            Phaser.Math.Clamp(
+                                Math.round(
+                                    sampled.b +
+                                    error *
+                                        0.68,
+                                ),
+                                0,
+                                255,
+                            );
+
+                        const index =
+                            (
+                                textureY *
+                                    80 +
+                                textureX
+                            ) *
+                            4;
+
+                        image.data[
+                            index
+                        ] =
+                            r;
+                        image.data[
+                            index +
+                                1
+                        ] =
+                            green;
+                        image.data[
+                            index +
+                                2
+                        ] =
+                            b;
+                        image.data[
+                            index +
+                                3
+                        ] =
+                            255;
+                    }
+                }
+
+                botContext.putImageData(
+                    image,
+                    0,
+                    0,
+                );
+
+                const scaleX =
+                    frameW /
+                    this.gameWidth;
+                const scaleY =
+                    frameH /
+                    this.gameHeight;
+
+                const drawW =
+                    80 *
+                    scaleX;
+                const drawH =
+                    120 *
+                    scaleY;
+
+                const drawX =
+                    frameX +
+                    (
+                        hider.centerX -
+                        40
+                    ) *
+                    scaleX;
+
+                const drawY =
+                    frameY +
+                    (
+                        hider.centerY -
+                        60
+                    ) *
+                    scaleY;
+
+                context.imageSmoothingEnabled =
+                    false;
+
+                context.drawImage(
+                    botCanvas,
+                    drawX,
+                    drawY,
+                    drawW,
+                    drawH,
+                );
+
+                /*
+                 * Reveal where the player eventually found this bot.
+                 */
+                const markerX =
+                    frameX +
+                    hider.centerX *
+                    scaleX;
+
+                const markerY =
+                    frameY +
+                    hider.centerY *
+                    scaleY;
+
+                const markerRadius =
+                    34;
+
+                context.strokeStyle =
+                    'rgba(255,255,255,.98)';
+                context.lineWidth =
+                    8;
                 context.beginPath();
-                context.roundRect(
-                    64,
-                    y,
-                    width -
-                        128,
-                    56,
-                    14,
+                context.arc(
+                    markerX,
+                    markerY,
+                    markerRadius,
+                    0,
+                    Math.PI *
+                        2,
                 );
-                context.fill();
+                context.stroke();
+
+                context.strokeStyle =
+                    'rgba(255,74,74,.96)';
+                context.lineWidth =
+                    4;
+                context.beginPath();
+                context.arc(
+                    markerX,
+                    markerY,
+                    markerRadius -
+                        7,
+                    0,
+                    Math.PI *
+                        2,
+                );
+                context.stroke();
 
                 context.fillStyle =
-                    '#99b89f';
+                    '#ff4a4a';
                 context.font =
-                    '800 20px Arial, sans-serif';
-                context.fillText(
-                    label,
-                    88,
-                    y +
-                        35,
-                );
-
+                    '900 18px Arial, sans-serif';
                 context.textAlign =
-                    'right';
-                context.fillStyle =
-                    '#ffffff';
-                context.font =
-                    '900 24px Arial, sans-serif';
+                    'center';
                 context.fillText(
-                    value,
-                    width -
-                        88,
-                    y +
-                        35,
+                    String(
+                        botIndex +
+                            1,
+                    ),
+                    markerX,
+                    markerY -
+                        markerRadius -
+                        10,
                 );
+
                 context.textAlign =
                     'left';
             },
         );
 
-        const rankingY =
-            statsY +
-            statLabels.length *
-                74 +
-            22;
+        context.restore();
 
+        context.strokeStyle =
+            'rgba(255,255,255,.74)';
+        context.lineWidth =
+            4;
+        context.beginPath();
+        context.roundRect(
+            frameX,
+            frameY,
+            frameW,
+            frameH,
+            28,
+        );
+        context.stroke();
+
+        /*
+         * Large, readable summary under the image.
+         */
         context.fillStyle =
             '#ffffff';
         context.font =
-            '900 28px Arial, sans-serif';
+            '900 34px Arial, sans-serif';
+        context.fillText(
+            `${this.getMapDisplayName(this.practiceMap)} · ${this.practiceBotCount} BOT · ${this.practiceBotPrecision}%`,
+            62,
+            990,
+        );
+
+        context.fillStyle =
+            '#9fc4a6';
+        context.font =
+            '900 24px Arial, sans-serif';
         context.fillText(
             `🏆 ${this.practiceHuntDuration}s TOP 5`,
-            64,
-            rankingY,
+            62,
+            1040,
         );
 
         const records =
@@ -28125,98 +28584,67 @@ export class GameScene extends Phaser.Scene {
                 this.practiceHuntDuration,
             );
 
-        records.forEach(
-            (
-                record,
-                index,
-            ) => {
-                const y =
-                    rankingY +
-                    52 +
-                    index *
-                        52;
+        records
+            .slice(
+                0,
+                5,
+            )
+            .forEach(
+                (
+                    record,
+                    index,
+                ) => {
+                    const y =
+                        1088 +
+                        index *
+                            40;
 
-                context.fillStyle =
-                    index ===
-                        0
-                        ? '#ffdf70'
-                        : '#d8e6db';
+                    context.fillStyle =
+                        index ===
+                            0
+                            ? '#ffdf70'
+                            : '#ffffff';
 
-                context.font =
-                    '900 22px Arial, sans-serif';
-                context.fillText(
-                    `#${index + 1}`,
-                    72,
-                    y,
-                );
+                    context.font =
+                        '900 21px Arial, sans-serif';
 
-                context.fillStyle =
-                    '#ffffff';
-                context.font =
-                    '900 24px Arial, sans-serif';
-                context.fillText(
-                    this.formatPracticeTime(
-                        record.elapsedMs,
-                    ),
-                    150,
-                    y,
-                );
+                    context.fillText(
+                        `#${index + 1}  ${this.formatPracticeTime(record.elapsedMs)}`,
+                        64,
+                        y,
+                    );
 
-                context.textAlign =
-                    'right';
-                context.fillStyle =
-                    '#9eb5a3';
-                context.font =
-                    '800 18px Arial, sans-serif';
-                context.fillText(
-                    `${record.botCount} BOT · ${record.precision}%`,
-                    width -
-                        70,
-                    y,
-                );
-                context.textAlign =
-                    'left';
-            },
-        );
+                    context.textAlign =
+                        'right';
+                    context.fillStyle =
+                        '#95aa99';
+                    context.font =
+                        '800 17px Arial, sans-serif';
+
+                    context.fillText(
+                        `${record.botCount} BOT · ${record.precision}%`,
+                        width -
+                            64,
+                        y,
+                    );
+
+                    context.textAlign =
+                        'left';
+                },
+            );
 
         const shareUrl =
             this.getPracticeShareUrl();
 
-        let host =
-            shareUrl;
-
-        try {
-            host =
-                new URL(
-                    shareUrl,
-                ).host;
-        } catch {
-            // Keep full string.
-        }
-
         context.fillStyle =
             '#7be58c';
         context.font =
-            '900 27px Arial, sans-serif';
+            '900 25px Arial, sans-serif';
         context.fillText(
-            host,
-            64,
+            shareUrl,
+            62,
             height -
-                66,
-        );
-
-        context.textAlign =
-            'right';
-        context.fillStyle =
-            '#8ba392';
-        context.font =
-            '800 18px Arial, sans-serif';
-        context.fillText(
-            'HUNTER SPEED RECORD',
-            width -
-                64,
-            height -
-                68,
+                34,
         );
 
         return await new Promise<
@@ -28317,7 +28745,9 @@ export class GameScene extends Phaser.Scene {
                     await navigator.share({
                         title:
                             'Color Hunt',
-                        text,
+                        text:
+                            `${text}
+${shareUrl}`,
                         files: [
                             file,
                         ],
