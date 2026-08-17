@@ -6048,3 +6048,28 @@ body:has(.colorhunt-main-lobby) .colorhunt-controls-help {
     font-size: 14px;
   }
 }
+
+
+/* ============================================================
+   v0.10.10.183 — desktop waiting-room chat stays bottom-left
+   ============================================================ */
+
+@media (pointer: fine) {
+  /*
+   * v126 only locked the UNFOCUSED lobby chat. As soon as the input gained
+   * focus, :not(.colorhunt-chat--focused) stopped matching and the base
+   * top:8px rule won, making the entire chat jump upward.
+   *
+   * Waiting/lobby chat now keeps the exact same bottom-left anchor whether
+   * focused or not.
+   */
+  .colorhunt-chat.colorhunt-chat--desktop-lobby,
+  .colorhunt-chat.colorhunt-chat--desktop-lobby.colorhunt-chat--focused {
+    top: auto !important;
+    left: var(--chat-canvas-left) !important;
+    bottom: var(--chat-canvas-bottom) !important;
+    transform: none !important;
+    width: min(var(--chat-panel-width), 320px) !important;
+    max-height: min(var(--chat-panel-max-height), 176px) !important;
+  }
+}

@@ -17712,10 +17712,16 @@ export class GameScene extends Phaser.Scene {
          * □ 문자 대신 0~100% 연속 길이.
          * 안전: green -> 주의: yellow/orange -> 위험: red
          */
-        const barX = 36;
-        const barY = 23;
-        const barWidth = 138;
-        const barHeight = 9;
+        /*
+         * v0.10.10.183:
+         * Make HEAT impossible to miss. The old 138x9 bar was easy to read
+         * as decoration, especially on PC. This larger bar plus warning text
+         * makes "gun won't fire" clearly distinguishable from input failure.
+         */
+        const barX = 42;
+        const barY = 29;
+        const barWidth = 174;
+        const barHeight = 14;
 
         this.hunterHeatGraphics.clear();
 
@@ -17818,18 +17824,57 @@ export class GameScene extends Phaser.Scene {
         }
 
         /*
-         * 과열 중에는 작은 경고만 표시.
-         * PRECISION은 의미가 직관적이지 않아 HUD에서 제거했습니다.
+         * v0.10.10.183:
+         * Warn BEFORE full overheat too. This prevents players from assuming
+         * a missed click when the weapon is intentionally heat-limited.
          */
+        const heatDanger =
+            estimatedHeat >=
+                75;
+
+        const heatCritical =
+            estimatedHeat >=
+                92;
+
         this.hunterOverheatLabel
             .setText(
                 overheated
-                    ? tr('OVERHEAT!')
-                    : '',
+                    ? `⚠ ${tr('과열! 잠시 기다리세요')}`
+                    : heatCritical
+                        ? `⚠ ${tr('과열 직전!')}`
+                        : heatDanger
+                            ? tr('열 상승 중')
+                            : '',
+            )
+            .setColor(
+                overheated ||
+                heatCritical
+                    ? '#d32f2f'
+                    : '#b36b00',
             )
             .setVisible(
-                overheated,
+                overheated ||
+                heatDanger,
             );
+
+        /*
+         * Flash a short status message only when actually overheated. The
+         * label remains persistent while the weapon cools.
+         */
+        if (
+            overheated &&
+            this.statusText &&
+            (
+                !this.statusText.visible ||
+                !this.statusText.text.includes(
+                    tr('과열'),
+                )
+            )
+        ) {
+            this.showStatus(
+                `⚠ ${tr('샷건 과열! 잠시 식힌 후 발사하세요')}`,
+            );
+        }
     }
 
     private createHuntTensionUi(): void {
@@ -28085,12 +28130,12 @@ export class GameScene extends Phaser.Scene {
         this.hunterHeatLabel =
             this.add.text(
                 0,
-                27,
+                35,
                 tr('HEAT'),
                 {
                     fontFamily:
                         'monospace',
-                    fontSize: '11px',
+                    fontSize: '13px',
                     fontStyle: 'bold',
                     color: '#334139',
                 },
@@ -28099,13 +28144,13 @@ export class GameScene extends Phaser.Scene {
 
         this.hunterOverheatLabel =
             this.add.text(
-                174,
-                27,
+                220,
+                35,
                 '',
                 {
                     fontFamily:
                         'monospace',
-                    fontSize: '10px',
+                    fontSize: '12px',
                     fontStyle: 'bold',
                     color: '#d32f2f',
                 },
@@ -28114,10 +28159,10 @@ export class GameScene extends Phaser.Scene {
 
         const weaponHudBackground =
             this.add.rectangle(
-                87,
-                19,
-                184,
-                52,
+                110,
+                25,
+                230,
+                66,
                 0xfff4d6,
                 0.9,
             )
