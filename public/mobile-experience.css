@@ -5721,3 +5721,54 @@ body:has(.colorhunt-main-lobby) .colorhunt-controls-help {
     height: 48px !important;
   }
 }
+
+
+/* ============================================================
+   v0.10.10.172 — Practice content safe-area for custom scrollbar
+   ============================================================ */
+
+@media (pointer: coarse), (max-width: 900px) {
+  /*
+   * The always-visible custom scrollbar occupies the far-right edge.
+   * Reserve a dedicated gutter INSIDE the modal so right-aligned values
+   * (ranking metadata, precision %, slider values, etc.) never sit under it.
+   */
+  .colorhunt-practice-card {
+    padding-right: 64px !important;
+    box-sizing: border-box !important;
+  }
+
+  /*
+   * Extra protection for the rows that intentionally push values to the
+   * right. Keep their final value column clearly inside the safe area.
+   */
+  .colorhunt-practice-ranking > div,
+  .colorhunt-practice-time-title,
+  .colorhunt-practice-control label,
+  .colorhunt-practice-difficulty-row {
+    padding-right: 12px !important;
+    box-sizing: border-box !important;
+  }
+
+  .colorhunt-practice-ranking > div small,
+  .colorhunt-practice-time-title b,
+  .colorhunt-practice-control label b,
+  .colorhunt-practice-difficulty-row > b {
+    margin-right: 6px !important;
+  }
+
+  /*
+   * Range controls also need breathing room because the numeric value is
+   * rendered at the far right of the same row.
+   */
+  .colorhunt-practice-control input[type="range"] {
+    max-width: calc(100% - 6px) !important;
+  }
+}
+
+/* Fold landscape: the custom rail is a little wider, so reserve more room. */
+@media (pointer: coarse) and (orientation: landscape) and (max-height: 650px) {
+  .colorhunt-practice-card {
+    padding-right: 72px !important;
+  }
+}
