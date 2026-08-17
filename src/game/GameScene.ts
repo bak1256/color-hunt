@@ -15138,11 +15138,7 @@ export class GameScene extends Phaser.Scene {
                             true &&
                         Boolean(
                             room.roomId,
-                        ) &&
-                        Number(
-                            room.clients,
-                        ) >
-                            0,
+                        ),
                 );
 
             if (
@@ -15310,7 +15306,17 @@ export class GameScene extends Phaser.Scene {
                             </span>
 
                             <span class="ch-lobby-room-count">
-                                ${room.clients} / ${room.maxClients}
+                                ${
+                                    Math.max(
+                                        Number(
+                                            room.clients,
+                                        ) || 0,
+                                        Number(
+                                            room.metadata
+                                                ?.playerCount,
+                                        ) || 0,
+                                    )
+                                } / ${room.maxClients}
                             </span>
 
                             <span class="ch-lobby-room-status ${

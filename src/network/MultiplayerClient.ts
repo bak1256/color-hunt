@@ -729,15 +729,7 @@ this.phaseChangedHandlers.forEach(
           (room) =>
             Boolean(
               room?.roomId,
-            ) &&
-            Number.isFinite(
-              Number(
-                room.clients,
-              ),
-            ) &&
-            Number(
-              room.clients,
-            ) > 0,
+            ),
         )
         .map(
           (room) => ({
