@@ -3818,6 +3818,24 @@ export class GameScene extends Phaser.Scene {
             },
         );
 
+        /*
+         * v0.10.10.169:
+         * Lobby / Practice controls are DOM overlays, so their taps do not
+         * always reach Phaser's InputPlugin. Listen once at document capture
+         * level as well; this makes the first real user gesture unlock BGM
+         * regardless of whether the player touches canvas or DOM UI first.
+         */
+        document.addEventListener(
+            'pointerdown',
+            () => {
+                this.unlockGameAudio();
+            },
+            {
+                once: true,
+                capture: true,
+            },
+        );
+
         this.createImageBackground();
         this.createObstacles();
 
@@ -8187,6 +8205,22 @@ export class GameScene extends Phaser.Scene {
             scrollAffordance,
         );
 
+        const scrollTrack =
+            scrollAffordance
+                .querySelector<
+                    HTMLElement
+                >(
+                    '.colorhunt-practice-scroll-affordance__track',
+                );
+
+        const scrollThumb =
+            scrollAffordance
+                .querySelector<
+                    HTMLElement
+                >(
+                    '.colorhunt-practice-scroll-affordance__track i',
+                );
+
         const syncPracticeScrollAffordance =
             (): void => {
                 const maxScroll =
@@ -8207,19 +8241,20 @@ export class GameScene extends Phaser.Scene {
                         )
                         : 0;
 
-                const thumb =
-                    scrollAffordance
-                        .querySelector<
-                            HTMLElement
-                        >(
-                            '.colorhunt-practice-scroll-affordance__track i',
+                if (
+                    scrollTrack &&
+                    scrollThumb
+                ) {
+                    const travel =
+                        Math.max(
+                            0,
+                            scrollTrack.clientHeight -
+                                scrollThumb.clientHeight -
+                                10,
                         );
 
-                if (
-                    thumb
-                ) {
-                    thumb.style.transform =
-                        `translateY(${ratio * 72}px)`;
+                    scrollThumb.style.transform =
+                        `translateY(${ratio * travel}px)`;
                 }
 
                 scrollAffordance.classList
@@ -8229,6 +8264,149 @@ export class GameScene extends Phaser.Scene {
                             8,
                     );
             };
+
+        const setPracticeScrollFromClientY =
+            (
+                clientY:
+                    number,
+            ): void => {
+                if (
+                    !scrollTrack
+                ) {
+                    return;
+                }
+
+                const rect =
+                    scrollTrack
+                        .getBoundingClientRect();
+
+                const maxScroll =
+                    Math.max(
+                        0,
+                        card.scrollHeight -
+                            card.clientHeight,
+                    );
+
+                if (
+                    maxScroll <=
+                        0
+                ) {
+                    return;
+                }
+
+                const thumbHeight =
+                    scrollThumb
+                        ?.clientHeight ??
+                        36;
+
+                const usable =
+                    Math.max(
+                        1,
+                        rect.height -
+                            thumbHeight,
+                    );
+
+                const localY =
+                    Phaser.Math.Clamp(
+                        clientY -
+                            rect.top -
+                            thumbHeight /
+                                2,
+                        0,
+                        usable,
+                    );
+
+                card.scrollTop =
+                    (
+                        localY /
+                        usable
+                    ) *
+                    maxScroll;
+
+                syncPracticeScrollAffordance();
+            };
+
+        let practiceScrollPointerId =
+            -1;
+
+        scrollAffordance.addEventListener(
+            'pointerdown',
+            (
+                event,
+            ) => {
+                event.preventDefault();
+                event.stopPropagation();
+
+                practiceScrollPointerId =
+                    event.pointerId;
+
+                scrollAffordance
+                    .setPointerCapture(
+                        event.pointerId,
+                    );
+
+                setPracticeScrollFromClientY(
+                    event.clientY,
+                );
+            },
+        );
+
+        scrollAffordance.addEventListener(
+            'pointermove',
+            (
+                event,
+            ) => {
+                if (
+                    event.pointerId !==
+                        practiceScrollPointerId
+                ) {
+                    return;
+                }
+
+                event.preventDefault();
+
+                setPracticeScrollFromClientY(
+                    event.clientY,
+                );
+            },
+        );
+
+        const finishPracticeScrollDrag =
+            (
+                event:
+                    PointerEvent,
+            ): void => {
+                if (
+                    event.pointerId !==
+                        practiceScrollPointerId
+                ) {
+                    return;
+                }
+
+                practiceScrollPointerId =
+                    -1;
+
+                if (
+                    scrollAffordance
+                        .hasPointerCapture(
+                            event.pointerId,
+                        )
+                ) {
+                    scrollAffordance
+                        .releasePointerCapture(
+                            event.pointerId,
+                        );
+                }
+            };
+
+        scrollAffordance.addEventListener(
+            'pointerup',
+            finishPracticeScrollDrag,
+        );
+        scrollAffordance.addEventListener(
+            'pointercancel',
+            finishPracticeScrollDrag,
+        );
 
         card.addEventListener(
             'scroll',
@@ -9867,8 +10045,80 @@ export class GameScene extends Phaser.Scene {
         _elapsedMs:
             number,
     ): Promise<Blob | null> {
+        /*
+         * v0.10.10.169 SHARE CLEAN CAPTURE
+         * The brush cursor is editor UI, not part of the camouflage artwork.
+         * Hide every paint-preview helper for one render before snapshot, then
+         * restore exactly the previous visibility afterwards.
+         */
+        const paintPreviewWasVisible =
+            this.paintPreview?.visible ??
+                false;
+        const straightPreviewWasVisible =
+            this.straightLinePreview
+                ?.visible ??
+                false;
+        const precisionRingWasVisible =
+            this.mobilePaintPrecisionRing
+                ?.visible ??
+                false;
+        const precisionCrosshairWasVisible =
+            this.mobilePaintPrecisionCrosshair
+                ?.visible ??
+                false;
+
+        this.paintPreview
+            ?.setVisible(
+                false,
+            );
+        this.straightLinePreview
+            ?.setVisible(
+                false,
+            );
+        this.mobilePaintPrecisionRing
+            ?.setVisible(
+                false,
+            );
+        this.mobilePaintPrecisionCrosshair
+            ?.setVisible(
+                false,
+            );
+
+        await new Promise<void>(
+            (
+                resolve,
+            ) => {
+                requestAnimationFrame(
+                    () => {
+                        requestAnimationFrame(
+                            () => {
+                                resolve();
+                            },
+                        );
+                    },
+                );
+            },
+        );
+
         const gameSnapshot =
             await this.captureGameCanvasForShare();
+
+        this.paintPreview
+            ?.setVisible(
+                paintPreviewWasVisible,
+            );
+        this.straightLinePreview
+            ?.setVisible(
+                straightPreviewWasVisible,
+            );
+        this.mobilePaintPrecisionRing
+            ?.setVisible(
+                precisionRingWasVisible,
+            );
+        this.mobilePaintPrecisionCrosshair
+            ?.setVisible(
+                precisionCrosshairWasVisible,
+            );
 
         if (!gameSnapshot) {
             return null;
@@ -18614,12 +18864,50 @@ export class GameScene extends Phaser.Scene {
     }
 
     private unlockGameAudio(): void {
-        if (this.audioUnlocked) {
-            return;
+        /*
+         * Browser/WebView audio contexts can remain "suspended" even after
+         * Phaser has created sounds. Resume it from the user gesture before
+         * asking the phase BGM to play.
+         */
+        const soundManager =
+            this.sound as unknown as {
+                context?: AudioContext;
+            };
+
+        const context =
+            soundManager.context;
+
+        if (
+            context?.state ===
+                'suspended'
+        ) {
+            void context
+                .resume()
+                .catch(
+                    () => {
+                        // A later user gesture will retry naturally.
+                    },
+                );
         }
 
         this.audioUnlocked = true;
         this.syncPhaseMusic();
+
+        /*
+         * Some mobile WebViews report resume() asynchronously. Re-check the
+         * desired phase music shortly afterwards without restarting a track
+         * that is already playing.
+         */
+        this.time.delayedCall(
+            180,
+            () => {
+                if (
+                    this.bgmEnabled
+                ) {
+                    this.syncPhaseMusic();
+                }
+            },
+        );
     }
 
     private createBgmToggleButton(): void {

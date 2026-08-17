@@ -5469,3 +5469,72 @@ body:has(.colorhunt-main-lobby) .colorhunt-controls-help {
     font-size: 10px;
   }
 }
+
+
+/* ============================================================
+   v0.10.10.169 — ONE custom Practice scrollbar only
+   ============================================================ */
+
+@media (pointer: coarse), (max-width: 900px) {
+  /*
+   * Native mobile scrollbars auto-hide and previously overlapped our guide.
+   * Keep the card scrollable, but render no native bar at all.
+   */
+  .colorhunt-practice-card {
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+    padding-right: 12px !important;
+  }
+
+  .colorhunt-practice-card::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+  }
+
+  /*
+   * v165 was visual-only. v169 is the actual scrollbar control.
+   */
+  .colorhunt-practice-scroll-affordance {
+    pointer-events: auto !important;
+    touch-action: none !important;
+    cursor: grab;
+    user-select: none;
+    -webkit-user-select: none;
+    width: 42px !important;
+    padding: 8px 5px 10px !important;
+    border-width: 3px !important;
+    opacity: 1 !important;
+  }
+
+  .colorhunt-practice-scroll-affordance:active {
+    cursor: grabbing;
+    transform: translateY(-50%) scale(.98);
+  }
+
+  .colorhunt-practice-scroll-affordance__track {
+    width: 16px !important;
+    height: 128px !important;
+    border-width: 2px !important;
+  }
+
+  .colorhunt-practice-scroll-affordance__track i {
+    left: 2px !important;
+    width: 8px !important;
+    height: 40px !important;
+    transition: none !important;
+  }
+
+  .colorhunt-practice-scroll-affordance__arrow {
+    font-size: 22px !important;
+  }
+
+  .colorhunt-practice-scroll-affordance__label {
+    font-size: 10px !important;
+  }
+
+  .colorhunt-practice-scroll-affordance:not(.is-scrollable) {
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+}
