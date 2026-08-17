@@ -9580,6 +9580,91 @@ export class GameScene extends Phaser.Scene {
         return url.toString();
     }
 
+    private async captureGameCanvasForShare(): Promise<HTMLImageElement | null> {
+        /*
+         * Do NOT draw this.game.canvas directly into a 2D canvas.
+         * On mobile Phaser commonly runs WebGL with preserveDrawingBuffer
+         * disabled, so drawImage(WebGLCanvas) can produce a black frame.
+         *
+         * Phaser's renderer snapshot reads the rendered framebuffer at the
+         * correct point in the render cycle and works for both WebGL/Canvas.
+         */
+        return await new Promise<
+            HTMLImageElement | null
+        >(
+            (
+                resolve,
+            ) => {
+                let settled =
+                    false;
+
+                const finish =
+                    (
+                        image:
+                            HTMLImageElement | null,
+                    ): void => {
+                        if (settled) {
+                            return;
+                        }
+
+                        settled =
+                            true;
+                        resolve(
+                            image,
+                        );
+                    };
+
+                try {
+                    this.game.renderer.snapshot(
+                        (
+                            snapshot:
+                                HTMLImageElement |
+                                Phaser.Display.Color,
+                        ) => {
+                            if (
+                                snapshot instanceof
+                                    HTMLImageElement
+                            ) {
+                                finish(
+                                    snapshot,
+                                );
+                                return;
+                            }
+
+                            /*
+                             * SnapshotCallback may also yield Phaser.Color
+                             * according to the renderer typings. A color is
+                             * not a usable game screenshot, so fail cleanly.
+                             */
+                            finish(
+                                null,
+                            );
+                        },
+                        'image/png',
+                        1,
+                    );
+                } catch {
+                    finish(
+                        null,
+                    );
+                }
+
+                /*
+                 * A hidden/background WebView can occasionally skip the
+                 * snapshot callback. Never leave the Complete button hanging.
+                 */
+                window.setTimeout(
+                    () => {
+                        finish(
+                            null,
+                        );
+                    },
+                    2_500,
+                );
+            },
+        );
+    }
+
     private async createHiderPracticeShareBlob(
         elapsedMs:
             number,
@@ -9589,6 +9674,13 @@ export class GameScene extends Phaser.Scene {
          * It also previews cleanly in messenger apps without creating an
          * excessively tall Story-only image.
          */
+        const gameSnapshot =
+            await this.captureGameCanvasForShare();
+
+        if (!gameSnapshot) {
+            return null;
+        }
+
         const width =
             1080;
         const height =
@@ -9695,11 +9787,13 @@ export class GameScene extends Phaser.Scene {
         context.clip();
 
         context.drawImage(
-            this.game.canvas,
+            gameSnapshot,
             0,
             0,
-            this.game.canvas.width,
-            this.game.canvas.height,
+            gameSnapshot.naturalWidth ||
+                gameSnapshot.width,
+            gameSnapshot.naturalHeight ||
+                gameSnapshot.height,
             shotX,
             shotY,
             shotW,
