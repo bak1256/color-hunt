@@ -2867,7 +2867,7 @@ export class GameScene extends Phaser.Scene {
     private practiceMap = 'map1';
     private practiceBotCount = 3;
     private practiceBotPrecision = 65;
-    private practiceExitButton?: Phaser.GameObjects.Text;
+    private practiceExitButton?: HTMLButtonElement;
     private readonly practiceBotTextureKeys =
         new Set<string>();
 
@@ -7882,11 +7882,14 @@ export class GameScene extends Phaser.Scene {
                             data-bot-precision
                             type="range"
                             min="50"
-                            max="80"
+                            max="95"
                             step="5"
                             value="${this.practiceBotPrecision}"
                         >
-                        <small>${tr('높을수록 봇의 색이 배경과 더 비슷해집니다.')}</small>
+                        <div class="colorhunt-practice-difficulty-row">
+                            <small>${tr('높을수록 봇의 색이 배경과 더 비슷해집니다.')}</small>
+                            <b data-practice-difficulty></b>
+                        </div>
                     </div>
 
                     <button type="button" class="colorhunt-practice-start" data-practice-hunter>
@@ -8134,6 +8137,46 @@ export class GameScene extends Phaser.Scene {
                 '[data-bot-precision-value]',
             );
 
+        const difficultyLabel =
+            card.querySelector<
+                HTMLElement
+            >(
+                '[data-practice-difficulty]',
+            );
+
+        const updateDifficultyUi =
+            (): void => {
+                const extreme =
+                    this.practiceBotPrecision >=
+                    85;
+
+                precision?.classList.toggle(
+                    'is-extreme',
+                    extreme,
+                );
+
+                precisionValue?.classList.toggle(
+                    'is-extreme',
+                    extreme,
+                );
+
+                card.classList.toggle(
+                    'practice-is-extreme',
+                    extreme,
+                );
+
+                if (difficultyLabel) {
+                    difficultyLabel.textContent =
+                        extreme
+                            ? `🔥 ${tr('핵어려움')}`
+                            : '';
+                    difficultyLabel.classList.toggle(
+                        'is-visible',
+                        extreme,
+                    );
+                }
+            };
+
         const commitPrecision =
             (): void => {
                 if (!precision) {
@@ -8150,7 +8193,7 @@ export class GameScene extends Phaser.Scene {
                         ) *
                             5,
                         50,
-                        80,
+                        95,
                     );
 
                 precision.value =
@@ -8162,6 +8205,8 @@ export class GameScene extends Phaser.Scene {
                     precisionValue.textContent =
                         `${this.practiceBotPrecision}%`;
                 }
+
+                updateDifficultyUi();
             };
 
         [
@@ -8179,6 +8224,8 @@ export class GameScene extends Phaser.Scene {
                 );
             },
         );
+
+        updateDifficultyUi();
 
         const updateMap =
             (): void => {
@@ -8727,7 +8774,7 @@ export class GameScene extends Phaser.Scene {
                                     this.practiceBotPrecision -
                                     50
                                 ) /
-                                30;
+                                45;
 
                             /*
                              * 50%: larger hand-painted color mismatch.
@@ -8737,7 +8784,7 @@ export class GameScene extends Phaser.Scene {
                             const maxError =
                                 Phaser.Math.Linear(
                                     58,
-                                    8,
+                                    2,
                                     Phaser.Math.Clamp(
                                         ratio,
                                         0,
@@ -8938,52 +8985,98 @@ export class GameScene extends Phaser.Scene {
 
     private createPracticeExitButton(): void {
         this.practiceExitButton
-            ?.destroy();
+            ?.remove();
+
+        const button =
+            document.createElement(
+                'button',
+            );
+
+        button.type =
+            'button';
+        button.className =
+            'colorhunt-practice-exit-button';
+        button.textContent =
+            `← ${tr('연습 종료')}`;
+
+        document.body.appendChild(
+            button,
+        );
 
         this.practiceExitButton =
-            this.add.text(
-                this.gameWidth -
-                    16,
-                16,
-                `← ${tr('연습 종료')}`,
-                {
-                    fontFamily:
-                        'monospace',
-                    fontSize:
-                        this.mobileControlsEnabled
-                            ? '12px'
-                            : '13px',
-                    fontStyle:
-                        'bold',
-                    color:
-                        '#35523d',
-                    backgroundColor:
-                        '#fff9e8',
-                    padding: {
-                        x: 10,
-                        y: 7,
-                    },
-                },
-            )
-                .setOrigin(
-                    1,
-                    0,
-                )
-                .setScrollFactor(
-                    0,
-                )
-                .setDepth(
-                    9000,
-                )
-                .setInteractive({
-                    useHandCursor:
-                        true,
-                });
+            button;
 
-        this.practiceExitButton.on(
-            'pointerdown',
-            () => {
-                this.exitPracticeMode();
+        const updatePosition =
+            (): void => {
+                if (
+                    this.practiceExitButton !==
+                    button
+                ) {
+                    return;
+                }
+
+                const rect =
+                    this.game.canvas
+                        .getBoundingClientRect();
+
+                button.style.setProperty(
+                    '--practice-exit-top',
+                    `${Math.round(
+                        rect.top +
+                        10,
+                    )}px`,
+                );
+
+                button.style.setProperty(
+                    '--practice-exit-right',
+                    `${Math.round(
+                        Math.max(
+                            8,
+                            window.innerWidth -
+                            rect.right +
+                            10,
+                        ),
+                    )}px`,
+                );
+            };
+
+        button.addEventListener(
+            'click',
+            (
+                event,
+            ) => {
+                event.preventDefault();
+                event.stopPropagation();
+
+                /*
+                 * Manual exit NEVER writes a ranking record.
+                 */
+                this.practiceStartedAt =
+                    0;
+                this.exitPracticeMode(
+                    true,
+                );
+            },
+        );
+
+        updatePosition();
+
+        const onViewport =
+            (): void => {
+                if (
+                    this.practiceExitButton ===
+                    button
+                ) {
+                    updatePosition();
+                }
+            };
+
+        window.addEventListener(
+            'resize',
+            onViewport,
+            {
+                passive: true,
+                once: true,
             },
         );
     }
@@ -8999,7 +9092,7 @@ export class GameScene extends Phaser.Scene {
             null;
 
         this.practiceExitButton
-            ?.destroy();
+            ?.remove();
         this.practiceExitButton =
             undefined;
 
@@ -21609,7 +21702,11 @@ export class GameScene extends Phaser.Scene {
             !this.mobilePendingPaintStartWorld ||
             !pointer.isDown ||
             this.phase !== 'paint' ||
-            !this.isMultiplayerSession()
+            (
+                !this.isMultiplayerSession() &&
+                this.practiceMode !==
+                    'hider'
+            )
         ) {
             return false;
         }
@@ -21673,8 +21770,8 @@ export class GameScene extends Phaser.Scene {
         this.playPaintSound();
         this.isPainting = true;
         this.activeStrokeTargetSessionId =
-            multiplayerClient
-                .getSessionId() ?? '';
+            this.networkPlayerManager
+                .getLocalSessionId() ?? '';
 
         this.activeStrokePoints = [
             startPoint,
@@ -22276,7 +22373,9 @@ export class GameScene extends Phaser.Scene {
                 }
 
                 if (
-                    this.isMultiplayerSession()
+                    this.isMultiplayerSession() ||
+                    this.practiceMode ===
+                        'hider'
                 ) {
                     if (
                         this.shiftPaintKey?.isDown &&
@@ -24595,6 +24694,18 @@ export class GameScene extends Phaser.Scene {
                 this.showHunterVictory();
                 return;
             }
+
+            if (
+                this.practiceMode ===
+                    'hunter' &&
+                this.hunterReserve <=
+                    0
+            ) {
+                this.showPracticeResult(
+                    false,
+                );
+                return;
+            }
         }
 
         this.cameras.main.shake(
@@ -26100,6 +26211,20 @@ export class GameScene extends Phaser.Scene {
         won:
             boolean,
     ): void {
+        if (
+            this.menuModalOverlay
+                ?.classList.contains(
+                    'colorhunt-practice-result-overlay',
+                )
+        ) {
+            return;
+        }
+
+        this.phase =
+            won
+                ? 'hunterVictory'
+                : 'hiderVictory';
+
         const elapsedMs =
             this.practiceStartedAt >
                 0
@@ -26124,10 +26249,12 @@ export class GameScene extends Phaser.Scene {
             false;
         this.clearAllAimingVisuals();
         this.stopAllBgm();
-        this.practiceExitButton
-            ?.setVisible(
-                false,
-            );
+        if (
+            this.practiceExitButton
+        ) {
+            this.practiceExitButton.hidden =
+                true;
+        }
 
         this.closeMenuModal();
 

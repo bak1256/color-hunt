@@ -5,6 +5,7 @@ const STORAGE_KEY = 'chameleon-hunt-language';
 type Dict = Record<string, string>;
 
 const ja: Dict = {
+  "핵어려움": "超激ムズ",
   "헌터 연습 시간": "ハンター練習時間",
   "시간별 TOP 5": "時間別 TOP 5",
   "아직 기록이 없습니다.": "まだ記録がありません。",
@@ -172,6 +173,7 @@ const ja: Dict = {
 };
 
 const en: Dict = {
+  "핵어려움": "EXTREME",
   "헌터 연습 시간": "Hunter Practice Time",
   "시간별 TOP 5": "TOP 5 by Time",
   "아직 기록이 없습니다.": "No records yet.",
@@ -341,6 +343,7 @@ const en: Dict = {
 };
 
 const zh: Dict = {
+  "핵어려움": "地狱难度",
   "헌터 연습 시간": "猎人练习时间",
   "시간별 TOP 5": "按时间 TOP 5",
   "아직 기록이 없습니다.": "暂无记录。",
