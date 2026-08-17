@@ -4838,3 +4838,121 @@ body:has(.colorhunt-main-lobby) .colorhunt-controls-help {
     padding-bottom: 6px !important;
   }
 }
+
+
+/* ============================================================
+   v0.10.10.156 — Visible mobile Practice scrollbar
+   ============================================================ */
+
+/*
+ * Desktop/WebKit fallback too, but intentionally strongest on touch devices.
+ */
+.colorhunt-practice-card {
+  scrollbar-width: auto;
+  scrollbar-color: #5f9169 rgba(232, 239, 216, .92);
+}
+
+/* Chromium / Samsung Internet / Android WebView */
+.colorhunt-practice-card::-webkit-scrollbar {
+  width: 14px;
+}
+
+.colorhunt-practice-card::-webkit-scrollbar-track {
+  background: rgba(232, 239, 216, .96);
+  border-left: 1px solid rgba(91, 122, 86, .22);
+  border-radius: 999px;
+}
+
+.colorhunt-practice-card::-webkit-scrollbar-thumb {
+  min-height: 72px;
+  background:
+    linear-gradient(
+      180deg,
+      #75ad7d 0%,
+      #4f865a 100%
+    );
+  border: 3px solid rgba(244, 247, 231, .98);
+  border-radius: 999px;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.32),
+    0 1px 2px rgba(38, 66, 43, .20);
+}
+
+.colorhunt-practice-card::-webkit-scrollbar-thumb:hover {
+  background:
+    linear-gradient(
+      180deg,
+      #69a572 0%,
+      #457a50 100%
+    );
+}
+
+@media (pointer: coarse), (max-width: 900px) {
+  .colorhunt-practice-card {
+    /*
+     * Leave visible breathing room for the scrollbar instead of letting
+     * content sit directly underneath it.
+     */
+    padding-right: 18px !important;
+    scrollbar-width: auto;
+    scrollbar-color: #4f865a #e8efd8;
+  }
+
+  .colorhunt-practice-card::-webkit-scrollbar {
+    width: 18px;
+  }
+
+  .colorhunt-practice-card::-webkit-scrollbar-track {
+    margin-block: 64px 12px;
+    background: rgba(222, 234, 207, .98);
+    border: 1px solid rgba(76, 114, 80, .26);
+    border-radius: 999px;
+  }
+
+  .colorhunt-practice-card::-webkit-scrollbar-thumb {
+    min-height: 92px;
+    border: 4px solid rgba(241, 246, 228, .98);
+    border-radius: 999px;
+    background:
+      linear-gradient(
+        180deg,
+        #72b47d 0%,
+        #4c8657 100%
+      );
+  }
+
+  /*
+   * A visual cue at the bottom edge of the sticky header makes it obvious
+   * that more settings continue below even when the browser hides native
+   * scrollbars during idle.
+   */
+  .colorhunt-practice-head::after {
+    content: "↓  SCROLL";
+    position: absolute;
+    right: 58px;
+    bottom: 6px;
+    padding: 3px 7px;
+    border: 1px solid rgba(82, 126, 86, .22);
+    border-radius: 999px;
+    background: rgba(230, 241, 218, .96);
+    color: #4d7755;
+    font-size: 7px;
+    font-weight: 950;
+    line-height: 1;
+    letter-spacing: .05em;
+    pointer-events: none;
+    opacity: .92;
+  }
+}
+
+/* Extra chunky thumb for short Fold landscape viewports. */
+@media (pointer: coarse) and (orientation: landscape) and (max-height: 650px) {
+  .colorhunt-practice-card::-webkit-scrollbar {
+    width: 20px;
+  }
+
+  .colorhunt-practice-card::-webkit-scrollbar-thumb {
+    min-height: 110px;
+    border-width: 4px;
+  }
+}
