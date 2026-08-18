@@ -30888,21 +30888,14 @@ export class GameScene extends Phaser.Scene {
             }
         } else {
             /*
-             * HOTFIX v0.10.10.153:
-             * Hunter Practice now uses the SAME Hunt countdown text object
-             * as the real game. The previous branch hid timerText in Practice
-             * and relied on survivalHudText only, which could disappear after
-             * camera/fixed-HUD compensation on some devices.
-             *
-             * One clock (phaseEndTime) -> one visible TIME n countdown.
+             * v0.10.10.236.1:
+             * Hunt already has the compact translated "찾는 중! · ⏱ Ns"
+             * survival HUD. The old centered "TIME N" box is redundant and
+             * must never be shown in Hunt.
              */
             this.timerText
-                .setVisible(true)
-                .setDepth(6200)
-                .setScrollFactor(0)
-                .setText(
-                    tr(`TIME ${remainingSeconds}`),
-                );
+                .setText('')
+                .setVisible(false);
 
             if (
                 this.practiceMode ===
