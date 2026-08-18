@@ -16740,11 +16740,13 @@ export class GameScene extends Phaser.Scene {
                     return aTitle.localeCompare(bTitle);
                 });
 
+            /*
+             * v0.10.10.227:
+             * Render the complete sorted public-room list.  A playing room
+             * must not disappear merely because open rooms occupy the first
+             * five slots.
+             */
             sortedRooms
-                .slice(
-                    0,
-                    5,
-                )
                 .forEach(
                     (
                         room:
