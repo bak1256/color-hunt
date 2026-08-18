@@ -25629,8 +25629,14 @@ export class GameScene extends Phaser.Scene {
             return false;
         }
 
+        /*
+         * v0.10.10.238.9:
+         * v238.7 could increment the original counter even when its Phaser
+         * status message was instantly cleared. Use a fresh versioned key so
+         * every desktop Hider gets three ACTUALLY VISIBLE tutorial toasts.
+         */
         const storageKey =
-            'colorhunt-eyedropper-rightclick-tip-count';
+            'colorhunt-eyedropper-rightclick-tip-count-v2';
 
         const shownCount =
             Math.max(
