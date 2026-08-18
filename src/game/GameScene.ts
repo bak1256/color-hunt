@@ -3197,6 +3197,7 @@ export class GameScene extends Phaser.Scene {
     private mobilePaintPrecisionRing?: Phaser.GameObjects.Arc;
     private mobilePaintPrecisionCrosshair?: Phaser.GameObjects.Graphics;
     private mobilePaintPrecisionHandle?: Phaser.GameObjects.Graphics;
+    private mobileLastBrushTargetWorld?: Phaser.Math.Vector2;
     private mobilePaintHoldDotEvent?: Phaser.Time.TimerEvent;
     private mobilePaintLineModeEvent?: Phaser.Time.TimerEvent;
     private mobilePaintDotCommitted = false;
@@ -23844,15 +23845,21 @@ export class GameScene extends Phaser.Scene {
         }
 
         /*
-         * Mobile precision mode:
-         * move the TARGET 92 SCREEN pixels above the finger first, then
-         * convert through the camera. This stays accurate at every zoom and
-         * after viewport/orientation changes.
+         * Mobile precision brush:
+         * the fingertip holds the lower-right end of a diagonal brush.
+         * The actual paint footprint sits 72 screen px left and 82 px above
+         * the finger, keeping both the grip and the paint tip visible.
          */
-        return this.getPointerWorldPoint(
-            pointer,
-            -92,
+        const result =
+            new Phaser.Math.Vector2();
+
+        this.cameras.main.getWorldPoint(
+            pointer.x - 72,
+            pointer.y - 82,
+            result,
         );
+
+        return result;
     }
 
     private getPaintPreviewWorldPoint(
@@ -23987,6 +23994,9 @@ export class GameScene extends Phaser.Scene {
                 pointer,
             );
 
+        this.mobileLastBrushTargetWorld =
+            target.clone();
+
         const fingerWorld =
             this.getPointerWorldPoint(
                 pointer,
@@ -24049,31 +24059,71 @@ export class GameScene extends Phaser.Scene {
             )
             .setVisible(true);
 
+        const dx = fingerWorld.x - target.x;
+        const dy = fingerWorld.y - target.y;
+        const length = Math.max(0.001, Math.hypot(dx, dy));
+        const ux = dx / length;
+        const uy = dy / length;
+        const px = -uy;
+        const py = ux;
+        const ferruleX = target.x + ux * (22 / zoom);
+        const ferruleY = target.y + uy * (22 / zoom);
+
         this.mobilePaintPrecisionHandle
             ?.clear()
+            /* dark outline */
             .lineStyle(
-                this.straightLineModeActive
-                    ? 7 / zoom
-                    : 5 / zoom,
-                accent,
-                0.78,
+                this.straightLineModeActive ? 11 / zoom : 9 / zoom,
+                0x172027,
+                0.92,
             )
             .lineBetween(
-                target.x,
-                target.y,
+                ferruleX,
+                ferruleY,
                 fingerWorld.x,
                 fingerWorld.y,
             )
-            .fillStyle(
-                accent,
-                0.88,
+            /* wooden handle */
+            .lineStyle(
+                this.straightLineModeActive ? 7 / zoom : 6 / zoom,
+                this.straightLineModeActive ? 0xf59e0b : 0xc98245,
+                0.98,
             )
+            .lineBetween(
+                ferruleX,
+                ferruleY,
+                fingerWorld.x,
+                fingerWorld.y,
+            )
+            /* metal ferrule */
+            .lineStyle(8 / zoom, 0xe8edf0, 0.98)
+            .lineBetween(
+                target.x + ux * (10 / zoom),
+                target.y + uy * (10 / zoom),
+                ferruleX,
+                ferruleY,
+            )
+            /* colored bristle tip */
+            .fillStyle(this.paintColor, 0.98)
+            .fillTriangle(
+                target.x - px * (7 / zoom),
+                target.y - py * (7 / zoom),
+                target.x + px * (7 / zoom),
+                target.y + py * (7 / zoom),
+                target.x + ux * (14 / zoom),
+                target.y + uy * (14 / zoom),
+            )
+            .fillStyle(0x172027, 0.96)
             .fillCircle(
                 fingerWorld.x,
                 fingerWorld.y,
-                this.straightLineModeActive
-                    ? 8 / zoom
-                    : 6 / zoom,
+                this.straightLineModeActive ? 11 / zoom : 9 / zoom,
+            )
+            .fillStyle(0xffffff, 0.95)
+            .fillCircle(
+                fingerWorld.x,
+                fingerWorld.y,
+                this.straightLineModeActive ? 6 / zoom : 5 / zoom,
             )
             .setVisible(true);
     }
@@ -24113,12 +24163,12 @@ export class GameScene extends Phaser.Scene {
             );
 
         /*
-         * The resting footprint sits on the character. The grip is exactly
-         * 92 SCREEN pixels below it, matching getPaintInputWorldPoint().
-         * Touching this visible grip therefore puts the real brush footprint
-         * right where the idle preview was shown.
+         * Keep the brush where the player last painted. Only the very first
+         * time falls back to the character. The lower-right grip mirrors the
+         * exact (-72, -82) screen-pixel input offset used while painting.
          */
         const target =
+            this.mobileLastBrushTargetWorld?.clone() ??
             new Phaser.Math.Vector2(
                 container.x,
                 container.y - 18 * visualScale,
@@ -24126,8 +24176,8 @@ export class GameScene extends Phaser.Scene {
 
         const grip =
             new Phaser.Math.Vector2(
-                target.x,
-                target.y + 92 / zoom,
+                target.x + 72 / zoom,
+                target.y + 82 / zoom,
             );
 
         this.paintPreview
@@ -24180,64 +24230,56 @@ export class GameScene extends Phaser.Scene {
             .setVisible(true);
 
         /*
-         * High-contrast brush shaft + oversized grip. Draw a dark outline
-         * first, then a bright inner shaft so it remains visible over every
-         * map/color and cannot be hidden by the user's fingertip.
+         * A real brush silhouette: diagonal wooden shaft, silver ferrule,
+         * colored bristles, and a large grab knob that stays clear of the
+         * fingertip.
          */
+        const dx = grip.x - target.x;
+        const dy = grip.y - target.y;
+        const length = Math.max(0.001, Math.hypot(dx, dy));
+        const ux = dx / length;
+        const uy = dy / length;
+        const px = -uy;
+        const py = ux;
+        const ferruleX = target.x + ux * (24 / zoom);
+        const ferruleY = target.y + uy * (24 / zoom);
+
         this.mobilePaintPrecisionHandle
             ?.clear()
-            .lineStyle(
-                11 / zoom,
-                0x172027,
-                0.88,
-            )
+            .lineStyle(12 / zoom, 0x172027, 0.92)
             .lineBetween(
-                target.x,
-                target.y + 6 / zoom,
+                ferruleX,
+                ferruleY,
                 grip.x,
                 grip.y,
             )
-            .lineStyle(
-                6 / zoom,
-                0xf8e7bd,
-                0.98,
-            )
+            .lineStyle(7 / zoom, 0xc98245, 1)
             .lineBetween(
-                target.x,
-                target.y + 6 / zoom,
+                ferruleX,
+                ferruleY,
                 grip.x,
                 grip.y,
             )
-            .fillStyle(
-                0x172027,
-                0.95,
+            .lineStyle(10 / zoom, 0xe8edf0, 1)
+            .lineBetween(
+                target.x + ux * (10 / zoom),
+                target.y + uy * (10 / zoom),
+                ferruleX,
+                ferruleY,
             )
-            .fillCircle(
-                grip.x,
-                grip.y,
-                14 / zoom,
-            )
-            .fillStyle(
-                0xffffff,
-                0.96,
-            )
-            .fillCircle(
-                grip.x,
-                grip.y,
-                9 / zoom,
-            )
-            .fillStyle(
-                this.paintColor,
-                0.95,
-            )
+            .fillStyle(this.paintColor, 0.98)
             .fillTriangle(
-                target.x - 8 / zoom,
-                target.y + 8 / zoom,
-                target.x + 8 / zoom,
-                target.y + 8 / zoom,
-                target.x,
-                target.y - 8 / zoom,
+                target.x - px * (8 / zoom),
+                target.y - py * (8 / zoom),
+                target.x + px * (8 / zoom),
+                target.y + py * (8 / zoom),
+                target.x + ux * (16 / zoom),
+                target.y + uy * (16 / zoom),
             )
+            .fillStyle(0x172027, 0.96)
+            .fillCircle(grip.x, grip.y, 15 / zoom)
+            .fillStyle(0xffffff, 0.98)
+            .fillCircle(grip.x, grip.y, 9 / zoom)
             .setVisible(true);
     }
 
@@ -24252,98 +24294,77 @@ export class GameScene extends Phaser.Scene {
         }
 
         const target =
-            this.getPaintPreviewWorldPoint(
-                pointer,
-            );
-
+            this.getPaintPreviewWorldPoint(pointer);
         const zoom =
-            Math.max(
-                0.01,
-                this.cameras.main.zoom,
-            );
+            Math.max(0.01, this.cameras.main.zoom);
 
         const fx =
             this.add.graphics()
                 .setDepth(6510);
 
-        fx.lineStyle(
-            5 / zoom,
-            0xf59e0b,
-            0.95,
-        );
-        fx.strokeCircle(
-            target.x,
-            target.y,
-            30 / zoom,
-        );
-        fx.lineStyle(
-            2 / zoom,
-            0xfff3c4,
-            0.95,
-        );
-        fx.strokeCircle(
-            target.x,
-            target.y,
-            40 / zoom,
-        );
+        fx.lineStyle(6 / zoom, 0xf59e0b, 1);
+        fx.strokeCircle(target.x, target.y, 32 / zoom);
+        fx.lineStyle(2 / zoom, 0xffffff, 1);
+        fx.strokeCircle(target.x, target.y, 43 / zoom);
 
-        const language =
-            getLanguage();
-
+        const language = getLanguage();
         const labelCopy = {
-            ko: '↔ 직선 칠 준비!',
-            ja: '↔ 直線モード!',
-            en: '↔ LINE READY!',
-            zh: '↔ 直线模式!',
+            ko: '직선 모드 ON  ↔  드래그해서 직선 칠하기',
+            ja: '直線モード ON  ↔  ドラッグで直線',
+            en: 'LINE MODE ON  ↔  DRAG TO PAINT A LINE',
+            zh: '直线模式 ON  ↔  拖动绘制直线',
         } as const;
 
+        /*
+         * Keep the message crisp: no scale tween. A thick black backing and
+         * high-resolution text make the state unmistakable on small phones.
+         */
         const label =
             this.add.text(
                 target.x,
-                target.y - 52 / zoom,
-                labelCopy[language] ??
-                    labelCopy.en,
+                target.y - 62 / zoom,
+                labelCopy[language] ?? labelCopy.en,
                 {
-                    fontFamily:
-                        'Arial, sans-serif',
-                    fontSize:
-                        `${Math.round(15 / zoom)}px`,
+                    fontFamily: 'Arial, sans-serif',
+                    fontSize: `${Math.round(17 / zoom)}px`,
                     fontStyle: 'bold',
-                    color: '#fff7d6',
-                    backgroundColor:
-                        'rgba(121, 67, 3, 0.88)',
+                    color: '#ffffff',
+                    backgroundColor: 'rgba(0, 0, 0, 0.94)',
+                    stroke: '#f59e0b',
+                    strokeThickness: Math.max(2, Math.round(3 / zoom)),
                     padding: {
-                        x: Math.max(
-                            4,
-                            Math.round(7 / zoom),
-                        ),
-                        y: Math.max(
-                            3,
-                            Math.round(4 / zoom),
-                        ),
+                        x: Math.max(7, Math.round(10 / zoom)),
+                        y: Math.max(5, Math.round(7 / zoom)),
                     },
                 },
             )
                 .setOrigin(0.5)
-                .setDepth(6511);
+                .setDepth(6511)
+                .setResolution(2);
 
         try {
-            navigator.vibrate?.(28);
+            navigator.vibrate?.([35, 35, 55]);
         } catch {
             // Haptics are best-effort only.
         }
 
         this.tweens.add({
-            targets: [fx, label],
+            targets: fx,
             alpha: 0,
-            scaleX: 1.38,
-            scaleY: 1.38,
-            duration: 680,
+            scaleX: 1.2,
+            scaleY: 1.2,
+            duration: 520,
             ease: 'Quad.easeOut',
-            onComplete: () => {
-                fx.destroy();
-                label.destroy();
-            },
+            onComplete: () => fx.destroy(),
+        });
+
+        this.tweens.add({
+            targets: label,
+            alpha: 0,
+            delay: 900,
+            duration: 260,
+            ease: 'Linear',
+            onComplete: () => label.destroy(),
         });
     }
 
