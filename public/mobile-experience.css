@@ -6314,3 +6314,39 @@ html.colorhunt-mobile .colorhunt-waiting-room.ch-uniform-mobile-scale * {
   .colorhunt-practice-hider-tips { gap: 4px; margin: 7px 0 9px; }
   .colorhunt-practice-hider-tips span { padding: 5px 6px; font-size: 8px; }
 }
+
+
+/* v0.10.10.201 practice readability + map preview */
+.colorhunt-practice-game-desc {
+  display: grid;
+  gap: 4px;
+  margin: 8px 0 0 !important;
+  font-size: 15px !important;
+  line-height: 1.5 !important;
+  font-weight: 800 !important;
+}
+.colorhunt-practice-game-desc span,
+.colorhunt-practice-game-desc strong { display: block; }
+.colorhunt-practice-game-desc strong { font-size: 16px; color: #244a30; }
+.colorhunt-practice-map--compact {
+  display: grid !important;
+  grid-template-columns: minmax(110px, 34%) 1fr;
+  gap: 12px;
+  align-items: center;
+}
+.colorhunt-practice-map-preview {
+  width: 100%;
+  height: 76px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 2px solid rgba(74,111,78,.34);
+  box-shadow: 0 3px 10px rgba(28,48,32,.15);
+}
+.colorhunt-practice-purpose strong { font-size: 1.08em; font-weight: 950; }
+@media (max-width: 760px), (max-height: 520px) {
+  .colorhunt-practice-intro > strong { font-size: 14px !important; }
+  .colorhunt-practice-game-desc { font-size: 12px !important; line-height: 1.42 !important; gap: 2px; }
+  .colorhunt-practice-game-desc strong { font-size: 13px; }
+  .colorhunt-practice-map-preview { height: 58px; }
+  .colorhunt-practice-purpose { font-size: 9.5px !important; line-height: 1.42 !important; }
+}

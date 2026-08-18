@@ -671,6 +671,50 @@ const ko: Dict = {
 
 const dictionaries: Record<GameLanguage, Dict> = { ko, ja, en, zh };
 
+/* v0.10.10.201: complete Practice Ground localization. */
+Object.assign(ko, {
+  'BEGINNER PRACTICE':'초보자 연습', '연습장':'연습장', 'COLOR HUNT는 어떤 게임인가요?':'COLOR HUNT는 어떤 게임인가요?',
+  '하이더는 배경과 비슷한 색으로 몸을 칠해 숨고':'하이더는 배경과 비슷한 색으로 몸을 칠해 숨고',
+  '헌터는 제한된 시간과 탄약 안에 위장한 하이더를 찾아내는':'헌터는 제한된 시간과 탄약 안에 위장한 하이더를 찾아내는',
+  '2D 숨바꼭질 게임입니다.':'2D 숨바꼭질 게임입니다.', 'HIDER · 칠하고 숨기':'HIDER · 칠하고 숨기', 'HUNTER · 찾아서 맞히기':'HUNTER · 찾아서 맞히기',
+  '연습 맵':'연습 맵', '연습 맵 미리보기':'연습 맵 미리보기', '헌터 연습':'헌터 연습', '하이더 연습':'하이더 연습', '왜 연습하나요?':'왜 연습하나요?',
+  '위장한 상대를 빠르게 발견하고, 제한 탄약과 과열을 관리하며 정확히 사격하는 감각을 익힙니다.':'위장한 상대를 빠르게 발견하고, 제한 탄약과 과열을 관리하며 정확히 사격하는 감각을 익힙니다.',
+  '배경색을 스포이드로 뽑고 브러시로 몸을 칠해, 눈에 띄지 않는 위장을 빠르고 정교하게 만드는 감각을 익힙니다.':'배경색을 스포이드로 뽑고 브러시로 몸을 칠해, 눈에 띄지 않는 위장을 빠르고 정교하게 만드는 감각을 익힙니다.',
+  '제한 시간':'제한 시간','봇 하이더 수':'봇 하이더 수','위장 정밀도':'위장 정밀도','높을수록 배경과 더 비슷하게 숨습니다.':'높을수록 배경과 더 비슷하게 숨습니다.',
+  '헌터 연습 시작':'헌터 연습 시작','하이더 연습 시작':'하이더 연습 시작','브러시 · 도트 · 직선':'브러시 · 도트 · 직선','스포이드 색 추출':'스포이드 색 추출','배경에 자연스럽게 위장':'배경에 자연스럽게 위장'
+});
+Object.assign(ja, {
+  'BEGINNER PRACTICE':'初心者練習', '연습장':'練習場', 'COLOR HUNT는 어떤 게임인가요?':'COLOR HUNTはどんなゲーム？',
+  '하이더는 배경과 비슷한 색으로 몸을 칠해 숨고':'HIDERは背景に近い色で体を塗って隠れ、',
+  '헌터는 제한된 시간과 탄약 안에 위장한 하이더를 찾아내는':'HUNTERは制限時間と弾薬の中で擬態したHIDERを見つけ出す',
+  '2D 숨바꼭질 게임입니다.':'2Dかくれんぼゲームです。','HIDER · 칠하고 숨기':'HIDER · 塗って隠れる','HUNTER · 찾아서 맞히기':'HUNTER · 見つけて撃つ',
+  '연습 맵':'練習マップ','연습 맵 미리보기':'練習マップのプレビュー','헌터 연습':'HUNTER練習','하이더 연습':'HIDER練習','왜 연습하나요?':'なぜ練習するの？',
+  '위장한 상대를 빠르게 발견하고, 제한 탄약과 과열을 관리하며 정확히 사격하는 감각을 익힙니다.':'擬態した相手を素早く見つけ、限られた弾薬とオーバーヒートを管理しながら正確に撃つ感覚を身につけます。',
+  '배경색을 스포이드로 뽑고 브러시로 몸을 칠해, 눈에 띄지 않는 위장을 빠르고 정교하게 만드는 감각을 익힙니다.':'スポイトで背景色を取り、ブラシで体を塗って、目立たない擬態を素早く丁寧に作る感覚を身につけます。',
+  '제한 시간':'制限時間','봇 하이더 수':'BOT HIDER数','위장 정밀도':'擬態精度','높을수록 배경과 더 비슷하게 숨습니다.':'高いほど背景に近い色で隠れます。','헌터 연습 시작':'HUNTER練習開始','하이더 연습 시작':'HIDER練習開始','브러시 · 도트 · 직선':'ブラシ · ドット · 直線','스포이드 색 추출':'スポイトで色を取得','배경에 자연스럽게 위장':'背景に自然に擬態'
+});
+Object.assign(en, {
+  'BEGINNER PRACTICE':'BEGINNER PRACTICE','연습장':'PRACTICE GROUND','COLOR HUNT는 어떤 게임인가요?':'What is COLOR HUNT?',
+  '하이더는 배경과 비슷한 색으로 몸을 칠해 숨고':'HIDERS paint their bodies to match the background and hide.',
+  '헌터는 제한된 시간과 탄약 안에 위장한 하이더를 찾아내는':'HUNTERS must find the camouflaged HIDERS with limited time and ammo.',
+  '2D 숨바꼭질 게임입니다.':'It is a 2D hide-and-seek game.','HIDER · 칠하고 숨기':'HIDER · PAINT & HIDE','HUNTER · 찾아서 맞히기':'HUNTER · FIND & SHOOT',
+  '연습 맵':'PRACTICE MAP','연습 맵 미리보기':'Practice map preview','헌터 연습':'HUNTER PRACTICE','하이더 연습':'HIDER PRACTICE','왜 연습하나요?':'Why practice?',
+  '위장한 상대를 빠르게 발견하고, 제한 탄약과 과열을 관리하며 정확히 사격하는 감각을 익힙니다.':'Learn to spot camouflaged targets quickly, manage limited ammo and heat, and shoot accurately.',
+  '배경색을 스포이드로 뽑고 브러시로 몸을 칠해, 눈에 띄지 않는 위장을 빠르고 정교하게 만드는 감각을 익힙니다.':'Sample background colors with the eyedropper and paint your body to create fast, precise camouflage that blends in.',
+  '제한 시간':'TIME LIMIT','봇 하이더 수':'BOT HIDERS','위장 정밀도':'CAMOUFLAGE ACCURACY','높을수록 배경과 더 비슷하게 숨습니다.':'Higher values make bots blend more closely with the background.','헌터 연습 시작':'START HUNTER PRACTICE','하이더 연습 시작':'START HIDER PRACTICE','브러시 · 도트 · 직선':'Brush · Dot · Line','스포이드 색 추출':'Eyedropper color sampling','배경에 자연스럽게 위장':'Blend naturally into the background'
+});
+Object.assign(zh, {
+  'BEGINNER PRACTICE':'新手练习','연습장':'练习场','COLOR HUNT는 어떤 게임인가요?':'COLOR HUNT是什么游戏？',
+  '하이더는 배경과 비슷한 색으로 몸을 칠해 숨고':'HIDER把身体涂成接近背景的颜色并隐藏起来，',
+  '헌터는 제한된 시간과 탄약 안에 위장한 하이더를 찾아내는':'HUNTER要在有限的时间和弹药内找出伪装的HIDER，',
+  '2D 숨바꼭질 게임입니다.':'这是一款2D捉迷藏游戏。','HIDER · 칠하고 숨기':'HIDER · 涂色并隐藏','HUNTER · 찾아서 맞히기':'HUNTER · 找到并射击',
+  '연습 맵':'练习地图','연습 맵 미리보기':'练习地图预览','헌터 연습':'HUNTER练习','하이더 연습':'HIDER练习','왜 연습하나요?':'为什么要练习？',
+  '위장한 상대를 빠르게 발견하고, 제한 탄약과 과열을 관리하며 정확히 사격하는 감각을 익힙니다.':'练习快速发现伪装目标，并在管理有限弹药和过热的同时准确射击。',
+  '배경색을 스포이드로 뽑고 브러시로 몸을 칠해, 눈에 띄지 않는 위장을 빠르고 정교하게 만드는 감각을 익힙니다.':'用吸管提取背景颜色，再用画笔涂身体，练习快速而精细地制作不显眼的伪装。',
+  '제한 시간':'时间限制','봇 하이더 수':'BOT HIDER数量','위장 정밀도':'伪装精度','높을수록 배경과 더 비슷하게 숨습니다.':'数值越高，BOT越接近背景颜色。','헌터 연습 시작':'开始HUNTER练习','하이더 연습 시작':'开始HIDER练习','브러시 · 도트 · 직선':'画笔 · 点涂 · 直线','스포이드 색 추출':'吸管取色','배경에 자연스럽게 위장':'自然融入背景'
+});
+
+
 function detectBrowserLanguage(): GameLanguage {
   const candidates =
     typeof navigator !== 'undefined'

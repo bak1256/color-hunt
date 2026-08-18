@@ -2689,15 +2689,37 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
-        const zoom =
-            this.adjustPaintWorldZoom(
-                delta > 0
-                    ? -1
-                    : 1,
-            );
+        /*
+         * Keep the persistent brush / eyedropper visually anchored while
+         * pinching. Camera zoom recenters on the character, so a fixed world
+         * coordinate would otherwise jump across the screen. Preserve its
+         * pre-zoom screen coordinate and convert that screen point back into
+         * world space after the camera zoom changes.
+         */
+        const camera = this.cameras.main;
+        const oldZoom = Math.max(0.01, camera.zoom);
+        const anchor = this.mobileLastBrushTargetWorld?.clone();
+        const anchorScreen = anchor
+            ? new Phaser.Math.Vector2(
+                (anchor.x - camera.worldView.x) * oldZoom,
+                (anchor.y - camera.worldView.y) * oldZoom,
+            )
+            : undefined;
 
-        this.mobilePinchDistance =
-            distance;
+        const zoom = this.adjustPaintWorldZoom(delta > 0 ? -1 : 1);
+
+        if (anchorScreen) {
+            const anchoredWorld = new Phaser.Math.Vector2();
+            camera.getWorldPoint(anchorScreen.x, anchorScreen.y, anchoredWorld);
+            this.mobileLastBrushTargetWorld = anchoredWorld;
+            if (this.eyedropperArmed) {
+                this.showMobileIdleEyedropperGuide();
+            } else {
+                this.showMobileIdleBrushGuide();
+            }
+        }
+
+        this.mobilePinchDistance = distance;
 
         this.networkPlayerManager
             .showOnlyLocalPlayer();
@@ -8428,7 +8450,7 @@ export class GameScene extends Phaser.Scene {
         card.innerHTML = `
             <header class="colorhunt-practice-head">
                 <div>
-                    <small>${tr('BEGINNER PRACTICE')}</small>
+                    <small>COLOR HUNT · ${tr('BEGINNER PRACTICE')}</small>
                     <strong>🎯 ${tr('연습장')}</strong>
                 </div>
                 <button type="button" data-practice-close>✕</button>
@@ -8436,7 +8458,7 @@ export class GameScene extends Phaser.Scene {
 
             <section class="colorhunt-practice-intro">
                 <strong>🎨 ${tr('COLOR HUNT는 어떤 게임인가요?')}</strong>
-                <p>${tr('하이더는 배경과 비슷한 색으로 몸을 칠해 숨고, 헌터는 제한된 시간과 탄약 안에 위장한 하이더를 찾아내는 2D 숨바꼭질 게임입니다.')}</p>
+                <p class="colorhunt-practice-game-desc"><span>${tr('하이더는 배경과 비슷한 색으로 몸을 칠해 숨고')}</span><span>${tr('헌터는 제한된 시간과 탄약 안에 위장한 하이더를 찾아내는')}</span><strong>${tr('2D 숨바꼭질 게임입니다.')}</strong></p>
                 <div class="colorhunt-practice-rule-flow">
                     <span>🎨 ${tr('HIDER · 칠하고 숨기')}</span>
                     <b>VS</b>
@@ -8445,6 +8467,7 @@ export class GameScene extends Phaser.Scene {
             </section>
 
             <div class="colorhunt-practice-map colorhunt-practice-map--compact">
+                <img class="colorhunt-practice-map-preview" data-practice-map-preview src="/assets/backgrounds/${this.practiceMap}.png" alt="${tr('연습 맵 미리보기')}">
                 <label>
                     <span>🗺️ ${tr('연습 맵')}</span>
                     <select data-practice-map>
@@ -8458,7 +8481,7 @@ export class GameScene extends Phaser.Scene {
                     <div class="colorhunt-practice-mode-icon">🔦</div>
                     <div class="colorhunt-practice-mode-copy">
                         <strong>${tr('헌터 연습')}</strong>
-                        <p class="colorhunt-practice-purpose">${tr('왜 연습하나요? 위장한 상대를 빠르게 발견하고, 제한 탄약과 과열을 관리하며 정확히 사격하는 감각을 익힙니다.')}</p>
+                        <p class="colorhunt-practice-purpose"><strong>${tr('왜 연습하나요?')}</strong><br>${tr('위장한 상대를 빠르게 발견하고, 제한 탄약과 과열을 관리하며 정확히 사격하는 감각을 익힙니다.')}</p>
 
                         <div class="colorhunt-practice-time">
                             <div class="colorhunt-practice-time-title">
@@ -8514,7 +8537,7 @@ export class GameScene extends Phaser.Scene {
                     <div class="colorhunt-practice-mode-icon">🎨</div>
                     <div class="colorhunt-practice-mode-copy">
                         <strong>${tr('하이더 연습')}</strong>
-                        <p class="colorhunt-practice-purpose">${tr('왜 연습하나요? 배경색을 스포이드로 뽑고 브러시로 몸을 칠해, 눈에 띄지 않는 위장을 빠르고 정교하게 만드는 감각을 익힙니다.')}</p>
+                        <p class="colorhunt-practice-purpose"><strong>${tr('왜 연습하나요?')}</strong><br>${tr('배경색을 스포이드로 뽑고 브러시로 몸을 칠해, 눈에 띄지 않는 위장을 빠르고 정교하게 만드는 감각을 익힙니다.')}</p>
                         <div class="colorhunt-practice-hider-tips">
                             <span>🖌️ ${tr('브러시 · 도트 · 직선')}</span>
                             <span>💧 ${tr('스포이드 색 추출')}</span>
@@ -8793,9 +8816,22 @@ export class GameScene extends Phaser.Scene {
                 '[data-practice-map]',
             );
 
+        const mapPreview =
+            card.querySelector<HTMLImageElement>(
+                '[data-practice-map-preview]',
+            );
+
+        const syncPracticeMapPreview = (): void => {
+            const selected = mapSelect?.value ?? this.practiceMap;
+            if (mapPreview && /^map(?:[1-9]|1[01])$/.test(selected)) {
+                mapPreview.src = `/assets/backgrounds/${selected}.png`;
+                mapPreview.alt = `${tr('연습 맵 미리보기')} · ${this.getMapDisplayName(selected)}`;
+            }
+        };
+
         if (mapSelect) {
-            mapSelect.value =
-                this.practiceMap;
+            mapSelect.value = this.practiceMap;
+            syncPracticeMapPreview();
         }
 
         const rankingRoot =
@@ -9100,14 +9136,9 @@ export class GameScene extends Phaser.Scene {
                     mapSelect?.value ??
                     'map1';
 
-                if (
-                    /^map(?:[1-9]|1[01])$/
-                        .test(
-                            selected,
-                        )
-                ) {
-                    this.practiceMap =
-                        selected;
+                if (/^map(?:[1-9]|1[01])$/.test(selected)) {
+                    this.practiceMap = selected;
+                    syncPracticeMapPreview();
                 }
             };
 
@@ -24130,15 +24161,7 @@ export class GameScene extends Phaser.Scene {
                 0.9,
             );
 
-        if (this.brushShape === 'square') {
-            this.mobilePaintPrecisionCrosshair
-                ?.strokeRect(
-                    target.x - guideSize,
-                    target.y - guideSize,
-                    guideSize * 2,
-                    guideSize * 2,
-                );
-        } else {
+        if (this.brushShape !== 'square') {
             this.mobilePaintPrecisionCrosshair
                 ?.lineBetween(
                     target.x - 10 / zoom,
@@ -24154,8 +24177,9 @@ export class GameScene extends Phaser.Scene {
                 );
         }
 
+        /* Square paintPreview already draws the exact stamp outline. */
         this.mobilePaintPrecisionCrosshair
-            ?.setVisible(true);
+            ?.setVisible(this.brushShape !== 'square');
 
         const dx = fingerWorld.x - target.x;
         const dy = fingerWorld.y - target.y;
@@ -24316,15 +24340,7 @@ export class GameScene extends Phaser.Scene {
                 0.96,
             );
 
-        if (this.brushShape === 'square') {
-            this.mobilePaintPrecisionCrosshair
-                ?.strokeRect(
-                    target.x - idleGuideSize,
-                    target.y - idleGuideSize,
-                    idleGuideSize * 2,
-                    idleGuideSize * 2,
-                );
-        } else {
+        if (this.brushShape !== 'square') {
             this.mobilePaintPrecisionCrosshair
                 ?.lineBetween(
                     target.x - 10 / zoom,
@@ -24340,8 +24356,9 @@ export class GameScene extends Phaser.Scene {
                 );
         }
 
+        /* Square paintPreview already draws the exact stamp outline. */
         this.mobilePaintPrecisionCrosshair
-            ?.setVisible(true);
+            ?.setVisible(this.brushShape !== 'square');
 
         /*
          * A real brush silhouette: diagonal wooden shaft, silver ferrule,
@@ -24440,21 +24457,32 @@ export class GameScene extends Phaser.Scene {
                 labelCopy[language] ?? labelCopy.en,
                 {
                     fontFamily: 'Arial, sans-serif',
-                    fontSize: `${Math.round(17 / zoom)}px`,
+                    /*
+                     * Render at a normal fixed font size, then cancel camera
+                     * zoom with object scale. This keeps the glyph texture
+                     * crisp even when the paint camera is heavily zoomed.
+                     */
+                    fontSize: '18px',
                     fontStyle: 'bold',
                     color: '#ffffff',
-                    backgroundColor: 'rgba(0, 0, 0, 0.94)',
-                    stroke: '#f59e0b',
-                    strokeThickness: Math.max(2, Math.round(3 / zoom)),
+                    backgroundColor: 'rgba(15, 23, 42, 0.96)',
+                    stroke: '#111827',
+                    strokeThickness: 2,
                     padding: {
-                        x: Math.max(7, Math.round(10 / zoom)),
-                        y: Math.max(5, Math.round(7 / zoom)),
+                        x: 12,
+                        y: 8,
                     },
                 },
             )
                 .setOrigin(0.5)
                 .setDepth(6511)
-                .setResolution(2);
+                .setScale(1 / zoom)
+                .setResolution(
+                    Math.max(
+                        2,
+                        Math.ceil(window.devicePixelRatio || 1),
+                    ),
+                );
 
         try {
             navigator.vibrate?.([35, 35, 55]);
