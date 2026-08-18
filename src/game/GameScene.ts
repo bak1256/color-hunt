@@ -3666,6 +3666,22 @@ export class GameScene extends Phaser.Scene {
     private eyedropperMagnifier?: Phaser.GameObjects.Image;
     private eyedropperMagnifierSwatch?: Phaser.GameObjects.Rectangle;
     private eyedropperToolGuide?: Phaser.GameObjects.Graphics;
+
+    /*
+     * v0.10.10.236.6:
+     * Mobile pipette movement and color sampling are intentionally decoupled.
+     * The tool must follow the finger every pointer event; expensive pixel/body
+     * color sampling is throttled and cached separately.
+     */
+    private mobileEyedropperPreviewColor =
+        0xffffff;
+    private mobileEyedropperLastSampleAt =
+        -Infinity;
+    private mobileEyedropperSampleCanvas?:
+        HTMLCanvasElement;
+    private mobileEyedropperSampleContext?:
+        CanvasRenderingContext2D;
+
     private readonly eyedropperMagnifierTextureKey =
         'eyedropper-mobile-magnifier';
     private lobbyInfoCard!: Phaser.GameObjects.Rectangle;
@@ -24022,6 +24038,11 @@ export class GameScene extends Phaser.Scene {
         this.eyedropperArmed = true;
         this.eyedropperPointerId = -1;
 
+        this.mobileEyedropperPreviewColor =
+            this.paintColor;
+        this.mobileEyedropperLastSampleAt =
+            -Infinity;
+
         /*
          * Kill every brush-only visual before showing the pipette.
          */
@@ -26510,6 +26531,9 @@ export class GameScene extends Phaser.Scene {
                         this.eyedropperPointerId =
                             pointer.id;
 
+                        this.mobileEyedropperLastSampleAt =
+                            -Infinity;
+
                         this.captureMobilePaintPointer(
                             pointer,
                         );
@@ -28243,6 +28267,12 @@ export class GameScene extends Phaser.Scene {
          * appear to move in jerky steps over the background.
          */
         if (this.mobileControlsEnabled) {
+            /*
+             * CRITICAL: movement must be cheap.
+             * Move/redraw the pipette on EVERY pointer event, but do the
+             * expensive body-history + image pixel read only once per 80ms.
+             * The selected color is still sampled exactly on finger-up.
+             */
             const target =
                 this.getPaintInputWorldPoint(
                     pointer,
@@ -28251,12 +28281,24 @@ export class GameScene extends Phaser.Scene {
             this.mobileLastBrushTargetWorld =
                 target.clone();
 
-            const candidateColor =
-                this.getEyedropperColorAtWorld(
-                    target.x,
-                    target.y,
-                ) ??
-                this.paintColor;
+            const now =
+                performance.now();
+
+            if (
+                now -
+                    this.mobileEyedropperLastSampleAt >=
+                80
+            ) {
+                this.mobileEyedropperLastSampleAt =
+                    now;
+
+                this.mobileEyedropperPreviewColor =
+                    this.getEyedropperColorAtWorld(
+                        target.x,
+                        target.y,
+                    ) ??
+                    this.mobileEyedropperPreviewColor;
+            }
 
             const grip =
                 this.getPointerWorldPoint(
@@ -28271,7 +28313,7 @@ export class GameScene extends Phaser.Scene {
             this.drawMobileEyedropperGuide(
                 target,
                 grip,
-                candidateColor,
+                this.mobileEyedropperPreviewColor,
             );
 
             return;
@@ -28970,25 +29012,41 @@ export class GameScene extends Phaser.Scene {
                 sourceImage.height - 1,
             );
 
-        const canvas =
-            document.createElement(
-                'canvas',
-            );
-        canvas.width = 1;
-        canvas.height = 1;
+        if (
+            !this.mobileEyedropperSampleCanvas
+        ) {
+            this.mobileEyedropperSampleCanvas =
+                document.createElement(
+                    'canvas',
+                );
+            this.mobileEyedropperSampleCanvas.width =
+                1;
+            this.mobileEyedropperSampleCanvas.height =
+                1;
+
+            this.mobileEyedropperSampleContext =
+                this.mobileEyedropperSampleCanvas.getContext(
+                    '2d',
+                    {
+                        willReadFrequently:
+                            true,
+                    },
+                ) ?? undefined;
+        }
 
         const context =
-            canvas.getContext(
-                '2d',
-                {
-                    willReadFrequently:
-                        true,
-                },
-            );
+            this.mobileEyedropperSampleContext;
 
         if (!context) {
             return null;
         }
+
+        context.clearRect(
+            0,
+            0,
+            1,
+            1,
+        );
 
         context.drawImage(
             sourceImage,
@@ -29215,6 +29273,9 @@ export class GameScene extends Phaser.Scene {
         }
 
         this.paintColor =
+            sampledColor;
+
+        this.mobileEyedropperPreviewColor =
             sampledColor;
 
         this.createBrushTexture(true);
