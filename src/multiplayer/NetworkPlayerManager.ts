@@ -2842,6 +2842,26 @@ export class NetworkPlayerManager {
       return;
     }
 
+    /*
+     * v0.10.10.230 PAINT OWNERSHIP GUARD:
+     * Never paint a render view that is no longer the authoritative Schema
+     * player for this sessionId. This protects every client from delayed
+     * packets belonging to a superseded reconnect session.
+     */
+    const room =
+      multiplayerClient.getRoom();
+    const authoritativePlayer =
+      room?.state?.players?.get?.(
+        stroke.targetSessionId,
+      );
+
+    if (
+      room &&
+      !authoritativePlayer
+    ) {
+      return;
+    }
+
     stroke.points.forEach((point) => {
       const pixelX =
         Math.round(point.x);

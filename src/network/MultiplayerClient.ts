@@ -428,8 +428,6 @@ this.phaseChangedHandlers.forEach(
 
   private lastManualReconnectAt = 0;
 
-  private connectionIssueStartedAt = 0;
-
   /* v0.10.10.220: remember every browser/app background lifecycle signal. */
   private lastDocumentHiddenAt = 0;
 
@@ -528,6 +526,14 @@ this.phaseChangedHandlers.forEach(
             options.isPrivate,
           password:
             options.password ?? "",
+          /*
+           * v0.10.10.230:
+           * Hosts need the same stable identity as joiners from the very first
+           * socket. Without this, a host background/fresh-rejoin creates a
+           * second Hider while the old Hunter/host remains as a ghost.
+           */
+          clientKey:
+            this.getStableClientKey(),
         },
       );
 
@@ -1159,7 +1165,9 @@ private async attemptFreshRejoin(
   ): Promise<void> {
     if (
       this.room !== sourceRoom ||
-      this.manualReconnectInFlight
+      this.manualReconnectInFlight ||
+      sourceRoom.reconnection
+        .isReconnecting
     ) {
       return;
     }
@@ -1237,28 +1245,12 @@ private async attemptFreshRejoin(
       this.clearConnectionIssue();
     } catch {
       /*
-       * If token recovery cannot complete quickly after a network handoff,
-       * make a fresh connection using the same browser clientKey. The server
-       * transfers the authoritative role/state from the old ghost session.
+       * v0.10.10.230 SINGLE RECOVERY OWNER:
+       * Never start a fresh join from inside a token reconnect attempt.
+       * Colyseus/server still own the old session reservation here. Starting
+       * both paths at once is what produced duplicate players/paint ownership.
+       * A fresh clientKey handoff is allowed only after final room.onLeave().
        */
-      const issueFor =
-        this.connectionIssueStartedAt > 0
-          ? Date.now() -
-            this.connectionIssueStartedAt
-          : 0;
-
-      if (
-        issueFor >= 1800 &&
-        (
-          typeof navigator ===
-            "undefined" ||
-          navigator.onLine
-        )
-      ) {
-        void this.attemptFreshRejoin(
-          sourceRoom,
-        );
-      }
     } finally {
       this.manualReconnectInFlight =
         false;
@@ -1273,10 +1265,7 @@ private async attemptFreshRejoin(
     }
 
     this.connectionIssueNotified = true;
-    this.connectionIssueStartedAt =
-      Date.now();
-
-    this.connectionDropHandlers
+this.connectionDropHandlers
       .forEach(
         (handler) => {
           handler(reason);
@@ -1286,8 +1275,7 @@ private async attemptFreshRejoin(
 
   private clearConnectionIssue(): void {
     this.connectionIssueNotified = false;
-    this.connectionIssueStartedAt = 0;
-    this.lastRoomPingAt = Date.now();
+this.lastRoomPingAt = Date.now();
 
     this.connectionRecoveredHandlers
       .forEach(
@@ -1452,39 +1440,31 @@ this.manualReconnectInFlight = false;
           }
 
           this.notifyConnectionIssue(reason);
-          this.lastRoomPingAt = Math.min(
-            this.lastRoomPingAt,
-            Date.now() - 9000,
-          );
 
           /*
-           * Recovery is deliberately staged, never parallel. Token reconnect
-           * gets first chance to preserve the exact sessionId. A fresh
-           * stable-clientKey handoff is the fallback only if the old Room is
-           * still current a little later.
+           * v0.10.10.230:
+           * Focus/visibility changes are normal. Give the SDK/server
+           * reconnection reservation time to recover the SAME sessionId.
+           * Do not open a second WebSocket/player while automatic reconnect
+           * is active.
            */
-          void this.attemptManualReconnect(room);
+          globalThis.setTimeout(() => {
+            if (
+              answered ||
+              generation !== this.resumeProbeGeneration ||
+              this.room !== room ||
+              !this.connectionIssueNotified ||
+              (typeof document !== "undefined" && document.hidden) ||
+              room.reconnection.isReconnecting
+            ) {
+              return;
+            }
 
-          [2600, 5200, 9000, 15000, 24000, 36000, 52000, 72000]
-            .forEach((delay) => {
-              globalThis.setTimeout(() => {
-                if (
-                  this.room !== room ||
-                  !this.connectionIssueNotified ||
-                  (typeof navigator !== "undefined" && !navigator.onLine) ||
-                  (typeof document !== "undefined" && document.hidden)
-                ) {
-                  return;
-                }
-
-                if (delay <= 5200) {
-                  void this.attemptManualReconnect(room);
-                } else {
-                  void this.attemptFreshRejoin(room);
-                }
-              }, delay);
-            });
-        }, 1800);
+            void this.attemptManualReconnect(
+              room,
+            );
+          }, 7000);
+        }, 5000);
       };
 
     const handleVisibilityChange =
@@ -1664,29 +1644,19 @@ this.manualReconnectInFlight = false;
            */
           if (
             activeRound &&
-            silentFor >= 10000 &&
+            silentFor >= 12000 &&
+            !room.reconnection
+              .isReconnecting &&
             now -
               this.lastManualReconnectAt >=
-              1800
+              5000
           ) {
+            /*
+             * Only a genuinely half-open transport gets a manual token
+             * reconnect. Fresh rejoin is NEVER launched by the watchdog;
+             * it is reserved for final onLeave after the old reservation ends.
+             */
             void this.attemptManualReconnect(
-              room,
-            );
-          }
-
-          if (
-            activeRound &&
-            this.connectionIssueStartedAt > 0 &&
-            now -
-              this.connectionIssueStartedAt >=
-              12000 &&
-            (
-              typeof navigator ===
-                "undefined" ||
-              navigator.onLine
-            )
-          ) {
-            void this.attemptFreshRejoin(
               room,
             );
           }
@@ -1756,19 +1726,13 @@ this.manualReconnectInFlight = false;
           reason,
         );
 
-        globalThis.setTimeout(
-          () => {
-            if (
-              this.room === room &&
-              this.connectionIssueNotified
-            ) {
-              void this.attemptManualReconnect(
-                room,
-              );
-            }
-          },
-          450,
-        );
+        /*
+         * v0.10.10.230:
+         * Do not race Colyseus' own reconnect 450ms after a drop.
+         * The server keeps this exact session reconnectable for 30 seconds.
+         * The health watchdog may use token reconnect later only if the SDK
+         * is NOT already reconnecting.
+         */
       },
     );
 
@@ -2576,9 +2540,14 @@ this.manualReconnectInFlight = false;
             recentlyHidden ||
             recentlyBackgrounded;
 
+          /*
+           * We are here only after final room.onLeave(), so the old server
+           * reservation is no longer the recovery owner. Fresh handoff is now
+           * safe, but keep retries sparse to avoid connection storms.
+           */
           const retryDelays = backgroundTabRecovery
-            ? [250, 700, 1500, 2800, 5000, 8500, 13000, 20000, 30000, 45000, 60000, 75000]
-            : [350, 900, 1800, 3200, 6000, 9000];
+            ? [1000, 3000, 7000, 15000, 30000, 60000]
+            : [1200, 3500, 8000, 15000];
 
           retryDelays.forEach((delay) => {
             globalThis.setTimeout(() => {
@@ -2620,15 +2589,15 @@ this.manualReconnectInFlight = false;
              * player to the public lobby while recovery is still plausible.
              */
             if (backgroundTabRecovery && visibleFor < 180000) {
-              void this.attemptManualReconnect(room);
-
-              if (visibleFor >= 5000) {
-                void this.attemptFreshRejoin(room);
+              if (visibleFor >= 3000) {
+                void this.attemptFreshRejoin(
+                  room,
+                );
               }
 
               globalThis.setTimeout(
                 terminalCheck,
-                Math.max(2000, Math.min(7000, 180500 - visibleFor)),
+                Math.max(3000, Math.min(8000, 180500 - visibleFor)),
               );
               return;
             }
