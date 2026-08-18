@@ -6226,18 +6226,9 @@ export class GameScene extends Phaser.Scene {
             tr('원형'),
             circleSvg,
             () => {
-                this.eyedropperArmed =
-                    false;
-                this.hideEyedropperMagnifier();
-                this.brushShape =
-                    'circle';
-                this.createBrushTexture();
-                this.updatePaintHud();
-                this.updatePaintPreviewImmediately();
-                this.highlightBrushShape(
+                this.activateMobileBrushTool(
                     'circle',
                 );
-                this.updateEyedropperButtonUi();
             },
         );
 
@@ -6246,18 +6237,9 @@ export class GameScene extends Phaser.Scene {
             tr('사각형'),
             squareSvg,
             () => {
-                this.eyedropperArmed =
-                    false;
-                this.hideEyedropperMagnifier();
-                this.brushShape =
-                    'square';
-                this.createBrushTexture();
-                this.updatePaintHud();
-                this.updatePaintPreviewImmediately();
-                this.highlightBrushShape(
+                this.activateMobileBrushTool(
                     'square',
                 );
-                this.updateEyedropperButtonUi();
             },
         );
 
@@ -6278,44 +6260,18 @@ export class GameScene extends Phaser.Scene {
                     return;
                 }
 
-                this.finishActivePaintStroke();
-                this.isPainting = false;
-                this.eyedropperArmed =
-                    !this.eyedropperArmed;
-                this.hideEyedropperMagnifier();
+                /*
+                 * Mobile eyedropper is a SELECT button, not a toggle.
+                 * Re-tapping it keeps the eyedropper selected and cannot
+                 * accidentally resurrect a brush-only pointer state.
+                 */
+                this.activateMobileEyedropperTool();
 
-                if (
-                    this.eyedropperArmed
-                ) {
-                    this.hideMobilePaintPrecisionGuide();
-                    this.paintPreview
-                        ?.setVisible(false);
-                    this.showMobileIdleEyedropperGuide();
-                    const eyedropperHelp =
-                        this.mobileControlsEnabled
-                            ? (
-                                {
-                                    ko: '스포이드: 도구를 잡아 움직이고 손을 떼면 색상이 선택됩니다',
-                                    ja: 'スポイト：ツールを動かし、指を離すと色を選択します',
-                                    en: 'Eyedropper: drag the tool and release to pick a color',
-                                    zh: '吸管：拖动工具，松开手指即可取色',
-                                } as const
-                            )[getLanguage()]
-                            : (
-                                {
-                                    ko: '스포이드: 원하는 색을 클릭하면 바로 추출됩니다',
-                                    ja: 'スポイト：取りたい色をクリックするとすぐに抽出します',
-                                    en: 'Eyedropper: click the color you want to sample',
-                                    zh: '吸管：点击想要的颜色即可立即取色',
-                                } as const
-                            )[getLanguage()];
-
-                    this.showStatus(
-                        eyedropperHelp,
-                    );
-                } else {
-                    this.showMobileIdleBrushGuide();
-                }
+                /*
+                 * v0.10.10.236.4:
+                 * Do not show the old mobile "도구를 잡아..." instruction.
+                 * The persistent pipette graphic is self-explanatory.
+                 */
             },
         );
 
@@ -23609,26 +23565,21 @@ export class GameScene extends Phaser.Scene {
                 }
 
                 /*
-                 * Arm on pointer DOWN. Mobile browsers can lose the object's
-                 * pointerup after touch movement, which previously left this
-                 * button apparently dead.
-                 *
-                 * Scene-level pointerdown sees this as UI and returns, so
-                 * arming here cannot accidentally sample the button itself.
+                 * Mobile selects the eyedropper deterministically. Desktop
+                 * keeps its normal one-click eyedropper help.
                  */
-                this.eyedropperArmed =
-                    !this.eyedropperArmed;
+                if (this.mobileControlsEnabled) {
+                    this.activateMobileEyedropperTool();
+                    return;
+                }
 
+                this.eyedropperArmed = true;
                 this.updateEyedropperButtonUi();
                 this.hideEyedropperMagnifier();
 
-                if (this.eyedropperArmed) {
-                    this.showStatus(
-                        this.mobileControlsEnabled
-                            ? tr('스포이드: 배경을 누른 채 움직이고 손을 떼면 색상이 선택됩니다')
-                            : tr('스포이드: 배경에서 원하는 색을 클릭하세요'),
-                    );
-                }
+                this.showStatus(
+                    tr('스포이드: 배경에서 원하는 색을 클릭하세요'),
+                );
             },
         );
 
@@ -24038,6 +23989,88 @@ export class GameScene extends Phaser.Scene {
                 .setVisible(false);
 
         this.updatePaintControlHelp();
+    }
+
+    /*
+     * v0.10.10.236.4 MOBILE PAINT TOOL OWNERSHIP
+     *
+     * Brush and eyedropper are mutually exclusive tools. Switching tools must
+     * clear the previous tool's pending pointer/capture/visual state first.
+     * Otherwise a stale brush preview can keep following the finger while the
+     * eyedropper graphic remains frozen at its old position.
+     */
+    private activateMobileEyedropperTool(): void {
+        this.finishActivePaintStroke();
+        this.isPainting = false;
+
+        this.releaseMobilePaintPointer();
+        this.cancelMobilePaintHoldTimers();
+
+        this.mobilePendingPaintPointerId = -1;
+        this.mobilePendingPaintStartScreen =
+            undefined;
+        this.mobilePendingPaintStartWorld =
+            undefined;
+        this.mobilePaintDotCommitted = false;
+
+        this.straightLineStart = undefined;
+        this.straightLineStartWorld =
+            undefined;
+        this.straightLineModeActive = false;
+        this.clearStraightLinePreview();
+
+        this.eyedropperArmed = true;
+        this.eyedropperPointerId = -1;
+
+        /*
+         * Kill every brush-only visual before showing the pipette.
+         */
+        this.paintPreview
+            ?.setAlpha(1)
+            .setVisible(false);
+        this.hideMobilePaintPrecisionGuide();
+
+        /*
+         * Reset and redraw the eyedropper at the last brush/tool position.
+         */
+        this.hideEyedropperMagnifier();
+        this.updateEyedropperButtonUi();
+        this.showMobileIdleEyedropperGuide();
+    }
+
+    private activateMobileBrushTool(
+        shape: BrushShape,
+    ): void {
+        this.finishActivePaintStroke();
+        this.isPainting = false;
+
+        this.releaseMobilePaintPointer();
+        this.cancelMobilePaintHoldTimers();
+
+        this.mobilePendingPaintPointerId = -1;
+        this.mobilePendingPaintStartScreen =
+            undefined;
+        this.mobilePendingPaintStartWorld =
+            undefined;
+        this.mobilePaintDotCommitted = false;
+
+        this.eyedropperPointerId = -1;
+        this.eyedropperArmed = false;
+
+        /*
+         * Kill every eyedropper-only visual before restoring the brush.
+         */
+        this.hideEyedropperMagnifier();
+        this.hideMobilePaintPrecisionGuide();
+
+        this.brushShape = shape;
+        this.createBrushTexture();
+        this.updatePaintHud();
+        this.updatePaintPreviewImmediately();
+        this.highlightBrushShape(shape);
+        this.updateEyedropperButtonUi();
+
+        this.showMobileIdleBrushGuide();
     }
 
     private updateEyedropperButtonUi(): void {
@@ -26690,6 +26723,20 @@ export class GameScene extends Phaser.Scene {
             Phaser.Input.Events.POINTER_MOVE,
             (pointer: Phaser.Input.Pointer) => {
                 if (
+                    this.mobileControlsEnabled &&
+                    this.eyedropperArmed
+                ) {
+                    /*
+                     * Eyedropper owns the visual channel completely.
+                     * Never allow brush preview/precision-guide code farther
+                     * below to follow the finger while the pipette is selected.
+                     */
+                    this.paintPreview
+                        ?.setVisible(false);
+                    this.hideMobilePaintPrecisionGuide();
+                }
+
+                if (
                     this.eyedropperArmed &&
                     pointer.id ===
                         this.eyedropperPointerId
@@ -26708,6 +26755,18 @@ export class GameScene extends Phaser.Scene {
                     this.updateEyedropperMagnifier(
                         pointer,
                     );
+                    return;
+                }
+
+                if (
+                    this.mobileControlsEnabled &&
+                    this.eyedropperArmed
+                ) {
+                    /*
+                     * No active pipette drag owns this pointer. Keep the idle
+                     * pipette where it is; do not fall through into brush
+                     * movement/painting code.
+                     */
                     return;
                 }
 
