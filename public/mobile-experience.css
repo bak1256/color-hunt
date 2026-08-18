@@ -6815,3 +6815,67 @@ html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-guide span {
     font-size: 12px !important;
   }
 }
+
+/* ============================================================
+   v0.10.10.207 — persistent practice scrollbar + avatar mobile fit
+   ============================================================ */
+
+/* The old SCROLL word and arrow are gone; only a clean persistent rail remains. */
+.colorhunt-practice-scroll-affordance {
+  display: block !important;
+  position: absolute !important;
+  z-index: 80 !important;
+  top: 76px !important;
+  right: max(5px, env(safe-area-inset-right)) !important;
+  bottom: 22px !important;
+  width: 10px !important;
+  height: auto !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  pointer-events: none !important;
+  opacity: .95 !important;
+}
+.colorhunt-practice-scroll-affordance__arrow,
+.colorhunt-practice-scroll-affordance__label {
+  display: none !important;
+}
+.colorhunt-practice-scroll-affordance__track {
+  display: block !important;
+  position: absolute !important;
+  inset: 0 !important;
+  width: 10px !important;
+  height: 100% !important;
+  min-height: 60px !important;
+  padding: 2px !important;
+  box-sizing: border-box !important;
+  border-radius: 999px !important;
+  background: rgba(228, 234, 219, .98) !important;
+  box-shadow: inset 0 0 0 1px rgba(86, 119, 88, .28) !important;
+}
+.colorhunt-practice-scroll-affordance__track i {
+  display: block !important;
+  width: 6px !important;
+  height: clamp(38px, 18%, 74px) !important;
+  min-height: 38px !important;
+  border-radius: 999px !important;
+  background: #67966c !important;
+  box-shadow: 0 1px 3px rgba(35, 67, 43, .25) !important;
+  transform: translateY(0);
+  transition: transform 80ms linear;
+}
+.colorhunt-practice-scroll-affordance:not(.is-scrollable) {
+  opacity: .38 !important;
+}
+
+/* Mobile avatar editor: keep the preview comfortably visible in one glance. */
+html.colorhunt-mobile .colorhunt-avatar-editor {
+  max-height: calc(100dvh - 8px) !important;
+  overflow-y: auto !important;
+}
+html.colorhunt-mobile .colorhunt-avatar-editor canvas {
+  touch-action: none !important;
+}

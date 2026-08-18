@@ -2224,8 +2224,22 @@ export class GameScene extends Phaser.Scene {
                     ).length;
 
                 if (realDownCount < 2) {
+                    const wasPinching =
+                        this.mobilePinchActive;
+
                     this.mobilePinchDistance = 0;
                     this.mobilePinchActive = false;
+
+                    if (
+                        wasPinching &&
+                        this.phase === 'paint'
+                    ) {
+                        if (this.eyedropperArmed) {
+                            this.showMobileIdleEyedropperGuide();
+                        } else {
+                            this.showMobileIdleBrushGuide();
+                        }
+                    }
                 }
             };
 
@@ -2662,18 +2676,15 @@ export class GameScene extends Phaser.Scene {
             this.mobilePinchActive = true;
 
             /*
-             * Commit an already-started stroke before switching to zoom.
-             * A preview-only touch is simply cancelled.
+             * v0.10.10.207: a pinch is CAMERA ONLY. Never let either pinch
+             * finger become a brush/eyedropper position. Keep the last tool
+             * world position untouched and temporarily hide editor guides.
              */
             if (this.isPainting) {
                 this.finishActivePaintStroke();
                 this.isPainting = false;
             }
 
-            /*
-             * A deliberate two-finger pinch owns input now; give up the
-             * single-finger paint capture before zooming.
-             */
             this.releaseMobilePaintPointer();
 
             if (
@@ -2683,6 +2694,9 @@ export class GameScene extends Phaser.Scene {
             }
 
             this.clearStraightLinePreview();
+            this.hideMobilePaintPrecisionGuide();
+            this.paintPreview?.setVisible(false);
+            this.hideEyedropperMagnifier();
         }
 
         if (Math.abs(delta) < 8) {
@@ -2690,34 +2704,13 @@ export class GameScene extends Phaser.Scene {
         }
 
         /*
-         * Keep the persistent brush / eyedropper visually anchored while
-         * pinching. Camera zoom recenters on the character, so a fixed world
-         * coordinate would otherwise jump across the screen. Preserve its
-         * pre-zoom screen coordinate and convert that screen point back into
-         * world space after the camera zoom changes.
+         * Do not rewrite mobileLastBrushTargetWorld while zooming. Older
+         * versions repeatedly converted the pinch fingers through camera
+         * coordinates, which made the tool jump toward the fingers.
          */
-        const camera = this.cameras.main;
-        const oldZoom = Math.max(0.01, camera.zoom);
-        const anchor = this.mobileLastBrushTargetWorld?.clone();
-        const anchorScreen = anchor
-            ? new Phaser.Math.Vector2(
-                (anchor.x - camera.worldView.x) * oldZoom,
-                (anchor.y - camera.worldView.y) * oldZoom,
-            )
-            : undefined;
-
-        const zoom = this.adjustPaintWorldZoom(delta > 0 ? -1 : 1);
-
-        if (anchorScreen) {
-            const anchoredWorld = new Phaser.Math.Vector2();
-            camera.getWorldPoint(anchorScreen.x, anchorScreen.y, anchoredWorld);
-            this.mobileLastBrushTargetWorld = anchoredWorld;
-            if (this.eyedropperArmed) {
-                this.showMobileIdleEyedropperGuide();
-            } else {
-                this.showMobileIdleBrushGuide();
-            }
-        }
+        const zoom = this.adjustPaintWorldZoom(
+            delta > 0 ? -1 : 1,
+        );
 
         this.mobilePinchDistance = distance;
 
@@ -8580,8 +8573,15 @@ export class GameScene extends Phaser.Scene {
             </span>
         `;
 
-        // v0.10.10.204: no floating SCROLL badge; the card itself shows a native scrollbar.
-        // Do not append scrollAffordance to the overlay.
+        /*
+         * v0.10.10.207: keep the helper element only as a persistent visual
+         * scrollbar rail. The old ↓ SCROLL text/arrow stay hidden by CSS.
+         * Mobile browsers may auto-hide their native scrollbar, so this rail
+         * remains visible and its thumb follows card.scrollTop.
+         */
+        overlay.appendChild(
+            scrollAffordance,
+        );
 
         const scrollTrack =
             scrollAffordance
@@ -13224,7 +13224,32 @@ export class GameScene extends Phaser.Scene {
             0x3b82f6;
 
         let selectedSize = 3;
-        let editorZoom = 1.8;
+        /*
+         * v0.10.10.207:
+         * The mobile editor used to open at 1.8x, which could leave only a
+         * cropped slice of the avatar visible on narrow landscape phones.
+         * Start mobile at a fit-friendly zoom; desktop keeps the old feel.
+         */
+        let editorZoom =
+            this.mobileControlsEnabled
+                ? 1.08
+                : 1.8;
+
+        /*
+         * User panning lives in canvas pixels. 0,0 means the avatar is
+         * perfectly centered. Dragging the EMPTY editor background pans the
+         * avatar without painting it.
+         */
+        let editorPanX = 0;
+        let editorPanY = 0;
+        let panning = false;
+        let panPointerId = -1;
+        let panStartScreen:
+            { x: number; y: number } |
+            undefined;
+        let panStartOffset:
+            { x: number; y: number } |
+            undefined;
 
         /*
          * v0.10.10.124:
@@ -13420,7 +13445,8 @@ export class GameScene extends Phaser.Scene {
                 (
                     displayX -
                     canvas.width /
-                        2
+                        2 -
+                    editorPanX
                 ) /
                     (
                         editorPixelScale *
@@ -13432,7 +13458,8 @@ export class GameScene extends Phaser.Scene {
                 (
                     displayY -
                     canvas.height /
-                        2
+                        2 -
+                    editorPanY
                 ) /
                     (
                         editorPixelScale *
@@ -13474,6 +13501,7 @@ export class GameScene extends Phaser.Scene {
             x:
                 canvas.width /
                     2 +
+                editorPanX +
                 (
                     x +
                     0.5 -
@@ -13484,6 +13512,7 @@ export class GameScene extends Phaser.Scene {
             y:
                 canvas.height /
                     2 +
+                editorPanY +
                 (
                     y +
                     0.5 -
@@ -13974,6 +14003,12 @@ export class GameScene extends Phaser.Scene {
 
                 if (!pinchActive) {
                     pinchActive = true;
+                    panning = false;
+                    panPointerId = -1;
+                    panStartScreen =
+                        undefined;
+                    panStartOffset =
+                        undefined;
                     finishStroke();
                 }
 
@@ -14048,6 +14083,44 @@ export class GameScene extends Phaser.Scene {
                     return;
                 }
 
+                const downLogical =
+                    canvasToLogical(
+                        event.clientX,
+                        event.clientY,
+                    );
+
+                /*
+                 * Dragging EMPTY background pans the avatar. A touch that
+                 * starts on the actual body remains a paint gesture.
+                 */
+                if (
+                    this.mobileControlsEnabled &&
+                    !insideBody(
+                        downLogical.x,
+                        downLogical.y,
+                    )
+                ) {
+                    panning = true;
+                    panPointerId =
+                        event.pointerId;
+                    panStartScreen = {
+                        x: event.clientX,
+                        y: event.clientY,
+                    };
+                    panStartOffset = {
+                        x: editorPanX,
+                        y: editorPanY,
+                    };
+                    drawing = false;
+                    paintStarted = false;
+                    pendingPointerId = -1;
+                    pendingStartScreen =
+                        undefined;
+                    hoverPoint = undefined;
+                    replay();
+                    return;
+                }
+
                 drawing = true;
                 paintStarted = false;
                 pendingPointerId =
@@ -14059,10 +14132,7 @@ export class GameScene extends Phaser.Scene {
                 };
 
                 hoverPoint =
-                    canvasToLogical(
-                        event.clientX,
-                        event.clientY,
-                    );
+                    downLogical;
 
                 currentPoints = [];
                 replay();
@@ -14072,6 +14142,58 @@ export class GameScene extends Phaser.Scene {
         canvas.addEventListener(
             'pointermove',
             (event) => {
+                if (
+                    panning &&
+                    panPointerId ===
+                        event.pointerId &&
+                    panStartScreen &&
+                    panStartOffset &&
+                    activePointers.size < 2
+                ) {
+                    event.preventDefault();
+
+                    const rect =
+                        canvas.getBoundingClientRect();
+
+                    const canvasScaleX =
+                        canvas.width /
+                        Math.max(1, rect.width);
+                    const canvasScaleY =
+                        canvas.height /
+                        Math.max(1, rect.height);
+
+                    editorPanX =
+                        panStartOffset.x +
+                        (
+                            event.clientX -
+                            panStartScreen.x
+                        ) * canvasScaleX;
+
+                    editorPanY =
+                        panStartOffset.y +
+                        (
+                            event.clientY -
+                            panStartScreen.y
+                        ) * canvasScaleY;
+
+                    editorPanX =
+                        Phaser.Math.Clamp(
+                            editorPanX,
+                            -canvas.width * 0.38,
+                            canvas.width * 0.38,
+                        );
+                    editorPanY =
+                        Phaser.Math.Clamp(
+                            editorPanY,
+                            -canvas.height * 0.38,
+                            canvas.height * 0.38,
+                        );
+
+                    hoverPoint = undefined;
+                    replay();
+                    return;
+                }
+
                 hoverPoint =
                     canvasToLogical(
                         event.clientX,
@@ -14178,6 +14300,20 @@ export class GameScene extends Phaser.Scene {
                 activePointers.delete(
                     event.pointerId,
                 );
+
+                if (
+                    panPointerId ===
+                        event.pointerId
+                ) {
+                    panning = false;
+                    panPointerId = -1;
+                    panStartScreen =
+                        undefined;
+                    panStartOffset =
+                        undefined;
+                    hoverPoint = undefined;
+                    replay();
+                }
 
                 if (
                     activePointers.size <
@@ -25540,6 +25676,17 @@ export class GameScene extends Phaser.Scene {
                     pointer.id ===
                         this.eyedropperPointerId
                 ) {
+                    /* Pinch owns both fingers; never sample/move the tool. */
+                    if (
+                        this.mobileControlsEnabled &&
+                        (
+                            this.mobilePinchActive ||
+                            this.mobileTouchPoints.size >= 2
+                        )
+                    ) {
+                        return;
+                    }
+
                     this.updateEyedropperMagnifier(
                         pointer,
                     );
