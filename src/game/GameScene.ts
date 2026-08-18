@@ -8542,7 +8542,218 @@ export class GameScene extends Phaser.Scene {
         }
     }
 
-    private handleInviteLinkOnLoad(): void {
+    private showInviteGameInProgressModal(): void {
+        this.closeMenuModal();
+
+        const copy =
+            (
+                {
+                    ko: {
+                        title: '🎮 게임이 진행 중입니다',
+                        body: '이미 게임이 진행 중입니다.\n게임이 끝난 후 다시 참가해주세요.',
+                        button: '확인',
+                    },
+                    ja: {
+                        title: '🎮 ゲーム進行中です',
+                        body: 'すでにゲームが進行中です。\nゲーム終了後にもう一度参加してください。',
+                        button: '確認',
+                    },
+                    en: {
+                        title: '🎮 Game in progress',
+                        body: 'A game is already in progress.\nPlease join again after the round ends.',
+                        button: 'OK',
+                    },
+                    zh: {
+                        title: '🎮 游戏正在进行中',
+                        body: '游戏已经开始。\n请在本局结束后重新加入。',
+                        button: '确认',
+                    },
+                } as const
+            )[getLanguage()];
+
+        const overlay =
+            document.createElement(
+                'div',
+            );
+
+        Object.assign(
+            overlay.style,
+            {
+                position: 'fixed',
+                inset: '0',
+                zIndex: '10050',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '18px',
+                boxSizing: 'border-box',
+                background:
+                    'rgba(30, 48, 35, .38)',
+                backdropFilter:
+                    'blur(5px)',
+                WebkitBackdropFilter:
+                    'blur(5px)',
+            },
+        );
+
+        const card =
+            document.createElement(
+                'div',
+            );
+
+        Object.assign(
+            card.style,
+            {
+                width:
+                    'min(460px, calc(100vw - 30px))',
+                boxSizing: 'border-box',
+                padding: '24px 24px 22px',
+                border:
+                    '2px solid #70a978',
+                borderRadius: '20px',
+                background: '#fff9e9',
+                color: '#284333',
+                textAlign: 'center',
+                boxShadow:
+                    '0 16px 48px rgba(20,42,28,.28)',
+                fontFamily:
+                    'Arial, sans-serif',
+            },
+        );
+
+        const title =
+            document.createElement(
+                'strong',
+            );
+        title.textContent =
+            copy.title;
+
+        Object.assign(
+            title.style,
+            {
+                display: 'block',
+                fontSize:
+                    'clamp(21px, 5vw, 28px)',
+                lineHeight: '1.25',
+                fontWeight: '900',
+                marginBottom: '14px',
+            },
+        );
+
+        const body =
+            document.createElement(
+                'p',
+            );
+        body.textContent =
+            copy.body;
+
+        Object.assign(
+            body.style,
+            {
+                margin: '0 0 20px',
+                whiteSpace: 'pre-line',
+                fontSize:
+                    'clamp(15px, 3.8vw, 18px)',
+                lineHeight: '1.55',
+                fontWeight: '700',
+            },
+        );
+
+        const button =
+            document.createElement(
+                'button',
+            );
+        button.type = 'button';
+        button.textContent =
+            copy.button;
+
+        Object.assign(
+            button.style,
+            {
+                width: '100%',
+                minHeight: '48px',
+                border:
+                    '2px solid #5d8e67',
+                borderRadius: '13px',
+                background: '#65a76f',
+                color: '#fff',
+                fontSize: '17px',
+                fontWeight: '900',
+                cursor: 'pointer',
+            },
+        );
+
+        card.append(
+            title,
+            body,
+            button,
+        );
+
+        overlay.appendChild(
+            card,
+        );
+
+        document.body.appendChild(
+            overlay,
+        );
+
+        this.input.enabled = false;
+
+        if (this.input.keyboard) {
+            this.input.keyboard.enabled =
+                false;
+        }
+
+        const close =
+            (): void => {
+                overlay.remove();
+
+                window.setTimeout(
+                    () => {
+                        this.input.enabled =
+                            true;
+
+                        if (
+                            this.input.keyboard
+                        ) {
+                            this.input.keyboard.enabled =
+                                true;
+                        }
+                    },
+                    80,
+                );
+            };
+
+        button.addEventListener(
+            'click',
+            close,
+            {
+                once: true,
+            },
+        );
+    }
+
+    private clearInviteRoomFromAddressBar(): void {
+        const url =
+            new URL(
+                window.location.href,
+            );
+
+        url.searchParams.delete(
+            'room',
+        );
+        url.searchParams.delete(
+            'private',
+        );
+
+        window.history.replaceState(
+            {},
+            '',
+            `${url.pathname}${url.search}${url.hash}`,
+        );
+    }
+
+    private async handleInviteLinkOnLoad(): Promise<void> {
         if (this.inviteJoinTriggered) {
             return;
         }
@@ -8564,6 +8775,51 @@ export class GameScene extends Phaser.Scene {
         this.pendingInviteRoomId = roomId;
         this.pendingInvitePrivate =
             params.get('private') === '1';
+
+        /*
+         * v0.10.10.238.5 INVITE PREFLIGHT
+         *
+         * Do not ask for a nickname until the server has told us whether the
+         * invited room is still in Lobby. This works for PUBLIC and PRIVATE
+         * rooms because /api/room-status queries the room directly by ID.
+         *
+         * The server's onJoin guard from v238.1+ remains the final authority;
+         * this preflight exists to make the UX immediate and intuitive.
+         */
+        try {
+            const status =
+                await multiplayerClient
+                    .getRoomStatus(
+                        roomId,
+                    );
+
+            if (
+                status.exists &&
+                status.phase !==
+                    'lobby'
+            ) {
+                this.pendingInviteRoomId =
+                    '';
+                this.pendingInvitePrivate =
+                    false;
+
+                this.clearInviteRoomFromAddressBar();
+                this.showMainMenu();
+                this.showInviteGameInProgressModal();
+                return;
+            }
+        } catch (error) {
+            /*
+             * If status lookup fails because the server is waking up or the
+             * network is temporarily unavailable, keep the old join path.
+             * The authoritative server join guard still prevents mid-game
+             * entry.
+             */
+            console.warn(
+                '[Color Hunt] invite preflight failed; falling back to join guard',
+                error,
+            );
+        }
 
         this.openJoinRoomModal(
             roomId,

@@ -708,6 +708,50 @@ this.phaseChangedHandlers.forEach(
     return room;
   }
 
+  async getRoomStatus(
+    roomId: string,
+  ): Promise<{
+    exists: boolean;
+    phase: string;
+    isPrivate: boolean;
+  }> {
+    const response = await fetch(
+      `${this.serverUrl}/api/room-status?roomId=${encodeURIComponent(roomId)}&t=${Date.now()}`,
+      {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+        },
+        cache: "no-store",
+      },
+    );
+
+    if (!response.ok) {
+      throw new Error(
+        `Room status request failed: ${response.status}`,
+      );
+    }
+
+    const payload =
+      await response.json() as {
+        exists?: boolean;
+        phase?: string;
+        isPrivate?: boolean;
+      };
+
+    return {
+      exists:
+        payload.exists === true,
+      phase:
+        String(
+          payload.phase ??
+          "unknown",
+        ),
+      isPrivate:
+        payload.isPrivate === true,
+    };
+  }
+
   prewarmServer(): void {
     /*
      * v0.10.10.105:
