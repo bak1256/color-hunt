@@ -6195,12 +6195,12 @@ export class GameScene extends Phaser.Scene {
 
             this.controlsHelpRoot.style.setProperty(
                 '--controls-right',
-                `${Math.round(outerRight + 192)}px`,
+                `${Math.round(outerRight)}px`,
             );
 
             this.controlsHelpRoot.style.setProperty(
                 '--controls-top',
-                `${Math.round(canvasRect.top + 10)}px`,
+                `${Math.round(canvasRect.top + 86)}px`,
             );
             return;
         }
@@ -8434,95 +8434,98 @@ export class GameScene extends Phaser.Scene {
                 <button type="button" data-practice-close>✕</button>
             </header>
 
-            <div class="colorhunt-practice-map">
+            <section class="colorhunt-practice-intro">
+                <strong>🎨 ${tr('COLOR HUNT는 어떤 게임인가요?')}</strong>
+                <p>${tr('하이더는 배경과 비슷한 색으로 몸을 칠해 숨고, 헌터는 제한된 시간과 탄약 안에 위장한 하이더를 찾아내는 2D 숨바꼭질 게임입니다.')}</p>
+                <div class="colorhunt-practice-rule-flow">
+                    <span>🎨 ${tr('HIDER · 칠하고 숨기')}</span>
+                    <b>VS</b>
+                    <span>🔦 ${tr('HUNTER · 찾아서 맞히기')}</span>
+                </div>
+            </section>
+
+            <div class="colorhunt-practice-map colorhunt-practice-map--compact">
                 <label>
-                    <span>🗺️ ${tr('연습할 맵')}</span>
+                    <span>🗺️ ${tr('연습 맵')}</span>
                     <select data-practice-map>
                         ${mapOptions}
                     </select>
                 </label>
             </div>
 
-            <div class="colorhunt-practice-time">
-                <div class="colorhunt-practice-time-title">
-                    <span>⏱️ ${tr('헌터 연습 시간')}</span>
-                    <b data-practice-time-value>${this.practiceHuntDuration}s</b>
-                </div>
-                <div class="colorhunt-practice-time-buttons">
-                    ${[80, 100, 120].map(
-                        (seconds) => `
-                            <button
-                                type="button"
-                                data-practice-time="${seconds}"
-                                class="${
-                                    seconds ===
-                                    this.practiceHuntDuration
-                                        ? 'is-active'
-                                        : ''
-                                }"
-                            >${seconds}s</button>
-                        `,
-                    ).join('')}
-                </div>
-                <div class="colorhunt-practice-ranking" data-practice-ranking></div>
-            </div>
+            <div class="colorhunt-practice-mode-grid">
+                <section class="colorhunt-practice-mode colorhunt-practice-mode--hunter">
+                    <div class="colorhunt-practice-mode-icon">🔦</div>
+                    <div class="colorhunt-practice-mode-copy">
+                        <strong>${tr('헌터 연습')}</strong>
+                        <p class="colorhunt-practice-purpose">${tr('왜 연습하나요? 위장한 상대를 빠르게 발견하고, 제한 탄약과 과열을 관리하며 정확히 사격하는 감각을 익힙니다.')}</p>
 
-            <section class="colorhunt-practice-mode colorhunt-practice-mode--hunter">
-                <div class="colorhunt-practice-mode-icon">🔦</div>
-                <div class="colorhunt-practice-mode-copy">
-                    <strong>${tr('헌터 연습')}</strong>
-                    <p>${tr('봇 하이더들이 자동으로 위장하고 랜덤한 장소에 숨습니다. 찾아서 샷건으로 맞혀보세요!')}</p>
-
-                    <div class="colorhunt-practice-control">
-                        <label>
-                            <span>${tr('봇 하이더 수')}</span>
-                            <b data-bot-count-value>${this.practiceBotCount}</b>
-                        </label>
-                        <input
-                            data-bot-count
-                            type="range"
-                            min="1"
-                            max="5"
-                            step="1"
-                            value="${this.practiceBotCount}"
-                        >
-                    </div>
-
-                    <div class="colorhunt-practice-control">
-                        <label>
-                            <span>${tr('위장 정밀도')}</span>
-                            <b data-bot-precision-value>${this.practiceBotPrecision}%</b>
-                        </label>
-                        <input
-                            data-bot-precision
-                            type="range"
-                            min="50"
-                            max="95"
-                            step="5"
-                            value="${this.practiceBotPrecision}"
-                        >
-                        <div class="colorhunt-practice-difficulty-row">
-                            <small>${tr('높을수록 봇의 색이 배경과 더 비슷해집니다.')}</small>
-                            <b data-practice-difficulty></b>
+                        <div class="colorhunt-practice-time">
+                            <div class="colorhunt-practice-time-title">
+                                <span>⏱️ ${tr('제한 시간')}</span>
+                                <b data-practice-time-value>${this.practiceHuntDuration}s</b>
+                            </div>
+                            <div class="colorhunt-practice-time-buttons">
+                                ${[80, 100, 120].map(
+                                    (seconds) => `
+                                        <button
+                                            type="button"
+                                            data-practice-time="${seconds}"
+                                            class="${
+                                                seconds === this.practiceHuntDuration
+                                                    ? 'is-active'
+                                                    : ''
+                                            }"
+                                        >${seconds}s</button>
+                                    `,
+                                ).join('')}
+                            </div>
                         </div>
+
+                        <div class="colorhunt-practice-control">
+                            <label>
+                                <span>${tr('봇 하이더 수')}</span>
+                                <b data-bot-count-value>${this.practiceBotCount}</b>
+                            </label>
+                            <input data-bot-count type="range" min="1" max="5" step="1" value="${this.practiceBotCount}">
+                        </div>
+
+                        <div class="colorhunt-practice-control">
+                            <label>
+                                <span>${tr('위장 정밀도')}</span>
+                                <b data-bot-precision-value>${this.practiceBotPrecision}%</b>
+                            </label>
+                            <input data-bot-precision type="range" min="50" max="95" step="5" value="${this.practiceBotPrecision}">
+                            <div class="colorhunt-practice-difficulty-row">
+                                <small>${tr('높을수록 배경과 더 비슷하게 숨습니다.')}</small>
+                                <b data-practice-difficulty></b>
+                            </div>
+                        </div>
+
+                        <button type="button" class="colorhunt-practice-start" data-practice-hunter>
+                            🔫 ${tr('헌터 연습 시작')}
+                        </button>
+
+                        <div class="colorhunt-practice-ranking" data-practice-ranking></div>
                     </div>
+                </section>
 
-                    <button type="button" class="colorhunt-practice-start" data-practice-hunter>
-                        🔫 ${tr('헌터 연습 시작')}
-                    </button>
-                </div>
-            </section>
-
-            <section class="colorhunt-practice-mode colorhunt-practice-mode--hider">
-                <div class="colorhunt-practice-mode-icon">🎨</div>
-                <div class="colorhunt-practice-mode-copy">
-                    <strong>${tr('하이더 연습')}</strong>
-                    <p>${tr('헌터 없이 자유롭게 움직이며 색칠, 붓, 스포이드와 위장을 연습합니다.')}</p>
-                    <button type="button" class="colorhunt-practice-start colorhunt-practice-start--hider" data-practice-hider>
-                        🌿 ${tr('하이더 연습 시작')}
-                    </button>
-                </div>
-            </section>
+                <section class="colorhunt-practice-mode colorhunt-practice-mode--hider">
+                    <div class="colorhunt-practice-mode-icon">🎨</div>
+                    <div class="colorhunt-practice-mode-copy">
+                        <strong>${tr('하이더 연습')}</strong>
+                        <p class="colorhunt-practice-purpose">${tr('왜 연습하나요? 배경색을 스포이드로 뽑고 브러시로 몸을 칠해, 눈에 띄지 않는 위장을 빠르고 정교하게 만드는 감각을 익힙니다.')}</p>
+                        <div class="colorhunt-practice-hider-tips">
+                            <span>🖌️ ${tr('브러시 · 도트 · 직선')}</span>
+                            <span>💧 ${tr('스포이드 색 추출')}</span>
+                            <span>🌿 ${tr('배경에 자연스럽게 위장')}</span>
+                        </div>
+                        <button type="button" class="colorhunt-practice-start colorhunt-practice-start--hider" data-practice-hider>
+                            🌿 ${tr('하이더 연습 시작')}
+                        </button>
+                    </div>
+                </section>
+            </div>
         `;
 
         overlay.appendChild(
@@ -9887,7 +9890,7 @@ export class GameScene extends Phaser.Scene {
                     '--practice-exit-top',
                     `${Math.round(
                         rect.top +
-                        10,
+                        48,
                     )}px`,
                 );
 
@@ -9907,7 +9910,7 @@ export class GameScene extends Phaser.Scene {
                 button.style.setProperty(
                     '--practice-exit-right',
                     `${Math.round(
-                        canvasOuterRight + 92,
+                        canvasOuterRight,
                     )}px`,
                 );
 
@@ -31138,6 +31141,131 @@ ${shareUrl}`,
         );
     }
 
+    private revealPracticeBotsBeforeResult(): void {
+        this.canShoot = false;
+        this.clearAllAimingVisuals();
+
+        /*
+         * Keep the real camouflaged Practice characters on screen, but make
+         * every survivor impossible to miss before the result modal opens.
+         */
+        this.networkPlayerManager
+            .setNamesVisible(
+                true,
+            );
+
+        const revealMarkers:
+            Phaser.GameObjects.GameObject[] = [];
+
+        this.hiders.forEach(
+            (
+                hider,
+                index,
+            ) => {
+                if (!hider.alive) {
+                    return;
+                }
+
+                const ring =
+                    this.add.circle(
+                        hider.centerX,
+                        hider.centerY,
+                        34,
+                        0xffc247,
+                        0.12,
+                    )
+                        .setStrokeStyle(
+                            4,
+                            0xffd45c,
+                            1,
+                        )
+                        .setDepth(
+                            4998,
+                        );
+
+                const label =
+                    this.add.text(
+                        hider.centerX,
+                        hider.centerY - 48,
+                        `👀 BOT ${index + 1} · ${tr('여기!')}`,
+                        {
+                            fontFamily:
+                                'Arial, sans-serif',
+                            fontSize:
+                                '14px',
+                            fontStyle:
+                                'bold',
+                            color:
+                                '#ffffff',
+                            backgroundColor:
+                                '#d96d2ae8',
+                            padding: {
+                                x: 7,
+                                y: 4,
+                            },
+                        },
+                    )
+                        .setOrigin(
+                            0.5,
+                        )
+                        .setDepth(
+                            4999,
+                        );
+
+                revealMarkers.push(
+                    ring,
+                    label,
+                );
+
+                this.tweens.add({
+                    targets: ring,
+                    scale: 1.22,
+                    alpha: 0.9,
+                    duration: 320,
+                    yoyo: true,
+                    repeat: 3,
+                });
+            },
+        );
+
+        this.showStatus(
+            tr('시간 종료! 찾지 못한 봇의 위치를 공개합니다.'),
+        );
+
+        this.cameras.main.flash(
+            220,
+            255,
+            190,
+            70,
+        );
+
+        this.time.delayedCall(
+            2000,
+            () => {
+                revealMarkers.forEach(
+                    (object) => {
+                        object.destroy();
+                    },
+                );
+
+                this.networkPlayerManager
+                    .setNamesVisible(
+                        false,
+                    );
+
+                if (
+                    this.practiceMode ===
+                        'hunter'
+                ) {
+                    this.showPracticeResult(
+                        false,
+                        'time',
+                    );
+                }
+            },
+        );
+    }
+
     private showPracticeResult(
         won:
             boolean,
@@ -31386,9 +31514,7 @@ ${shareUrl}`,
         ) {
             this.phase =
                 'hiderVictory';
-            this.showPracticeResult(
-                false,
-            );
+            this.revealPracticeBotsBeforeResult();
             return;
         }
 
