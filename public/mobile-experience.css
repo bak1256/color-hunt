@@ -6187,3 +6187,39 @@ html.colorhunt-mobile .colorhunt-waiting-room.ch-uniform-mobile-scale * {
 .ch-install-help--active {
   min-height: 2.8em;
 }
+
+/* ============================================================
+   v0.10.10.197 — clean practice top rail + input-safe tool UI
+   ============================================================ */
+.colorhunt-controls-help.colorhunt-controls-help--practice {
+  top: var(--controls-top, 10px) !important;
+  right: var(--controls-right, 202px) !important;
+}
+
+.colorhunt-controls-help.colorhunt-controls-help--practice .colorhunt-controls-help__button,
+.colorhunt-practice-exit-button {
+  width: 92px;
+  min-width: 92px;
+  max-width: 92px;
+  height: 34px;
+  min-height: 34px;
+  box-sizing: border-box;
+  padding: 0 8px;
+  border: 2px solid #6f9b73;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #fffdf0 0%, #edf3dc 100%);
+  color: #35523d;
+  font-size: 9px;
+  font-weight: 950;
+  line-height: 1;
+  white-space: nowrap;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.75),
+    0 3px 0 rgba(58,91,62,.14),
+    0 7px 18px rgba(34,58,39,.13);
+  touch-action: manipulation;
+}
+
+.colorhunt-controls-help.colorhunt-controls-help--practice .colorhunt-controls-help__panel {
+  top: 40px !important;
+}

@@ -5698,9 +5698,15 @@ export class GameScene extends Phaser.Scene {
                 if (
                     this.eyedropperArmed
                 ) {
+                    this.hideMobilePaintPrecisionGuide();
+                    this.paintPreview
+                        ?.setVisible(false);
+                    this.showMobileIdleEyedropperGuide();
                     this.showStatus(
-                        tr('스포이드: 배경을 누른 채 움직이고 손을 떼면 색상이 선택됩니다'),
+                        tr('스포이드: 도구를 잡아 움직이고 손을 떼면 색상이 선택됩니다'),
                     );
+                } else {
+                    this.showMobileIdleBrushGuide();
                 }
             },
         );
@@ -6168,6 +6174,40 @@ export class GameScene extends Phaser.Scene {
 
         const canvasRect =
             this.game.canvas.getBoundingClientRect();
+
+        if (this.practiceMode) {
+            if (this.controlsHelpButton) {
+                this.controlsHelpButton.style.display =
+                    '';
+            }
+
+            this.controlsHelpRoot.classList.add(
+                'colorhunt-controls-help--practice',
+            );
+
+            const outerRight =
+                Math.max(
+                    8,
+                    window.innerWidth -
+                        canvasRect.right +
+                        10,
+                );
+
+            this.controlsHelpRoot.style.setProperty(
+                '--controls-right',
+                `${Math.round(outerRight + 192)}px`,
+            );
+
+            this.controlsHelpRoot.style.setProperty(
+                '--controls-top',
+                `${Math.round(canvasRect.top + 10)}px`,
+            );
+            return;
+        }
+
+        this.controlsHelpRoot.classList.remove(
+            'colorhunt-controls-help--practice',
+        );
 
         if (
             this.waitingRoomRoot &&
@@ -9851,17 +9891,27 @@ export class GameScene extends Phaser.Scene {
                     )}px`,
                 );
 
+                const canvasOuterRight =
+                    Math.max(
+                        8,
+                        window.innerWidth -
+                            rect.right +
+                            10,
+                    );
+
+                /*
+                 * Right-most canvas slot is reserved for Phaser's BGM chip.
+                 * Exit sits to its left; Controls Help sits immediately left
+                 * of Exit with the exact same button footprint.
+                 */
                 button.style.setProperty(
                     '--practice-exit-right',
                     `${Math.round(
-                        Math.max(
-                            8,
-                            window.innerWidth -
-                            rect.right +
-                            10,
-                        ),
+                        canvasOuterRight + 92,
                     )}px`,
                 );
+
+                this.updateControlsHelpPosition();
             };
 
         button.addEventListener(
@@ -9916,6 +9966,11 @@ export class GameScene extends Phaser.Scene {
 
         this.practiceMode =
             null;
+
+        this.controlsHelpRoot?.classList.remove(
+            'colorhunt-controls-help--practice',
+        );
+        this.updateControlsHelpPosition();
 
         this.practiceExitButton
             ?.remove();
@@ -10066,43 +10121,13 @@ export class GameScene extends Phaser.Scene {
     }
 
     private showPracticeStartBanner(
-        message: string,
+        _message: string,
     ): void {
-        const banner = this.add.text(
-            0,
-            0,
-            message,
-            {
-                fontFamily: 'Arial, sans-serif',
-                fontSize: '26px',
-                fontStyle: 'bold',
-                color: '#ffffff',
-                backgroundColor: 'rgba(5, 12, 18, 0.96)',
-                stroke: '#65d66d',
-                strokeThickness: 4,
-                padding: { x: 18, y: 12 },
-                align: 'center',
-            },
-        )
-            .setOrigin(0.5)
-            .setScrollFactor(0)
-            .setDepth(20000)
-            .setResolution(2);
-
-        this.setFixedHudScreenPosition(
-            banner,
-            this.gameWidth / 2,
-            Math.max(90, this.gameHeight * 0.26),
-        );
-
-        this.tweens.add({
-            targets: banner,
-            alpha: 0,
-            delay: 1050,
-            duration: 350,
-            ease: 'Linear',
-            onComplete: () => banner.destroy(),
-        });
+        /*
+         * v0.10.10.197: deliberately no visual banner. The previous giant
+         * "연습 시작!" overlay obscured most of the playfield on phones.
+         * Practice now starts directly into a clean gameplay view.
+         */
     }
 
     private markPracticeHiderPaintStarted(): void {
@@ -24941,9 +24966,60 @@ export class GameScene extends Phaser.Scene {
                 object ===
                     this.spectatorButton ||
                 object ===
+                    this.bgmToggleButton ||
+                object ===
                     this.brushSizeSliderTrack ||
                 object ===
                     this.brushSizeSliderKnob,
+        );
+    }
+
+    private isMobileDomUiScreenPoint(
+        screenX: number,
+        screenY: number,
+    ): boolean {
+        if (!this.mobileControlsEnabled) {
+            return false;
+        }
+
+        const rect =
+            this.game.canvas.getBoundingClientRect();
+
+        if (
+            rect.width <= 0 ||
+            rect.height <= 0
+        ) {
+            return false;
+        }
+
+        const clientX =
+            rect.left +
+            screenX / this.gameWidth * rect.width;
+        const clientY =
+            rect.top +
+            screenY / this.gameHeight * rect.height;
+
+        const element =
+            document.elementFromPoint(
+                clientX,
+                clientY,
+            );
+
+        if (!(element instanceof HTMLElement)) {
+            return false;
+        }
+
+        /*
+         * Canvas-backed controls are handled by isPaintUiHit / joystick
+         * ownership. This branch protects DOM controls layered over the game:
+         * practice exit/help, paint palette buttons/sliders and any modal UI.
+         * A fresh touch on one of these must NEVER move the persistent brush
+         * or eyedropper to the button's screen position.
+         */
+        return Boolean(
+            element.closest(
+                'button, input, select, textarea, [role="dialog"], .colorhunt-controls-help, .colorhunt-practice-exit-button, .colorhunt-paint-dock',
+            ),
         );
     }
 
@@ -25048,6 +25124,16 @@ export class GameScene extends Phaser.Scene {
                     return;
                 }
 
+                if (
+                    this.mobileControlsEnabled &&
+                    this.isMobileDomUiScreenPoint(
+                        pointer.x,
+                        pointer.y,
+                    )
+                ) {
+                    return;
+                }
+
                 /*
                  * v0.10.10.127:
                  * One REAL touch always belongs to paint.
@@ -25124,6 +25210,12 @@ export class GameScene extends Phaser.Scene {
                         this.eyedropperPointerId =
                             pointer.id;
 
+                        this.captureMobilePaintPointer(
+                            pointer,
+                        );
+                        this.hideMobilePaintPrecisionGuide();
+                        this.paintPreview
+                            ?.setVisible(false);
                         this.updateEyedropperMagnifier(
                             pointer,
                         );
@@ -25406,6 +25498,21 @@ export class GameScene extends Phaser.Scene {
                 if (
                     this.mobileControlsEnabled &&
                     this.phase === 'paint' &&
+                    pointer.isDown &&
+                    pointer.id !== this.mobilePendingPaintPointerId &&
+                    !this.isPainting &&
+                    pointer.id !== this.eyedropperPointerId &&
+                    this.isMobileDomUiScreenPoint(
+                        pointer.x,
+                        pointer.y,
+                    )
+                ) {
+                    return;
+                }
+
+                if (
+                    this.mobileControlsEnabled &&
+                    this.phase === 'paint' &&
                     pointer.isDown
                 ) {
                     this.updateMobilePaintPrecisionGuide(
@@ -25553,16 +25660,28 @@ export class GameScene extends Phaser.Scene {
                     pointer.id ===
                         this.eyedropperPointerId
                 ) {
+                    const target =
+                        this.getPaintPreviewWorldPoint(
+                            pointer,
+                        );
+
+                    this.mobileLastBrushTargetWorld =
+                        target.clone();
+
                     this.pickColorFromBackground(
-                        pointer.worldX,
-                        pointer.worldY,
+                        target.x,
+                        target.y,
                     );
 
-                    this.eyedropperArmed =
-                        false;
+                    /*
+                     * Eyedropper remains the selected tool after release.
+                     * The sampled-color pipette stays at the last position
+                     * until Circle/Square is explicitly selected.
+                     */
+                    this.eyedropperPointerId = -1;
                     this.updateEyedropperButtonUi();
-                    this.hideEyedropperMagnifier();
                     this.hideMobilePaintPrecisionGuide();
+                    this.showMobileIdleEyedropperGuide();
 
                     this.isPainting = false;
                     this.finishActivePaintStroke();
@@ -26550,7 +26669,6 @@ export class GameScene extends Phaser.Scene {
 
         this.eyedropperToolGuide =
             this.add.graphics()
-                .setScrollFactor(0)
                 .setDepth(9102)
                 .setVisible(false);
 
@@ -26571,6 +26689,138 @@ export class GameScene extends Phaser.Scene {
                 .setScrollFactor(0)
                 .setDepth(9101)
                 .setVisible(false);
+    }
+
+    private showMobileIdleEyedropperGuide(): void {
+        if (
+            !this.mobileControlsEnabled ||
+            this.phase !== 'paint' ||
+            !this.eyedropperArmed
+        ) {
+            return;
+        }
+
+        this.ensureEyedropperMagnifier();
+        this.eyedropperMagnifier
+            ?.setVisible(false);
+        this.eyedropperMagnifierSwatch
+            ?.setVisible(false);
+        this.hideMobilePaintPrecisionGuide();
+        this.paintPreview
+            ?.setVisible(false);
+
+        const container =
+            this.networkPlayerManager
+                ?.getLocalPlayerContainer?.();
+
+        if (!container || !this.eyedropperToolGuide) {
+            return;
+        }
+
+        const zoom =
+            Math.max(0.01, this.cameras.main.zoom);
+        const visualScale =
+            Math.max(
+                Math.abs(container.scaleX || 1),
+                Math.abs(container.scaleY || 1),
+            );
+
+        const target =
+            this.mobileLastBrushTargetWorld?.clone() ??
+            new Phaser.Math.Vector2(
+                container.x,
+                container.y - 18 * visualScale,
+            );
+
+        const grip =
+            new Phaser.Math.Vector2(
+                target.x + 72 / zoom,
+                target.y + 82 / zoom,
+            );
+
+        this.drawMobileEyedropperGuide(
+            target,
+            grip,
+            this.paintColor,
+        );
+    }
+
+    private drawMobileEyedropperGuide(
+        target: Phaser.Math.Vector2,
+        grip: Phaser.Math.Vector2,
+        previewColor: number,
+    ): void {
+        const guide = this.eyedropperToolGuide;
+        if (!guide) {
+            return;
+        }
+
+        const zoom =
+            Math.max(0.01, this.cameras.main.zoom);
+        const dx = grip.x - target.x;
+        const dy = grip.y - target.y;
+        const length = Math.max(0.001, Math.hypot(dx, dy));
+        const ux = dx / length;
+        const uy = dy / length;
+        const px = -uy;
+        const py = ux;
+        const barrelStartX = target.x + ux * (18 / zoom);
+        const barrelStartY = target.y + uy * (18 / zoom);
+
+        guide
+            .clear()
+            /* large sampled-color chip beside the sampling tip, not finger */
+            .fillStyle(0x172027, 0.96)
+            .fillCircle(
+                target.x - px * (26 / zoom),
+                target.y - py * (26 / zoom),
+                18 / zoom,
+            )
+            .fillStyle(previewColor, 1)
+            .fillCircle(
+                target.x - px * (26 / zoom),
+                target.y - py * (26 / zoom),
+                14 / zoom,
+            )
+            /* dark outline + glass pipette, same angle/length as brush */
+            .lineStyle(13 / zoom, 0x172027, 0.95)
+            .lineBetween(
+                barrelStartX,
+                barrelStartY,
+                grip.x,
+                grip.y,
+            )
+            .lineStyle(8 / zoom, 0xe7eef2, 1)
+            .lineBetween(
+                barrelStartX,
+                barrelStartY,
+                grip.x,
+                grip.y,
+            )
+            .lineStyle(4 / zoom, previewColor, 0.92)
+            .lineBetween(
+                target.x + ux * (28 / zoom),
+                target.y + uy * (28 / zoom),
+                grip.x - ux * (13 / zoom),
+                grip.y - uy * (13 / zoom),
+            )
+            /* pointed sampling tip faces the exact selected pixel */
+            .fillStyle(0x172027, 1)
+            .fillTriangle(
+                target.x,
+                target.y,
+                target.x + ux * (20 / zoom) - px * (7 / zoom),
+                target.y + uy * (20 / zoom) - py * (7 / zoom),
+                target.x + ux * (20 / zoom) + px * (7 / zoom),
+                target.y + uy * (20 / zoom) + py * (7 / zoom),
+            )
+            .fillStyle(previewColor, 1)
+            .fillCircle(
+                grip.x,
+                grip.y,
+                9 / zoom,
+            )
+            .setVisible(true);
     }
 
     private hideEyedropperMagnifier(): void {
@@ -27186,80 +27436,35 @@ export class GameScene extends Phaser.Scene {
                 }
         ).refresh?.();
 
-        const screenX =
-            Phaser.Math.Clamp(
-                pointer.x,
-                70,
-                this.gameWidth - 70,
-            );
-
         /*
-         * Prefer above the finger. Near the top edge, flip below.
+         * v0.10.10.197 mobile eyedropper UX:
+         * remove the old giant circular loupe entirely. The eyedropper now
+         * occupies the exact same persistent diagonal-tool slot as the brush.
+         * Its large color chip sits by the tip, safely away from the finger.
          */
-        const preferredY =
-            pointer.y > 145
-                ? pointer.y - 92
-                : pointer.y + 92;
-
-        const screenY =
-            Phaser.Math.Clamp(
-                preferredY,
-                70,
-                this.gameHeight - 82,
-            );
-
-        this.setFixedHudScreenPosition(
-            this.eyedropperMagnifier,
-            screenX,
-            screenY,
-        );
-
-        this.setFixedHudScreenPosition(
-            this.eyedropperMagnifierSwatch!,
-            Phaser.Math.Clamp(screenX + 68, 30, this.gameWidth - 30),
-            screenY + 28,
-        );
-
-        /*
-         * Mobile eyedropper silhouette: diagonal barrel + bulb + pointed tip.
-         * The sampled color swatch sits beside it so the player can verify the
-         * exact color before returning to the circle/square brush.
-         */
-        const pipette = this.eyedropperToolGuide;
-        if (pipette) {
-            const zoom = Math.max(0.01, this.cameras.main.zoom);
-            const px = pointer.worldX;
-            const py = pointer.worldY;
-            pipette
-                .clear()
-                .lineStyle(11 / zoom, 0x172027, 0.94)
-                .lineBetween(px + 10 / zoom, py - 10 / zoom, px + 58 / zoom, py - 58 / zoom)
-                .lineStyle(7 / zoom, 0xe8edf0, 1)
-                .lineBetween(px + 10 / zoom, py - 10 / zoom, px + 58 / zoom, py - 58 / zoom)
-                .fillStyle(candidateColor, 1)
-                .fillCircle(px + 61 / zoom, py - 61 / zoom, 9 / zoom)
-                .fillStyle(0x172027, 1)
-                .fillTriangle(
-                    px,
-                    py,
-                    px + 14 / zoom,
-                    py - 5 / zoom,
-                    px + 5 / zoom,
-                    py - 14 / zoom,
-                )
-                .setVisible(true);
-        }
-
         this.eyedropperMagnifier
-            .setVisible(true);
-
+            .setVisible(false);
         this.eyedropperMagnifierSwatch
-            ?.setFillStyle(
-                candidateColor,
-                1,
-            )
-            .setStrokeStyle(3, 0x172027, 0.95)
-            .setVisible(true);
+            ?.setVisible(false);
+
+        const target =
+            this.getPaintPreviewWorldPoint(pointer);
+        this.mobileLastBrushTargetWorld =
+            target.clone();
+
+        const zoom =
+            Math.max(0.01, this.cameras.main.zoom);
+        const grip =
+            new Phaser.Math.Vector2(
+                target.x + 72 / zoom,
+                target.y + 82 / zoom,
+            );
+
+        this.drawMobileEyedropperGuide(
+            target,
+            grip,
+            candidateColor,
+        );
     }
 
     private pickColorFromBackground(
