@@ -264,6 +264,9 @@ export class GameScene extends Phaser.Scene {
     private survivalHudText!: Phaser.GameObjects.Text;
     private survivalHiderLabelText!: Phaser.GameObjects.Text;
     private survivalHunterLabelText!: Phaser.GameObjects.Text;
+    private survivalHiderLabelScreenX = 0;
+    private survivalHunterLabelScreenX = 0;
+    private survivalRoleLabelScreenY = 36;
     private disconnectNoticeText!: Phaser.GameObjects.Text;
     private disconnectNoticeEvent?: Phaser.Time.TimerEvent;
     private paintReadyButton?: Phaser.GameObjects.Text;
@@ -1558,14 +1561,47 @@ export class GameScene extends Phaser.Scene {
          * labels down into the playfield. Keep labels in the same raw HUD
          * coordinates as the icons so HIDER/HUNTER stay aligned at every zoom.
          */
-        this.survivalHiderLabelText.setPosition(
-            hiderLabelScreenX,
-            roleLabelY,
-        );
-        this.survivalHunterLabelText.setPosition(
-            hunterLabelScreenX,
-            roleLabelY,
-        );
+        this.survivalHiderLabelScreenX =
+            hiderLabelScreenX;
+        this.survivalHunterLabelScreenX =
+            hunterLabelScreenX;
+        this.survivalRoleLabelScreenY =
+            roleLabelY;
+
+        this.syncSurvivalRoleLabelHudPosition();
+    }
+
+    /**
+     * Keep HIDER/HUNTER labels pinned to the same screen pixels as the
+     * survival icons regardless of camera zoom. setScrollFactor(0) removes
+     * camera scrolling, but Phaser still applies camera zoom to display
+     * objects. Recalculate the inverse-zoom position every frame so the
+     * labels stay visible both during the zoomed hunt camera and the 1x
+     * post-round reveal camera.
+     */
+    private syncSurvivalRoleLabelHudPosition(): void {
+        if (
+            !this.survivalHiderLabelText ||
+            !this.survivalHunterLabelText
+        ) {
+            return;
+        }
+
+        if (this.survivalHiderLabelText.visible) {
+            this.setFixedHudScreenPosition(
+                this.survivalHiderLabelText,
+                this.survivalHiderLabelScreenX,
+                this.survivalRoleLabelScreenY,
+            );
+        }
+
+        if (this.survivalHunterLabelText.visible) {
+            this.setFixedHudScreenPosition(
+                this.survivalHunterLabelText,
+                this.survivalHunterLabelScreenX,
+                this.survivalRoleLabelScreenY,
+            );
+        }
     }
 
     private showHiderFoundEffect(
@@ -4654,6 +4690,11 @@ export class GameScene extends Phaser.Scene {
                 this.reload();
             }
         }
+
+        // Camera zoom/follow can change after updateSurvivalHud(). Re-apply
+        // role-label screen coordinates at the very end of the frame so the
+        // labels never disappear during gameplay or jump after round end.
+        this.syncSurvivalRoleLabelHudPosition();
     }
 
     /*
