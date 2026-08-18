@@ -5064,21 +5064,14 @@ export class GameScene extends Phaser.Scene {
         );
 
         /*
-         * v0.10.10.102:
-         * Any coarse-pointer interaction outside chat belongs to the game.
-         * It must never leave/restore focus on the text input.
+         * v0.10.10.229:
+         * Clicking/tapping outside chat immediately returns control to the
+         * game on BOTH desktop and mobile. Desktop no longer requires ESC
+         * after typing before WASD / fire input can resume.
          */
         window.addEventListener(
             'pointerdown',
             (event) => {
-                if (
-                    !window.matchMedia(
-                        '(pointer: coarse)',
-                    ).matches
-                ) {
-                    return;
-                }
-
                 const target =
                     event.target;
 
@@ -5204,7 +5197,10 @@ export class GameScene extends Phaser.Scene {
          * Lobby/Hunt use CSS bottom anchoring.
          */
         const logicalTop =
-            desktopPaint
+            (
+                this.phase === 'paint' ||
+                this.phase === 'hunt'
+            )
                 ? 10
                 : 8;
 
@@ -20464,7 +20460,7 @@ export class GameScene extends Phaser.Scene {
             );
 
             this.hunterBlindText.setVisible(
-                visible,
+                false,
             );
         }
 
@@ -21417,12 +21413,13 @@ export class GameScene extends Phaser.Scene {
             );
 
             /*
-             * v0.10.10.96:
-             * Hunter blind PANEL remains Hunter-only, but the compact
-             * "위장하세요 | PAINT n" text is shared by Hider and Hunter.
+             * v0.10.10.229:
+             * Remove the legacy paint countdown box completely. Paint time is
+             * already shown by the fixed survival/hourglass HUD; keeping a
+             * second Phaser text object made it move/scale with paint zoom.
              */
             this.hunterBlindText
-                ?.setVisible(true);
+                ?.setVisible(false);
 
             /*
              * Both roles refresh map colors, but only HIDER receives them in
@@ -28099,6 +28096,125 @@ export class GameScene extends Phaser.Scene {
         worldX: number,
         worldY: number,
     ): void {
+        /*
+         * v0.10.10.229:
+         * A Hider can eyedrop colors already painted on their own body.
+         * PaintLayer is an 80x120 local texture centered at (-40,-60).
+         * If the sampled body pixel is opaque, use it before the background.
+         */
+        if (
+            this.networkPlayerManager
+                ?.isLocalHider?.()
+        ) {
+            const localPaint =
+                this.networkPlayerManager
+                    .getLocalPaintVisual?.();
+
+            if (localPaint?.source) {
+                const localX =
+                    (
+                        worldX -
+                        localPaint.x
+                    ) /
+                    Math.max(
+                        0.01,
+                        localPaint.scaleX,
+                    ) +
+                    40;
+
+                const localY =
+                    (
+                        worldY -
+                        localPaint.y
+                    ) /
+                    Math.max(
+                        0.01,
+                        localPaint.scaleY,
+                    ) +
+                    60;
+
+                const textureX =
+                    Math.floor(localX);
+                const textureY =
+                    Math.floor(localY);
+
+                if (
+                    textureX >= 0 &&
+                    textureY >= 0 &&
+                    textureX <
+                        localPaint.source.width &&
+                    textureY <
+                        localPaint.source.height
+                ) {
+                    const sampleCanvas =
+                        document.createElement(
+                            'canvas',
+                        );
+
+                    sampleCanvas.width = 1;
+                    sampleCanvas.height = 1;
+
+                    const sampleContext =
+                        sampleCanvas.getContext(
+                            '2d',
+                        );
+
+                    if (sampleContext) {
+                        sampleContext.clearRect(
+                            0,
+                            0,
+                            1,
+                            1,
+                        );
+
+                        sampleContext.drawImage(
+                            localPaint.source,
+                            textureX,
+                            textureY,
+                            1,
+                            1,
+                            0,
+                            0,
+                            1,
+                            1,
+                        );
+
+                        const bodyPixel =
+                            sampleContext
+                                .getImageData(
+                                    0,
+                                    0,
+                                    1,
+                                    1,
+                                )
+                                .data;
+
+                        if (bodyPixel[3] > 8) {
+                            this.paintColor =
+                                Phaser.Display.Color
+                                    .GetColor(
+                                        bodyPixel[0],
+                                        bodyPixel[1],
+                                        bodyPixel[2],
+                                    );
+
+                            this.createBrushTexture(
+                                true,
+                            );
+
+                            this.isPainting = false;
+                            this.activeStrokePoints = [];
+                            this.activeStrokeTargetSessionId = '';
+
+                            this.updatePaintHud();
+                            this.updatePaintPreviewImmediately();
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+
         const sourceImage = this.textures
             .get(
                 this.currentBackgroundTextureKey,
@@ -28215,15 +28331,12 @@ export class GameScene extends Phaser.Scene {
         this.updatePaintHud();
         this.updatePaintPreviewImmediately();
 
-        const hexColor =
-            this.paintColor
-                .toString(16)
-                .padStart(6, '0')
-                .toUpperCase();
-
-        this.showStatus(
-            tr(`색상 추출 #${hexColor}`),
-        );
+        /*
+         * v0.10.10.229:
+         * Eyedropper selection should be silent. The persistent pipette/color
+         * preview already communicates the sampled color; the old red status
+         * toast covered the paint view and was especially distracting on Hider.
+         */
     }
 
     private updatePaintPreview(
@@ -30179,38 +30292,6 @@ export class GameScene extends Phaser.Scene {
                 ? '#c62828'
                 : '#1f2937',
         );
-
-        if (
-            this.phase === 'paint' &&
-            this.isMultiplayerSession() &&
-            this.hunterBlindText?.visible
-        ) {
-            /*
-             * Paint 카메라는 플레이어가 확대/축소할 수 있습니다.
-             * hunterBlindText가 월드 카메라 zoom을 그대로 먹으면
-             * 카운터가 같이 커졌다/작아졌다 하므로 HUD 픽셀 크기로 역보정합니다.
-             * Multiplayer Paint의 legacy timerText는 이미 숨겨져 있으므로
-             * 이 카운터 하나만 고정 표시합니다.
-             */
-            const cameraZoom = Math.max(
-                0.01,
-                this.cameras.main.zoom,
-            );
-
-            this.hunterBlindText
-                .setText(
-                    `${tr('위장하세요')}  ·  ` +
-                    `⌛ ${remainingSeconds}`,
-                )
-                .setScrollFactor(0)
-                .setScale(1 / cameraZoom);
-
-            this.setFixedHudScreenPosition(
-                this.hunterBlindText,
-                this.gameWidth / 2,
-                98,
-            );
-        }
 
         if (
             this.isMultiplayerSession()

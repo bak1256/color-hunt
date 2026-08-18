@@ -7222,3 +7222,32 @@ html.colorhunt-mobile .colorhunt-practice-desktop-hint {
     width: 100% !important;
   }
 }
+
+
+/* ============================================================
+   v0.10.10.229 — fixed phase chat + paint cleanup
+   ============================================================ */
+
+/*
+ * Paint -> Hunt must not make the chat jump from top-left to bottom-left.
+ * Keep the panel at the exact same canvas anchor in both phases so it stays
+ * clear of the bottom paint palette and does not visually "teleport".
+ */
+.colorhunt-chat.colorhunt-chat--hunt:not(.colorhunt-chat--focused) {
+  top: var(--chat-canvas-top) !important;
+  left: var(--chat-canvas-left) !important;
+  bottom: auto !important;
+  transform: none !important;
+}
+
+@media (pointer: fine) {
+  .colorhunt-chat.colorhunt-chat--hunt,
+  .colorhunt-chat.colorhunt-chat--hunt.colorhunt-chat--focused {
+    top: var(--chat-canvas-top) !important;
+    left: var(--chat-canvas-left) !important;
+    bottom: auto !important;
+    transform: none !important;
+    width: min(var(--chat-panel-width), 300px) !important;
+    max-height: min(var(--chat-panel-max-height), 148px) !important;
+  }
+}
