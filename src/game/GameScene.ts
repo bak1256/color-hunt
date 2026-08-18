@@ -24169,9 +24169,54 @@ export class GameScene extends Phaser.Scene {
                 this.updateEyedropperButtonUi();
                 this.hideEyedropperMagnifier();
 
-                this.showStatus(
-                    tr('스포이드: 배경에서 원하는 색을 클릭하세요'),
-                );
+                /*
+                 * v0.10.10.238.7 DESKTOP EYEDROPPER DISCOVERY
+                 *
+                 * Some desktop players naturally discover the visible
+                 * eyedropper button but never realize that right-click is the
+                 * quick shortcut. Teach it only three times per browser so it
+                 * helps beginners without becoming repetitive.
+                 */
+                const rightClickTipStorageKey =
+                    'colorhunt-eyedropper-rightclick-tip-count';
+
+                const previousTipCount =
+                    Math.max(
+                        0,
+                        Number.parseInt(
+                            localStorage.getItem(
+                                rightClickTipStorageKey,
+                            ) ?? '0',
+                            10,
+                        ) || 0,
+                    );
+
+                if (previousTipCount < 3) {
+                    const tip =
+                        (
+                            {
+                                ko: '💡 스포이드는 우클릭으로도 바로 사용할 수 있어요!',
+                                ja: '💡 スポイトは右クリックでもすぐ使えます！',
+                                en: '💡 You can also use the eyedropper instantly with right-click!',
+                                zh: '💡 吸管工具也可以直接用鼠标右键使用！',
+                            } as const
+                        )[getLanguage()];
+
+                    this.showStatus(
+                        tip,
+                    );
+
+                    localStorage.setItem(
+                        rightClickTipStorageKey,
+                        String(
+                            previousTipCount + 1,
+                        ),
+                    );
+                } else {
+                    this.showStatus(
+                        tr('스포이드: 배경에서 원하는 색을 클릭하세요'),
+                    );
+                }
             },
         );
 
