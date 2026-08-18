@@ -290,6 +290,14 @@ export class GameScene extends Phaser.Scene {
 
     private disconnectNoticeText!: Phaser.GameObjects.Text;
     private disconnectNoticeEvent?: Phaser.Time.TimerEvent;
+
+    /*
+     * v0.10.10.238:
+     * New Room objects can replace the old transport after a reconnect.
+     * Attach the role-disconnect countdown listener once per Room instance.
+     */
+    private roleDisconnectCountdownRoom?: object;
+
     private paintReadyButton?: Phaser.GameObjects.Text;
 
     /*
@@ -7167,7 +7175,116 @@ export class GameScene extends Phaser.Scene {
         }
     }
 
+    private attachRoleDisconnectCountdownListener(): void {
+        const room =
+            multiplayerClient.getRoom();
+
+        if (
+            !room ||
+            this.roleDisconnectCountdownRoom ===
+                room
+        ) {
+            return;
+        }
+
+        this.roleDisconnectCountdownRoom =
+            room;
+
+        room.onMessage(
+            'role_disconnect_countdown',
+            (
+                payload: {
+                    role?:
+                        'hunter' |
+                        'hider';
+                    remaining?:
+                        number;
+                    cancelled?:
+                        boolean;
+                },
+            ) => {
+                if (
+                    payload.cancelled ||
+                    !payload.role
+                ) {
+                    this.clearStatus();
+                    return;
+                }
+
+                const remaining =
+                    Math.max(
+                        1,
+                        Math.round(
+                            Number(
+                                payload.remaining ??
+                                1,
+                            ),
+                        ),
+                    );
+
+                const message =
+                    payload.role ===
+                        'hunter'
+                        ? (
+                            {
+                                ko: `⚠️ 헌터 연결 끊김 · ${remaining}초 후 HIDER 승리`,
+                                ja: `⚠️ ハンター接続切れ · ${remaining}秒後 HIDER 勝利`,
+                                en: `⚠️ Hunters disconnected · HIDER wins in ${remaining}s`,
+                                zh: `⚠️ 猎人连接中断 · ${remaining}秒后 HIDER 获胜`,
+                            } as const
+                        )[getLanguage()]
+                        : (
+                            {
+                                ko: `⚠️ 하이더 전원 연결 끊김 · ${remaining}초 후 HUNTER 승리`,
+                                ja: `⚠️ HIDER全員接続切れ · ${remaining}秒後 HUNTER 勝利`,
+                                en: `⚠️ All Hiders disconnected · HUNTER wins in ${remaining}s`,
+                                zh: `⚠️ 所有 HIDER 连接中断 · ${remaining}秒后 HUNTER 获胜`,
+                            } as const
+                        )[getLanguage()];
+
+                /*
+                 * Server sends every second, so showStatus's 1.4s lifetime
+                 * naturally keeps one clear countdown message on screen.
+                 */
+                this.showStatus(
+                    message,
+                );
+            },
+        );
+
+        room.onMessage(
+            'player_disconnect_eliminated',
+            (
+                payload: {
+                    name?: string;
+                },
+            ) => {
+                const name =
+                    String(
+                        payload.name ??
+                        'Player',
+                    );
+
+                const message =
+                    (
+                        {
+                            ko: `⚠️ ${name}님이 복귀하지 않아 이번 라운드에서 탈락했습니다.`,
+                            ja: `⚠️ ${name}さんが戻らなかったため、このラウンドから脱落しました。`,
+                            en: `⚠️ ${name} did not return and was eliminated from this round.`,
+                            zh: `⚠️ ${name} 未返回，本回合已淘汰。`,
+                        } as const
+                    )[getLanguage()];
+
+                this.showStatus(
+                    message,
+                );
+            },
+        );
+    }
+
     private registerMultiplayerEvents(): void {
+        this.attachRoleDisconnectCountdownListener();
+
         this.networkUnsubscribers.push(
             multiplayerClient.onChatMessage(
                 (
@@ -8120,6 +8237,8 @@ export class GameScene extends Phaser.Scene {
         this.networkUnsubscribers.push(
             multiplayerClient.onConnectionRecovered(
                 () => {
+                    this.attachRoleDisconnectCountdownListener();
+
                     /*
                      * v0.10.10.231:
                      * Connection recovery is not complete until the Scene has
