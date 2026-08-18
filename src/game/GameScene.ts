@@ -95,12 +95,13 @@ export class GameScene extends Phaser.Scene {
              * whole 960x540 game.
              */
             if (
-                window.matchMedia(
-                    '(pointer: coarse)',
-                ).matches &&
-                document.activeElement ===
-                    this.chatInput
+                this.mobileChatViewportLocked
             ) {
+                /*
+                 * Software-keyboard viewport changes are not real game-layout
+                 * changes. Keep Phaser's canvas geometry frozen and reposition
+                 * only the DOM chat.
+                 */
                 this.updateChatKeyboardOffset();
                 return;
             }
@@ -283,6 +284,10 @@ export class GameScene extends Phaser.Scene {
     private survivalHiderLabelScreenX = 0;
     private survivalHunterLabelScreenX = 0;
     private survivalRoleLabelScreenY = 36;
+    private survivalTimerScreenX =
+        this.gameWidth / 2;
+    private survivalTimerScreenY = 66;
+
     private disconnectNoticeText!: Phaser.GameObjects.Text;
     private disconnectNoticeEvent?: Phaser.Time.TimerEvent;
     private paintReadyButton?: Phaser.GameObjects.Text;
@@ -1542,20 +1547,30 @@ export class GameScene extends Phaser.Scene {
              * AGAIN and visually flies upward. Convert the desired SCREEN
              * pixel back through the camera so the badge is truly fixed.
              */
+            this.survivalTimerScreenX =
+                this.gameWidth / 2;
+            this.survivalTimerScreenY =
+                88;
+
             this.setFixedHudScreenPosition(
                 this.survivalHudText,
-                this.gameWidth / 2,
-                88,
+                this.survivalTimerScreenX,
+                this.survivalTimerScreenY,
             );
 
             this.survivalHudText
                 .setDepth(26010);
         } else {
-            this.survivalHudText
-                .setPosition(
-                    hourglassX,
-                    66,
-                );
+            this.survivalTimerScreenX =
+                hourglassX;
+            this.survivalTimerScreenY =
+                66;
+
+            this.setFixedHudScreenPosition(
+                this.survivalHudText,
+                this.survivalTimerScreenX,
+                this.survivalTimerScreenY,
+            );
         }
 
         const hiderLabelX =
@@ -1628,7 +1643,64 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
-        if (this.survivalHiderLabelText.visible) {
+        const zoom =
+            Math.max(
+                0.01,
+                this.cameras.main.zoom,
+            );
+
+        /*
+         * Phaser scrollFactor(0) removes camera scrolling but camera ZOOM still
+         * scales the object. Apply inverse zoom every frame so icons, role names
+         * and the countdown never shrink/disappear during Paint/Hunt zoom.
+         */
+        if (
+            this.survivalHudGraphics?.visible
+        ) {
+            const centerX =
+                this.gameWidth / 2;
+            const centerY =
+                this.gameHeight / 2;
+
+            this.survivalHudGraphics
+                .setScrollFactor(0)
+                .setPosition(
+                    centerX -
+                        centerX /
+                            zoom,
+                    centerY -
+                        centerY /
+                            zoom,
+                )
+                .setScale(
+                    1 / zoom,
+                );
+        }
+
+        if (
+            this.survivalHudText?.visible
+        ) {
+            this.survivalHudText
+                .setScrollFactor(0)
+                .setScale(
+                    1 / zoom,
+                );
+
+            this.setFixedHudScreenPosition(
+                this.survivalHudText,
+                this.survivalTimerScreenX,
+                this.survivalTimerScreenY,
+            );
+        }
+
+        if (
+            this.survivalHiderLabelText.visible
+        ) {
+            this.survivalHiderLabelText
+                .setScale(
+                    1 / zoom,
+                );
+
             this.setFixedHudScreenPosition(
                 this.survivalHiderLabelText,
                 this.survivalHiderLabelScreenX,
@@ -1636,7 +1708,14 @@ export class GameScene extends Phaser.Scene {
             );
         }
 
-        if (this.survivalHunterLabelText.visible) {
+        if (
+            this.survivalHunterLabelText.visible
+        ) {
+            this.survivalHunterLabelText
+                .setScale(
+                    1 / zoom,
+                );
+
             this.setFixedHudScreenPosition(
                 this.survivalHunterLabelText,
                 this.survivalHunterLabelScreenX,
@@ -3158,21 +3237,11 @@ export class GameScene extends Phaser.Scene {
      * Keep the rendered Phaser canvas size unchanged while the software
      * keyboard is open for chat.
      */
-    private chatCanvasLayoutLock?: {
-        width: string;
-        height: string;
-        maxWidth: string;
-        maxHeight: string;
-        flex: string;
-    };
-    private chatGameParentLayoutLock?: {
-        element: HTMLElement;
-        width: string;
-        height: string;
-        minWidth: string;
-        minHeight: string;
-        overflow: string;
-    };
+    private mobileChatViewportLocked = false;
+    private mobileChatUnlockTimer?: number;
+    private mobileChatCanvasCssText = '';
+    private mobileChatParentCssText = '';
+
 
     private readonly chatMessageIds =
         new Set<string>();
@@ -4828,9 +4897,23 @@ export class GameScene extends Phaser.Scene {
         if (
             !window.matchMedia(
                 '(pointer: coarse)',
-            ).matches ||
-            this.chatCanvasLayoutLock
+            ).matches
         ) {
+            return;
+        }
+
+        if (
+            this.mobileChatUnlockTimer !==
+                undefined
+        ) {
+            window.clearTimeout(
+                this.mobileChatUnlockTimer,
+            );
+            this.mobileChatUnlockTimer =
+                undefined;
+        }
+
+        if (this.mobileChatViewportLocked) {
             return;
         }
 
@@ -4847,100 +4930,183 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
-        this.chatCanvasLayoutLock = {
-            width: canvas.style.width,
-            height: canvas.style.height,
-            maxWidth:
-                canvas.style.maxWidth,
-            maxHeight:
-                canvas.style.maxHeight,
-            flex: canvas.style.flex,
-        };
-        const parent = canvas.parentElement;
+        const parent =
+            canvas.parentElement;
+
+        this.mobileChatViewportLocked =
+            true;
+
+        this.mobileChatCanvasCssText =
+            canvas.style.cssText;
+
         if (parent) {
-            this.chatGameParentLayoutLock = {
-                element: parent,
-                width: parent.style.width,
-                height: parent.style.height,
-                minWidth: parent.style.minWidth,
-                minHeight: parent.style.minHeight,
-                overflow: parent.style.overflow,
-            };
-            parent.style.width = `${Math.round(rect.width)}px`;
-            parent.style.height = `${Math.round(rect.height)}px`;
-            parent.style.minWidth = `${Math.round(rect.width)}px`;
-            parent.style.minHeight = `${Math.round(rect.height)}px`;
-            parent.style.overflow = 'hidden';
+            this.mobileChatParentCssText =
+                parent.style.cssText;
         }
 
         /*
-         * Freeze the current physical CSS box BEFORE the mobile keyboard opens.
-         * Phaser's logical render size stays 960x540.
+         * Android Chrome/Samsung Internet can resize the LAYOUT viewport,
+         * not only visualViewport, when the keyboard opens. Phaser FIT then
+         * recalculates the canvas from the shorter height and the entire
+         * 16:9 game becomes smaller.
+         *
+         * Freeze the exact on-screen box as a fixed element BEFORE focus.
+         * !important prevents Phaser/CSS resize observers from replacing it
+         * while the keyboard is visible.
          */
-        canvas.style.width =
-            `${Math.round(rect.width)}px`;
-        canvas.style.height =
-            `${Math.round(rect.height)}px`;
-        canvas.style.maxWidth =
-            'none';
-        canvas.style.maxHeight =
-            'none';
-        canvas.style.flex =
-            '0 0 auto';
+        canvas.style.setProperty(
+            'position',
+            'fixed',
+            'important',
+        );
+        canvas.style.setProperty(
+            'left',
+            `${Math.round(rect.left)}px`,
+            'important',
+        );
+        canvas.style.setProperty(
+            'top',
+            `${Math.round(rect.top)}px`,
+            'important',
+        );
+        canvas.style.setProperty(
+            'width',
+            `${Math.round(rect.width)}px`,
+            'important',
+        );
+        canvas.style.setProperty(
+            'height',
+            `${Math.round(rect.height)}px`,
+            'important',
+        );
+        canvas.style.setProperty(
+            'min-width',
+            `${Math.round(rect.width)}px`,
+            'important',
+        );
+        canvas.style.setProperty(
+            'min-height',
+            `${Math.round(rect.height)}px`,
+            'important',
+        );
+        canvas.style.setProperty(
+            'max-width',
+            'none',
+            'important',
+        );
+        canvas.style.setProperty(
+            'max-height',
+            'none',
+            'important',
+        );
+        canvas.style.setProperty(
+            'margin',
+            '0',
+            'important',
+        );
+
+        if (parent) {
+            parent.style.setProperty(
+                'width',
+                `${Math.round(rect.width)}px`,
+                'important',
+            );
+            parent.style.setProperty(
+                'height',
+                `${Math.round(rect.height)}px`,
+                'important',
+            );
+            parent.style.setProperty(
+                'min-width',
+                `${Math.round(rect.width)}px`,
+                'important',
+            );
+            parent.style.setProperty(
+                'min-height',
+                `${Math.round(rect.height)}px`,
+                'important',
+            );
+            parent.style.setProperty(
+                'overflow',
+                'visible',
+                'important',
+            );
+        }
+
+        /*
+         * Browsers sometimes scroll the focused input into view. The chat is
+         * already positioned manually, so do not let that browser scroll move
+         * the game underneath it.
+         */
+        window.scrollTo(0, 0);
     }
 
     private unlockGameCanvasAfterMobileChat(): void {
-        const lock =
-            this.chatCanvasLayoutLock;
-
-        if (!lock) {
+        if (!this.mobileChatViewportLocked) {
             return;
         }
 
-        const canvas =
-            this.game.canvas;
-
-        canvas.style.width =
-            lock.width;
-        canvas.style.height =
-            lock.height;
-        canvas.style.maxWidth =
-            lock.maxWidth;
-        canvas.style.maxHeight =
-            lock.maxHeight;
-        canvas.style.flex =
-            lock.flex;
-
-        this.chatCanvasLayoutLock =
-            undefined;
-
-        const parentLock = this.chatGameParentLayoutLock;
-        if (parentLock) {
-            parentLock.element.style.width = parentLock.width;
-            parentLock.element.style.height = parentLock.height;
-            parentLock.element.style.minWidth = parentLock.minWidth;
-            parentLock.element.style.minHeight = parentLock.minHeight;
-            parentLock.element.style.overflow = parentLock.overflow;
-            this.chatGameParentLayoutLock = undefined;
+        if (
+            this.mobileChatUnlockTimer !==
+                undefined
+        ) {
+            window.clearTimeout(
+                this.mobileChatUnlockTimer,
+            );
         }
 
         /*
-         * Keyboard close emits multiple intermediate viewport sizes. Restore
-         * normal responsive scaling only after they have settled.
+         * blur fires before Android finishes closing the software keyboard.
+         * Restoring responsive canvas CSS immediately would still expose one
+         * shrunken viewport frame. Keep it frozen until viewport settles.
          */
-        window.setTimeout(
-            () => {
-                if (
-                    this.sys.isActive() &&
-                    document.activeElement !==
-                        this.chatInput
-                ) {
-                    this.scale.refresh();
-                    this.updateChatKeyboardOffset();
-                }
-            },
-            140,
-        );
+        this.mobileChatUnlockTimer =
+            window.setTimeout(
+                () => {
+                    const canvas =
+                        this.game.canvas;
+                    const parent =
+                        canvas.parentElement;
+
+                    canvas.style.cssText =
+                        this.mobileChatCanvasCssText;
+
+                    if (parent) {
+                        parent.style.cssText =
+                            this.mobileChatParentCssText;
+                    }
+
+                    this.mobileChatCanvasCssText =
+                        '';
+                    this.mobileChatParentCssText =
+                        '';
+                    this.mobileChatViewportLocked =
+                        false;
+                    this.mobileChatUnlockTimer =
+                        undefined;
+
+                    window.scrollTo(0, 0);
+
+                    if (
+                        this.sys.isActive()
+                    ) {
+                        this.scale.refresh();
+
+                        this.time.delayedCall(
+                            80,
+                            () => {
+                                if (
+                                    this.sys.isActive()
+                                ) {
+                                    this.scale.refresh();
+                                    this.updateChatKeyboardOffset();
+                                }
+                            },
+                        );
+                    }
+                },
+                320,
+            );
     }
 
     private createChatUi(): void {
@@ -25416,6 +25582,35 @@ export class GameScene extends Phaser.Scene {
             'colorhunt-paint-dock--paint-pass-through',
         );
 
+        /*
+         * READY is a DOM button floating above the canvas. While a brush or
+         * eyedropper finger is already active it must become completely
+         * transparent to hit-testing, otherwise crossing it can stall pointer
+         * delivery and leave the gesture in pinch/zoom state.
+         */
+        this.paintReadyDomButton?.style.setProperty(
+            'pointer-events',
+            'none',
+            'important',
+        );
+
+        this.pruneMobileTouchPoints();
+
+        const realPaintTouches =
+            [...this.mobileTouchPoints.keys()]
+                .filter(
+                    (id) =>
+                        this.isMobilePointerActuallyDown(
+                            id,
+                        ),
+                )
+                .length;
+
+        if (realPaintTouches < 2) {
+            this.mobilePinchActive = false;
+            this.mobilePinchDistance = 0;
+        }
+
         const nativeEvent =
             pointer.event;
 
@@ -25482,6 +25677,9 @@ export class GameScene extends Phaser.Scene {
             this.mobilePaintDock?.classList.remove(
                 'colorhunt-paint-dock--paint-pass-through',
             );
+            this.paintReadyDomButton?.style.removeProperty(
+                'pointer-events',
+            );
             return;
         }
 
@@ -25510,6 +25708,16 @@ export class GameScene extends Phaser.Scene {
         this.mobilePaintDock?.classList.remove(
             'colorhunt-paint-dock--paint-pass-through',
         );
+        this.paintReadyDomButton?.style.removeProperty(
+            'pointer-events',
+        );
+
+        if (
+            this.mobileTouchPoints.size < 2
+        ) {
+            this.mobilePinchActive = false;
+            this.mobilePinchDistance = 0;
+        }
     }
 
     private cancelMobilePaintHoldTimers(): void {
@@ -28276,24 +28484,12 @@ export class GameScene extends Phaser.Scene {
         );
         context.stroke();
 
-        let candidateColor =
+        const candidateColor =
+            this.getEyedropperColorAtWorld(
+                sampleWorldPoint.x,
+                sampleWorldPoint.y,
+            ) ??
             0xffffff;
-
-        const centerPixel =
-            sceneContext.getImageData(
-                half,
-                half,
-                1,
-                1,
-            ).data;
-
-        candidateColor =
-            Phaser.Display.Color
-                .GetColor(
-                    centerPixel[0],
-                    centerPixel[1],
-                    centerPixel[2],
-                );
 
         (
             texture as unknown as
@@ -28333,39 +28529,22 @@ export class GameScene extends Phaser.Scene {
         );
     }
 
-    private pickColorFromBackground(
+    private sampleBackgroundColorAtWorld(
         worldX: number,
         worldY: number,
-    ): void {
-        /*
-         * v0.10.10.231.1 EMERGENCY EYEDROPPER FIX:
-         *
-         * Temporarily remove the v229 RenderTexture source-image sampling path.
-         * On some Phaser/WebGL paths that source is not a safe CanvasImageSource
-         * at runtime, which can abort the whole eyedropper before background
-         * sampling happens.
-         *
-         * Restore the proven background sampler first; own-body color sampling
-         * can be reintroduced later through an explicit pixel-read API.
-         */
-        const sourceImage = this.textures
-            .get(
-                this.currentBackgroundTextureKey,
-            )
-            .getSourceImage() as HTMLImageElement;
+    ): number | null {
+        const sourceImage =
+            this.textures
+                .get(
+                    this.currentBackgroundTextureKey,
+                )
+                .getSourceImage() as
+                    HTMLImageElement;
 
         if (!sourceImage) {
-            this.showStatus(
-                tr('배경 이미지를 읽을 수 없습니다'),
-            );
-
-            return;
+            return null;
         }
 
-        /*
-         * 확대된 배경의 현재 화면 경계를 기준으로 정규화합니다.
-         * 따라서 눈으로 클릭한 픽셀과 실제 스포이드 색이 일치합니다.
-         */
         const bounds =
             this.backgroundImage.getBounds();
 
@@ -28375,7 +28554,10 @@ export class GameScene extends Phaser.Scene {
                     worldX -
                     bounds.left
                 ) /
-                bounds.width,
+                Math.max(
+                    1,
+                    bounds.width,
+                ),
                 0,
                 1,
             );
@@ -28386,7 +28568,10 @@ export class GameScene extends Phaser.Scene {
                     worldY -
                     bounds.top
                 ) /
-                bounds.height,
+                Math.max(
+                    1,
+                    bounds.height,
+                ),
                 0,
                 1,
             );
@@ -28412,16 +28597,23 @@ export class GameScene extends Phaser.Scene {
             );
 
         const canvas =
-            document.createElement('canvas');
-
+            document.createElement(
+                'canvas',
+            );
         canvas.width = 1;
         canvas.height = 1;
 
         const context =
-            canvas.getContext('2d');
+            canvas.getContext(
+                '2d',
+                {
+                    willReadFrequently:
+                        true,
+                },
+            );
 
         if (!context) {
-            return;
+            return null;
         }
 
         context.drawImage(
@@ -28444,17 +28636,213 @@ export class GameScene extends Phaser.Scene {
                 1,
             ).data;
 
-        this.paintColor =
-            Phaser.Display.Color.GetColor(
+        return Phaser.Display.Color
+            .GetColor(
                 pixel[0],
                 pixel[1],
                 pixel[2],
             );
+    }
+
+    private sampleOwnPaintHistoryColorAtWorld(
+        worldX: number,
+        worldY: number,
+    ): number | null {
+        if (
+            !this.networkPlayerManager
+                ?.isLocalHider?.()
+        ) {
+            return null;
+        }
+
+        const container =
+            this.networkPlayerManager
+                .getLocalPlayerContainer();
+
+        if (!container) {
+            return null;
+        }
+
+        const scaleX =
+            container.scaleX || 1;
+        const scaleY =
+            container.scaleY || 1;
+
+        const textureX =
+            Math.round(
+                (
+                    worldX -
+                    container.x
+                ) /
+                    scaleX +
+                    40,
+            );
+
+        const textureY =
+            Math.round(
+                (
+                    worldY -
+                    container.y
+                ) /
+                    scaleY +
+                    60,
+            );
+
+        if (
+            textureX < 0 ||
+            textureX > 79 ||
+            textureY < 0 ||
+            textureY > 119
+        ) {
+            return null;
+        }
 
         /*
-         * 같은 색을 과거에 사용했더라도 현재 Phaser texture cache 상태를
-         * 신뢰하지 않고 스포이드 직후 현재 brush를 강제로 다시 생성합니다.
+         * Walk newest stroke -> oldest stroke so the sampled color is exactly
+         * the topmost paint currently visible at this body pixel.
          */
+        for (
+            let strokeIndex =
+                this.localPaintHistory.length -
+                1;
+            strokeIndex >= 0;
+            strokeIndex -= 1
+        ) {
+            const stroke =
+                this.localPaintHistory[
+                    strokeIndex
+                ];
+
+            const diameter =
+                Math.max(
+                    1,
+                    Math.round(
+                        stroke.size,
+                    ),
+                );
+
+            const minOffset =
+                -Math.floor(
+                    diameter / 2,
+                );
+
+            const maxOffset =
+                minOffset +
+                diameter -
+                1;
+
+            const centerOffset =
+                (
+                    minOffset +
+                    maxOffset
+                ) / 2;
+
+            const circleRadius =
+                Math.max(
+                    0.5,
+                    diameter / 2 -
+                        0.25,
+                );
+
+            for (
+                let pointIndex =
+                    stroke.points.length -
+                        1;
+                pointIndex >= 0;
+                pointIndex -= 1
+            ) {
+                const point =
+                    stroke.points[
+                        pointIndex
+                    ];
+
+                const offsetX =
+                    textureX -
+                    Math.round(
+                        point.x,
+                    );
+
+                const offsetY =
+                    textureY -
+                    Math.round(
+                        point.y,
+                    );
+
+                if (
+                    offsetX < minOffset ||
+                    offsetX > maxOffset ||
+                    offsetY < minOffset ||
+                    offsetY > maxOffset
+                ) {
+                    continue;
+                }
+
+                if (
+                    stroke.shape !==
+                        'square'
+                ) {
+                    const dx =
+                        offsetX -
+                        centerOffset;
+                    const dy =
+                        offsetY -
+                        centerOffset;
+
+                    if (
+                        dx * dx +
+                            dy * dy >
+                        circleRadius *
+                            circleRadius
+                    ) {
+                        continue;
+                    }
+                }
+
+                return stroke.color;
+            }
+        }
+
+        return null;
+    }
+
+    private getEyedropperColorAtWorld(
+        worldX: number,
+        worldY: number,
+    ): number | null {
+        return (
+            this.sampleOwnPaintHistoryColorAtWorld(
+                worldX,
+                worldY,
+            ) ??
+            this.sampleBackgroundColorAtWorld(
+                worldX,
+                worldY,
+            )
+        );
+    }
+
+    private pickColorFromBackground(
+        worldX: number,
+        worldY: number,
+    ): void {
+        const sampledColor =
+            this.getEyedropperColorAtWorld(
+                worldX,
+                worldY,
+            );
+
+        if (
+            sampledColor === null
+        ) {
+            this.showStatus(
+                tr('배경 이미지를 읽을 수 없습니다'),
+            );
+            return;
+        }
+
+        this.paintColor =
+            sampledColor;
+
         this.createBrushTexture(true);
 
         this.isPainting = false;
@@ -28463,13 +28851,6 @@ export class GameScene extends Phaser.Scene {
 
         this.updatePaintHud();
         this.updatePaintPreviewImmediately();
-
-        /*
-         * v0.10.10.229:
-         * Eyedropper selection should be silent. The persistent pipette/color
-         * preview already communicates the sampled color; the old red status
-         * toast covered the paint view and was especially distracting on Hider.
-         */
     }
 
     private updatePaintPreview(
@@ -30850,18 +31231,14 @@ export class GameScene extends Phaser.Scene {
         if (
             this.isMultiplayerSession()
         ) {
-            const localRole =
-                multiplayerClient
-                    .getLocalPlayer()
-                    ?.role;
-
+            /*
+             * Main match HUD no longer shows the large mid-left keyboard help.
+             * Controls are already available from the help UI and this text
+             * obscures gameplay on both Hunter and Hider.
+             */
             this.guideText
-                .setVisible(true)
-                .setText(
-                    localRole === 'hunter'
-                        ? tr('WASD 이동 · 마우스 조준 · 좌클릭 발사')
-                        : tr('WASD 이동'),
-                );
+                .setText('')
+                .setVisible(false);
         } else {
             this.guideText.setText(
                 tr('WASD 이동 · 마우스 조준 · 좌클릭 발사'),
