@@ -1496,11 +1496,46 @@ export class GameScene extends Phaser.Scene {
             this.practiceMode ===
                 'hunter';
 
+        const localRole =
+            multiplayerClient
+                .getLocalPlayer()
+                ?.role;
+
+        const timerMessage =
+            this.phase === 'paint'
+                ? (
+                    localRole === 'hunter'
+                        ? (
+                            {
+                                ko: '🎨 색칠 시간',
+                                ja: '🎨 ペイント時間',
+                                en: '🎨 PAINT TIME',
+                                zh: '🎨 涂色时间',
+                            } as const
+                        )[getLanguage()]
+                        : (
+                            {
+                                ko: '🎨 위장하세요!',
+                                ja: '🎨 擬態しよう！',
+                                en: '🎨 CAMOUFLAGE!',
+                                zh: '🎨 快伪装！',
+                            } as const
+                        )[getLanguage()]
+                )
+                : (
+                    {
+                        ko: '🔎 찾는 중!',
+                        ja: '🔎 捜索中！',
+                        en: '🔎 HUNTING!',
+                        zh: '🔎 搜索中！',
+                    } as const
+                )[getLanguage()];
+
         this.survivalHudText
             .setText(
                 isHunterPractice
                     ? `⏱ ${survivalRemainingSeconds}s`
-                    : `${survivalRemainingSeconds}`,
+                    : `${timerMessage}  ⏱ ${survivalRemainingSeconds}s`,
             )
             .setOrigin(
                 0.5,
@@ -1515,8 +1550,8 @@ export class GameScene extends Phaser.Scene {
                     )
                     : (
                         this.mobileControlsEnabled
-                            ? 12
-                            : 14
+                            ? 11
+                            : 13
                     ),
             )
             .setPadding(
@@ -3239,8 +3274,6 @@ export class GameScene extends Phaser.Scene {
      */
     private mobileChatViewportLocked = false;
     private mobileChatUnlockTimer?: number;
-    private mobileChatCanvasCssText = '';
-    private mobileChatParentCssText = '';
 
 
     private readonly chatMessageIds =
@@ -4913,132 +4946,43 @@ export class GameScene extends Phaser.Scene {
                 undefined;
         }
 
-        if (this.mobileChatViewportLocked) {
-            return;
-        }
-
-        const canvas =
-            this.game.canvas;
-
-        const rect =
-            canvas.getBoundingClientRect();
-
-        if (
-            rect.width <= 0 ||
-            rect.height <= 0
-        ) {
-            return;
-        }
-
-        const parent =
-            canvas.parentElement;
-
         this.mobileChatViewportLocked =
             true;
 
-        this.mobileChatCanvasCssText =
-            canvas.style.cssText;
-
-        if (parent) {
-            this.mobileChatParentCssText =
-                parent.style.cssText;
-        }
-
         /*
-         * Android Chrome/Samsung Internet can resize the LAYOUT viewport,
-         * not only visualViewport, when the keyboard opens. Phaser FIT then
-         * recalculates the canvas from the shorter height and the entire
-         * 16:9 game becomes smaller.
+         * v0.10.10.233:
+         * DO NOT resize/fix/scale the Phaser canvas when the keyboard opens.
          *
-         * Freeze the exact on-screen box as a fixed element BEFORE focus.
-         * !important prevents Phaser/CSS resize observers from replacing it
-         * while the keyboard is visible.
+         * Chromium's VirtualKeyboard overlay mode is exactly what the game
+         * needs: the software keyboard overlays the web page instead of
+         * shrinking the layout viewport. The game therefore stays at the
+         * exact same size; only the DOM chat is moved above the keyboard.
+         *
+         * Use a structural cast so this still compiles when TypeScript's DOM
+         * lib does not yet expose navigator.virtualKeyboard.
          */
-        canvas.style.setProperty(
-            'position',
-            'fixed',
-            'important',
-        );
-        canvas.style.setProperty(
-            'left',
-            `${Math.round(rect.left)}px`,
-            'important',
-        );
-        canvas.style.setProperty(
-            'top',
-            `${Math.round(rect.top)}px`,
-            'important',
-        );
-        canvas.style.setProperty(
-            'width',
-            `${Math.round(rect.width)}px`,
-            'important',
-        );
-        canvas.style.setProperty(
-            'height',
-            `${Math.round(rect.height)}px`,
-            'important',
-        );
-        canvas.style.setProperty(
-            'min-width',
-            `${Math.round(rect.width)}px`,
-            'important',
-        );
-        canvas.style.setProperty(
-            'min-height',
-            `${Math.round(rect.height)}px`,
-            'important',
-        );
-        canvas.style.setProperty(
-            'max-width',
-            'none',
-            'important',
-        );
-        canvas.style.setProperty(
-            'max-height',
-            'none',
-            'important',
-        );
-        canvas.style.setProperty(
-            'margin',
-            '0',
-            'important',
-        );
+        const virtualKeyboard =
+            (
+                navigator as Navigator & {
+                    virtualKeyboard?: {
+                        overlaysContent:
+                            boolean;
+                    };
+                }
+            ).virtualKeyboard;
 
-        if (parent) {
-            parent.style.setProperty(
-                'width',
-                `${Math.round(rect.width)}px`,
-                'important',
-            );
-            parent.style.setProperty(
-                'height',
-                `${Math.round(rect.height)}px`,
-                'important',
-            );
-            parent.style.setProperty(
-                'min-width',
-                `${Math.round(rect.width)}px`,
-                'important',
-            );
-            parent.style.setProperty(
-                'min-height',
-                `${Math.round(rect.height)}px`,
-                'important',
-            );
-            parent.style.setProperty(
-                'overflow',
-                'visible',
-                'important',
-            );
+        if (virtualKeyboard) {
+            virtualKeyboard.overlaysContent =
+                true;
         }
 
         /*
-         * Browsers sometimes scroll the focused input into view. The chat is
-         * already positioned manually, so do not let that browser scroll move
-         * the game underneath it.
+         * Fallback browsers may still resize visualViewport. The global mobile
+         * viewport handler sees mobileChatViewportLocked and intentionally
+         * skips Phaser scale.refresh(), preventing game zoom/shrink.
          */
         window.scrollTo(0, 0);
+        this.updateChatKeyboardOffset();
     }
 
     private unlockGameCanvasAfterMobileChat(): void {
@@ -5056,56 +5000,22 @@ export class GameScene extends Phaser.Scene {
         }
 
         /*
-         * blur fires before Android finishes closing the software keyboard.
-         * Restoring responsive canvas CSS immediately would still expose one
-         * shrunken viewport frame. Keep it frozen until viewport settles.
+         * Blur can fire slightly before the OS keyboard finishes its closing
+         * animation. Keep resize suppression for a short grace period.
+         * No canvas CSS is restored because v233 never changes canvas CSS.
          */
         this.mobileChatUnlockTimer =
             window.setTimeout(
                 () => {
-                    const canvas =
-                        this.game.canvas;
-                    const parent =
-                        canvas.parentElement;
-
-                    canvas.style.cssText =
-                        this.mobileChatCanvasCssText;
-
-                    if (parent) {
-                        parent.style.cssText =
-                            this.mobileChatParentCssText;
-                    }
-
-                    this.mobileChatCanvasCssText =
-                        '';
-                    this.mobileChatParentCssText =
-                        '';
                     this.mobileChatViewportLocked =
                         false;
                     this.mobileChatUnlockTimer =
                         undefined;
 
                     window.scrollTo(0, 0);
-
-                    if (
-                        this.sys.isActive()
-                    ) {
-                        this.scale.refresh();
-
-                        this.time.delayedCall(
-                            80,
-                            () => {
-                                if (
-                                    this.sys.isActive()
-                                ) {
-                                    this.scale.refresh();
-                                    this.updateChatKeyboardOffset();
-                                }
-                            },
-                        );
-                    }
+                    this.updateChatKeyboardOffset();
                 },
-                320,
+                260,
             );
     }
 
@@ -5603,7 +5513,29 @@ export class GameScene extends Phaser.Scene {
         const viewport =
             window.visualViewport;
 
-        const keyboardOffset =
+        const virtualKeyboard =
+            (
+                navigator as Navigator & {
+                    virtualKeyboard?: {
+                        boundingRect?: {
+                            height:
+                                number;
+                        };
+                    };
+                }
+            ).virtualKeyboard;
+
+        const overlayKeyboardHeight =
+            this.mobileChatViewportLocked
+                ? Math.max(
+                    0,
+                    virtualKeyboard
+                        ?.boundingRect
+                        ?.height ?? 0,
+                )
+                : 0;
+
+        const visualViewportKeyboardOffset =
             viewport
                 ? Math.max(
                     0,
@@ -5612,6 +5544,12 @@ export class GameScene extends Phaser.Scene {
                         viewport.offsetTop,
                 )
                 : 0;
+
+        const keyboardOffset =
+            Math.max(
+                overlayKeyboardHeight,
+                visualViewportKeyboardOffset,
+            );
 
         this.chatRoot.style
             .setProperty(
@@ -6118,8 +6056,27 @@ export class GameScene extends Phaser.Scene {
                     this.paintPreview
                         ?.setVisible(false);
                     this.showMobileIdleEyedropperGuide();
+                    const eyedropperHelp =
+                        this.mobileControlsEnabled
+                            ? (
+                                {
+                                    ko: '스포이드: 도구를 잡아 움직이고 손을 떼면 색상이 선택됩니다',
+                                    ja: 'スポイト：ツールを動かし、指を離すと色を選択します',
+                                    en: 'Eyedropper: drag the tool and release to pick a color',
+                                    zh: '吸管：拖动工具，松开手指即可取色',
+                                } as const
+                            )[getLanguage()]
+                            : (
+                                {
+                                    ko: '스포이드: 원하는 색을 클릭하면 바로 추출됩니다',
+                                    ja: 'スポイト：取りたい色をクリックするとすぐに抽出します',
+                                    en: 'Eyedropper: click the color you want to sample',
+                                    zh: '吸管：点击想要的颜色即可立即取色',
+                                } as const
+                            )[getLanguage()];
+
                     this.showStatus(
-                        tr('스포이드: 도구를 잡아 움직이고 손을 떼면 색상이 선택됩니다'),
+                        eyedropperHelp,
                     );
                 } else {
                     this.showMobileIdleBrushGuide();
