@@ -2204,33 +2204,43 @@ export class NetworkPlayerManager {
         color,
       );
 
-    const radius =
-      size <= 1
-        ? 0
-        : Math.max(
-            1,
-            Math.round(size),
-          );
+    /*
+     * size is the actual pixel DIAMETER. Previously size=2 was interpreted
+     * as radius=2, so 1px -> 2px jumped from 1x1 to as much as 5x5.
+     * Keep square brushes exactly N x N and circular brushes inside the same
+     * N x N footprint.
+     */
+    const diameter = Math.max(
+      1,
+      Math.round(size),
+    );
+    const minOffset =
+      -Math.floor(diameter / 2);
+    const maxOffset =
+      minOffset + diameter - 1;
+    const centerOffset =
+      (minOffset + maxOffset) / 2;
+    const circleRadius =
+      Math.max(0.5, diameter / 2 - 0.25);
 
     for (
-      let offsetY = -radius;
-      offsetY <= radius;
+      let offsetY = minOffset;
+      offsetY <= maxOffset;
       offsetY += 1
     ) {
       for (
-        let offsetX = -radius;
-        offsetX <= radius;
+        let offsetX = minOffset;
+        offsetX <= maxOffset;
         offsetX += 1
       ) {
-        if (radius > 0) {
+        if (shape !== "square") {
+          const dx =
+            offsetX - centerOffset;
+          const dy =
+            offsetY - centerOffset;
           const insideBrush =
-            shape === "square"
-              ? true
-              : (
-                  offsetX * offsetX +
-                  offsetY * offsetY <=
-                  radius * radius
-                );
+            dx * dx + dy * dy <=
+            circleRadius * circleRadius;
 
           if (!insideBrush) {
             continue;

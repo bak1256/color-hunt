@@ -24182,49 +24182,30 @@ export class GameScene extends Phaser.Scene {
             0.95,
         );
 
+        /*
+         * v218: brushSize is the real pixel diameter, not a radius.
+         * The old code made 2px preview/stamp look roughly 5px wide.
+         */
+        const diameter = Math.max(
+            1,
+            previewSize,
+        );
+
         if (this.brushSize === 1) {
-            const pixelScale =
-                multiplayerClient.isConnected() &&
-                this.phase === 'paint' &&
-                this.networkPlayerManager
-                    .canLocalControlHunter()
-                    ? this.networkPlayerManager
-                        .getLocalPlayerVisualScale()
-                    : 1;
-
             this.paintPreview.fillRect(
-                -pixelScale / 2,
-                -pixelScale / 2,
-                pixelScale,
-                pixelScale,
+                -diameter / 2,
+                -diameter / 2,
+                diameter,
+                diameter,
             );
             return;
         }
 
         if (
-            this.brushShape ===
-            'dotCircle'
+            this.brushShape === 'dotCircle' ||
+            this.brushShape === 'circle'
         ) {
-            this.drawPixelCirclePreview(
-                previewSize,
-            );
-            return;
-        }
-
-        if (
-            this.brushShape ===
-            'circle'
-        ) {
-            const pixelScale =
-                multiplayerClient.isConnected() &&
-                this.phase === 'paint'
-                    ? this.networkPlayerManager
-                        .getLocalPlayerVisualScale()
-                    : 1;
-
-            const visibleRadius =
-                previewSize +
-                pixelScale * 0.5;
+            const visibleRadius = diameter / 2;
 
             this.paintPreview.fillCircle(
                 0,
@@ -24239,74 +24220,18 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
-        const pixelScale =
-            multiplayerClient.isConnected() &&
-            this.phase === 'paint'
-                ? this.networkPlayerManager
-                    .getLocalPlayerVisualScale()
-                : 1;
-
-        const diameter =
-            previewSize * 2 +
-            pixelScale;
-
-        /*
-         * Actual square brush stamps integer cells from -radius..+radius,
-         * i.e. 2*radius+1 pixels. Match that footprint exactly.
-         */
         this.paintPreview.fillRect(
-            -previewSize,
-            -previewSize,
+            -diameter / 2,
+            -diameter / 2,
             diameter,
             diameter,
         );
 
         this.paintPreview.strokeRect(
-            -previewSize,
-            -previewSize,
+            -diameter / 2,
+            -diameter / 2,
             diameter,
             diameter,
-        );
-    }
-
-    private drawPixelCirclePreview(
-        radius: number,
-    ): void {
-        const logicalRadius =
-            Math.max(
-                1,
-                Math.round(radius),
-            );
-
-        for (
-            let y = -logicalRadius;
-            y <= logicalRadius;
-            y += 1
-        ) {
-            const halfWidth =
-                Math.floor(
-                    Math.sqrt(
-                        Math.max(
-                            0,
-                            logicalRadius *
-                                logicalRadius -
-                            y * y,
-                        ),
-                    ),
-                );
-
-            this.paintPreview.fillRect(
-                -halfWidth,
-                y,
-                halfWidth * 2 + 1,
-                1,
-            );
-        }
-
-        this.paintPreview.strokeCircle(
-            0,
-            0,
-            logicalRadius,
         );
     }
 
@@ -26311,7 +26236,10 @@ export class GameScene extends Phaser.Scene {
             ) => {
                 if (
                     this.phase !== 'paint' ||
-                    !this.isMultiplayerSession()
+                    (
+                        !this.isMultiplayerSession() &&
+                        this.practiceMode !== 'hider'
+                    )
                 ) {
                     return;
                 }
@@ -26996,35 +26924,24 @@ export class GameScene extends Phaser.Scene {
              * 로컬 DOT CIRCLE 브러시와 같은 픽셀 원 알고리즘을
              * 사용해 다른 클라이언트에서도 네모로 보이지 않게 합니다.
              */
-            for (
-                let y = -radius;
-                y <= radius;
-                y += 1
-            ) {
-                const halfWidth =
-                    Math.floor(
-                        Math.sqrt(
-                            Math.max(
-                                0,
-                                radius * radius -
-                                y * y,
-                            ),
-                        ),
-                    );
+            const center = (diameter - 1) / 2;
+            const pixelRadius = Math.max(0.5, diameter / 2 - 0.25);
 
-                graphics.fillRect(
-                    radius - halfWidth,
-                    radius + y,
-                    halfWidth * 2 + 1,
-                    1,
-                );
+            for (let y = 0; y < diameter; y += 1) {
+                for (let x = 0; x < diameter; x += 1) {
+                    const dx = x - center;
+                    const dy = y - center;
+                    if (dx * dx + dy * dy <= pixelRadius * pixelRadius) {
+                        graphics.fillRect(x, y, 1, 1);
+                    }
+                }
             }
         } else if (
             shape === 'circle'
         ) {
             graphics.fillCircle(
-                radius,
-                radius,
+                diameter / 2,
+                diameter / 2,
                 radius,
             );
         } else {
@@ -32237,16 +32154,11 @@ ${shareUrl}`,
             return;
         }
 
-        const radius =
-            Math.max(
-                1,
-                Math.round(
-                    this.brushSize,
-                ),
-            );
-
-        const diameter =
-            radius * 2 + 1;
+        const diameter = Math.max(
+            2,
+            Math.round(this.brushSize),
+        );
+        const radius = diameter / 2;
 
         const graphics =
             this.add.graphics();
