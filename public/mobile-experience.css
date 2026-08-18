@@ -1073,11 +1073,32 @@ canvas {
 }
 
 .ch-lobby-room-status.is-playing {
-  color: #e98514;
+  color: #d83b3b;
+  border-color: #efc3c3;
+  background: #fff6f6;
 }
 
 .ch-lobby-room-status.is-playing i {
-  background: #ff9d18;
+  background: #ef4444;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, .12);
+}
+
+.ch-lobby-room-row.is-disabled,
+.ch-lobby-room-row:disabled {
+  cursor: default;
+  opacity: .78;
+}
+
+.ch-lobby-room-row.is-disabled:hover,
+.ch-lobby-room-row:disabled:hover {
+  background: transparent;
+}
+
+.ch-lobby-room-row.is-disabled .ch-lobby-room-play,
+.ch-lobby-room-row:disabled .ch-lobby-room-play {
+  color: #8f9b92;
+  background: #f4f6f3;
+  border-color: #d9e0d6;
 }
 
 .ch-lobby-room-play {

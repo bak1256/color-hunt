@@ -16710,7 +16710,37 @@ export class GameScene extends Phaser.Scene {
                     };
                 };
 
-            rooms
+            /*
+             * v0.10.10.226:
+             * Keep rooms that are already playing visible, but always place
+             * joinable lobby rooms first.  Active games stay in the list as
+             * read-only status rows so players can see server activity without
+             * accidentally trying to join a round that has already started.
+             */
+            const sortedRooms =
+                [...rooms].sort((a, b) => {
+                    const aPhase =
+                        String(a.metadata?.phase ?? 'lobby');
+                    const bPhase =
+                        String(b.metadata?.phase ?? 'lobby');
+                    const aPlaying = aPhase !== 'lobby';
+                    const bPlaying = bPhase !== 'lobby';
+
+                    if (aPlaying !== bPlaying) {
+                        return aPlaying ? 1 : -1;
+                    }
+
+                    const aTitle = String(
+                        a.metadata?.roomTitle ?? a.roomId,
+                    );
+                    const bTitle = String(
+                        b.metadata?.roomTitle ?? b.roomId,
+                    );
+
+                    return aTitle.localeCompare(bTitle);
+                });
+
+            sortedRooms
                 .slice(
                     0,
                     5,
@@ -16748,6 +16778,17 @@ export class GameScene extends Phaser.Scene {
                         const available =
                             phase ===
                             'lobby';
+
+                        row.disabled =
+                            !available;
+                        row.setAttribute(
+                            'aria-disabled',
+                            available ? 'false' : 'true',
+                        );
+                        row.classList.toggle(
+                            'is-disabled',
+                            !available,
+                        );
 
                         row.innerHTML = `
                             <span class="ch-lobby-room-name">
@@ -16815,19 +16856,21 @@ export class GameScene extends Phaser.Scene {
                             </span>
 
                             <span class="ch-lobby-room-play">
-                                ▶
+                                ${available ? '▶' : '—'}
                             </span>
                         `;
 
-                        row.addEventListener(
-                            'click',
-                            () => {
-                                this.openJoinRoomModal(
-                                    room.roomId,
-                                    false,
-                                );
-                            },
-                        );
+                        if (available) {
+                            row.addEventListener(
+                                'click',
+                                () => {
+                                    this.openJoinRoomModal(
+                                        room.roomId,
+                                        false,
+                                    );
+                                },
+                            );
+                        }
 
                         list.appendChild(
                             row,
