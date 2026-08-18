@@ -2174,6 +2174,14 @@ export class GameScene extends Phaser.Scene {
                 pointer:
                     Phaser.Input.Pointer,
             ) => {
+                /*
+                 * A primary touch after a completed pinch is the strongest
+                 * browser-level proof that this is a fresh one-finger gesture.
+                 */
+                this.resetMobilePinchForFreshPrimaryTouch(
+                    pointer,
+                );
+
                 this.pruneMobileTouchPoints();
 
                 if (
@@ -2444,6 +2452,28 @@ export class GameScene extends Phaser.Scene {
                 if (realDownCount < 2) {
                     const wasPinching =
                         this.mobilePinchActive;
+
+                    /*
+                     * After pinch release, Phaser can leave the second pointer
+                     * cached as down. Purge everything except a genuinely held
+                     * remaining pointer so the next finger cannot inherit zoom.
+                     */
+                    [
+                        ...this.mobileTouchPoints
+                            .keys(),
+                    ].forEach(
+                        (id) => {
+                            if (
+                                !this.isMobilePointerActuallyDown(
+                                    id,
+                                )
+                            ) {
+                                this.mobileTouchPoints.delete(
+                                    id,
+                                );
+                            }
+                        },
+                    );
 
                     this.mobilePinchDistance = 0;
                     this.mobilePinchActive = false;
@@ -2775,6 +2805,100 @@ export class GameScene extends Phaser.Scene {
         }
 
         return false;
+    }
+
+    /*
+     * v0.10.10.236.3 MOBILE PINCH RELEASE RESET
+     *
+     * Some mobile browsers/Phaser builds can leave one of the two pinch
+     * pointers marked isDown after both fingers have physically left the
+     * screen. The next single finger is then misclassified as a two-finger
+     * gesture, so painting stops and that one finger keeps zooming.
+     *
+     * A new PRIMARY touch means there cannot be an older physical touch.
+     * Treat it as the authoritative start of a fresh one-finger gesture and
+     * purge every stale pinch pointer/state.
+     */
+    private resetMobilePinchForFreshPrimaryTouch(
+        pointer: Phaser.Input.Pointer,
+    ): void {
+        if (
+            !this.mobileControlsEnabled ||
+            this.phase !== 'paint'
+        ) {
+            return;
+        }
+
+        const event =
+            pointer.event as
+                | PointerEvent
+                | TouchEvent
+                | undefined;
+
+        let freshSingleTouch =
+            false;
+
+        if (
+            typeof PointerEvent !==
+                'undefined' &&
+            event instanceof
+                PointerEvent &&
+            event.pointerType ===
+                'touch'
+        ) {
+            freshSingleTouch =
+                event.isPrimary;
+        } else if (
+            typeof TouchEvent !==
+                'undefined' &&
+            event instanceof
+                TouchEvent
+        ) {
+            freshSingleTouch =
+                event.touches.length <= 1;
+        }
+
+        if (!freshSingleTouch) {
+            return;
+        }
+
+        /*
+         * Keep only the current real finger. Do not trust stale Phaser
+         * Pointer.isDown values left over from the previous pinch.
+         */
+        this.mobileTouchPoints.clear();
+
+        this.mobileTouchPoints.set(
+            pointer.id,
+            new Phaser.Math.Vector2(
+                pointer.x,
+                pointer.y,
+            ),
+        );
+
+        this.mobilePinchActive = false;
+        this.mobilePinchDistance = 0;
+
+        /*
+         * Pinch may have cancelled an in-progress pending brush state.
+         * Make the next pointerdown a completely new paint gesture.
+         */
+        if (
+            this.mobilePendingPaintPointerId !==
+                pointer.id
+        ) {
+            this.cancelMobilePaintHoldTimers();
+            this.mobilePendingPaintPointerId =
+                -1;
+            this.mobilePendingPaintStartScreen =
+                undefined;
+            this.mobilePendingPaintStartWorld =
+                undefined;
+            this.mobilePaintDotCommitted =
+                false;
+        }
+
+        this.eyedropperPointerId = -1;
     }
 
     private pruneMobileTouchPoints(): void {
@@ -26274,6 +26398,15 @@ export class GameScene extends Phaser.Scene {
                 if (
                     this.mobileControlsEnabled
                 ) {
+                    /*
+                     * Defensive second reset at the actual paint-input gate.
+                     * This prevents a stale pinch flag/map from blocking the
+                     * brush even if listener ordering differs by browser.
+                     */
+                    this.resetMobilePinchForFreshPrimaryTouch(
+                        pointer,
+                    );
+
                     this.pruneMobileTouchPoints();
 
                     const trueSecondFinger =
@@ -26582,6 +26715,38 @@ export class GameScene extends Phaser.Scene {
                     this.mobileControlsEnabled
                 ) {
                     this.pruneMobileTouchPoints();
+
+                    const moveEvent =
+                        pointer.event as
+                            | PointerEvent
+                            | TouchEvent
+                            | undefined;
+
+                    const definitelySingleTouch =
+                        (
+                            typeof PointerEvent !==
+                                'undefined' &&
+                            moveEvent instanceof
+                                PointerEvent &&
+                            moveEvent.pointerType ===
+                                'touch' &&
+                            moveEvent.isPrimary
+                        ) ||
+                        (
+                            typeof TouchEvent !==
+                                'undefined' &&
+                            moveEvent instanceof
+                                TouchEvent &&
+                            moveEvent.touches.length <= 1
+                        );
+
+                    if (
+                        definitelySingleTouch &&
+                        this.mobileTouchPoints.size <= 1
+                    ) {
+                        this.mobilePinchActive = false;
+                        this.mobilePinchDistance = 0;
+                    }
                 }
 
                 const activeMobilePaintTouches =
