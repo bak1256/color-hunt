@@ -906,6 +906,28 @@ export class GameScene extends Phaser.Scene {
     }
 
     private updateSurvivalHud(): void {
+        /*
+         * v0.10.10.236.2:
+         * Survival/phase HUD only belongs to Paint/Hunt (plus Hunter practice).
+         * Countdown uses its own central 3·2·1 UI and must not say "찾는 중!".
+         */
+        if (
+            this.practiceMode !== 'hunter' &&
+            this.phase !== 'paint' &&
+            this.phase !== 'hunt'
+        ) {
+            this.survivalHudText
+                ?.setText('')
+                .setVisible(false);
+            this.survivalHudGraphics
+                ?.setVisible(false);
+            this.survivalHiderLabelText
+                ?.setVisible(false);
+            this.survivalHunterLabelText
+                ?.setVisible(false);
+            return;
+        }
+
         if (
             !this.survivalHudGraphics ||
             !this.survivalHudText
@@ -5482,13 +5504,18 @@ export class GameScene extends Phaser.Scene {
          * Paint chat therefore lives at the upper-left.
          * Lobby/Hunt use CSS bottom anchoring.
          */
+        /*
+         * v0.10.10.236.2:
+         * Hunt weapon/ammo HUD owns the upper-left corner. Keep chat below it
+         * so the message panel never overlaps shells / HEAT information.
+         * Paint stays at its existing upper-left position.
+         */
         const logicalTop =
-            (
-                this.phase === 'paint' ||
-                this.phase === 'hunt'
-            )
-                ? 10
-                : 8;
+            this.phase === 'hunt'
+                ? 92
+                : this.phase === 'paint'
+                    ? 10
+                    : 8;
 
         const maxChatHeight =
             coarsePointer &&
@@ -5506,9 +5533,15 @@ export class GameScene extends Phaser.Scene {
                 )
                 : desktopPaint
                     ? 148
-                    : coarsePointer
-                        ? 130
-                        : 176;
+                    : this.phase === 'hunt'
+                        ? (
+                            coarsePointer
+                                ? 118
+                                : 142
+                        )
+                        : coarsePointer
+                            ? 130
+                            : 176;
 
         this.chatRoot.style
             .setProperty(
@@ -21793,7 +21826,23 @@ export class GameScene extends Phaser.Scene {
                 remainingMs;
 
             this.updateLobbyUi();
-            this.updateSurvivalHud();
+
+            /*
+             * v0.10.10.236.2:
+             * Pre-Paint 3·2·1 countdown is NOT Hunt. Do not show the survival
+             * timer here, otherwise its non-paint fallback reads "찾는 중!".
+             * The dedicated central 3·2·1 countdown remains the only timer.
+             */
+            this.survivalHudText
+                ?.setText('')
+                .setVisible(false);
+            this.survivalHudGraphics
+                ?.setVisible(false);
+            this.survivalHiderLabelText
+                ?.setVisible(false);
+            this.survivalHunterLabelText
+                ?.setVisible(false);
+
             return;
         }
 
