@@ -1554,21 +1554,23 @@ export class GameScene extends Phaser.Scene {
          * hunt/practice must never push them off-screen or hide them behind
          * the role icons. Keep their SCREEN positions invariant at every zoom.
          */
-        if (Math.abs(this.cameras.main.zoom - 1) > 0.001) {
-            this.setFixedHudScreenPosition(
-                this.survivalHiderLabelText,
-                hiderLabelScreenX,
-                roleLabelY,
-            );
-            this.setFixedHudScreenPosition(
-                this.survivalHunterLabelText,
-                hunterLabelScreenX,
-                roleLabelY,
-            );
-        } else {
-            this.survivalHiderLabelText.setPosition(hiderLabelScreenX, roleLabelY);
-            this.survivalHunterLabelText.setPosition(hunterLabelScreenX, roleLabelY);
-        }
+        /*
+         * v0.10.10.215:
+         * Keep role labels in one screen-space coordinate system at EVERY
+         * camera zoom, including the 1x reveal/result camera. Mixing raw world
+         * positions at 1x with fixed-HUD positions while zoomed made the labels
+         * jump downward exactly when practice zoomed back out.
+         */
+        this.setFixedHudScreenPosition(
+            this.survivalHiderLabelText,
+            hiderLabelScreenX,
+            roleLabelY,
+        );
+        this.setFixedHudScreenPosition(
+            this.survivalHunterLabelText,
+            hunterLabelScreenX,
+            roleLabelY,
+        );
     }
 
     private showHiderFoundEffect(
@@ -31543,6 +31545,19 @@ ${shareUrl}`,
 
         this.phase =
             'hiderVictory';
+
+        /*
+         * v0.10.10.215:
+         * A timeout reveal is the actual end of the countdown. Force every
+         * visible timer source to zero before the camera/result UI changes so
+         * the last rendered frame can never remain stuck on 1s.
+         */
+        this.phaseEndTime = this.time.now;
+        this.survivalHudText
+            .setText('⏱ 0s');
+        this.timerText
+            .setText(tr('TIME 0'));
+
         this.canShoot = false;
         this.clearAllAimingVisuals();
         this.stopAllBgm();
