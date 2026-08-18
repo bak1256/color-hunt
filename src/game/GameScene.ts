@@ -14962,6 +14962,9 @@ export class GameScene extends Phaser.Scene {
             undefined;
         this.mainLobbyRoomList =
             undefined;
+
+        this.bgmToggleButton
+            ?.setVisible(true);
     }
 
     private updateMainLobbyDomPosition(): void {
@@ -15213,10 +15216,16 @@ export class GameScene extends Phaser.Scene {
                 <section class="ch-lobby-actions">
                     <div class="ch-lobby-actions-title-row">
                         <h2>🎮 ${tr('게임 시작하기')}</h2>
-                        <button
-                            type="button"
-                            class="ch-lobby-inline-controls"
-                        >${this.getControlsHelpCopy().button}</button>
+                        <div class="ch-lobby-inline-actions">
+                            <button
+                                type="button"
+                                class="ch-lobby-inline-bgm"
+                            >${this.bgmEnabled ? tr('♫ BGM ON') : tr('♫ BGM OFF')}</button>
+                            <button
+                                type="button"
+                                class="ch-lobby-inline-controls"
+                            >${this.getControlsHelpCopy().button}</button>
+                        </div>
                     </div>
 
                     <div class="ch-lobby-profile-card">
@@ -15308,6 +15317,15 @@ export class GameScene extends Phaser.Scene {
         this.mainLobbyRoot =
             root;
 
+        /*
+         * v0.10.10.225
+         * The public lobby owns its own inline BGM button next to Controls.
+         * Hide the old floating Phaser chip here so there is only one BGM
+         * control and the visual language stays consistent.
+         */
+        this.bgmToggleButton
+            ?.setVisible(false);
+
         this.mainLobbyRoomList =
             root.querySelector(
                 '.ch-lobby-room-list',
@@ -15325,6 +15343,58 @@ export class GameScene extends Phaser.Scene {
                     );
                 },
             );
+
+        const inlineBgmButton =
+            root.querySelector<
+                HTMLButtonElement
+            >(
+                '.ch-lobby-inline-bgm',
+            );
+
+        inlineBgmButton?.addEventListener(
+            'click',
+            (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+
+                this.audioUnlocked =
+                    true;
+                this.bgmEnabled =
+                    !this.bgmEnabled;
+
+                localStorage.setItem(
+                    'chameleon-hunt-bgm-enabled',
+                    String(
+                        this.bgmEnabled,
+                    ),
+                );
+
+                const label =
+                    this.bgmEnabled
+                        ? tr('♫ BGM ON')
+                        : tr('♫ BGM OFF');
+
+                inlineBgmButton.textContent =
+                    label;
+
+                this.bgmToggleButton
+                    ?.setText(
+                        label,
+                    );
+
+                this.waitingRoomRoot
+                    ?.querySelector<
+                        HTMLButtonElement
+                    >(
+                        '.ch-waiting-bgm-inline',
+                    )
+                    ?.replaceChildren(
+                        label,
+                    );
+
+                this.syncPhaseMusic();
+            },
+        );
 
         const inlineControlsButton =
             root.querySelector<
