@@ -5418,7 +5418,7 @@ export class GameScene extends Phaser.Scene {
                 hunt: '사냥 · WASD 이동 · 마우스 조준 · 좌클릭 발사',
                 mobileLobby: '대기실 · 버튼 터치 · 채팅칸 터치',
                 mobilePaint: '색칠 · 손가락으로 칠하기 · 핀치 확대/축소 · 아래 도구로 붓 변경',
-                mobileStraight: '직선 · Shift 직선 기능은 PC 키보드 조작에서 사용할 수 있습니다',
+                mobileStraight: '직선 · 브러시를 길게 누르면 주황색 이펙트와 함께 직선 모드가 켜집니다',
                 mobileHunt: '사냥 · 왼쪽 이동 · 오른쪽 조준 · FIRE 발사',
             },
             ja: {
@@ -5431,7 +5431,7 @@ export class GameScene extends Phaser.Scene {
                 hunt: 'ハント · WASD移動 · マウス照準 · 左クリック射撃',
                 mobileLobby: 'ロビー · ボタン操作 · 入力欄タップでチャット',
                 mobilePaint: 'ペイント · 指で塗る · ピンチズーム · 下のツールでブラシ変更',
-                mobileStraight: '直線 · Shift直線機能はPCキーボード操作で利用できます',
+                mobileStraight: '直線 · ブラシを長押しするとオレンジの合図で直線モードになります',
                 mobileHunt: 'ハント · 左で移動 · 右で照準 · FIREで射撃',
             },
             en: {
@@ -5444,7 +5444,7 @@ export class GameScene extends Phaser.Scene {
                 hunt: 'Hunt · WASD move · Mouse aim · Left click fire',
                 mobileLobby: 'Lobby · Tap buttons · Tap chat field to type',
                 mobilePaint: 'Paint · Paint with one finger · Pinch to zoom · Bottom tools change brush',
-                mobileStraight: 'Straight line · Shift straight-line mode is available with a PC keyboard',
+                mobileStraight: 'Straight line · Long-press the brush until the orange cue appears, then drag',
                 mobileHunt: 'Hunt · Left move · Right aim · FIRE shoots',
             },
             zh: {
@@ -5457,7 +5457,7 @@ export class GameScene extends Phaser.Scene {
                 hunt: '狩猎：WASD/方向键移动 · 鼠标瞄准 · 左键射击',
                 mobileLobby: '大厅：点击屏幕按钮 · 点击聊天输入框聊天',
                 mobilePaint: '涂色 · 单指涂色 · 双指缩放 · 使用底部工具切换画笔',
-                mobileStraight: '直线 · Shift 直线功能可在 PC 键盘操作中使用',
+                mobileStraight: '直线 · 长按画笔，出现橙色提示后拖动即可画直线',
                 mobileHunt: '狩猎：左侧移动 · 右侧瞄准 · FIRE按钮射击',
             },
         } as const;
@@ -5546,6 +5546,7 @@ export class GameScene extends Phaser.Scene {
                         );
                         this.updateEyedropperButtonUi();
                         this.syncMobilePaintDockUi();
+                        this.showMobileIdleBrushGuide();
                     },
                 );
 
@@ -5596,6 +5597,7 @@ export class GameScene extends Phaser.Scene {
                         event.stopPropagation();
                         onPress();
                         this.syncMobilePaintDockUi();
+                        this.showMobileIdleBrushGuide();
                     },
                 );
 
@@ -5772,6 +5774,20 @@ export class GameScene extends Phaser.Scene {
                     ),
                 );
                 this.syncMobilePaintDockUi();
+
+                /*
+                 * v0.10.10.194:
+                 * A DOM range input may temporarily become the browser's
+                 * active pointer target. Never let that make the in-game
+                 * brush disappear: redraw the persistent brush now and once
+                 * more on the next animation frame after the slider settles.
+                 */
+                this.showMobileIdleBrushGuide();
+                window.requestAnimationFrame(
+                    () => {
+                        this.showMobileIdleBrushGuide();
+                    },
+                );
             },
         );
 
@@ -5825,6 +5841,11 @@ export class GameScene extends Phaser.Scene {
         if (visible) {
             this.syncMobilePaintDockUi();
             this.updateMobilePaintDockPosition();
+            this.showMobileIdleBrushGuide();
+            this.time.delayedCall(
+                0,
+                () => this.showMobileIdleBrushGuide(),
+            );
         }
     }
 
@@ -23824,13 +23845,13 @@ export class GameScene extends Phaser.Scene {
 
         /*
          * Mobile precision mode:
-         * move the TARGET 58 SCREEN pixels above the finger first, then
+         * move the TARGET 92 SCREEN pixels above the finger first, then
          * convert through the camera. This stays accurate at every zoom and
          * after viewport/orientation changes.
          */
         return this.getPointerWorldPoint(
             pointer,
-            -58,
+            -92,
         );
     }
 
@@ -24057,6 +24078,275 @@ export class GameScene extends Phaser.Scene {
             .setVisible(true);
     }
 
+    private showMobileIdleBrushGuide(): void {
+        if (
+            !this.mobileControlsEnabled ||
+            this.phase !== 'paint' ||
+            this.eyedropperArmed ||
+            this.isPainting ||
+            this.mobilePendingPaintPointerId >= 0 ||
+            !this.paintPreview
+        ) {
+            return;
+        }
+
+        this.ensureMobilePaintPrecisionGuide();
+
+        const container =
+            this.networkPlayerManager
+                ?.getLocalPlayerContainer?.();
+
+        if (!container) {
+            return;
+        }
+
+        const zoom =
+            Math.max(
+                0.01,
+                this.cameras.main.zoom,
+            );
+
+        const visualScale =
+            Math.max(
+                Math.abs(container.scaleX || 1),
+                Math.abs(container.scaleY || 1),
+            );
+
+        /*
+         * The resting footprint sits on the character. The grip is exactly
+         * 92 SCREEN pixels below it, matching getPaintInputWorldPoint().
+         * Touching this visible grip therefore puts the real brush footprint
+         * right where the idle preview was shown.
+         */
+        const target =
+            new Phaser.Math.Vector2(
+                container.x,
+                container.y - 18 * visualScale,
+            );
+
+        const grip =
+            new Phaser.Math.Vector2(
+                target.x,
+                target.y + 92 / zoom,
+            );
+
+        this.paintPreview
+            .setPosition(
+                target.x,
+                target.y,
+            );
+        this.redrawPaintPreview();
+        this.paintPreview
+            .setAlpha(0.68)
+            .setVisible(true);
+
+        this.mobilePaintPrecisionRing
+            ?.setPosition(
+                target.x,
+                target.y,
+            )
+            .setRadius(
+                Math.max(
+                    13 / zoom,
+                    this.getPaintPreviewBrushSize(),
+                ),
+            )
+            .setStrokeStyle(
+                3 / zoom,
+                0x172027,
+                0.9,
+            )
+            .setVisible(true);
+
+        this.mobilePaintPrecisionCrosshair
+            ?.clear()
+            .lineStyle(
+                2 / zoom,
+                0xffffff,
+                0.96,
+            )
+            .lineBetween(
+                target.x - 10 / zoom,
+                target.y,
+                target.x + 10 / zoom,
+                target.y,
+            )
+            .lineBetween(
+                target.x,
+                target.y - 10 / zoom,
+                target.x,
+                target.y + 10 / zoom,
+            )
+            .setVisible(true);
+
+        /*
+         * High-contrast brush shaft + oversized grip. Draw a dark outline
+         * first, then a bright inner shaft so it remains visible over every
+         * map/color and cannot be hidden by the user's fingertip.
+         */
+        this.mobilePaintPrecisionHandle
+            ?.clear()
+            .lineStyle(
+                11 / zoom,
+                0x172027,
+                0.88,
+            )
+            .lineBetween(
+                target.x,
+                target.y + 6 / zoom,
+                grip.x,
+                grip.y,
+            )
+            .lineStyle(
+                6 / zoom,
+                0xf8e7bd,
+                0.98,
+            )
+            .lineBetween(
+                target.x,
+                target.y + 6 / zoom,
+                grip.x,
+                grip.y,
+            )
+            .fillStyle(
+                0x172027,
+                0.95,
+            )
+            .fillCircle(
+                grip.x,
+                grip.y,
+                14 / zoom,
+            )
+            .fillStyle(
+                0xffffff,
+                0.96,
+            )
+            .fillCircle(
+                grip.x,
+                grip.y,
+                9 / zoom,
+            )
+            .fillStyle(
+                this.paintColor,
+                0.95,
+            )
+            .fillTriangle(
+                target.x - 8 / zoom,
+                target.y + 8 / zoom,
+                target.x + 8 / zoom,
+                target.y + 8 / zoom,
+                target.x,
+                target.y - 8 / zoom,
+            )
+            .setVisible(true);
+    }
+
+    private showMobileStraightLineReadyFx(
+        pointer: Phaser.Input.Pointer,
+    ): void {
+        if (
+            !this.mobileControlsEnabled ||
+            this.phase !== 'paint'
+        ) {
+            return;
+        }
+
+        const target =
+            this.getPaintPreviewWorldPoint(
+                pointer,
+            );
+
+        const zoom =
+            Math.max(
+                0.01,
+                this.cameras.main.zoom,
+            );
+
+        const fx =
+            this.add.graphics()
+                .setDepth(6510);
+
+        fx.lineStyle(
+            5 / zoom,
+            0xf59e0b,
+            0.95,
+        );
+        fx.strokeCircle(
+            target.x,
+            target.y,
+            30 / zoom,
+        );
+        fx.lineStyle(
+            2 / zoom,
+            0xfff3c4,
+            0.95,
+        );
+        fx.strokeCircle(
+            target.x,
+            target.y,
+            40 / zoom,
+        );
+
+        const language =
+            getLanguage();
+
+        const labelCopy = {
+            ko: '↔ 직선 칠 준비!',
+            ja: '↔ 直線モード!',
+            en: '↔ LINE READY!',
+            zh: '↔ 直线模式!',
+        } as const;
+
+        const label =
+            this.add.text(
+                target.x,
+                target.y - 52 / zoom,
+                labelCopy[language] ??
+                    labelCopy.en,
+                {
+                    fontFamily:
+                        'Arial, sans-serif',
+                    fontSize:
+                        `${Math.round(15 / zoom)}px`,
+                    fontStyle: 'bold',
+                    color: '#fff7d6',
+                    backgroundColor:
+                        'rgba(121, 67, 3, 0.88)',
+                    padding: {
+                        x: Math.max(
+                            4,
+                            Math.round(7 / zoom),
+                        ),
+                        y: Math.max(
+                            3,
+                            Math.round(4 / zoom),
+                        ),
+                    },
+                },
+            )
+                .setOrigin(0.5)
+                .setDepth(6511);
+
+        try {
+            navigator.vibrate?.(28);
+        } catch {
+            // Haptics are best-effort only.
+        }
+
+        this.tweens.add({
+            targets: [fx, label],
+            alpha: 0,
+            scaleX: 1.38,
+            scaleY: 1.38,
+            duration: 680,
+            ease: 'Quad.easeOut',
+            onComplete: () => {
+                fx.destroy();
+                label.destroy();
+            },
+        });
+    }
+
     private hideMobilePaintPrecisionGuide(): void {
         this.mobilePaintPrecisionRing
             ?.setVisible(false);
@@ -24117,11 +24407,19 @@ export class GameScene extends Phaser.Scene {
             false;
 
         if (hidePreview) {
-            this.paintPreview
-                ?.setAlpha(1)
-                .setVisible(false);
+            if (
+                this.mobileControlsEnabled &&
+                this.phase === 'paint' &&
+                !this.eyedropperArmed
+            ) {
+                this.showMobileIdleBrushGuide();
+            } else {
+                this.paintPreview
+                    ?.setAlpha(1)
+                    .setVisible(false);
 
-            this.hideMobilePaintPrecisionGuide();
+                this.hideMobilePaintPrecisionGuide();
+            }
         }
     }
 
@@ -24133,6 +24431,17 @@ export class GameScene extends Phaser.Scene {
         ) {
             return;
         }
+
+        /*
+         * v0.10.10.194:
+         * Do this BEFORE checking PointerEvent. iOS/embedded WebViews can
+         * expose the Phaser touch as TouchEvent instead; previously that
+         * early return meant the palette stayed touchable and stole the
+         * stroke the instant the finger crossed over it.
+         */
+        this.mobilePaintDock?.classList.add(
+            'colorhunt-paint-dock--paint-pass-through',
+        );
 
         const nativeEvent =
             pointer.event;
@@ -24166,13 +24475,7 @@ export class GameScene extends Phaser.Scene {
              * for WebViews/Safari builds where setPointerCapture is flaky:
              * crossing over the palette can no longer cut the stroke.
              */
-            this.mobilePaintDock?.classList.add(
-                'colorhunt-paint-dock--paint-pass-through',
-            );
         } catch {
-            this.mobilePaintDock?.classList.add(
-                'colorhunt-paint-dock--paint-pass-through',
-            );
             /*
              * Pointer capture can be unavailable in a few embedded WebViews.
              * Painting still falls back to the previous behavior there.
@@ -24202,6 +24505,10 @@ export class GameScene extends Phaser.Scene {
             nativePointerId <
                 0
         ) {
+            /* TouchEvent/WebView path has no native PointerEvent id. */
+            this.mobilePaintDock?.classList.remove(
+                'colorhunt-paint-dock--paint-pass-through',
+            );
             return;
         }
 
@@ -24350,6 +24657,7 @@ export class GameScene extends Phaser.Scene {
                     this.mobilePaintHoldDotEvent = undefined;
                     this.mobilePaintLineModeEvent = undefined;
                     this.updateMobilePaintPrecisionGuide(pointer);
+                    this.showMobileStraightLineReadyFx(pointer);
                     this.updateStraightLinePreview(pointer);
                 },
             );
@@ -25152,6 +25460,7 @@ export class GameScene extends Phaser.Scene {
                         this.finishActivePaintStroke();
                     }
 
+                    this.showMobileIdleBrushGuide();
                     return;
                 }
 
@@ -25219,6 +25528,7 @@ export class GameScene extends Phaser.Scene {
 
                 this.isPainting = false;
                 this.finishActivePaintStroke();
+                this.showMobileIdleBrushGuide();
             },
         );
 
@@ -25244,6 +25554,7 @@ export class GameScene extends Phaser.Scene {
                     if (committedDot) {
                         this.finishActivePaintStroke();
                     }
+                    this.showMobileIdleBrushGuide();
                     return;
                 }
 
@@ -27009,6 +27320,15 @@ export class GameScene extends Phaser.Scene {
                     : 1,
             )
             .setVisible(true);
+
+        if (
+            this.mobileControlsEnabled &&
+            !pointer.isDown &&
+            this.mobilePendingPaintPointerId < 0 &&
+            !this.isPainting
+        ) {
+            this.showMobileIdleBrushGuide();
+        }
     }
 
     private updateBrushSizeInput(): void {
