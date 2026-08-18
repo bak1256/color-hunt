@@ -25454,13 +25454,13 @@ export class GameScene extends Phaser.Scene {
             .fillCircle(
                 fingerWorld.x,
                 fingerWorld.y,
-                this.straightLineModeActive ? 11 / zoom : 9 / zoom,
+                this.straightLineModeActive ? 16 / zoom : 14 / zoom,
             )
-            .fillStyle(0xffffff, 0.95)
+            .fillStyle(0xffffff, 0.97)
             .fillCircle(
                 fingerWorld.x,
                 fingerWorld.y,
-                this.straightLineModeActive ? 6 / zoom : 5 / zoom,
+                this.straightLineModeActive ? 10 / zoom : 9 / zoom,
             )
             .setVisible(true);
     }
@@ -26051,7 +26051,12 @@ export class GameScene extends Phaser.Scene {
          */
         this.mobilePaintLineModeEvent =
             this.time.delayedCall(
-                650,
+                /*
+                 * v0.10.10.236.5:
+                 * Slightly faster than the old 650ms while still clearly
+                 * separated from the 120ms dot hold.
+                 */
+                560,
                 () => {
                     if (
                         pointer.id !== this.mobilePendingPaintPointerId ||
@@ -28173,11 +28178,27 @@ export class GameScene extends Phaser.Scene {
                 target.x + ux * (20 / zoom) + px * (7 / zoom),
                 target.y + uy * (20 / zoom) + py * (7 / zoom),
             )
+            /*
+             * Larger hand grip: clearly shows where the finger should hold
+             * the tool and matches the improved brush handle readability.
+             */
+            .fillStyle(0x172027, 0.98)
+            .fillCircle(
+                grip.x,
+                grip.y,
+                14 / zoom,
+            )
+            .fillStyle(0xffffff, 0.98)
+            .fillCircle(
+                grip.x,
+                grip.y,
+                10 / zoom,
+            )
             .fillStyle(previewColor, 1)
             .fillCircle(
                 grip.x,
                 grip.y,
-                9 / zoom,
+                7 / zoom,
             )
             .setVisible(true);
     }
@@ -28202,6 +28223,57 @@ export class GameScene extends Phaser.Scene {
         this.ensureEyedropperMagnifier();
 
         if (!this.eyedropperMagnifier) {
+            return;
+        }
+
+        /*
+         * v0.10.10.236.5 MOBILE EYEDROPPER FAST PATH
+         *
+         * The old mobile path rebuilt an invisible 15x15 loupe canvas on every
+         * pointermove, including reconstructing the entire local paint history.
+         * The loupe itself has been hidden since v197, so that work only caused
+         * severe drag stutter.
+         *
+         * Mobile now samples exactly ONE color at the visible pipette tip and
+         * redraws only the lightweight Graphics guide.
+         *
+         * IMPORTANT: use getPaintInputWorldPoint(), not
+         * getPaintPreviewWorldPoint(). The latter intentionally snaps BRUSH
+         * coordinates to character texture pixels, which made the pipette
+         * appear to move in jerky steps over the background.
+         */
+        if (this.mobileControlsEnabled) {
+            const target =
+                this.getPaintInputWorldPoint(
+                    pointer,
+                );
+
+            this.mobileLastBrushTargetWorld =
+                target.clone();
+
+            const candidateColor =
+                this.getEyedropperColorAtWorld(
+                    target.x,
+                    target.y,
+                ) ??
+                this.paintColor;
+
+            const grip =
+                this.getPointerWorldPoint(
+                    pointer,
+                );
+
+            this.eyedropperMagnifier
+                .setVisible(false);
+            this.eyedropperMagnifierSwatch
+                ?.setVisible(false);
+
+            this.drawMobileEyedropperGuide(
+                target,
+                grip,
+                candidateColor,
+            );
+
             return;
         }
 
