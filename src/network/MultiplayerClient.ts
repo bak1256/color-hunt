@@ -725,8 +725,11 @@ this.phaseChangedHandlers.forEach(
         method: "GET",
         headers: {
           Accept: "application/json",
-          "Cache-Control": "no-cache",
         },
+        // Keep this a CORS-simple GET. A request-side Cache-Control header
+        // triggers a preflight on cross-origin deployments and can make the
+        // public room list fail entirely when the server does not allow that
+        // header. The timestamp already defeats intermediary/browser caches.
         cache: "no-store",
       },
     );
@@ -738,12 +741,13 @@ this.phaseChangedHandlers.forEach(
     }
 
     const payload =
-      await response.json() as {
-        rooms?: PublicRoomInfo[];
-      };
+      await response.json() as
+        | { rooms?: PublicRoomInfo[] }
+        | PublicRoomInfo[];
 
-    const rooms =
-      payload.rooms ?? [];
+    const rooms = Array.isArray(payload)
+      ? payload
+      : payload.rooms ?? [];
 
     console.log(
       "[Chameleon Hunt] Public rooms from API",
