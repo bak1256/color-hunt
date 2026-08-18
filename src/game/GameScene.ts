@@ -26861,10 +26861,27 @@ export class GameScene extends Phaser.Scene {
         const bounds =
             this.backgroundImage.getBounds();
 
+        /*
+         * v0.10.10.198:
+         * The mobile pipette is intentionally offset from the fingertip,
+         * exactly like the diagonal brush. Sample from the PIPETTE TIP, not
+         * from pointer.worldX/worldY. This keeps the live color chip and the
+         * color committed on pointer-up perfectly aligned with the visible
+         * tool tip.
+         */
+        const sampleWorldPoint =
+            this.mobileControlsEnabled
+                ? this.getPaintPreviewWorldPoint(
+                    pointer,
+                )
+                : this.getPointerWorldPoint(
+                    pointer,
+                );
+
         const normalizedX =
             Phaser.Math.Clamp(
                 (
-                    pointer.worldX -
+                    sampleWorldPoint.x -
                     bounds.left
                 ) /
                 bounds.width,
@@ -26875,7 +26892,7 @@ export class GameScene extends Phaser.Scene {
         const normalizedY =
             Phaser.Math.Clamp(
                 (
-                    pointer.worldY -
+                    sampleWorldPoint.y -
                     bounds.top
                 ) /
                 bounds.height,
