@@ -9119,7 +9119,10 @@ export class GameScene extends Phaser.Scene {
             </section>
 
             <div class="colorhunt-practice-map colorhunt-practice-map--compact">
-                <strong class="colorhunt-practice-map-title">🗺️ ${tr('연습 맵')}</strong>
+                <div class="colorhunt-practice-map-heading" style="margin-bottom:10px;">
+                    <strong class="colorhunt-practice-map-title" style="display:block;font-size:clamp(18px,4.6vw,24px);line-height:1.2;font-weight:900;letter-spacing:-0.02em;">🗺️ ${tr('연습할 맵을 선택하세요')}</strong>
+                    <p class="colorhunt-practice-map-description" style="margin:6px 0 0;font-size:clamp(13px,3.25vw,16px);line-height:1.45;font-weight:700;opacity:.86;">${tr('좌우 화살표로 연습할 맵을 고르세요. 선택한 맵에서 헌터·하이더 연습을 시작합니다.')}</p>
+                </div>
                 <div class="colorhunt-practice-map-picker">
                     <button type="button" class="colorhunt-practice-map-arrow" data-practice-map-prev aria-label="${tr('이전 맵')}">‹</button>
                     <img class="colorhunt-practice-map-preview" data-practice-map-preview src="/assets/backgrounds/${this.practiceMap}.png" alt="${tr('연습 맵 미리보기')}">
