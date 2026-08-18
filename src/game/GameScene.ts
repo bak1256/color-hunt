@@ -6117,9 +6117,7 @@ export class GameScene extends Phaser.Scene {
                 if (localIsHunter) {
                     this.eyedropperArmed =
                         false;
-                    this.showStatus(
-                        tr('헌터는 스포이드를 사용할 수 없습니다.'),
-                    );
+                    this.showHunterEyedropperDisabledNotice();
                     return;
                 }
 
@@ -23432,9 +23430,7 @@ export class GameScene extends Phaser.Scene {
                     this.eyedropperArmed =
                         false;
                     this.hideEyedropperMagnifier();
-                    this.showStatus(
-                        tr('헌터는 스포이드를 사용할 수 없습니다.'),
-                    );
+                    this.showHunterEyedropperDisabledNotice();
                     this.updateEyedropperButtonUi();
                     return;
                 }
@@ -26280,9 +26276,7 @@ export class GameScene extends Phaser.Scene {
                     if (localIsHunter) {
                         this.eyedropperArmed = false;
                         this.updateEyedropperButtonUi();
-                        this.showStatus(
-                            tr('헌터는 숨겨진 배경을 스포이드할 수 없습니다. CAMO SWATCH를 사용하세요.'),
-                        );
+                        this.showHunterEyedropperDisabledNotice();
                         return;
                     }
 
@@ -26350,9 +26344,7 @@ export class GameScene extends Phaser.Scene {
                          * 보이지 않는 현재 gameplay background pixel을 우클릭으로
                          * 추출하는 것을 금지합니다.
                          */
-                        this.showStatus(
-                            tr('헌터는 숨겨진 배경을 스포이드할 수 없습니다. CAMO SWATCH를 사용하세요.'),
-                        );
+                        this.showHunterEyedropperDisabledNotice();
 
                         return;
                     }
@@ -30733,6 +30725,91 @@ export class GameScene extends Phaser.Scene {
             .setVisible(false);
 
         this.updatePaintControlHelp();
+    }
+
+    private showHunterEyedropperDisabledNotice(): void {
+        const message =
+            (
+                {
+                    ko: '🚫 헌터는 색칠 시간에 스포이드를 사용할 수 없습니다.',
+                    ja: '🚫 ハンターはペイント時間中にスポイトを使用できません。',
+                    en: "🚫 Hunters can't use the eyedropper during paint time.",
+                    zh: '🚫 猎人在涂色时间无法使用吸管。',
+                } as const
+            )[getLanguage()];
+
+        /*
+         * Hunter Paint can have blackout/camera overlays above Phaser status
+         * text. Use a short DOM toast so both the eyedropper button and PC
+         * right-click always give unmistakable feedback.
+         */
+        document
+            .querySelectorAll(
+                '.colorhunt-hunter-eyedropper-notice',
+            )
+            .forEach(
+                (element) =>
+                    element.remove(),
+            );
+
+        const notice =
+            document.createElement(
+                'div',
+            );
+
+        notice.className =
+            'colorhunt-hunter-eyedropper-notice';
+
+        notice.textContent =
+            message;
+
+        Object.assign(
+            notice.style,
+            {
+                position: 'fixed',
+                left: '50%',
+                top: '18%',
+                transform:
+                    'translate(-50%, -50%)',
+                zIndex: '100000',
+                maxWidth:
+                    'min(88vw, 560px)',
+                padding:
+                    '12px 18px',
+                borderRadius:
+                    '14px',
+                border:
+                    '2px solid rgba(255,255,255,.9)',
+                background:
+                    'rgba(35, 40, 38, .94)',
+                color: '#fffdf3',
+                fontFamily:
+                    'Arial, sans-serif',
+                fontSize:
+                    this.mobileControlsEnabled
+                        ? '15px'
+                        : '16px',
+                fontWeight:
+                    '800',
+                textAlign:
+                    'center',
+                lineHeight:
+                    '1.35',
+                boxShadow:
+                    '0 6px 24px rgba(0,0,0,.30)',
+                pointerEvents:
+                    'none',
+            },
+        );
+
+        document.body.appendChild(
+            notice,
+        );
+
+        window.setTimeout(
+            () => notice.remove(),
+            1700,
+        );
     }
 
     private showStatus(message: string): void {
