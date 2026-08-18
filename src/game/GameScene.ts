@@ -3682,6 +3682,19 @@ export class GameScene extends Phaser.Scene {
     private mobileEyedropperSampleContext?:
         CanvasRenderingContext2D;
 
+    /*
+     * v0.10.10.236.7:
+     * Phaser POINTER_MOVE is not reliable on every mobile browser after a
+     * touch starts near/over DOM overlays. Track the active pipette with the
+     * browser's native pointer stream at window capture level.
+     */
+    private mobileNativeEyedropperPointerId =
+        -1;
+    private mobileNativeEyedropperMoveHandler?:
+        (event: PointerEvent) => void;
+    private mobileNativeEyedropperEndHandler?:
+        (event: PointerEvent) => void;
+
     private readonly eyedropperMagnifierTextureKey =
         'eyedropper-mobile-magnifier';
     private lobbyInfoCard!: Phaser.GameObjects.Rectangle;
@@ -4535,6 +4548,8 @@ export class GameScene extends Phaser.Scene {
                     'colorhunt:viewportchange',
                     this.handleMobileViewportChange,
                 );
+
+                this.stopMobileNativeEyedropperDrag();
 
                 this.destroyChatUi();
                 this.destroyControlsHelpUi();
@@ -24016,6 +24031,8 @@ export class GameScene extends Phaser.Scene {
      * eyedropper graphic remains frozen at its old position.
      */
     private activateMobileEyedropperTool(): void {
+        this.stopMobileNativeEyedropperDrag();
+
         this.finishActivePaintStroke();
         this.isPainting = false;
 
@@ -24062,6 +24079,8 @@ export class GameScene extends Phaser.Scene {
     private activateMobileBrushTool(
         shape: BrushShape,
     ): void {
+        this.stopMobileNativeEyedropperDrag();
+
         this.finishActivePaintStroke();
         this.isPainting = false;
 
@@ -26540,9 +26559,23 @@ export class GameScene extends Phaser.Scene {
                         this.hideMobilePaintPrecisionGuide();
                         this.paintPreview
                             ?.setVisible(false);
-                        this.updateEyedropperMagnifier(
+
+                        /*
+                         * Native window-level drag owns mobile pipette movement.
+                         * Phaser still remains the fallback for non-PointerEvent
+                         * WebViews.
+                         */
+                        this.startMobileNativeEyedropperDrag(
                             pointer,
                         );
+
+                        if (
+                            !(pointer.event instanceof PointerEvent)
+                        ) {
+                            this.updateEyedropperMagnifier(
+                                pointer,
+                            );
+                        }
 
                         return;
                     }
@@ -26763,6 +26796,19 @@ export class GameScene extends Phaser.Scene {
                     this.paintPreview
                         ?.setVisible(false);
                     this.hideMobilePaintPrecisionGuide();
+                }
+
+                if (
+                    this.mobileControlsEnabled &&
+                    this.mobileNativeEyedropperPointerId >=
+                        0 &&
+                    this.eyedropperArmed
+                ) {
+                    /*
+                     * Native window pointer stream owns this drag. Avoid
+                     * duplicate Phaser updates / ID mismatches.
+                     */
+                    return;
                 }
 
                 if (
@@ -27050,6 +27096,19 @@ export class GameScene extends Phaser.Scene {
                 this.releaseMobilePaintPointer(
                     pointer,
                 );
+
+                if (
+                    this.mobileControlsEnabled &&
+                    this.mobileNativeEyedropperPointerId >=
+                        0 &&
+                    this.eyedropperArmed
+                ) {
+                    /*
+                     * Native window pointerup will perform the exact final
+                     * sample and cleanup.
+                     */
+                    return;
+                }
 
                 if (
                     this.eyedropperArmed &&
@@ -28228,6 +28287,8 @@ export class GameScene extends Phaser.Scene {
     }
 
     private hideEyedropperMagnifier(): void {
+        this.stopMobileNativeEyedropperDrag();
+
         this.eyedropperPointerId = -1;
 
         this.eyedropperMagnifier
@@ -28239,6 +28300,293 @@ export class GameScene extends Phaser.Scene {
         this.eyedropperToolGuide
             ?.clear()
             .setVisible(false);
+    }
+
+    private getMobileNativeEyedropperWorldPoints(
+        clientX: number,
+        clientY: number,
+    ): {
+        target: Phaser.Math.Vector2;
+        grip: Phaser.Math.Vector2;
+    } | null {
+        const canvas =
+            this.game.canvas;
+
+        const rect =
+            canvas.getBoundingClientRect();
+
+        if (
+            rect.width <= 0 ||
+            rect.height <= 0
+        ) {
+            return null;
+        }
+
+        /*
+         * Convert browser client coordinates to Phaser logical screen
+         * coordinates. This bypasses Phaser.Pointer's occasionally stale x/y
+         * values after DOM overlays / pointer capture transitions.
+         */
+        const screenX =
+            (
+                clientX -
+                rect.left
+            ) *
+            (
+                this.gameWidth /
+                rect.width
+            );
+
+        const screenY =
+            (
+                clientY -
+                rect.top
+            ) *
+            (
+                this.gameHeight /
+                rect.height
+            );
+
+        const target =
+            new Phaser.Math.Vector2();
+
+        const grip =
+            new Phaser.Math.Vector2();
+
+        this.cameras.main.getWorldPoint(
+            screenX - 72,
+            screenY - 82,
+            target,
+        );
+
+        this.cameras.main.getWorldPoint(
+            screenX,
+            screenY,
+            grip,
+        );
+
+        return {
+            target,
+            grip,
+        };
+    }
+
+    private updateMobileNativeEyedropperDrag(
+        clientX: number,
+        clientY: number,
+        forceSample = false,
+    ): Phaser.Math.Vector2 | null {
+        const points =
+            this.getMobileNativeEyedropperWorldPoints(
+                clientX,
+                clientY,
+            );
+
+        if (!points) {
+            return null;
+        }
+
+        this.mobileLastBrushTargetWorld =
+            points.target.clone();
+
+        const now =
+            performance.now();
+
+        if (
+            forceSample ||
+            now -
+                this.mobileEyedropperLastSampleAt >=
+                80
+        ) {
+            this.mobileEyedropperLastSampleAt =
+                now;
+
+            this.mobileEyedropperPreviewColor =
+                this.getEyedropperColorAtWorld(
+                    points.target.x,
+                    points.target.y,
+                ) ??
+                this.mobileEyedropperPreviewColor;
+        }
+
+        /*
+         * This draw is deliberately cheap and always runs for every native
+         * pointermove, independently from preview-color sampling.
+         */
+        this.drawMobileEyedropperGuide(
+            points.target,
+            points.grip,
+            this.mobileEyedropperPreviewColor,
+        );
+
+        return points.target;
+    }
+
+    private stopMobileNativeEyedropperDrag(): void {
+        if (
+            this.mobileNativeEyedropperMoveHandler
+        ) {
+            window.removeEventListener(
+                'pointermove',
+                this.mobileNativeEyedropperMoveHandler,
+                true,
+            );
+
+            this.mobileNativeEyedropperMoveHandler =
+                undefined;
+        }
+
+        if (
+            this.mobileNativeEyedropperEndHandler
+        ) {
+            window.removeEventListener(
+                'pointerup',
+                this.mobileNativeEyedropperEndHandler,
+                true,
+            );
+            window.removeEventListener(
+                'pointercancel',
+                this.mobileNativeEyedropperEndHandler,
+                true,
+            );
+
+            this.mobileNativeEyedropperEndHandler =
+                undefined;
+        }
+
+        this.mobileNativeEyedropperPointerId =
+            -1;
+    }
+
+    private startMobileNativeEyedropperDrag(
+        pointer: Phaser.Input.Pointer,
+    ): void {
+        this.stopMobileNativeEyedropperDrag();
+
+        const nativeEvent =
+            pointer.event;
+
+        if (
+            !(nativeEvent instanceof PointerEvent)
+        ) {
+            /*
+             * Older iOS/WebViews still fall back to Phaser input handling.
+             */
+            return;
+        }
+
+        this.mobileNativeEyedropperPointerId =
+            nativeEvent.pointerId;
+
+        this.mobileNativeEyedropperMoveHandler =
+            (
+                event:
+                    PointerEvent,
+            ): void => {
+                if (
+                    event.pointerId !==
+                        this.mobileNativeEyedropperPointerId ||
+                    !this.eyedropperArmed ||
+                    this.phase !== 'paint'
+                ) {
+                    return;
+                }
+
+                /*
+                 * Prevent browser pan/zoom ownership from taking over after
+                 * the first touch. The Color Hunt paint camera handles pinch
+                 * separately when two real touches are present.
+                 */
+                if (event.cancelable) {
+                    event.preventDefault();
+                }
+
+                this.updateMobileNativeEyedropperDrag(
+                    event.clientX,
+                    event.clientY,
+                );
+            };
+
+        this.mobileNativeEyedropperEndHandler =
+            (
+                event:
+                    PointerEvent,
+            ): void => {
+                if (
+                    event.pointerId !==
+                        this.mobileNativeEyedropperPointerId
+                ) {
+                    return;
+                }
+
+                const target =
+                    this.updateMobileNativeEyedropperDrag(
+                        event.clientX,
+                        event.clientY,
+                        true,
+                    );
+
+                if (
+                    target &&
+                    this.eyedropperArmed
+                ) {
+                    /*
+                     * Exact final sample. Preview can be throttled; committed
+                     * color cannot.
+                     */
+                    this.pickColorFromBackground(
+                        target.x,
+                        target.y,
+                    );
+
+                    this.mobileLastBrushTargetWorld =
+                        target.clone();
+
+                    this.eyedropperPointerId =
+                        -1;
+
+                    this.updateEyedropperButtonUi();
+                    this.hideMobilePaintPrecisionGuide();
+                    this.showMobileIdleEyedropperGuide();
+
+                    this.isPainting = false;
+                    this.finishActivePaintStroke();
+                }
+
+                this.releaseMobilePaintPointer();
+                this.stopMobileNativeEyedropperDrag();
+            };
+
+        window.addEventListener(
+            'pointermove',
+            this.mobileNativeEyedropperMoveHandler,
+            {
+                capture: true,
+                passive: false,
+            },
+        );
+
+        window.addEventListener(
+            'pointerup',
+            this.mobileNativeEyedropperEndHandler,
+            true,
+        );
+
+        window.addEventListener(
+            'pointercancel',
+            this.mobileNativeEyedropperEndHandler,
+            true,
+        );
+
+        /*
+         * Draw immediately from the actual native coordinates so the first
+         * frame and all drag frames use the same coordinate source.
+         */
+        this.updateMobileNativeEyedropperDrag(
+            nativeEvent.clientX,
+            nativeEvent.clientY,
+            true,
+        );
     }
 
     private updateEyedropperMagnifier(
