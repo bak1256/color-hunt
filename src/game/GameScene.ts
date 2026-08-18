@@ -3196,6 +3196,10 @@ export class GameScene extends Phaser.Scene {
     private redoPaintButton?: Phaser.GameObjects.Text;
     private mobilePaintPrecisionRing?: Phaser.GameObjects.Arc;
     private mobilePaintPrecisionCrosshair?: Phaser.GameObjects.Graphics;
+    private mobilePaintPrecisionHandle?: Phaser.GameObjects.Graphics;
+    private mobilePaintHoldDotEvent?: Phaser.Time.TimerEvent;
+    private mobilePaintLineModeEvent?: Phaser.Time.TimerEvent;
+    private mobilePaintDotCommitted = false;
     private spectatorButton?: Phaser.GameObjects.Text;
     private spectatorStatusText?: Phaser.GameObjects.Text;
     private spectatorSessionId = '';
@@ -23912,7 +23916,8 @@ export class GameScene extends Phaser.Scene {
     private ensureMobilePaintPrecisionGuide(): void {
         if (
             this.mobilePaintPrecisionRing &&
-            this.mobilePaintPrecisionCrosshair
+            this.mobilePaintPrecisionCrosshair &&
+            this.mobilePaintPrecisionHandle
         ) {
             return;
         }
@@ -23937,6 +23942,11 @@ export class GameScene extends Phaser.Scene {
             this.add.graphics()
                 .setDepth(6501)
                 .setVisible(false);
+
+        this.mobilePaintPrecisionHandle =
+            this.add.graphics()
+                .setDepth(6502)
+                .setVisible(false);
     }
 
     private updateMobilePaintPrecisionGuide(
@@ -23956,6 +23966,27 @@ export class GameScene extends Phaser.Scene {
                 pointer,
             );
 
+        const fingerWorld =
+            this.getPointerWorldPoint(
+                pointer,
+            );
+
+        const zoom =
+            Math.max(
+                0.01,
+                this.cameras.main.zoom,
+            );
+
+        const accent =
+            this.straightLineModeActive
+                ? 0xf59e0b
+                : 0x172027;
+
+        /*
+         * The translucent paintPreview is the exact stamp footprint.
+         * This ring + stem is the 'brush handle': users can always see why
+         * the paint lands above their fingertip instead of guessing.
+         */
         this.mobilePaintPrecisionRing
             ?.setPosition(
                 target.x,
@@ -23963,34 +23994,65 @@ export class GameScene extends Phaser.Scene {
             )
             .setRadius(
                 Math.max(
-                    12,
-                    this.brushSize * 2.4,
+                    12 / zoom,
+                    this.getPaintPreviewBrushSize(),
                 ),
+            )
+            .setStrokeStyle(
+                this.straightLineModeActive
+                    ? 4 / zoom
+                    : 2.5 / zoom,
+                accent,
+                0.92,
             )
             .setVisible(true);
 
         this.mobilePaintPrecisionCrosshair
             ?.clear()
             .lineStyle(
-                2 /
-                    Math.max(
-                        0.01,
-                        this.cameras.main.zoom,
-                    ),
-                0x172027,
+                2 / zoom,
+                accent,
                 0.9,
             )
             .lineBetween(
-                target.x - 10,
+                target.x - 10 / zoom,
                 target.y,
-                target.x + 10,
+                target.x + 10 / zoom,
                 target.y,
             )
             .lineBetween(
                 target.x,
-                target.y - 10,
+                target.y - 10 / zoom,
                 target.x,
-                target.y + 10,
+                target.y + 10 / zoom,
+            )
+            .setVisible(true);
+
+        this.mobilePaintPrecisionHandle
+            ?.clear()
+            .lineStyle(
+                this.straightLineModeActive
+                    ? 7 / zoom
+                    : 5 / zoom,
+                accent,
+                0.78,
+            )
+            .lineBetween(
+                target.x,
+                target.y,
+                fingerWorld.x,
+                fingerWorld.y,
+            )
+            .fillStyle(
+                accent,
+                0.88,
+            )
+            .fillCircle(
+                fingerWorld.x,
+                fingerWorld.y,
+                this.straightLineModeActive
+                    ? 8 / zoom
+                    : 6 / zoom,
             )
             .setVisible(true);
     }
@@ -24000,6 +24062,10 @@ export class GameScene extends Phaser.Scene {
             ?.setVisible(false);
 
         this.mobilePaintPrecisionCrosshair
+            ?.clear()
+            .setVisible(false);
+
+        this.mobilePaintPrecisionHandle
             ?.clear()
             .setVisible(false);
     }
@@ -24036,6 +24102,8 @@ export class GameScene extends Phaser.Scene {
     private clearMobilePendingPaint(
         hidePreview = true,
     ): void {
+        this.cancelMobilePaintHoldTimers();
+
         this.mobilePendingPaintPointerId =
             -1;
 
@@ -24044,6 +24112,9 @@ export class GameScene extends Phaser.Scene {
 
         this.mobilePendingPaintStartWorld =
             undefined;
+
+        this.mobilePaintDotCommitted =
+            false;
 
         if (hidePreview) {
             this.paintPreview
@@ -24088,7 +24159,20 @@ export class GameScene extends Phaser.Scene {
 
             this.mobilePaintCapturedNativePointerId =
                 nativePointerId;
+
+            /*
+             * While one finger owns a paint stroke, the DOM paint dock must
+             * become transparent to pointer hit-testing. This is a fallback
+             * for WebViews/Safari builds where setPointerCapture is flaky:
+             * crossing over the palette can no longer cut the stroke.
+             */
+            this.mobilePaintDock?.classList.add(
+                'colorhunt-paint-dock--paint-pass-through',
+            );
         } catch {
+            this.mobilePaintDock?.classList.add(
+                'colorhunt-paint-dock--paint-pass-through',
+            );
             /*
              * Pointer capture can be unavailable in a few embedded WebViews.
              * Painting still falls back to the previous behavior there.
@@ -24142,65 +24226,31 @@ export class GameScene extends Phaser.Scene {
             this.mobilePaintCapturedNativePointerId =
                 -1;
         }
+
+        this.mobilePaintDock?.classList.remove(
+            'colorhunt-paint-dock--paint-pass-through',
+        );
     }
 
-    private beginMobilePaintAfterDrag(
-        pointer: Phaser.Input.Pointer,
-    ): boolean {
+    private cancelMobilePaintHoldTimers(): void {
+        this.mobilePaintHoldDotEvent?.remove(false);
+        this.mobilePaintLineModeEvent?.remove(false);
+        this.mobilePaintHoldDotEvent = undefined;
+        this.mobilePaintLineModeEvent = undefined;
+    }
+
+    private commitMobilePendingDot(): boolean {
         if (
             this.mobilePendingPaintPointerId < 0 ||
-            pointer.id !==
-                this.mobilePendingPaintPointerId ||
-            !this.mobilePendingPaintStartScreen ||
             !this.mobilePendingPaintStartWorld ||
-            !pointer.isDown ||
             this.phase !== 'paint' ||
-            (
-                !this.isMultiplayerSession() &&
-                this.practiceMode !==
-                    'hider'
-            )
+            this.mobilePaintDotCommitted
         ) {
-            return false;
-        }
-
-        const movedScreenPixels =
-            Phaser.Math.Distance.Between(
-                this.mobilePendingPaintStartScreen.x,
-                this.mobilePendingPaintStartScreen.y,
-                pointer.x,
-                pointer.y,
-            );
-
-        /*
-         * A pure tap is preview-only.
-         * The first real movement (>= 1 screen pixel) commits painting.
-         */
-        if (movedScreenPixels < 1) {
-            this.showMobilePendingPaintPreview(
-                pointer,
-            );
-            return true;
+            return this.mobilePaintDotCommitted;
         }
 
         const startTarget =
             this.mobilePendingPaintStartWorld.clone();
-
-        const currentTarget =
-            this.getPaintInputWorldPoint(
-                pointer,
-            );
-
-        this.paintPreview
-            .setAlpha(1)
-            .setPosition(
-                this.getPaintPreviewWorldPoint(
-                    pointer,
-                ).x,
-                this.getPaintPreviewWorldPoint(
-                    pointer,
-                ).y,
-            );
 
         const startPoint =
             this.networkPlayerManager
@@ -24214,10 +24264,7 @@ export class GameScene extends Phaser.Scene {
                 );
 
         if (!startPoint) {
-            this.clearMobilePendingPaint(
-                false,
-            );
-            return true;
+            return false;
         }
 
         this.playPaintSound();
@@ -24225,30 +24272,137 @@ export class GameScene extends Phaser.Scene {
         this.activeStrokeTargetSessionId =
             this.networkPlayerManager
                 .getLocalSessionId() ?? '';
-
-        this.activeStrokePoints = [
-            startPoint,
-        ];
-
-        this.currentStrokeHistoryPoints = [
-            startPoint,
-        ];
-
+        this.activeStrokePoints = [startPoint];
+        this.currentStrokeHistoryPoints = [startPoint];
         this.straightLineStart = {
             x: startPoint.x,
             y: startPoint.y,
         };
-
         this.straightLineStartWorld =
             startTarget.clone();
+        this.mobilePaintDotCommitted = true;
 
-        this.straightLineModeActive =
-            false;
+        if (this.practiceMode === 'hider') {
+            this.markPracticeHiderPaintStarted();
+        }
+
+        return true;
+    }
+
+    private scheduleMobilePaintHoldModes(
+        pointer: Phaser.Input.Pointer,
+    ): void {
+        this.cancelMobilePaintHoldTimers();
+        this.mobilePaintDotCommitted = false;
+
+        /* Short hold = one precise dot, even with a perfectly still finger. */
+        this.mobilePaintHoldDotEvent =
+            this.time.delayedCall(
+                120,
+                () => {
+                    if (
+                        pointer.id !== this.mobilePendingPaintPointerId ||
+                        !pointer.isDown
+                    ) {
+                        return;
+                    }
+                    this.commitMobilePendingDot();
+                    this.showMobilePendingPaintPreview(pointer);
+                },
+            );
 
         /*
-         * Immediately continue from the preview point to the first moved
-         * point, so enabling the 1px threshold does not create a gap.
+         * Longer hold arms straight-line mode. The orange handle/ring is the
+         * tactile visual acknowledgement; from here dragging aims a line and
+         * release commits it.
          */
+        this.mobilePaintLineModeEvent =
+            this.time.delayedCall(
+                520,
+                () => {
+                    if (
+                        pointer.id !== this.mobilePendingPaintPointerId ||
+                        !pointer.isDown ||
+                        !this.mobilePendingPaintStartScreen
+                    ) {
+                        return;
+                    }
+
+                    const moved =
+                        Phaser.Math.Distance.Between(
+                            this.mobilePendingPaintStartScreen.x,
+                            this.mobilePendingPaintStartScreen.y,
+                            pointer.x,
+                            pointer.y,
+                        );
+
+                    if (moved > 8) {
+                        return;
+                    }
+
+                    if (!this.commitMobilePendingDot()) {
+                        return;
+                    }
+
+                    this.straightLineModeActive = true;
+                    this.mobilePendingPaintPointerId = -1;
+                    this.mobilePaintHoldDotEvent?.remove(false);
+                    this.mobilePaintHoldDotEvent = undefined;
+                    this.mobilePaintLineModeEvent = undefined;
+                    this.updateMobilePaintPrecisionGuide(pointer);
+                    this.updateStraightLinePreview(pointer);
+                },
+            );
+    }
+
+    private beginMobilePaintAfterDrag(
+        pointer: Phaser.Input.Pointer,
+    ): boolean {
+        if (
+            this.mobilePendingPaintPointerId < 0 ||
+            pointer.id !== this.mobilePendingPaintPointerId ||
+            !this.mobilePendingPaintStartScreen ||
+            !this.mobilePendingPaintStartWorld ||
+            !pointer.isDown ||
+            this.phase !== 'paint' ||
+            (
+                !this.isMultiplayerSession() &&
+                this.practiceMode !== 'hider'
+            )
+        ) {
+            return false;
+        }
+
+        const movedScreenPixels =
+            Phaser.Math.Distance.Between(
+                this.mobilePendingPaintStartScreen.x,
+                this.mobilePendingPaintStartScreen.y,
+                pointer.x,
+                pointer.y,
+            );
+
+        /* Ignore normal finger tremor. A still/near-still hold becomes a dot. */
+        if (movedScreenPixels < 6) {
+            this.showMobilePendingPaintPreview(pointer);
+            return true;
+        }
+
+        /* Deliberate movement before the long-hold threshold = freehand. */
+        this.mobilePaintLineModeEvent?.remove(false);
+        this.mobilePaintLineModeEvent = undefined;
+        this.mobilePaintHoldDotEvent?.remove(false);
+        this.mobilePaintHoldDotEvent = undefined;
+
+        const currentTarget =
+            this.getPaintInputWorldPoint(pointer);
+
+        if (!this.mobilePaintDotCommitted) {
+            if (!this.commitMobilePendingDot()) {
+                this.clearMobilePendingPaint(false);
+                return true;
+            }
+        }
+
         const currentPoint =
             this.networkPlayerManager
                 .paintLocalPlayer(
@@ -24261,19 +24415,22 @@ export class GameScene extends Phaser.Scene {
                 );
 
         if (currentPoint) {
-            this.interpolateActivePaintStroke(
-                currentPoint,
-            );
+            this.interpolateActivePaintStroke(currentPoint);
         }
 
-        this.clearMobilePendingPaint(
-            false,
-        );
+        this.mobilePendingPaintPointerId = -1;
+        this.mobilePendingPaintStartScreen = undefined;
+        this.mobilePendingPaintStartWorld = undefined;
+        this.mobilePaintDotCommitted = false;
 
-        this.updateMobilePaintPrecisionGuide(
-            pointer,
-        );
+        this.paintPreview
+            .setAlpha(1)
+            .setPosition(
+                this.getPaintPreviewWorldPoint(pointer).x,
+                this.getPaintPreviewWorldPoint(pointer).y,
+            );
 
+        this.updateMobilePaintPrecisionGuide(pointer);
         return true;
     }
 
@@ -24655,7 +24812,12 @@ export class GameScene extends Phaser.Scene {
                         this.mobilePendingPaintStartWorld =
                             paintTarget.clone();
 
+                
                         this.showMobilePendingPaintPreview(
+                            pointer,
+                        );
+
+                        this.scheduleMobilePaintHoldModes(
                             pointer,
                         );
 
@@ -24976,11 +25138,20 @@ export class GameScene extends Phaser.Scene {
                         this.mobilePendingPaintPointerId
                 ) {
                     /*
-                     * Finger lifted before crossing the 1px threshold:
-                     * preview disappears and absolutely no paint is applied.
+                     * A quick tap stays preview-only. A short hold has already
+                     * committed exactly one dot, so finish that stroke here.
                      */
+                    const committedDot =
+                        this.mobilePaintDotCommitted &&
+                        this.isPainting;
+
                     this.clearMobilePendingPaint();
                     this.isPainting = false;
+
+                    if (committedDot) {
+                        this.finishActivePaintStroke();
+                    }
+
                     return;
                 }
 
@@ -25065,8 +25236,14 @@ export class GameScene extends Phaser.Scene {
                     pointer.id ===
                         this.mobilePendingPaintPointerId
                 ) {
+                    const committedDot =
+                        this.mobilePaintDotCommitted &&
+                        this.isPainting;
                     this.clearMobilePendingPaint();
                     this.isPainting = false;
+                    if (committedDot) {
+                        this.finishActivePaintStroke();
+                    }
                     return;
                 }
 
@@ -26778,16 +26955,46 @@ export class GameScene extends Phaser.Scene {
         }
 
         const pointer = this.input.activePointer;
+        let previewPoint: Phaser.Math.Vector2;
 
-        const previewPoint =
-            this.mobileControlsEnabled
-                ? this.getPaintPreviewWorldPoint(
-                    pointer,
+        if (
+            this.mobileControlsEnabled &&
+            !pointer.isDown &&
+            this.mobilePendingPaintPointerId < 0 &&
+            !this.isPainting
+        ) {
+            const container =
+                this.networkPlayerManager
+                    ?.getLocalPlayerContainer?.();
+
+            const visualScale =
+                container
+                    ? Math.max(
+                        Math.abs(container.scaleX || 1),
+                        Math.abs(container.scaleY || 1),
+                    )
+                    : 1;
+
+            /*
+             * Persistent idle swatch on the upper torso. Changing shape or
+             * size never makes the preview disappear, so the next stroke's
+             * true footprint is always visible.
+             */
+            previewPoint = container
+                ? new Phaser.Math.Vector2(
+                    container.x,
+                    container.y - 18 * visualScale,
                 )
-                : new Phaser.Math.Vector2(
-                    pointer.worldX,
-                    pointer.worldY,
-                );
+                : this.getPaintPreviewWorldPoint(pointer);
+        } else {
+            previewPoint =
+                this.mobileControlsEnabled
+                    ? this.getPaintPreviewWorldPoint(pointer)
+                    : new Phaser.Math.Vector2(
+                        pointer.worldX,
+                        pointer.worldY,
+                    );
+        }
 
         this.paintPreview.setPosition(
             previewPoint.x,
@@ -26795,7 +27002,13 @@ export class GameScene extends Phaser.Scene {
         );
 
         this.redrawPaintPreview();
-        this.paintPreview.setVisible(true);
+        this.paintPreview
+            .setAlpha(
+                this.mobileControlsEnabled
+                    ? 0.72
+                    : 1,
+            )
+            .setVisible(true);
     }
 
     private updateBrushSizeInput(): void {

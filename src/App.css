@@ -139,3 +139,9 @@ html.colorhunt-mobile .game-container {
   margin: 0;
   padding: 0;
 }
+
+
+/* v0.10.10.192: active mobile paint strokes must never be stolen by the DOM palette. */
+.colorhunt-paint-dock--paint-pass-through {
+  pointer-events: none !important;
+}
