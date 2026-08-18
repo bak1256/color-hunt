@@ -24169,50 +24169,10 @@ export class GameScene extends Phaser.Scene {
                 this.updateEyedropperButtonUi();
                 this.hideEyedropperMagnifier();
 
-                /*
-                 * v0.10.10.238.7 DESKTOP EYEDROPPER DISCOVERY
-                 *
-                 * Some desktop players naturally discover the visible
-                 * eyedropper button but never realize that right-click is the
-                 * quick shortcut. Teach it only three times per browser so it
-                 * helps beginners without becoming repetitive.
-                 */
-                const rightClickTipStorageKey =
-                    'colorhunt-eyedropper-rightclick-tip-count';
+                const showedRightClickTip =
+                    this.showDesktopEyedropperRightClickTip();
 
-                const previousTipCount =
-                    Math.max(
-                        0,
-                        Number.parseInt(
-                            localStorage.getItem(
-                                rightClickTipStorageKey,
-                            ) ?? '0',
-                            10,
-                        ) || 0,
-                    );
-
-                if (previousTipCount < 3) {
-                    const tip =
-                        (
-                            {
-                                ko: '💡 스포이드는 우클릭으로도 바로 사용할 수 있어요!',
-                                ja: '💡 スポイトは右クリックでもすぐ使えます！',
-                                en: '💡 You can also use the eyedropper instantly with right-click!',
-                                zh: '💡 吸管工具也可以直接用鼠标右键使用！',
-                            } as const
-                        )[getLanguage()];
-
-                    this.showStatus(
-                        tip,
-                    );
-
-                    localStorage.setItem(
-                        rightClickTipStorageKey,
-                        String(
-                            previousTipCount + 1,
-                        ),
-                    );
-                } else {
+                if (!showedRightClickTip) {
                     this.showStatus(
                         tr('스포이드: 배경에서 원하는 색을 클릭하세요'),
                     );
@@ -25662,6 +25622,116 @@ export class GameScene extends Phaser.Scene {
                     );
             },
         );
+    }
+
+    private showDesktopEyedropperRightClickTip(): boolean {
+        if (this.mobileControlsEnabled) {
+            return false;
+        }
+
+        const storageKey =
+            'colorhunt-eyedropper-rightclick-tip-count';
+
+        const shownCount =
+            Math.max(
+                0,
+                Number.parseInt(
+                    localStorage.getItem(
+                        storageKey,
+                    ) ?? '0',
+                    10,
+                ) || 0,
+            );
+
+        if (shownCount >= 3) {
+            return false;
+        }
+
+        /*
+         * v0.10.10.238.8
+         * Do NOT use showStatus() for this tutorial.
+         * Paint-phase status is frequently refreshed/cleared by other HUD
+         * updates, so the previous v238.7 message could disappear within the
+         * same frame and look as if it never appeared.
+         *
+         * Use a dedicated fixed DOM toast that is independent from Phaser HUD.
+         */
+        document
+            .querySelector(
+                '.colorhunt-desktop-eyedropper-tip',
+            )
+            ?.remove();
+
+        const toast =
+            document.createElement(
+                'div',
+            );
+
+        toast.className =
+            'colorhunt-desktop-eyedropper-tip';
+
+        toast.textContent =
+            (
+                {
+                    ko: '💡 스포이드는 우클릭으로도 바로 사용할 수 있어요!',
+                    ja: '💡 スポイトは右クリックでもすぐ使えます！',
+                    en: '💡 You can also use the eyedropper instantly with right-click!',
+                    zh: '💡 吸管工具也可以直接用鼠标右键使用！',
+                } as const
+            )[getLanguage()];
+
+        Object.assign(
+            toast.style,
+            {
+                position: 'fixed',
+                left: '50%',
+                top: '18%',
+                transform:
+                    'translateX(-50%)',
+                zIndex: '10040',
+                maxWidth:
+                    'min(620px, calc(100vw - 40px))',
+                boxSizing: 'border-box',
+                padding: '11px 18px',
+                border:
+                    '2px solid rgba(111,143,101,.96)',
+                borderRadius: '13px',
+                background:
+                    'rgba(255,249,230,.97)',
+                color: '#284333',
+                boxShadow:
+                    '0 8px 24px rgba(25,48,32,.25)',
+                fontFamily:
+                    'Arial, sans-serif',
+                fontSize:
+                    'clamp(14px, 1.6vw, 18px)',
+                lineHeight: '1.35',
+                fontWeight: '900',
+                textAlign: 'center',
+                pointerEvents: 'none',
+                whiteSpace: 'normal',
+            },
+        );
+
+        document.body.appendChild(
+            toast,
+        );
+
+        localStorage.setItem(
+            storageKey,
+            String(
+                shownCount + 1,
+            ),
+        );
+
+        window.setTimeout(
+            () => {
+                toast.remove();
+            },
+            2600,
+        );
+
+        return true;
     }
 
     private createPaintTools(): void {
