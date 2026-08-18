@@ -3205,6 +3205,7 @@ export class GameScene extends Phaser.Scene {
     private roomListObjects: Phaser.GameObjects.GameObject[] = [];
     private roomListRenderSerial = 0;
     private roomListRefreshEvent?: Phaser.Time.TimerEvent;
+    private roomListVisibilityRefreshBound = false;
     private hunterBlindPanel!: Phaser.GameObjects.Rectangle;
     private hunterBlindText!: Phaser.GameObjects.Text;
     private countdownPanel!: Phaser.GameObjects.Rectangle;
@@ -12873,6 +12874,28 @@ export class GameScene extends Phaser.Scene {
 
     private startRoomListAutoRefresh(): void {
         this.roomListRefreshEvent?.remove();
+
+        /*
+         * Refresh immediately when the browser/app returns to the foreground.
+         * This prevents a stale room count from lingering after tab switching,
+         * screen lock, or mobile home/app switching.
+         */
+        if (!this.roomListVisibilityRefreshBound) {
+            this.roomListVisibilityRefreshBound = true;
+            const refreshWhenVisible = () => {
+                if (
+                    document.visibilityState === 'visible' &&
+                    !multiplayerClient.isConnected() &&
+                    !this.roomTransitionInProgress &&
+                    this.mainLobbyRoomList
+                ) {
+                    void this.refreshPublicRoomList(false);
+                }
+            };
+            document.addEventListener('visibilitychange', refreshWhenVisible);
+            window.addEventListener('focus', refreshWhenVisible);
+            window.addEventListener('pageshow', refreshWhenVisible);
+        }
         this.roomListRefreshEvent =
             this.time.addEvent({
                 delay: 3000,
@@ -16672,7 +16695,36 @@ export class GameScene extends Phaser.Scene {
                             </span>
 
                             <span class="ch-lobby-room-count">
-                                ${room.clients} / ${room.maxClients}
+                                ${(() => {
+                                    /*
+                                     * v0.10.10.223:
+                                     * Colyseus room.clients can briefly include a stale socket while
+                                     * background reconnect handoff is in progress. When the room API
+                                     * exposes authoritative playerCount metadata, prefer it so the
+                                     * public lobby reflects actual players instead of transport sockets.
+                                     */
+                                    const metadataCount = Number(
+                                        room.metadata?.playerCount,
+                                    );
+                                    const transportCount = Number(
+                                        room.clients,
+                                    );
+                                    const maxClients = Math.max(
+                                        0,
+                                        Number(room.maxClients) || 0,
+                                    );
+                                    const actualCount = Number.isFinite(metadataCount)
+                                        ? metadataCount
+                                        : transportCount;
+
+                                    return Math.max(
+                                        0,
+                                        Math.min(
+                                            maxClients || actualCount,
+                                            Math.floor(actualCount),
+                                        ),
+                                    );
+                                })()} / ${room.maxClients}
                             </span>
 
                             <span class="ch-lobby-room-status ${
