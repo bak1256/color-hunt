@@ -3296,6 +3296,7 @@ export class GameScene extends Phaser.Scene {
     private eyedropperPointerId = -1;
     private eyedropperMagnifier?: Phaser.GameObjects.Image;
     private eyedropperMagnifierSwatch?: Phaser.GameObjects.Rectangle;
+    private eyedropperToolGuide?: Phaser.GameObjects.Graphics;
     private readonly eyedropperMagnifierTextureKey =
         'eyedropper-mobile-magnifier';
     private lobbyInfoCard!: Phaser.GameObjects.Rectangle;
@@ -9962,6 +9963,10 @@ export class GameScene extends Phaser.Scene {
         this.practiceMode =
             'hunter';
 
+        /* Remove any lobby/avatar preview player before Practice renders. */
+        this.networkPlayerManager.clearAllPlayers();
+        this.lobbyAvatarPresetsBySession.clear();
+
         this.destroyMainLobbyDom();
         this.clearMainMenuObjects();
         this.hideChatUi(
@@ -10055,9 +10060,49 @@ export class GameScene extends Phaser.Scene {
 
         this.createPracticeExitButton();
 
-        this.showStatus(
+        this.showPracticeStartBanner(
             tr('연습 시작! 위장한 봇을 모두 찾아보세요.'),
         );
+    }
+
+    private showPracticeStartBanner(
+        message: string,
+    ): void {
+        const banner = this.add.text(
+            0,
+            0,
+            message,
+            {
+                fontFamily: 'Arial, sans-serif',
+                fontSize: '26px',
+                fontStyle: 'bold',
+                color: '#ffffff',
+                backgroundColor: 'rgba(5, 12, 18, 0.96)',
+                stroke: '#65d66d',
+                strokeThickness: 4,
+                padding: { x: 18, y: 12 },
+                align: 'center',
+            },
+        )
+            .setOrigin(0.5)
+            .setScrollFactor(0)
+            .setDepth(20000)
+            .setResolution(2);
+
+        this.setFixedHudScreenPosition(
+            banner,
+            this.gameWidth / 2,
+            Math.max(90, this.gameHeight * 0.26),
+        );
+
+        this.tweens.add({
+            targets: banner,
+            alpha: 0,
+            delay: 1050,
+            duration: 350,
+            ease: 'Linear',
+            onComplete: () => banner.destroy(),
+        });
     }
 
     private markPracticeHiderPaintStarted(): void {
@@ -11231,6 +11276,11 @@ export class GameScene extends Phaser.Scene {
         this.practiceMode =
             'hider';
 
+        /* Practice starts from a clean renderer; lobby-customized avatars must
+         * never remain as a ghost character over the practice background. */
+        this.networkPlayerManager.clearAllPlayers();
+        this.lobbyAvatarPresetsBySession.clear();
+
         this.destroyMainLobbyDom();
         this.clearMainMenuObjects();
         this.hideChatUi(
@@ -11357,6 +11407,10 @@ export class GameScene extends Phaser.Scene {
 
         this.createPracticeExitButton();
         this.createPracticeHiderRecordBar();
+
+        this.showPracticeStartBanner(
+            tr('연습 시작! 자유롭게 색칠해보세요.'),
+        );
 
         this.showStatus(
             tr('자유 연습 · 본게임과 같은 이동·색칠·확대·스포이드 조작을 연습해보세요.'),
@@ -24018,17 +24072,17 @@ export class GameScene extends Phaser.Scene {
          * This ring + stem is the 'brush handle': users can always see why
          * the paint lands above their fingertip instead of guessing.
          */
+        const guideSize = Math.max(
+            12 / zoom,
+            this.getPaintPreviewBrushSize(),
+        );
+
         this.mobilePaintPrecisionRing
             ?.setPosition(
                 target.x,
                 target.y,
             )
-            .setRadius(
-                Math.max(
-                    12 / zoom,
-                    this.getPaintPreviewBrushSize(),
-                ),
-            )
+            .setRadius(guideSize)
             .setStrokeStyle(
                 this.straightLineModeActive
                     ? 4 / zoom
@@ -24036,7 +24090,9 @@ export class GameScene extends Phaser.Scene {
                 accent,
                 0.92,
             )
-            .setVisible(true);
+            .setVisible(
+                this.brushShape !== 'square',
+            );
 
         this.mobilePaintPrecisionCrosshair
             ?.clear()
@@ -24044,20 +24100,34 @@ export class GameScene extends Phaser.Scene {
                 2 / zoom,
                 accent,
                 0.9,
-            )
-            .lineBetween(
-                target.x - 10 / zoom,
-                target.y,
-                target.x + 10 / zoom,
-                target.y,
-            )
-            .lineBetween(
-                target.x,
-                target.y - 10 / zoom,
-                target.x,
-                target.y + 10 / zoom,
-            )
-            .setVisible(true);
+            );
+
+        if (this.brushShape === 'square') {
+            this.mobilePaintPrecisionCrosshair
+                ?.strokeRect(
+                    target.x - guideSize,
+                    target.y - guideSize,
+                    guideSize * 2,
+                    guideSize * 2,
+                );
+        } else {
+            this.mobilePaintPrecisionCrosshair
+                ?.lineBetween(
+                    target.x - 10 / zoom,
+                    target.y,
+                    target.x + 10 / zoom,
+                    target.y,
+                )
+                .lineBetween(
+                    target.x,
+                    target.y - 10 / zoom,
+                    target.x,
+                    target.y + 10 / zoom,
+                );
+        }
+
+        this.mobilePaintPrecisionCrosshair
+            ?.setVisible(true);
 
         const dx = fingerWorld.x - target.x;
         const dy = fingerWorld.y - target.y;
@@ -24106,12 +24176,12 @@ export class GameScene extends Phaser.Scene {
             /* colored bristle tip */
             .fillStyle(this.paintColor, 0.98)
             .fillTriangle(
-                target.x - px * (7 / zoom),
-                target.y - py * (7 / zoom),
-                target.x + px * (7 / zoom),
-                target.y + py * (7 / zoom),
-                target.x + ux * (14 / zoom),
-                target.y + uy * (14 / zoom),
+                target.x,
+                target.y,
+                target.x + ux * (16 / zoom) - px * (7 / zoom),
+                target.y + uy * (16 / zoom) - py * (7 / zoom),
+                target.x + ux * (16 / zoom) + px * (7 / zoom),
+                target.y + uy * (16 / zoom) + py * (7 / zoom),
             )
             .fillStyle(0x172027, 0.96)
             .fillCircle(
@@ -24190,23 +24260,25 @@ export class GameScene extends Phaser.Scene {
             .setAlpha(0.68)
             .setVisible(true);
 
+        const idleGuideSize = Math.max(
+            13 / zoom,
+            this.getPaintPreviewBrushSize(),
+        );
+
         this.mobilePaintPrecisionRing
             ?.setPosition(
                 target.x,
                 target.y,
             )
-            .setRadius(
-                Math.max(
-                    13 / zoom,
-                    this.getPaintPreviewBrushSize(),
-                ),
-            )
+            .setRadius(idleGuideSize)
             .setStrokeStyle(
                 3 / zoom,
                 0x172027,
                 0.9,
             )
-            .setVisible(true);
+            .setVisible(
+                this.brushShape !== 'square',
+            );
 
         this.mobilePaintPrecisionCrosshair
             ?.clear()
@@ -24214,20 +24286,34 @@ export class GameScene extends Phaser.Scene {
                 2 / zoom,
                 0xffffff,
                 0.96,
-            )
-            .lineBetween(
-                target.x - 10 / zoom,
-                target.y,
-                target.x + 10 / zoom,
-                target.y,
-            )
-            .lineBetween(
-                target.x,
-                target.y - 10 / zoom,
-                target.x,
-                target.y + 10 / zoom,
-            )
-            .setVisible(true);
+            );
+
+        if (this.brushShape === 'square') {
+            this.mobilePaintPrecisionCrosshair
+                ?.strokeRect(
+                    target.x - idleGuideSize,
+                    target.y - idleGuideSize,
+                    idleGuideSize * 2,
+                    idleGuideSize * 2,
+                );
+        } else {
+            this.mobilePaintPrecisionCrosshair
+                ?.lineBetween(
+                    target.x - 10 / zoom,
+                    target.y,
+                    target.x + 10 / zoom,
+                    target.y,
+                )
+                .lineBetween(
+                    target.x,
+                    target.y - 10 / zoom,
+                    target.x,
+                    target.y + 10 / zoom,
+                );
+        }
+
+        this.mobilePaintPrecisionCrosshair
+            ?.setVisible(true);
 
         /*
          * A real brush silhouette: diagonal wooden shaft, silver ferrule,
@@ -24269,12 +24355,12 @@ export class GameScene extends Phaser.Scene {
             )
             .fillStyle(this.paintColor, 0.98)
             .fillTriangle(
-                target.x - px * (8 / zoom),
-                target.y - py * (8 / zoom),
-                target.x + px * (8 / zoom),
-                target.y + py * (8 / zoom),
-                target.x + ux * (16 / zoom),
-                target.y + uy * (16 / zoom),
+                target.x,
+                target.y,
+                target.x + ux * (18 / zoom) - px * (8 / zoom),
+                target.y + uy * (18 / zoom) - py * (8 / zoom),
+                target.x + ux * (18 / zoom) + px * (8 / zoom),
+                target.y + uy * (18 / zoom) + py * (8 / zoom),
             )
             .fillStyle(0x172027, 0.96)
             .fillCircle(grip.x, grip.y, 15 / zoom)
@@ -24609,6 +24695,12 @@ export class GameScene extends Phaser.Scene {
         this.straightLineStartWorld =
             startTarget.clone();
         this.mobilePaintDotCommitted = true;
+
+        try {
+            navigator.vibrate?.(16);
+        } catch {
+            // Tiny dot haptic is best-effort only.
+        }
 
         if (this.practiceMode === 'hider') {
             this.markPracticeHiderPaintStarted();
@@ -25290,6 +25382,22 @@ export class GameScene extends Phaser.Scene {
                     (
                         this.mobilePinchActive ||
                         activeMobilePaintTouches >= 2
+                    )
+                ) {
+                    return;
+                }
+
+                /*
+                 * A joystick/aim/fire finger is NEVER a brush finger. In v195
+                 * the precision guide updated before this ownership check, so
+                 * touching the movement stick could teleport the idle brush.
+                 */
+                if (
+                    this.mobileControlsEnabled &&
+                    (
+                        pointer.id === this.mobileMovePointerId ||
+                        pointer.id === this.mobileAimPointerId ||
+                        pointer.id === this.mobileFirePointerId
                     )
                 ) {
                     return;
@@ -26440,6 +26548,12 @@ export class GameScene extends Phaser.Scene {
                 .setDepth(9100)
                 .setVisible(false);
 
+        this.eyedropperToolGuide =
+            this.add.graphics()
+                .setScrollFactor(0)
+                .setDepth(9102)
+                .setVisible(false);
+
         this.eyedropperMagnifierSwatch =
             this.add.rectangle(
                 this.gameWidth / 2,
@@ -26467,6 +26581,10 @@ export class GameScene extends Phaser.Scene {
 
         this.eyedropperMagnifierSwatch
             ?.setVisible(false);
+
+        this.eyedropperToolGuide
+            ?.clear()
+            .setVisible(false);
     }
 
     private updateEyedropperMagnifier(
@@ -27098,9 +27216,39 @@ export class GameScene extends Phaser.Scene {
 
         this.setFixedHudScreenPosition(
             this.eyedropperMagnifierSwatch!,
-            screenX,
-            screenY + 62,
+            Phaser.Math.Clamp(screenX + 68, 30, this.gameWidth - 30),
+            screenY + 28,
         );
+
+        /*
+         * Mobile eyedropper silhouette: diagonal barrel + bulb + pointed tip.
+         * The sampled color swatch sits beside it so the player can verify the
+         * exact color before returning to the circle/square brush.
+         */
+        const pipette = this.eyedropperToolGuide;
+        if (pipette) {
+            const zoom = Math.max(0.01, this.cameras.main.zoom);
+            const px = pointer.worldX;
+            const py = pointer.worldY;
+            pipette
+                .clear()
+                .lineStyle(11 / zoom, 0x172027, 0.94)
+                .lineBetween(px + 10 / zoom, py - 10 / zoom, px + 58 / zoom, py - 58 / zoom)
+                .lineStyle(7 / zoom, 0xe8edf0, 1)
+                .lineBetween(px + 10 / zoom, py - 10 / zoom, px + 58 / zoom, py - 58 / zoom)
+                .fillStyle(candidateColor, 1)
+                .fillCircle(px + 61 / zoom, py - 61 / zoom, 9 / zoom)
+                .fillStyle(0x172027, 1)
+                .fillTriangle(
+                    px,
+                    py,
+                    px + 14 / zoom,
+                    py - 5 / zoom,
+                    px + 5 / zoom,
+                    py - 14 / zoom,
+                )
+                .setVisible(true);
+        }
 
         this.eyedropperMagnifier
             .setVisible(true);
@@ -27110,6 +27258,7 @@ export class GameScene extends Phaser.Scene {
                 candidateColor,
                 1,
             )
+            .setStrokeStyle(3, 0x172027, 0.95)
             .setVisible(true);
     }
 
