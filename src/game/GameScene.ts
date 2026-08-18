@@ -3331,6 +3331,10 @@ export class GameScene extends Phaser.Scene {
     private practiceBotCount = 3;
     private practiceBotPrecision = 65;
     private practiceExitButton?: HTMLButtonElement;
+    private practiceDesktopHint?: HTMLDivElement;
+    private practiceRevealConfirmButton?: HTMLButtonElement;
+    private practiceRevealMarkers: Phaser.GameObjects.GameObject[] = [];
+    private practiceRevealTweens: Phaser.Tweens.Tween[] = [];
     private readonly practiceBotTextureKeys =
         new Set<string>();
 
@@ -10050,11 +10054,49 @@ export class GameScene extends Phaser.Scene {
         );
     }
 
+    private clearPracticeRevealState(): void {
+        this.practiceRevealConfirmButton?.remove();
+        this.practiceRevealConfirmButton = undefined;
+
+        this.practiceRevealTweens.forEach((tween) => tween.stop());
+        this.practiceRevealTweens = [];
+
+        this.practiceRevealMarkers.forEach((object) => object.destroy());
+        this.practiceRevealMarkers = [];
+
+        this.networkPlayerManager.setNamesVisible(false);
+
+        /* Reveal mode uses a visible pointer for the DOM confirm button. */
+        this.input.setDefaultCursor('default');
+        this.game.canvas.style.cursor = '';
+    }
+
+    private destroyPracticeDesktopHint(): void {
+        this.practiceDesktopHint?.remove();
+        this.practiceDesktopHint = undefined;
+    }
+
+    private createPracticeDesktopHint(): void {
+        this.destroyPracticeDesktopHint();
+
+        if (this.mobileControlsEnabled || this.practiceMode !== 'hunter') {
+            return;
+        }
+
+        const hint = document.createElement('div');
+        hint.className = 'colorhunt-practice-desktop-hint';
+        hint.innerHTML = `<b>WASD</b> ${tr('이동')} <span>•</span> <b>${tr('좌클릭')}</b> ${tr('발사')}`;
+        document.body.appendChild(hint);
+        this.practiceDesktopHint = hint;
+    }
+
     private exitPracticeMode(
         reopenPractice =
             true,
     ): void {
         this.destroyPracticeHiderRecordBar();
+        this.clearPracticeRevealState();
+        this.destroyPracticeDesktopHint();
 
         this.networkPlayerManager
             .clearPracticePlayers();
@@ -10109,6 +10151,14 @@ export class GameScene extends Phaser.Scene {
         ) {
             return;
         }
+
+        /*
+         * A previous failed practice can leave reveal overlays/tweens alive
+         * if the scene is reopened through another UI path. Always scrub them
+         * before rebuilding bots so a new session can never start red.
+         */
+        this.clearPracticeRevealState();
+        this.destroyPracticeDesktopHint();
 
         this.practiceMode =
             'hunter';
@@ -10209,6 +10259,7 @@ export class GameScene extends Phaser.Scene {
         this.ensureGameplayCameraFollow();
 
         this.createPracticeExitButton();
+        this.createPracticeDesktopHint();
 
         this.showPracticeStartBanner(
             tr('연습 시작! 위장한 봇을 모두 찾아보세요.'),
@@ -11101,6 +11152,8 @@ export class GameScene extends Phaser.Scene {
 
         this.menuModalOverlay =
             overlay;
+        this.input.setDefaultCursor('default');
+        this.game.canvas.style.cursor = 'default';
         this.input.enabled =
             false;
 
@@ -31493,10 +31546,12 @@ ${shareUrl}`,
                 true,
             );
 
-        const revealMarkers:
-            Phaser.GameObjects.GameObject[] = [];
-        const revealTweens:
-            Phaser.Tweens.Tween[] = [];
+        this.clearPracticeRevealState();
+
+        /* The player must be able to see/click the confirm button on desktop. */
+        this.input.setDefaultCursor('default');
+        this.game.canvas.style.cursor = 'default';
+        this.destroyPracticeDesktopHint();
 
         this.hiders.forEach(
             (
@@ -31524,11 +31579,11 @@ ${shareUrl}`,
                             4998,
                         );
 
-                revealMarkers.push(
+                this.practiceRevealMarkers.push(
                     ring,
                 );
 
-                revealTweens.push(
+                this.practiceRevealTweens.push(
                     this.tweens.add({
                         targets: ring,
                         scale: 1.25,
@@ -31573,10 +31628,10 @@ ${shareUrl}`,
                         overlay.setDepth(
                             4997,
                         );
-                        revealMarkers.push(
+                        this.practiceRevealMarkers.push(
                             overlay,
                         );
-                        revealTweens.push(
+                        this.practiceRevealTweens.push(
                             this.tweens.add({
                                 targets: overlay,
                                 alpha: {
@@ -31620,7 +31675,7 @@ ${shareUrl}`,
                             4999,
                         );
 
-                revealMarkers.push(
+                this.practiceRevealMarkers.push(
                     label,
                 );
             },
@@ -31653,24 +31708,16 @@ ${shareUrl}`,
         document.body.appendChild(
             confirmButton,
         );
+        this.practiceRevealConfirmButton = confirmButton;
+
+        /* Force above Phaser canvas/HUD even on browsers with unusual stacks. */
+        confirmButton.style.pointerEvents = 'auto';
+        confirmButton.style.visibility = 'visible';
+        confirmButton.style.display = 'block';
 
         const finishReveal =
             (): void => {
-                confirmButton.remove();
-                revealTweens.forEach(
-                    (tween) => {
-                        tween.stop();
-                    },
-                );
-                revealMarkers.forEach(
-                    (object) => {
-                        object.destroy();
-                    },
-                );
-                this.networkPlayerManager
-                    .setNamesVisible(
-                        false,
-                    );
+                this.clearPracticeRevealState();
 
                 if (
                     this.practiceMode ===

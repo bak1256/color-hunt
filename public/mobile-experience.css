@@ -7043,3 +7043,45 @@ html.colorhunt-mobile .colorhunt-practice-reveal-confirm {
   border-radius: 14px;
   font-size: 16px;
 }
+
+/* ============================================================
+   v0.10.10.213 — Hunter practice desktop controls + reveal safety
+   ============================================================ */
+.colorhunt-practice-desktop-hint {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  z-index: 12040;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 42px;
+  padding: 8px 18px;
+  border: 2px solid rgba(244, 239, 217, .95);
+  border-radius: 14px;
+  background: rgba(18, 28, 24, .92);
+  color: #fff;
+  box-shadow: 0 4px 0 rgba(0,0,0,.34), 0 8px 20px rgba(0,0,0,.28);
+  font: 800 15px/1 Arial, sans-serif;
+  letter-spacing: .02em;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.colorhunt-practice-desktop-hint b {
+  color: #f6e59a;
+  font-size: 17px;
+}
+.colorhunt-practice-desktop-hint span {
+  opacity: .55;
+}
+html.colorhunt-mobile .colorhunt-practice-desktop-hint {
+  display: none !important;
+}
+
+.colorhunt-practice-reveal-confirm {
+  z-index: 2147482000 !important;
+  pointer-events: auto !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
