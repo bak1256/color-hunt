@@ -6965,3 +6965,45 @@ html.colorhunt-mobile .colorhunt-avatar-editor canvas {
   align-self: stretch !important;
   justify-self: stretch !important;
 }
+
+/* ============================================================
+   v0.10.10.211 — desktop uses native Practice scrollbar only
+   ============================================================ */
+/*
+ * The always-visible custom rail exists for touch devices because mobile
+ * browsers tend to auto-hide their native scrollbar. Desktop already has a
+ * stable native scrollbar, so showing both creates the doubled rail seen on
+ * PC. Keep the custom rail strictly touch/mobile-only and restore the native
+ * scrollbar for a fine pointer even if the browser window is narrow.
+ */
+@media (hover: hover) and (pointer: fine) {
+  .colorhunt-practice-scroll-affordance,
+  .colorhunt-practice-scroll-affordance:not(.is-scrollable) {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+
+  .colorhunt-practice-card {
+    scrollbar-width: thin !important;
+    scrollbar-color: #67966c #e4eadb !important;
+  }
+
+  .colorhunt-practice-card::-webkit-scrollbar {
+    display: block !important;
+    width: 9px !important;
+    height: 9px !important;
+  }
+
+  .colorhunt-practice-card::-webkit-scrollbar-track {
+    background: #e4eadb !important;
+    border-radius: 999px !important;
+  }
+
+  .colorhunt-practice-card::-webkit-scrollbar-thumb {
+    background: #67966c !important;
+    border-radius: 999px !important;
+    border: 2px solid #e4eadb !important;
+  }
+}
