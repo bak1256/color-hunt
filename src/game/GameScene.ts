@@ -6525,6 +6525,134 @@ export class GameScene extends Phaser.Scene {
             .setDepth(310);
     }
 
+    /*
+     * v0.10.10.231 HUNTER BACKGROUND RECOVERY
+     *
+     * A fresh reconnect can attach the replacement Room before its transferred
+     * role/player Schema has fully settled. The first phase replay may therefore
+     * enter Hunt while the local role is still unknown, producing the broken
+     * "lobby background + gun" hybrid screen.
+     *
+     * Rebuild the CURRENT phase again after the authoritative local player exists.
+     * This is intentionally idempotent and never creates a new connection.
+     */
+    private resyncGameplayAfterConnectionRecovery(
+        attempt = 0,
+    ): void {
+        const room =
+            multiplayerClient.getRoom();
+
+        if (!room) {
+            return;
+        }
+
+        this.multiplayerSessionActive = true;
+
+        this.networkPlayerManager
+            .syncPlayersFromCurrentRoom();
+
+        const localPlayer =
+            multiplayerClient.getLocalPlayer();
+
+        const localReady =
+            Boolean(localPlayer) &&
+            this.networkPlayerManager
+                .hasPlayer(room.sessionId);
+
+        if (!localReady) {
+            if (attempt < 20) {
+                this.time.delayedCall(
+                    attempt < 8 ? 80 : 180,
+                    () => {
+                        this.resyncGameplayAfterConnectionRecovery(
+                            attempt + 1,
+                        );
+                    },
+                );
+            }
+            return;
+        }
+
+        this.localNetworkPlayerReady = true;
+
+        const authoritativePhase =
+            multiplayerClient.getPhase();
+
+        const authoritativeEndsAt =
+            multiplayerClient.getPhaseEndsAt();
+
+        /*
+         * Re-enter even when phase === this.phase. The purpose is to rebuild
+         * role-dependent camera/UI/actors after a replacement sessionId.
+         */
+        this.applyNetworkPhase(
+            authoritativePhase,
+            authoritativeEndsAt,
+        );
+
+        this.networkPlayerManager
+            .syncPlayersFromCurrentRoom();
+
+        if (
+            authoritativePhase === 'hunt'
+        ) {
+            this.networkPlayerManager
+                .normalizeLocalPlayerForGameplay();
+
+            this.networkPlayerManager
+                .restoreAllPlayerVisibility();
+
+            this.networkPlayerManager
+                .setNamesVisible(false);
+
+            this.networkPlayerManager
+                .setHunterGunsVisible();
+
+            this.startGameplayCamera();
+        } else if (
+            authoritativePhase === 'paint'
+        ) {
+            this.networkPlayerManager
+                .showOnlyLocalPlayer();
+
+            this.centerPaintCameraOnLocalPlayer();
+        } else if (
+            authoritativePhase === 'lobby'
+        ) {
+            this.networkPlayerManager
+                .forceLobbyPositionsFromState();
+        }
+
+        this.hideLegacySinglePlayerActors();
+
+        multiplayerClient
+            .requestLobbySnapshot();
+        multiplayerClient
+            .requestPaintReadyState();
+        multiplayerClient
+            .requestRoundPaintState();
+
+        /*
+         * One more settle pass catches Schema transfer arriving just after the
+         * replacement Room joined, without touching the WebSocket lifecycle.
+         */
+        if (attempt === 0) {
+            this.time.delayedCall(
+                260,
+                () => {
+                    if (
+                        multiplayerClient.getRoom() ===
+                        room
+                    ) {
+                        this.resyncGameplayAfterConnectionRecovery(
+                            21,
+                        );
+                    }
+                },
+            );
+        }
+    }
+
     private registerMultiplayerEvents(): void {
         this.networkUnsubscribers.push(
             multiplayerClient.onChatMessage(
@@ -7479,98 +7607,28 @@ export class GameScene extends Phaser.Scene {
             multiplayerClient.onConnectionRecovered(
                 () => {
                     /*
-                     * v0.10.10.80:
-                     * Fresh fallback reconnect can change sessionId while the
-                     * old mobile render objects still exist locally.
-                     * Rebuild ALL network actors from the authoritative room
-                     * Schema so the local Hunter body, gun and Lobby avatar
-                     * always represent exactly one current session.
+                     * v0.10.10.231:
+                     * Connection recovery is not complete until the Scene has
+                     * rebuilt itself from the replacement Room's authoritative
+                     * role + phase. Never leave Hunter in a Lobby/Hunt hybrid.
                      */
-                    /*
-                     * v0.10.10.85:
-                     * Do NOT destroy all existing actors on reconnect.
-                     * That erased every Hider paint texture while the fresh
-                     * Hunter sessionId was still arriving. Reconcile only
-                     * changed sessions and preserve already-correct visuals.
-                     */
-                    this.networkPlayerManager
-                        .syncPlayersFromCurrentRoom();
-
-                    this.networkPlayerManager
-                        .restoreAllPlayerVisibility();
-
-                    this.networkPlayerManager
-                        .normalizeLocalPlayerForGameplay();
-
-                    multiplayerClient
-                        .requestLobbySnapshot();
-
-                    multiplayerClient
-                        .requestAvatarPresets();
-
-                    multiplayerClient
-                        .requestRoundPaintState();
+                    this.resyncGameplayAfterConnectionRecovery();
 
                     /*
-                     * v0.10.10.93:
-                     * Do not depend on old server-side session paint.
-                     * This GameScene still owns the exact current camouflage.
-                     * Once the replacement Hunter session has settled, send
-                     * that source once to the server for opponent restoration.
+                     * Preserve the local camouflage source and republish it only
+                     * after the authoritative player/phase has been restored.
                      */
-                    if (
-                        this.networkPlayerManager
-                            .isLocalHunter() &&
-                        this.localPaintHistory
-                            .length >
-                            0
-                    ) {
-                        this.time.delayedCall(
-                            900,
-                            () => {
-                                if (
-                                    this.phase ===
-                                        'paint' ||
-                                    this.phase ===
-                                        'hunt' ||
-                                    this.phase ===
-                                        'countdown'
-                                ) {
-                                    multiplayerClient
-                                        .sendReconnectPaintSnapshot(
-                                            this.localPaintHistory,
-                                        );
-                                }
-                            },
-                        );
-                    }
-
                     this.time.delayedCall(
-                        60,
+                        900,
                         () => {
-                            this.networkPlayerManager
-                                .syncPlayersFromCurrentRoom();
-
-                            this.networkPlayerManager
-                                .restoreAllPlayerVisibility();
-
                             if (
-                                this.phase ===
-                                    'hunt'
-                            ) {
-                                this.networkPlayerManager
-                                    .normalizeLocalPlayerForGameplay();
-                            }
-
-                            multiplayerClient
-                                .requestRoundPaintState();
-
-                            if (
-                                this.networkPlayerManager
-                                    .isLocalHunter() &&
-                                this.localPaintHistory
-                                    .length >
-                                    0
+                                (
+                                    this.phase === 'paint' ||
+                                    this.phase === 'hunt' ||
+                                    this.phase === 'countdown'
+                                ) &&
+                                this.localPaintHistory.length > 0 &&
+                                multiplayerClient.isConnected()
                             ) {
                                 multiplayerClient
                                     .sendReconnectPaintSnapshot(
@@ -7607,6 +7665,21 @@ export class GameScene extends Phaser.Scene {
                         ) {
                             this.beginConnectedRoomHandshake(
                                 room,
+                            );
+                        }
+
+                        /*
+                         * attachRoom() can emit connected=true before a fresh
+                         * handoff's transferred local role is fully visible.
+                         * Schedule authoritative Scene recovery instead of
+                         * trusting whatever Lobby/Paint/Hunt visuals survived.
+                         */
+                        if (room) {
+                            this.time.delayedCall(
+                                0,
+                                () => {
+                                    this.resyncGameplayAfterConnectionRecovery();
+                                },
                             );
                         }
 
