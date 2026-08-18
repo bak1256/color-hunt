@@ -89,6 +89,22 @@ export class GameScene extends Phaser.Scene {
                 return;
             }
 
+            /*
+             * The mobile software keyboard changes visual/layout viewport
+             * dimensions. That must reposition chat only, never rescale the
+             * whole 960x540 game.
+             */
+            if (
+                window.matchMedia(
+                    '(pointer: coarse)',
+                ).matches &&
+                document.activeElement ===
+                    this.chatInput
+            ) {
+                this.updateChatKeyboardOffset();
+                return;
+            }
+
             this.scale.refresh();
 
             this.time.delayedCall(
@@ -3136,6 +3152,20 @@ export class GameScene extends Phaser.Scene {
     ) => void;
     private chatViewportHandler?: () => void;
     private chatFocusArmed = false;
+
+    /*
+     * v0.10.10.231.2 MOBILE KEYBOARD LAYOUT LOCK:
+     * Keep the rendered Phaser canvas size unchanged while the software
+     * keyboard is open for chat.
+     */
+    private chatCanvasLayoutLock?: {
+        width: string;
+        height: string;
+        maxWidth: string;
+        maxHeight: string;
+        flex: string;
+    };
+
     private readonly chatMessageIds =
         new Set<string>();
     private controlsHelpRoot?: HTMLDivElement;
@@ -4786,6 +4816,99 @@ export class GameScene extends Phaser.Scene {
         );
     }
 
+    private lockGameCanvasForMobileChat(): void {
+        if (
+            !window.matchMedia(
+                '(pointer: coarse)',
+            ).matches ||
+            this.chatCanvasLayoutLock
+        ) {
+            return;
+        }
+
+        const canvas =
+            this.game.canvas;
+
+        const rect =
+            canvas.getBoundingClientRect();
+
+        if (
+            rect.width <= 0 ||
+            rect.height <= 0
+        ) {
+            return;
+        }
+
+        this.chatCanvasLayoutLock = {
+            width: canvas.style.width,
+            height: canvas.style.height,
+            maxWidth:
+                canvas.style.maxWidth,
+            maxHeight:
+                canvas.style.maxHeight,
+            flex: canvas.style.flex,
+        };
+
+        /*
+         * Freeze the current physical CSS box BEFORE the mobile keyboard opens.
+         * Phaser's logical render size stays 960x540.
+         */
+        canvas.style.width =
+            `${Math.round(rect.width)}px`;
+        canvas.style.height =
+            `${Math.round(rect.height)}px`;
+        canvas.style.maxWidth =
+            'none';
+        canvas.style.maxHeight =
+            'none';
+        canvas.style.flex =
+            '0 0 auto';
+    }
+
+    private unlockGameCanvasAfterMobileChat(): void {
+        const lock =
+            this.chatCanvasLayoutLock;
+
+        if (!lock) {
+            return;
+        }
+
+        const canvas =
+            this.game.canvas;
+
+        canvas.style.width =
+            lock.width;
+        canvas.style.height =
+            lock.height;
+        canvas.style.maxWidth =
+            lock.maxWidth;
+        canvas.style.maxHeight =
+            lock.maxHeight;
+        canvas.style.flex =
+            lock.flex;
+
+        this.chatCanvasLayoutLock =
+            undefined;
+
+        /*
+         * Keyboard close emits multiple intermediate viewport sizes. Restore
+         * normal responsive scaling only after they have settled.
+         */
+        window.setTimeout(
+            () => {
+                if (
+                    this.sys.isActive() &&
+                    document.activeElement !==
+                        this.chatInput
+                ) {
+                    this.scale.refresh();
+                    this.updateChatKeyboardOffset();
+                }
+            },
+            140,
+        );
+    }
+
     private createChatUi(): void {
         if (this.chatRoot) {
             return;
@@ -4935,6 +5058,7 @@ export class GameScene extends Phaser.Scene {
                  * release must never summon the keyboard.
                  */
                 this.chatFocusArmed = true;
+                this.lockGameCanvasForMobileChat();
                 event.stopPropagation();
             },
         );
@@ -4943,6 +5067,7 @@ export class GameScene extends Phaser.Scene {
             'touchstart',
             (event) => {
                 this.chatFocusArmed = true;
+                this.lockGameCanvasForMobileChat();
                 event.stopPropagation();
             },
             {
@@ -4967,6 +5092,7 @@ export class GameScene extends Phaser.Scene {
                 }
 
                 this.chatFocusArmed = false;
+                this.lockGameCanvasForMobileChat();
 
                 root.classList.add(
                     'colorhunt-chat--focused',
@@ -4985,6 +5111,7 @@ export class GameScene extends Phaser.Scene {
                     'colorhunt-chat--focused',
                 );
 
+                this.unlockGameCanvasAfterMobileChat();
                 this.updateChatKeyboardOffset();
             },
         );
@@ -5435,6 +5562,8 @@ export class GameScene extends Phaser.Scene {
     }
 
     private destroyChatUi(): void {
+        this.unlockGameCanvasAfterMobileChat();
+
         if (
             this.chatKeyboardHandler
         ) {
