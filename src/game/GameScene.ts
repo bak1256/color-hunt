@@ -297,6 +297,7 @@ export class GameScene extends Phaser.Scene {
      * Attach the role-disconnect countdown listener once per Room instance.
      */
     private roleDisconnectCountdownRoom?: object;
+    private joinRejectedRoom?: object;
 
     private paintReadyButton?: Phaser.GameObjects.Text;
 
@@ -7175,6 +7176,56 @@ export class GameScene extends Phaser.Scene {
         }
     }
 
+    private attachJoinRejectedListener(): void {
+        const room =
+            multiplayerClient.getRoom();
+
+        if (
+            !room ||
+            this.joinRejectedRoom === room
+        ) {
+            return;
+        }
+
+        this.joinRejectedRoom = room;
+
+        room.onMessage(
+            'join_rejected',
+            (
+                payload: {
+                    reason?: string;
+                    returnToLobby?: boolean;
+                },
+            ) => {
+                if (
+                    payload.reason !==
+                    'game_in_progress'
+                ) {
+                    return;
+                }
+
+                /*
+                 * v0.10.10.238.2:
+                 * The server has NOT created a PlayerState for this client.
+                 * Clear the rejected room locally as well; otherwise the
+                 * GameScene can remain visually attached to that room map
+                 * until the generic socket-close handler fires.
+                 */
+                void (
+                    async () => {
+                        await this.leaveCurrentRoomToLobby();
+
+                        this.showStatus(
+                            tr(
+                                '이미 게임이 진행 중입니다. 게임이 끝난 후 다시 참가해주세요.',
+                            ),
+                        );
+                    }
+                )();
+            },
+        );
+    }
+
     private attachRoleDisconnectCountdownListener(): void {
         const room =
             multiplayerClient.getRoom();
@@ -7283,6 +7334,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     private registerMultiplayerEvents(): void {
+        this.attachJoinRejectedListener();
         this.attachRoleDisconnectCountdownListener();
 
         this.networkUnsubscribers.push(
@@ -8237,6 +8289,7 @@ export class GameScene extends Phaser.Scene {
         this.networkUnsubscribers.push(
             multiplayerClient.onConnectionRecovered(
                 () => {
+                    this.attachJoinRejectedListener();
                     this.attachRoleDisconnectCountdownListener();
 
                     /*
