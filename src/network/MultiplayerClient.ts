@@ -430,10 +430,16 @@ this.phaseChangedHandlers.forEach(
 
   private connectionIssueStartedAt = 0;
 
-  /* v0.10.10.219: remember minimized/background tab transitions. */
+  /* v0.10.10.220: remember every browser/app background lifecycle signal. */
   private lastDocumentHiddenAt = 0;
 
   private lastDocumentVisibleAt = Date.now();
+
+  private lastAppBackgroundAt = 0;
+
+  private lastAppForegroundAt = Date.now();
+
+  private appBackgroundSignalActive = false;
 
   private lastJoinedRoomId = "";
 
@@ -1343,6 +1349,67 @@ this.manualReconnectInFlight = false;
         );
       };
 
+    const isActiveRound = (): boolean =>
+      this.lastStablePhase === "countdown" ||
+      this.lastStablePhase === "paint" ||
+      this.lastStablePhase === "hunt";
+
+    const markAppBackground =
+      (): void => {
+        const now = Date.now();
+        this.appBackgroundSignalActive = true;
+        this.lastAppBackgroundAt = now;
+        this.lastDocumentHiddenAt = now;
+      };
+
+    const resumeFromAppBackground =
+      (reason: string): void => {
+        const now = Date.now();
+        this.appBackgroundSignalActive = false;
+        this.lastAppForegroundAt = now;
+        this.lastDocumentVisibleAt = now;
+
+        if (this.room !== room || !isActiveRound()) {
+          return;
+        }
+
+        /*
+         * v0.10.10.220 MOBILE LIFECYCLE RECOVERY:
+         * iOS/Android can suspend JS completely after Home, screen lock,
+         * app switching, PWA backgrounding or OS power saving. The websocket
+         * may already be dead by the time JS resumes, so immediately try BOTH
+         * reconnection-token recovery and a fresh stable-clientKey rejoin.
+         */
+        this.notifyConnectionIssue(reason);
+        this.lastRoomPingAt = Math.min(
+          this.lastRoomPingAt,
+          now - 2200,
+        );
+
+        void this.attemptManualReconnect(room);
+        void this.attemptFreshRejoin(room);
+
+        [250, 800, 1800, 3500, 6500, 11000, 18000, 28000, 42000, 60000]
+          .forEach((delay) => {
+            globalThis.setTimeout(() => {
+              if (
+                this.room !== room ||
+                !this.connectionIssueNotified ||
+                (typeof navigator !== "undefined" && !navigator.onLine)
+              ) {
+                return;
+              }
+
+              if (typeof document !== "undefined" && document.hidden) {
+                return;
+              }
+
+              void this.attemptManualReconnect(room);
+              void this.attemptFreshRejoin(room);
+            }, delay);
+          });
+      };
+
     const handleVisibilityChange =
       (): void => {
         if (typeof document === "undefined") {
@@ -1350,37 +1417,44 @@ this.manualReconnectInFlight = false;
         }
 
         if (document.hidden) {
-          this.lastDocumentHiddenAt = Date.now();
+          markAppBackground();
           return;
         }
 
-        this.lastDocumentVisibleAt = Date.now();
-
-        if (this.room !== room) {
-          return;
-        }
-
-        /*
-         * Desktop browsers may freeze a minimized tab long enough for the
-         * transport to expire. Resume recovery before any terminal UI path.
-         */
-        this.lastRoomPingAt = Math.min(
-          this.lastRoomPingAt,
-          Date.now() - 1800,
+        resumeFromAppBackground(
+          "browser_visible_recovering",
         );
-
-        if (
-          this.lastStablePhase === "countdown" ||
-          this.lastStablePhase === "paint" ||
-          this.lastStablePhase === "hunt"
-        ) {
-          this.notifyConnectionIssue(
-            "browser_visible_recovering",
-          );
-          void this.attemptManualReconnect(room);
-          void this.attemptFreshRejoin(room);
-        }
       };
+
+    const handlePageHide = (): void => {
+      markAppBackground();
+    };
+
+    const handlePageShow = (): void => {
+      resumeFromAppBackground(
+        "browser_pageshow_recovering",
+      );
+    };
+
+    const handleWindowBlur = (): void => {
+      markAppBackground();
+    };
+
+    const handleWindowFocus = (): void => {
+      resumeFromAppBackground(
+        "browser_focus_recovering",
+      );
+    };
+
+    const handleFreeze = (): void => {
+      markAppBackground();
+    };
+
+    const handleResume = (): void => {
+      resumeFromAppBackground(
+        "browser_resume_recovering",
+      );
+    };
 
     globalThis.addEventListener?.(
       "offline",
@@ -1398,7 +1472,38 @@ this.manualReconnectInFlight = false;
         handleVisibilityChange,
         { passive: true },
       );
+      document.addEventListener(
+        "freeze",
+        handleFreeze,
+        { passive: true },
+      );
+      document.addEventListener(
+        "resume",
+        handleResume,
+        { passive: true },
+      );
     }
+
+    globalThis.addEventListener?.(
+      "pagehide",
+      handlePageHide,
+      { passive: true },
+    );
+    globalThis.addEventListener?.(
+      "pageshow",
+      handlePageShow,
+      { passive: true },
+    );
+    globalThis.addEventListener?.(
+      "blur",
+      handleWindowBlur,
+      { passive: true },
+    );
+    globalThis.addEventListener?.(
+      "focus",
+      handleWindowFocus,
+      { passive: true },
+    );
 
     const healthTimer =
       globalThis.setInterval(
@@ -1533,7 +1638,32 @@ this.manualReconnectInFlight = false;
             "visibilitychange",
             handleVisibilityChange,
           );
+          document.removeEventListener(
+            "freeze",
+            handleFreeze,
+          );
+          document.removeEventListener(
+            "resume",
+            handleResume,
+          );
         }
+
+        globalThis.removeEventListener?.(
+          "pagehide",
+          handlePageHide,
+        );
+        globalThis.removeEventListener?.(
+          "pageshow",
+          handlePageShow,
+        );
+        globalThis.removeEventListener?.(
+          "blur",
+          handleWindowBlur,
+        );
+        globalThis.removeEventListener?.(
+          "focus",
+          handleWindowFocus,
+        );
       };
 
     room.onDrop(
@@ -2358,12 +2488,19 @@ this.manualReconnectInFlight = false;
             leaveAt - this.lastDocumentVisibleAt < 6500;
           const recentlyHidden =
             this.lastDocumentHiddenAt > 0 &&
-            leaveAt - this.lastDocumentHiddenAt < 120000;
+            leaveAt - this.lastDocumentHiddenAt < 30 * 60 * 1000;
+          const recentlyBackgrounded =
+            this.lastAppBackgroundAt > 0 &&
+            leaveAt - this.lastAppBackgroundAt < 30 * 60 * 1000;
           const backgroundTabRecovery =
-            hiddenNow || recentlyVisible || recentlyHidden;
+            hiddenNow ||
+            this.appBackgroundSignalActive ||
+            recentlyVisible ||
+            recentlyHidden ||
+            recentlyBackgrounded;
 
           const retryDelays = backgroundTabRecovery
-            ? [250, 700, 1500, 2800, 5000, 8500, 13000, 20000, 30000]
+            ? [250, 700, 1500, 2800, 5000, 8500, 13000, 20000, 30000, 45000, 60000, 75000]
             : [350, 900, 1800, 3200, 6000, 9000];
 
           retryDelays.forEach((delay) => {
@@ -2382,22 +2519,34 @@ this.manualReconnectInFlight = false;
               return;
             }
 
-            /* Never declare a minimized/background tab terminally dead. */
-            if (typeof document !== "undefined" && document.hidden) {
-              globalThis.setTimeout(terminalCheck, 4000);
+            /*
+             * Never declare Home/screen-lock/app-switch/minimized sessions
+             * terminally dead. Mobile JS timers may wake only after minutes.
+             */
+            if (
+              (typeof document !== "undefined" && document.hidden) ||
+              this.appBackgroundSignalActive
+            ) {
+              globalThis.setTimeout(terminalCheck, 5000);
               return;
             }
 
             const visibleFor =
-              this.lastDocumentVisibleAt > 0
-                ? Date.now() - this.lastDocumentVisibleAt
+              this.lastAppForegroundAt > 0
+                ? Date.now() - this.lastAppForegroundAt
                 : Number.POSITIVE_INFINITY;
 
-            if (backgroundTabRecovery && visibleFor < 12000) {
+            /*
+             * After a real mobile resume, give the handoff path a full 90s.
+             * Do not throw the player to the lobby while the OS is still
+             * bringing Wi-Fi/cellular and the websocket stack back online.
+             */
+            if (backgroundTabRecovery && visibleFor < 90000) {
+              void this.attemptManualReconnect(room);
               void this.attemptFreshRejoin(room);
               globalThis.setTimeout(
                 terminalCheck,
-                Math.max(1200, 12500 - visibleFor),
+                Math.max(1500, Math.min(5000, 90500 - visibleFor)),
               );
               return;
             }
@@ -2410,7 +2559,7 @@ this.manualReconnectInFlight = false;
 
           globalThis.setTimeout(
             terminalCheck,
-            backgroundTabRecovery ? 14000 : 11000,
+            backgroundTabRecovery ? 18000 : 11000,
           );
 
           return;
