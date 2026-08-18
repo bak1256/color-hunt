@@ -126,3 +126,16 @@ html.colorhunt-mobile .game-container canvas {
   max-height: var(--ch-viewport-height) !important;
   margin: auto !important;
 }
+
+/* v0.10.10.191 — mobile viewport must never inherit document-flow offsets */
+html.colorhunt-mobile .app,
+html.colorhunt-mobile .game-container {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+}

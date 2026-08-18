@@ -59,6 +59,9 @@
       landscapeHint: '가로 화면 권장',
       fullscreenShort: '⛶ 전체화면',
       installed: '앱 모드',
+      alreadyInstalled: '✓ 이미 설치됨',
+      alreadyInstalledHelp: '이미 설치되어 있습니다. 홈 화면의 Color Hunt를 실행해주세요.',
+      installUnavailable: '설치 창이 열리지 않으면 이미 설치되어 있거나, 현재 브라우저가 직접 설치를 지원하지 않는 상태일 수 있어요.',
     },
     ja: {
       title: 'スマホを横向きにしてください',
@@ -70,6 +73,9 @@
       landscapeHint: '横画面推奨',
       fullscreenShort: '⛶ 全画面',
       installed: 'アプリモード',
+      alreadyInstalled: '✓ インストール済み',
+      alreadyInstalledHelp: 'すでにインストールされています。ホーム画面の Color Hunt を起動してください。',
+      installUnavailable: 'インストール画面が開かない場合は、すでにインストール済みか、現在のブラウザが直接インストールに対応していない可能性があります。',
     },
     en: {
       title: 'Rotate your phone sideways',
@@ -81,6 +87,9 @@
       landscapeHint: 'Landscape recommended',
       fullscreenShort: '⛶ Fullscreen',
       installed: 'App mode',
+      alreadyInstalled: '✓ Already installed',
+      alreadyInstalledHelp: 'Color Hunt is already installed. Launch it from your Home Screen.',
+      installUnavailable: 'If no install prompt appears, the app may already be installed or this browser may not support direct installation.',
     },
     zh: {
       title: '请将手机横屏',
@@ -92,6 +101,9 @@
       landscapeHint: '推荐横屏',
       fullscreenShort: '⛶ 全屏',
       installed: '应用模式',
+      alreadyInstalled: '✓ 已安装',
+      alreadyInstalledHelp: 'Color Hunt 已安装，请从主屏幕启动。',
+      installUnavailable: '如果没有弹出安装窗口，可能已经安装，或当前浏览器不支持直接安装。',
     },
   }[language];
 
@@ -115,10 +127,16 @@
    * visualViewport only for positioning the chat composer.
    */
   let stableGameWidth =
-    window.innerWidth;
+    window.visualViewport?.width ?? window.innerWidth;
 
   let stableGameHeight =
-    window.innerHeight;
+    window.visualViewport?.height ?? window.innerHeight;
+
+  let stableViewportLeft =
+    window.visualViewport?.offsetLeft ?? 0;
+
+  let stableViewportTop =
+    window.visualViewport?.offsetTop ?? 0;
 
   const isChatInputFocused = () => {
     const active =
@@ -208,6 +226,13 @@
   let deferredPrompt = null;
   let installMessageTimer = null;
 
+  const installStorageKey =
+    'colorhunt:pwa-installed';
+
+  let installedKnown =
+    standalone ||
+    localStorage.getItem(installStorageKey) === '1';
+
   const overlay = document.createElement('div');
   overlay.id = 'colorhunt-orientation-overlay';
   overlay.innerHTML = `
@@ -245,6 +270,40 @@
   const installButton =
     overlay.querySelector('[data-ch-install]');
 
+  const showInstallHelp = (message) => {
+    if (!help) {
+      return;
+    }
+
+    help.textContent = message;
+    help.classList.add('ch-install-help--active');
+
+    if (installMessageTimer) {
+      clearTimeout(installMessageTimer);
+    }
+
+    installMessageTimer = setTimeout(() => {
+      help.classList.remove('ch-install-help--active');
+    }, 9000);
+  };
+
+  const renderInstallState = () => {
+    if (!installButton) {
+      return;
+    }
+
+    if (installedKnown) {
+      installButton.hidden = false;
+      installButton.disabled = false;
+      installButton.classList.add('is-installed');
+      installButton.textContent = copy.alreadyInstalled;
+      return;
+    }
+
+    installButton.classList.remove('is-installed');
+    installButton.textContent = copy.install;
+  };
+
   async function requestFullscreenLandscape() {
     try {
       const root =
@@ -277,7 +336,7 @@
       // Orientation lock is best-effort only.
     }
 
-    syncViewport();
+    settleViewport();
   }
 
   fullscreenButtons.forEach((button) => {
@@ -293,61 +352,56 @@
     (event) => {
       event.preventDefault();
       deferredPrompt = event;
-      if (installButton) {
-        installButton.hidden = false;
-      }
+      installedKnown = false;
+      renderInstallState();
+    },
+  );
+
+  window.addEventListener(
+    'appinstalled',
+    () => {
+      deferredPrompt = null;
+      installedKnown = true;
+      localStorage.setItem(installStorageKey, '1');
+      renderInstallState();
+      showInstallHelp(copy.alreadyInstalledHelp);
     },
   );
 
   installButton?.addEventListener(
     'click',
     async () => {
+      if (installedKnown) {
+        showInstallHelp(copy.alreadyInstalledHelp);
+        return;
+      }
+
       if (deferredPrompt) {
         deferredPrompt.prompt();
 
         try {
-          await deferredPrompt.userChoice;
+          const choice = await deferredPrompt.userChoice;
+          if (choice?.outcome === 'accepted') {
+            installedKnown = true;
+            localStorage.setItem(installStorageKey, '1');
+            renderInstallState();
+            showInstallHelp(copy.alreadyInstalledHelp);
+          }
         } catch {}
 
         deferredPrompt = null;
         return;
       }
 
-      if (help) {
-        help.textContent =
-          isIOS
-            ? copy.iosInstall
-            : copy.installHelp;
-
-        help.classList.add(
-          'ch-install-help--active',
-        );
-
-        if (installMessageTimer) {
-          clearTimeout(
-            installMessageTimer,
-          );
-        }
-
-        installMessageTimer =
-          setTimeout(
-            () => {
-              help.classList.remove(
-                'ch-install-help--active',
-              );
-            },
-            9000,
-          );
-      }
+      showInstallHelp(
+        isIOS
+          ? copy.iosInstall
+          : copy.installUnavailable,
+      );
     },
   );
 
-  if (
-    standalone &&
-    installButton
-  ) {
-    installButton.hidden = true;
-  }
+  renderInstallState();
 
   let lastPreferredOrientation = '';
 
@@ -381,11 +435,19 @@
      * orientation/fullscreen changes still update normally.
      */
     if (!keyboardOpen) {
+      const viewport = window.visualViewport;
+
       stableGameWidth =
-        window.innerWidth;
+        viewport?.width ?? window.innerWidth;
 
       stableGameHeight =
-        window.innerHeight;
+        viewport?.height ?? window.innerHeight;
+
+      stableViewportLeft =
+        viewport?.offsetLeft ?? 0;
+
+      stableViewportTop =
+        viewport?.offsetTop ?? 0;
     }
 
     const measuredProfile =
@@ -417,6 +479,16 @@
       `${Math.round(
         stableGameHeight,
       )}px`,
+    );
+
+    document.documentElement.style.setProperty(
+      '--ch-viewport-left',
+      `${Math.round(stableViewportLeft)}px`,
+    );
+
+    document.documentElement.style.setProperty(
+      '--ch-viewport-top',
+      `${Math.round(stableViewportTop)}px`,
     );
 
     /*
@@ -480,6 +552,21 @@
   }
 
   let viewportTimer = 0;
+  let settleGeneration = 0;
+
+  function settleViewport() {
+    const generation = ++settleGeneration;
+    const delays = [0, 60, 140, 280, 520, 900, 1400];
+
+    delays.forEach((delay) => {
+      setTimeout(() => {
+        if (generation !== settleGeneration) {
+          return;
+        }
+        syncViewport();
+      }, delay);
+    });
+  }
 
   function scheduleSync() {
     clearTimeout(viewportTimer);
@@ -499,22 +586,14 @@
   window.addEventListener(
     'orientationchange',
     () => {
-      scheduleSync();
-      setTimeout(
-        syncViewport,
-        180,
-      );
-      setTimeout(
-        syncViewport,
-        520,
-      );
+      settleViewport();
     },
     { passive: true },
   );
 
   screen.orientation?.addEventListener?.(
     'change',
-    scheduleSync,
+    settleViewport,
   );
 
   window.visualViewport?.addEventListener(
@@ -547,10 +626,11 @@
 
   document.addEventListener(
     'fullscreenchange',
-    scheduleSync,
+    settleViewport,
   );
 
   syncViewport();
+  settleViewport();
 
   if (
     'serviceWorker' in navigator &&

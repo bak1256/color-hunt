@@ -14956,27 +14956,136 @@ export class GameScene extends Phaser.Scene {
                 ),
             );
 
-        const widthRatio =
-            touch
-                ? (
-                    landscapeCanvas
-                        ? 0.31
-                        : 0.36
-                )
-                : 0.285;
+        /*
+         * v0.10.10.191 MOBILE HOTFIX
+         * --------------------------
+         * The waiting room used to calculate a different width/height for
+         * every phone while CSS separately compressed each section. On short
+         * or unusual aspect-ratio phones that made the outer frame, buttons
+         * and typography scale at different rates.
+         *
+         * Mobile now has ONE authoring size (300x460) and the entire DOM
+         * panel is uniformly transformed to fit inside the actual Phaser
+         * canvas rectangle. Nothing inside the panel is allowed to reflow
+         * merely because the phone model changed.
+         */
+        if (touch) {
+            const designWidth = 300;
+            const designHeight = 460;
+
+            const availableWidth =
+                Math.max(
+                    1,
+                    rect.width -
+                        horizontalInset * 2,
+                );
+
+            const availableHeight =
+                Math.max(
+                    1,
+                    rect.height -
+                        verticalInset * 2,
+                );
+
+            const targetWidth =
+                Math.min(
+                    availableWidth,
+                    Math.max(
+                        170,
+                        rect.width *
+                            (
+                                landscapeCanvas
+                                    ? 0.31
+                                    : 0.36
+                            ),
+                    ),
+                );
+
+            const targetHeight =
+                Math.min(
+                    availableHeight,
+                    rect.height *
+                        (
+                            landscapeCanvas
+                                ? 0.92
+                                : 0.78
+                        ),
+                );
+
+            const scale =
+                Math.max(
+                    0.45,
+                    Math.min(
+                        1,
+                        targetWidth /
+                            designWidth,
+                        targetHeight /
+                            designHeight,
+                    ),
+                );
+
+            const renderedWidth =
+                designWidth * scale;
+            const renderedHeight =
+                designHeight * scale;
+
+            const left =
+                rect.right -
+                horizontalInset -
+                renderedWidth;
+
+            const top =
+                rect.top +
+                (
+                    rect.height -
+                    renderedHeight
+                ) / 2;
+
+            this.waitingRoomRoot.classList.add(
+                'ch-uniform-mobile-scale',
+            );
+
+            this.waitingRoomRoot.style.setProperty(
+                '--waiting-left',
+                `${left.toFixed(2)}px`,
+            );
+            this.waitingRoomRoot.style.setProperty(
+                '--waiting-top',
+                `${top.toFixed(2)}px`,
+            );
+            this.waitingRoomRoot.style.setProperty(
+                '--waiting-width',
+                `${designWidth}px`,
+            );
+            this.waitingRoomRoot.style.setProperty(
+                '--waiting-height',
+                `${designHeight}px`,
+            );
+            this.waitingRoomRoot.style.setProperty(
+                '--waiting-uniform-scale',
+                scale.toFixed(5),
+            );
+
+            return;
+        }
+
+        this.waitingRoomRoot.classList.remove(
+            'ch-uniform-mobile-scale',
+        );
+        this.waitingRoomRoot.style.removeProperty(
+            '--waiting-uniform-scale',
+        );
+
+        const widthRatio = 0.285;
 
         const panelWidth =
             Math.min(
                 rect.width -
                     horizontalInset * 2,
                 Math.max(
-                    touch
-                        ? 170
-                        : 250,
+                    250,
                     Math.min(
-                        touch
-                            ? 360
-                            : 340,
+                        340,
                         rect.width *
                             widthRatio,
                     ),
@@ -14990,16 +15099,7 @@ export class GameScene extends Phaser.Scene {
         const panelHeight =
             Math.min(
                 maxPanelHeight,
-                rect.height *
-                    (
-                        touch
-                            ? (
-                                landscapeCanvas
-                                    ? 0.92
-                                    : 0.78
-                            )
-                            : 0.84
-                    ),
+                rect.height * 0.84,
             );
 
         const left =

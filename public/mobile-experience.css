@@ -6087,3 +6087,103 @@ body:has(.colorhunt-main-lobby) .colorhunt-controls-help {
 .colorhunt-practice-result-card.is-ammo .colorhunt-practice-result-icon {
   filter: drop-shadow(0 3px 8px rgba(198, 40, 40, 0.28));
 }
+
+/* ============================================================
+   v0.10.10.191 — MOBILE GEOMETRY / ORIENTATION / INSTALL HOTFIX
+   One visible viewport, one canvas ratio, one waiting-room scale.
+   ============================================================ */
+
+:root {
+  --ch-viewport-left: 0px;
+  --ch-viewport-top: 0px;
+}
+
+html.colorhunt-mobile,
+html.colorhunt-mobile body {
+  position: fixed !important;
+  left: var(--ch-viewport-left) !important;
+  top: var(--ch-viewport-top) !important;
+  width: var(--ch-viewport-width) !important;
+  min-width: var(--ch-viewport-width) !important;
+  max-width: var(--ch-viewport-width) !important;
+  height: var(--ch-viewport-height) !important;
+  min-height: var(--ch-viewport-height) !important;
+  max-height: var(--ch-viewport-height) !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+html.colorhunt-mobile #root,
+html.colorhunt-mobile .app,
+html.colorhunt-mobile .game-container {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+}
+
+html.colorhunt-mobile .game-container {
+  display: grid !important;
+  place-items: center !important;
+}
+
+html.colorhunt-mobile .game-container canvas,
+html.colorhunt-mobile canvas {
+  position: relative !important;
+  display: block !important;
+  width: auto !important;
+  height: auto !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
+  margin: 0 !important;
+  object-fit: contain !important;
+  flex: none !important;
+  transform: none !important;
+  transform-origin: center center !important;
+}
+
+/* The waiting room is authored at one design size and scaled as ONE unit.
+   This prevents each button/card/font from shrinking at a different rate. */
+html.colorhunt-mobile .colorhunt-waiting-room.ch-uniform-mobile-scale {
+  width: 300px !important;
+  height: 460px !important;
+  max-width: none !important;
+  max-height: none !important;
+  transform: scale(var(--waiting-uniform-scale, 1)) !important;
+  transform-origin: 0 0 !important;
+  contain: layout style paint !important;
+}
+
+html.colorhunt-mobile .colorhunt-waiting-room.ch-uniform-mobile-scale .ch-waiting-shell {
+  width: 300px !important;
+  height: 460px !important;
+  min-width: 300px !important;
+  min-height: 460px !important;
+  max-width: 300px !important;
+  max-height: 460px !important;
+  overflow: hidden !important;
+}
+
+html.colorhunt-mobile .colorhunt-waiting-room.ch-uniform-mobile-scale,
+html.colorhunt-mobile .colorhunt-waiting-room.ch-uniform-mobile-scale * {
+  box-sizing: border-box !important;
+}
+
+/* Installation must never look like a dead button. */
+.ch-rotate-actions button[data-ch-install].is-installed {
+  background: rgba(74, 132, 88, .78) !important;
+  border-color: rgba(172, 230, 184, .65) !important;
+}
+
+.ch-install-help--active {
+  min-height: 2.8em;
+}
