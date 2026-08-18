@@ -31429,10 +31429,12 @@ export class GameScene extends Phaser.Scene {
         this.updateAmmoText();
         this.updateTargetText();
 
-        this.showStatus(
-            tr(`${this.huntDuration}초 안에 하이더를 찾으세요`),
-        );
-
+        /*
+         * v0.10.10.236:
+         * The top HUD already communicates Hunt state + remaining time.
+         * Do not flash the redundant "N초 안에 하이더를 찾으세요" toast
+         * to either Hunter or Hider when Hunt begins.
+         */
         this.input.setDefaultCursor('none');
     }
 
