@@ -3165,6 +3165,14 @@ export class GameScene extends Phaser.Scene {
         maxHeight: string;
         flex: string;
     };
+    private chatGameParentLayoutLock?: {
+        element: HTMLElement;
+        width: string;
+        height: string;
+        minWidth: string;
+        minHeight: string;
+        overflow: string;
+    };
 
     private readonly chatMessageIds =
         new Set<string>();
@@ -4848,6 +4856,22 @@ export class GameScene extends Phaser.Scene {
                 canvas.style.maxHeight,
             flex: canvas.style.flex,
         };
+        const parent = canvas.parentElement;
+        if (parent) {
+            this.chatGameParentLayoutLock = {
+                element: parent,
+                width: parent.style.width,
+                height: parent.style.height,
+                minWidth: parent.style.minWidth,
+                minHeight: parent.style.minHeight,
+                overflow: parent.style.overflow,
+            };
+            parent.style.width = `${Math.round(rect.width)}px`;
+            parent.style.height = `${Math.round(rect.height)}px`;
+            parent.style.minWidth = `${Math.round(rect.width)}px`;
+            parent.style.minHeight = `${Math.round(rect.height)}px`;
+            parent.style.overflow = 'hidden';
+        }
 
         /*
          * Freeze the current physical CSS box BEFORE the mobile keyboard opens.
@@ -4889,6 +4913,16 @@ export class GameScene extends Phaser.Scene {
 
         this.chatCanvasLayoutLock =
             undefined;
+
+        const parentLock = this.chatGameParentLayoutLock;
+        if (parentLock) {
+            parentLock.element.style.width = parentLock.width;
+            parentLock.element.style.height = parentLock.height;
+            parentLock.element.style.minWidth = parentLock.minWidth;
+            parentLock.element.style.minHeight = parentLock.minHeight;
+            parentLock.element.style.overflow = parentLock.overflow;
+            this.chatGameParentLayoutLock = undefined;
+        }
 
         /*
          * Keyboard close emits multiple intermediate viewport sizes. Restore
