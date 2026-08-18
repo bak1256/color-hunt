@@ -25904,9 +25904,14 @@ export class GameScene extends Phaser.Scene {
                     /*
                      * PC keeps the fast one-click workflow.
                      */
+                    const samplePoint =
+                        this.getPointerWorldPoint(
+                            pointer,
+                        );
+
                     this.pickColorFromBackground(
-                        pointer.worldX,
-                        pointer.worldY,
+                        samplePoint.x,
+                        samplePoint.y,
                     );
 
                     this.eyedropperArmed = false;
@@ -28170,124 +28175,16 @@ export class GameScene extends Phaser.Scene {
         worldY: number,
     ): void {
         /*
-         * v0.10.10.229:
-         * A Hider can eyedrop colors already painted on their own body.
-         * PaintLayer is an 80x120 local texture centered at (-40,-60).
-         * If the sampled body pixel is opaque, use it before the background.
+         * v0.10.10.231.1 EMERGENCY EYEDROPPER FIX:
+         *
+         * Temporarily remove the v229 RenderTexture source-image sampling path.
+         * On some Phaser/WebGL paths that source is not a safe CanvasImageSource
+         * at runtime, which can abort the whole eyedropper before background
+         * sampling happens.
+         *
+         * Restore the proven background sampler first; own-body color sampling
+         * can be reintroduced later through an explicit pixel-read API.
          */
-        if (
-            this.networkPlayerManager
-                ?.isLocalHider?.()
-        ) {
-            const localPaint =
-                this.networkPlayerManager
-                    .getLocalPaintVisual?.();
-
-            if (localPaint?.source) {
-                const localX =
-                    (
-                        worldX -
-                        localPaint.x
-                    ) /
-                    Math.max(
-                        0.01,
-                        localPaint.scaleX,
-                    ) +
-                    40;
-
-                const localY =
-                    (
-                        worldY -
-                        localPaint.y
-                    ) /
-                    Math.max(
-                        0.01,
-                        localPaint.scaleY,
-                    ) +
-                    60;
-
-                const textureX =
-                    Math.floor(localX);
-                const textureY =
-                    Math.floor(localY);
-
-                if (
-                    textureX >= 0 &&
-                    textureY >= 0 &&
-                    textureX <
-                        localPaint.source.width &&
-                    textureY <
-                        localPaint.source.height
-                ) {
-                    const sampleCanvas =
-                        document.createElement(
-                            'canvas',
-                        );
-
-                    sampleCanvas.width = 1;
-                    sampleCanvas.height = 1;
-
-                    const sampleContext =
-                        sampleCanvas.getContext(
-                            '2d',
-                        );
-
-                    if (sampleContext) {
-                        sampleContext.clearRect(
-                            0,
-                            0,
-                            1,
-                            1,
-                        );
-
-                        sampleContext.drawImage(
-                            localPaint.source,
-                            textureX,
-                            textureY,
-                            1,
-                            1,
-                            0,
-                            0,
-                            1,
-                            1,
-                        );
-
-                        const bodyPixel =
-                            sampleContext
-                                .getImageData(
-                                    0,
-                                    0,
-                                    1,
-                                    1,
-                                )
-                                .data;
-
-                        if (bodyPixel[3] > 8) {
-                            this.paintColor =
-                                Phaser.Display.Color
-                                    .GetColor(
-                                        bodyPixel[0],
-                                        bodyPixel[1],
-                                        bodyPixel[2],
-                                    );
-
-                            this.createBrushTexture(
-                                true,
-                            );
-
-                            this.isPainting = false;
-                            this.activeStrokePoints = [];
-                            this.activeStrokeTargetSessionId = '';
-
-                            this.updatePaintHud();
-                            this.updatePaintPreviewImmediately();
-                            return;
-                        }
-                    }
-                }
-            }
-        }
-
         const sourceImage = this.textures
             .get(
                 this.currentBackgroundTextureKey,
