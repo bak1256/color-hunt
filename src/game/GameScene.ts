@@ -8882,6 +8882,78 @@ export class GameScene extends Phaser.Scene {
             120,
         );
 
+        /*
+         * v0.10.10.219 Fold hotfix: folding/unfolding changes the live modal
+         * rect without recreating it. Recalculate the custom rail from the
+         * current card rect after every viewport/orientation/layout change.
+         */
+        const syncPracticeRailAfterViewportChange = (): void => {
+            if (!overlay.isConnected) {
+                return;
+            }
+
+            requestAnimationFrame(syncPracticeScrollAffordance);
+            window.setTimeout(syncPracticeScrollAffordance, 80);
+            window.setTimeout(syncPracticeScrollAffordance, 220);
+        };
+
+        window.addEventListener(
+            'resize',
+            syncPracticeRailAfterViewportChange,
+            { passive: true },
+        );
+        window.addEventListener(
+            'orientationchange',
+            syncPracticeRailAfterViewportChange,
+            { passive: true },
+        );
+        window.visualViewport?.addEventListener(
+            'resize',
+            syncPracticeRailAfterViewportChange,
+            { passive: true },
+        );
+        window.visualViewport?.addEventListener(
+            'scroll',
+            syncPracticeRailAfterViewportChange,
+            { passive: true },
+        );
+
+        if (typeof ResizeObserver !== 'undefined') {
+            const practiceRailResizeObserver = new ResizeObserver(
+                syncPracticeRailAfterViewportChange,
+            );
+            practiceRailResizeObserver.observe(card);
+
+            const disconnectRailObserver = (): void => {
+                practiceRailResizeObserver.disconnect();
+                window.removeEventListener(
+                    'resize',
+                    syncPracticeRailAfterViewportChange,
+                );
+                window.removeEventListener(
+                    'orientationchange',
+                    syncPracticeRailAfterViewportChange,
+                );
+                window.visualViewport?.removeEventListener(
+                    'resize',
+                    syncPracticeRailAfterViewportChange,
+                );
+                window.visualViewport?.removeEventListener(
+                    'scroll',
+                    syncPracticeRailAfterViewportChange,
+                );
+            };
+
+            ['[data-practice-close]', '[data-practice-hunter]', '[data-practice-hider]']
+                .forEach((selector) => {
+                    card.querySelector(selector)?.addEventListener(
+                        'click',
+                        disconnectRailObserver,
+                        { once: true },
+                    );
+                });
+        }
+
         document.body.appendChild(
             overlay,
         );

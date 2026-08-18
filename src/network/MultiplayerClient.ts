@@ -430,6 +430,11 @@ this.phaseChangedHandlers.forEach(
 
   private connectionIssueStartedAt = 0;
 
+  /* v0.10.10.219: remember minimized/background tab transitions. */
+  private lastDocumentHiddenAt = 0;
+
+  private lastDocumentVisibleAt = Date.now();
+
   private lastJoinedRoomId = "";
 
   private lastJoinOptions?: JoinRoomOptions;
@@ -1338,6 +1343,45 @@ this.manualReconnectInFlight = false;
         );
       };
 
+    const handleVisibilityChange =
+      (): void => {
+        if (typeof document === "undefined") {
+          return;
+        }
+
+        if (document.hidden) {
+          this.lastDocumentHiddenAt = Date.now();
+          return;
+        }
+
+        this.lastDocumentVisibleAt = Date.now();
+
+        if (this.room !== room) {
+          return;
+        }
+
+        /*
+         * Desktop browsers may freeze a minimized tab long enough for the
+         * transport to expire. Resume recovery before any terminal UI path.
+         */
+        this.lastRoomPingAt = Math.min(
+          this.lastRoomPingAt,
+          Date.now() - 1800,
+        );
+
+        if (
+          this.lastStablePhase === "countdown" ||
+          this.lastStablePhase === "paint" ||
+          this.lastStablePhase === "hunt"
+        ) {
+          this.notifyConnectionIssue(
+            "browser_visible_recovering",
+          );
+          void this.attemptManualReconnect(room);
+          void this.attemptFreshRejoin(room);
+        }
+      };
+
     globalThis.addEventListener?.(
       "offline",
       handleBrowserOffline,
@@ -1347,6 +1391,14 @@ this.manualReconnectInFlight = false;
       "online",
       handleBrowserOnline,
     );
+
+    if (typeof document !== "undefined") {
+      document.addEventListener(
+        "visibilitychange",
+        handleVisibilityChange,
+        { passive: true },
+      );
+    }
 
     const healthTimer =
       globalThis.setInterval(
@@ -1475,6 +1527,13 @@ this.manualReconnectInFlight = false;
           "online",
           handleBrowserOnline,
         );
+
+        if (typeof document !== "undefined") {
+          document.removeEventListener(
+            "visibilitychange",
+            handleVisibilityChange,
+          );
+        }
       };
 
     room.onDrop(
@@ -2291,43 +2350,67 @@ this.manualReconnectInFlight = false;
             room,
           );
 
-          [350, 900, 1800, 3200].forEach(
-            (delay) => {
+          const leaveAt = Date.now();
+          const hiddenNow =
+            typeof document !== "undefined" && document.hidden;
+          const recentlyVisible =
+            this.lastDocumentVisibleAt > 0 &&
+            leaveAt - this.lastDocumentVisibleAt < 6500;
+          const recentlyHidden =
+            this.lastDocumentHiddenAt > 0 &&
+            leaveAt - this.lastDocumentHiddenAt < 120000;
+          const backgroundTabRecovery =
+            hiddenNow || recentlyVisible || recentlyHidden;
+
+          const retryDelays = backgroundTabRecovery
+            ? [250, 700, 1500, 2800, 5000, 8500, 13000, 20000, 30000]
+            : [350, 900, 1800, 3200, 6000, 9000];
+
+          retryDelays.forEach((delay) => {
+            globalThis.setTimeout(() => {
+              if (
+                this.room === room &&
+                (typeof navigator === "undefined" || navigator.onLine)
+              ) {
+                void this.attemptFreshRejoin(room);
+              }
+            }, delay);
+          });
+
+          const terminalCheck = (): void => {
+            if (this.room !== room) {
+              return;
+            }
+
+            /* Never declare a minimized/background tab terminally dead. */
+            if (typeof document !== "undefined" && document.hidden) {
+              globalThis.setTimeout(terminalCheck, 4000);
+              return;
+            }
+
+            const visibleFor =
+              this.lastDocumentVisibleAt > 0
+                ? Date.now() - this.lastDocumentVisibleAt
+                : Number.POSITIVE_INFINITY;
+
+            if (backgroundTabRecovery && visibleFor < 12000) {
+              void this.attemptFreshRejoin(room);
               globalThis.setTimeout(
-                () => {
-                  if (
-                    this.room === room
-                  ) {
-                    void this.attemptFreshRejoin(
-                      room,
-                    );
-                  }
-                },
-                delay,
+                terminalCheck,
+                Math.max(1200, 12500 - visibleFor),
               );
-            },
-          );
+              return;
+            }
+
+            this.room = undefined;
+            this.callbacks = undefined;
+            this.lastStablePhase = "lobby";
+            this.emitConnectionChanged(false);
+          };
 
           globalThis.setTimeout(
-            () => {
-              /*
-               * Recovered successfully: attachRoom() replaced this.room.
-               */
-              if (this.room !== room) {
-                return;
-              }
-
-              this.room = undefined;
-              this.callbacks =
-                undefined;
-              this.lastStablePhase =
-                "lobby";
-
-              this.emitConnectionChanged(
-                false,
-              );
-            },
-            9000,
+            terminalCheck,
+            backgroundTabRecovery ? 14000 : 11000,
           );
 
           return;
