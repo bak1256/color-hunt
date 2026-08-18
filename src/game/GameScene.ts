@@ -1550,24 +1550,19 @@ export class GameScene extends Phaser.Scene {
             .setScale(1);
 
         /*
-         * Role labels are HUD, not world objects. Camera zoom used during
-         * hunt/practice must never push them off-screen or hide them behind
-         * the role icons. Keep their SCREEN positions invariant at every zoom.
+         * v0.10.10.216:
+         * The role icons are drawn by survivalHudGraphics with scrollFactor(0).
+         * The role labels already use the exact same HUD coordinate system.
+         * Do NOT run them through camera-zoom compensation: when the reveal
+         * camera zooms out to show the whole map, that compensation pushes the
+         * labels down into the playfield. Keep labels in the same raw HUD
+         * coordinates as the icons so HIDER/HUNTER stay aligned at every zoom.
          */
-        /*
-         * v0.10.10.215:
-         * Keep role labels in one screen-space coordinate system at EVERY
-         * camera zoom, including the 1x reveal/result camera. Mixing raw world
-         * positions at 1x with fixed-HUD positions while zoomed made the labels
-         * jump downward exactly when practice zoomed back out.
-         */
-        this.setFixedHudScreenPosition(
-            this.survivalHiderLabelText,
+        this.survivalHiderLabelText.setPosition(
             hiderLabelScreenX,
             roleLabelY,
         );
-        this.setFixedHudScreenPosition(
-            this.survivalHunterLabelText,
+        this.survivalHunterLabelText.setPosition(
             hunterLabelScreenX,
             roleLabelY,
         );
