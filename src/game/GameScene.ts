@@ -30768,7 +30768,12 @@ export class GameScene extends Phaser.Scene {
             {
                 position: 'fixed',
                 left: '50%',
-                top: '18%',
+                /*
+                 * v0.10.10.235.1:
+                 * Keep the warning away from the top survival/timer HUD.
+                 * Place it around the character-head area instead.
+                 */
+                top: '42%',
                 transform:
                     'translate(-50%, -50%)',
                 zIndex: '100000',
