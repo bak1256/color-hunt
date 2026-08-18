@@ -7251,3 +7251,120 @@ html.colorhunt-mobile .colorhunt-practice-desktop-hint {
     max-height: min(var(--chat-panel-max-height), 148px) !important;
   }
 }
+
+
+/* V10102386_FOLD_LOBBY_ROOM_HEADER */
+/*
+ * Fold / narrow-tablet lobby:
+ * Some older mobile rules hide .ch-lobby-room-head entirely.
+ * Keep the column header visible so "방 이름 / 맵 / 인원 / 상태" remains
+ * understandable on Fold inner screens as well as desktop.
+ */
+@media (min-width: 540px) and (max-width: 1100px) {
+  .ch-lobby-room-head {
+    display: grid !important;
+    grid-template-columns:
+      minmax(0, 1.9fr)
+      minmax(64px, .75fr)
+      minmax(62px, .6fr)
+      minmax(72px, .72fr)
+      42px !important;
+    align-items: center !important;
+    gap: 8px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+
+    min-height: 34px !important;
+    margin: 0 !important;
+    padding: 7px 12px !important;
+
+    visibility: visible !important;
+    opacity: 1 !important;
+    overflow: visible !important;
+
+    color: #5f7164 !important;
+    font-size: clamp(10px, 1.8vw, 12px) !important;
+    line-height: 1.2 !important;
+    font-weight: 800 !important;
+  }
+
+  .ch-lobby-room-head > span {
+    display: block !important;
+    min-width: 0 !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    white-space: nowrap !important;
+  }
+
+  /*
+   * Keep room rows on the exact same five-column grid as the header.
+   * This avoids the Fold-only "header says one thing, cells sit elsewhere"
+   * look when portrait/inner-screen media rules are active.
+   */
+  .ch-lobby-room-row {
+    grid-template-columns:
+      minmax(0, 1.9fr)
+      minmax(64px, .75fr)
+      minmax(62px, .6fr)
+      minmax(72px, .72fr)
+      42px !important;
+    gap: 8px !important;
+    align-items: center !important;
+  }
+
+  .ch-lobby-room-map,
+  .ch-lobby-room-count,
+  .ch-lobby-room-status {
+    display: block !important;
+    min-width: 0 !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    white-space: nowrap !important;
+  }
+}
+
+/*
+ * Very narrow folded/phone portrait layout:
+ * The dedicated table header is intentionally kept as a compact 4-column row.
+ * Room name itself already carries the thumbnail; the action button keeps a
+ * fixed final slot.
+ */
+@media (max-width: 539px) {
+  .ch-lobby-room-head {
+    display: grid !important;
+    grid-template-columns:
+      minmax(0, 1.7fr)
+      minmax(44px, .7fr)
+      minmax(44px, .62fr)
+      minmax(52px, .72fr)
+      34px !important;
+    gap: 4px !important;
+    padding: 6px 7px !important;
+    min-height: 30px !important;
+
+    visibility: visible !important;
+    opacity: 1 !important;
+
+    font-size: 9px !important;
+    line-height: 1.15 !important;
+    font-weight: 800 !important;
+  }
+
+  .ch-lobby-room-head > span {
+    display: block !important;
+    min-width: 0 !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    white-space: nowrap !important;
+  }
+
+  .ch-lobby-room-row {
+    grid-template-columns:
+      minmax(0, 1.7fr)
+      minmax(44px, .7fr)
+      minmax(44px, .62fr)
+      minmax(52px, .72fr)
+      34px !important;
+    gap: 4px !important;
+  }
+}
