@@ -788,8 +788,33 @@ export class GameScene extends Phaser.Scene {
                     ? `✓ ${tr('준비 완료')}`
                     : tr('준비 완료');
 
-            button.appendChild(
+            const count =
+                document.createElement(
+                    'strong',
+                );
+
+            count.className =
+                'colorhunt-paint-ready-fixed__count';
+
+            /*
+             * Hider에게도 현재 준비 인원을 보여줍니다.
+             * 자신의 버튼 토글 직후 서버 echo가 아직 안 왔을 때는
+             * localPaintReady를 이용해 최소한 자기 1명은 즉시 반영합니다.
+             */
+            const optimisticReadyCount =
+                Math.max(
+                    this.paintReadyCount,
+                    this.localPaintReady
+                        ? 1
+                        : 0,
+                );
+
+            count.textContent =
+                `${optimisticReadyCount}/${shownHiderCount}`;
+
+            button.append(
                 label,
+                count,
             );
 
             return;
@@ -20255,6 +20280,7 @@ export class GameScene extends Phaser.Scene {
                 },
             )
             .setOrigin(0.5)
+            .setScrollFactor(0)
             .setDepth(801)
             .setVisible(false);
     }
@@ -29992,9 +30018,30 @@ export class GameScene extends Phaser.Scene {
             this.isMultiplayerSession() &&
             this.hunterBlindText?.visible
         ) {
-            this.hunterBlindText.setText(
-                `${tr('위장하세요')}  ·  ` +
-                `⌛ ${remainingSeconds}`,
+            /*
+             * Paint 카메라는 플레이어가 확대/축소할 수 있습니다.
+             * hunterBlindText가 월드 카메라 zoom을 그대로 먹으면
+             * 카운터가 같이 커졌다/작아졌다 하므로 HUD 픽셀 크기로 역보정합니다.
+             * Multiplayer Paint의 legacy timerText는 이미 숨겨져 있으므로
+             * 이 카운터 하나만 고정 표시합니다.
+             */
+            const cameraZoom = Math.max(
+                0.01,
+                this.cameras.main.zoom,
+            );
+
+            this.hunterBlindText
+                .setText(
+                    `${tr('위장하세요')}  ·  ` +
+                    `⌛ ${remainingSeconds}`,
+                )
+                .setScrollFactor(0)
+                .setScale(1 / cameraZoom);
+
+            this.setFixedHudScreenPosition(
+                this.hunterBlindText,
+                this.gameWidth / 2,
+                98,
             );
         }
 

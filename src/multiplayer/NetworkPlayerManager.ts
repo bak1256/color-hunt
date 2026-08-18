@@ -1004,12 +1004,12 @@ export class NetworkPlayerManager {
       );
 
       view.nameText.setText(
-        `${player.name}\n${player.role.toUpperCase()}`,
+        player.name,
       );
     }
 
     view.nameText.setText(
-      `${player.name}\n${player.role.toUpperCase()}`,
+      player.name,
     );
 
     if (
@@ -1027,7 +1027,7 @@ export class NetworkPlayerManager {
 
       view.nameText.setText(
         player.alive
-          ? `${player.name}\n${player.role.toUpperCase()}`
+          ? player.name
           : `${player.name}\nFOUND!`,
       );
 
@@ -3772,7 +3772,7 @@ export class NetworkPlayerManager {
       .text(
         0,
         -39,
-        `${player.name}\n${player.role.toUpperCase()}`,
+        player.name,
         {
           fontFamily: "monospace",
           fontSize: "10px",
