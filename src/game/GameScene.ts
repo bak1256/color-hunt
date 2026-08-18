@@ -8467,13 +8467,11 @@ export class GameScene extends Phaser.Scene {
             </section>
 
             <div class="colorhunt-practice-map colorhunt-practice-map--compact">
+                <strong class="colorhunt-practice-map-title">🗺️ ${tr('연습 맵')}</strong>
                 <img class="colorhunt-practice-map-preview" data-practice-map-preview src="/assets/backgrounds/${this.practiceMap}.png" alt="${tr('연습 맵 미리보기')}">
-                <label>
-                    <span>🗺️ ${tr('연습 맵')}</span>
-                    <select data-practice-map>
-                        ${mapOptions}
-                    </select>
-                </label>
+                <select data-practice-map aria-label="${tr('연습 맵')}">
+                    ${mapOptions}
+                </select>
             </div>
 
             <div class="colorhunt-practice-mode-grid">
@@ -8486,7 +8484,6 @@ export class GameScene extends Phaser.Scene {
                         <div class="colorhunt-practice-time">
                             <div class="colorhunt-practice-time-title">
                                 <span>⏱️ ${tr('제한 시간')}</span>
-                                <b data-practice-time-value>${this.practiceHuntDuration}s</b>
                             </div>
                             <div class="colorhunt-practice-time-buttons">
                                 ${[80, 100, 120].map(
@@ -8578,9 +8575,8 @@ export class GameScene extends Phaser.Scene {
             </span>
         `;
 
-        overlay.appendChild(
-            scrollAffordance,
-        );
+        // v0.10.10.204: no floating SCROLL badge; the card itself shows a native scrollbar.
+        // Do not append scrollAffordance to the overlay.
 
         const scrollTrack =
             scrollAffordance
@@ -10250,7 +10246,7 @@ export class GameScene extends Phaser.Scene {
                 'small',
             );
         label.textContent =
-            `🎨 ${tr('위장 제작 시간')}`;
+            `🎨 ${tr('위장 제작 시간')} :`;
 
         const time =
             document.createElement(
@@ -10325,7 +10321,7 @@ export class GameScene extends Phaser.Scene {
                         Math.min(
                             rect.width -
                                 220,
-                            430,
+                            330,
                         ),
                     )}px`,
                 );
@@ -10480,6 +10476,22 @@ export class GameScene extends Phaser.Scene {
             this.mobilePaintPrecisionCrosshair
                 ?.visible ??
                 false;
+        const precisionHandleWasVisible =
+            this.mobilePaintPrecisionHandle
+                ?.visible ??
+                false;
+        const eyedropperToolGuideWasVisible =
+            this.eyedropperToolGuide
+                ?.visible ??
+                false;
+        const eyedropperMagnifierWasVisible =
+            this.eyedropperMagnifier
+                ?.visible ??
+                false;
+        const eyedropperSwatchWasVisible =
+            this.eyedropperMagnifierSwatch
+                ?.visible ??
+                false;
 
         this.paintPreview
             ?.setVisible(
@@ -10494,6 +10506,22 @@ export class GameScene extends Phaser.Scene {
                 false,
             );
         this.mobilePaintPrecisionCrosshair
+            ?.setVisible(
+                false,
+            );
+        this.mobilePaintPrecisionHandle
+            ?.setVisible(
+                false,
+            );
+        this.eyedropperToolGuide
+            ?.setVisible(
+                false,
+            );
+        this.eyedropperMagnifier
+            ?.setVisible(
+                false,
+            );
+        this.eyedropperMagnifierSwatch
             ?.setVisible(
                 false,
             );
@@ -10532,6 +10560,22 @@ export class GameScene extends Phaser.Scene {
         this.mobilePaintPrecisionCrosshair
             ?.setVisible(
                 precisionCrosshairWasVisible,
+            );
+        this.mobilePaintPrecisionHandle
+            ?.setVisible(
+                precisionHandleWasVisible,
+            );
+        this.eyedropperToolGuide
+            ?.setVisible(
+                eyedropperToolGuideWasVisible,
+            );
+        this.eyedropperMagnifier
+            ?.setVisible(
+                eyedropperMagnifierWasVisible,
+            );
+        this.eyedropperMagnifierSwatch
+            ?.setVisible(
+                eyedropperSwatchWasVisible,
             );
 
         if (!gameSnapshot) {
@@ -14680,7 +14724,6 @@ export class GameScene extends Phaser.Scene {
                 <section class="ch-lobby-rooms">
                     <header class="ch-lobby-section-head">
                         <div class="ch-lobby-section-title">
-                            <span class="ch-lobby-door">▯</span>
                             <span>${tr('공개 게임방')}</span>
                         </div>
                         <button type="button" class="ch-lobby-refresh">
