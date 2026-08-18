@@ -6687,3 +6687,131 @@ html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-guide span {
   font-size: clamp(7px, 1.55vw, 10px) !important;
   letter-spacing: -0.025em;
 }
+
+
+/* ============================================================
+   v0.10.10.206 — practice header/map alignment + paint hold tune
+   ============================================================ */
+
+/* Remove only the SCROLL word/badge. Keep the real right scrollbar. */
+.colorhunt-practice-head::after {
+  content: none !important;
+  display: none !important;
+}
+.colorhunt-practice-scroll-affordance,
+.colorhunt-practice-scroll-affordance__label {
+  display: none !important;
+}
+
+/* Hard reset the map picker so older mobile rules cannot scatter its children. */
+.colorhunt-practice-map--compact {
+  display: block !important;
+  position: relative !important;
+  min-height: 0 !important;
+  height: auto !important;
+  padding: 10px 12px !important;
+  overflow: hidden !important;
+}
+.colorhunt-practice-map-title {
+  display: block !important;
+  position: static !important;
+  width: auto !important;
+  margin: 0 0 8px !important;
+  transform: none !important;
+}
+.colorhunt-practice-map-picker {
+  display: flex !important;
+  position: static !important;
+  width: 100% !important;
+  max-width: 520px !important;
+  height: auto !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  gap: 8px !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  transform: none !important;
+}
+.colorhunt-practice-map-picker > * {
+  position: static !important;
+  inset: auto !important;
+  transform: none !important;
+  margin: 0 !important;
+}
+.colorhunt-practice-map-arrow {
+  flex: 0 0 38px !important;
+  width: 38px !important;
+  min-width: 38px !important;
+  height: 58px !important;
+  padding: 0 !important;
+  font-size: 28px !important;
+  line-height: 1 !important;
+}
+.colorhunt-practice-map-preview {
+  flex: 0 0 128px !important;
+  width: 128px !important;
+  min-width: 128px !important;
+  max-width: 128px !important;
+  height: 72px !important;
+  object-fit: cover !important;
+  aspect-ratio: 16 / 9 !important;
+  border-radius: 10px !important;
+}
+.colorhunt-practice-map-name {
+  flex: 0 1 auto !important;
+  min-width: 70px !important;
+  max-width: 170px !important;
+  font-size: clamp(13px, 1.5vw, 17px) !important;
+  line-height: 1.2 !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+  text-align: left !important;
+}
+
+/* Practice cards: decorative emoji no longer consumes a left column. */
+.colorhunt-practice-mode-grid .colorhunt-practice-mode {
+  display: block !important;
+  grid-template-columns: none !important;
+  gap: 0 !important;
+}
+.colorhunt-practice-mode-icon {
+  display: none !important;
+}
+.colorhunt-practice-mode-copy {
+  width: 100% !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+.colorhunt-practice-mode--hunter .colorhunt-practice-mode-copy > strong::before {
+  content: "🔦  ";
+}
+.colorhunt-practice-mode--hider .colorhunt-practice-mode-copy > strong::before {
+  content: "🎨  ";
+}
+
+@media (max-width: 700px), (max-height: 520px) {
+  .colorhunt-practice-map-picker {
+    max-width: 390px !important;
+    gap: 6px !important;
+  }
+  .colorhunt-practice-map-arrow {
+    flex-basis: 32px !important;
+    width: 32px !important;
+    min-width: 32px !important;
+    height: 48px !important;
+    font-size: 24px !important;
+  }
+  .colorhunt-practice-map-preview {
+    flex-basis: 104px !important;
+    width: 104px !important;
+    min-width: 104px !important;
+    max-width: 104px !important;
+    height: 58px !important;
+  }
+  .colorhunt-practice-map-name {
+    min-width: 58px !important;
+    max-width: 120px !important;
+    font-size: 12px !important;
+  }
+}

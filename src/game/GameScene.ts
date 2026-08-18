@@ -24874,7 +24874,7 @@ export class GameScene extends Phaser.Scene {
          */
         this.mobilePaintLineModeEvent =
             this.time.delayedCall(
-                520,
+                650,
                 () => {
                     if (
                         pointer.id !== this.mobilePendingPaintPointerId ||
