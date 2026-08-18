@@ -7085,3 +7085,47 @@ html.colorhunt-mobile .colorhunt-practice-desktop-hint {
   visibility: visible !important;
   opacity: 1 !important;
 }
+
+/* ============================================================
+   v0.10.10.214 — practice in-canvas help, durable reveal action,
+   zoom-proof role labels and larger practice top controls
+   ============================================================ */
+.colorhunt-practice-desktop-hint {
+  bottom: auto !important;
+  transform: translate(-50%, -100%) !important;
+  z-index: 2147483000 !important;
+  font-size: 16px !important;
+  min-height: 44px !important;
+  padding: 9px 20px !important;
+}
+
+.colorhunt-practice-reveal-confirm {
+  bottom: auto !important;
+  transform: translate(-50%, -100%) !important;
+  z-index: 2147483600 !important;
+  pointer-events: auto !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+.colorhunt-practice-reveal-confirm:active {
+  transform: translate(-50%, calc(-100% + 3px)) !important;
+}
+
+/* Same footprint, but readable labels. Allow translated text to shrink/wrap
+   inside the button instead of overflowing its frame. */
+.colorhunt-controls-help.colorhunt-controls-help--practice .colorhunt-controls-help__button,
+.colorhunt-practice-exit-button {
+  font-size: clamp(10px, 1.15vw, 13px) !important;
+  line-height: 1.08 !important;
+  white-space: normal !important;
+  text-align: center !important;
+  overflow-wrap: anywhere !important;
+  padding-inline: 7px !important;
+}
+
+@media (pointer: coarse) {
+  .colorhunt-controls-help.colorhunt-controls-help--practice .colorhunt-controls-help__button,
+  .colorhunt-practice-exit-button {
+    font-size: clamp(9px, 2.5vw, 12px) !important;
+  }
+}

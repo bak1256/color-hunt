@@ -1536,31 +1536,39 @@ export class GameScene extends Phaser.Scene {
                 spacing * 0.58,
             );
 
+        const hiderLabelScreenX = Math.max(4, hiderLabelX);
+        const hunterLabelScreenX = Math.min(this.gameWidth - 4, hunterLabelX);
+
         this.survivalHiderLabelText
-            .setText(
-                tr('하이더'),
-            )
-            .setPosition(
-                Math.max(
-                    4,
-                    hiderLabelX,
-                ),
-                roleLabelY,
-            )
-            .setVisible(true);
+            .setText(tr('하이더'))
+            .setVisible(true)
+            .setScale(1);
 
         this.survivalHunterLabelText
-            .setText(
-                tr('헌터'),
-            )
-            .setPosition(
-                Math.min(
-                    this.gameWidth - 4,
-                    hunterLabelX,
-                ),
+            .setText(tr('헌터'))
+            .setVisible(true)
+            .setScale(1);
+
+        /*
+         * Role labels are HUD, not world objects. Camera zoom used during
+         * hunt/practice must never push them off-screen or hide them behind
+         * the role icons. Keep their SCREEN positions invariant at every zoom.
+         */
+        if (Math.abs(this.cameras.main.zoom - 1) > 0.001) {
+            this.setFixedHudScreenPosition(
+                this.survivalHiderLabelText,
+                hiderLabelScreenX,
                 roleLabelY,
-            )
-            .setVisible(true);
+            );
+            this.setFixedHudScreenPosition(
+                this.survivalHunterLabelText,
+                hunterLabelScreenX,
+                roleLabelY,
+            );
+        } else {
+            this.survivalHiderLabelText.setPosition(hiderLabelScreenX, roleLabelY);
+            this.survivalHunterLabelText.setPosition(hunterLabelScreenX, roleLabelY);
+        }
     }
 
     private showHiderFoundEffect(
@@ -10088,6 +10096,18 @@ export class GameScene extends Phaser.Scene {
         hint.innerHTML = `<b>WASD</b> ${tr('이동')} <span>•</span> <b>${tr('좌클릭')}</b> ${tr('발사')}`;
         document.body.appendChild(hint);
         this.practiceDesktopHint = hint;
+
+        const placeInsideGame = (): void => {
+            if (this.practiceDesktopHint !== hint) return;
+            const rect = this.game.canvas.getBoundingClientRect();
+            hint.style.left = `${Math.round(rect.left + rect.width / 2)}px`;
+            hint.style.top = `${Math.round(Math.max(rect.top + 8, rect.bottom - 58))}px`;
+        };
+
+        placeInsideGame();
+        requestAnimationFrame(placeInsideGame);
+        window.setTimeout(placeInsideGame, 120);
+        window.addEventListener('resize', placeInsideGame, { passive: true, once: true });
     }
 
     private exitPracticeMode(
@@ -31714,6 +31734,26 @@ ${shareUrl}`,
         confirmButton.style.pointerEvents = 'auto';
         confirmButton.style.visibility = 'visible';
         confirmButton.style.display = 'block';
+
+        /*
+         * Keep the confirmation action INSIDE the visible game canvas.
+         * A viewport-bottom fixed button could sit below letterboxed canvases
+         * and looked as if it did not exist.
+         */
+        const placeConfirmInsideGame = (): void => {
+            if (this.practiceRevealConfirmButton !== confirmButton) return;
+            const rect = this.game.canvas.getBoundingClientRect();
+            confirmButton.style.left = `${Math.round(rect.left + rect.width / 2)}px`;
+            confirmButton.style.top = `${Math.round(Math.max(rect.top + 12, rect.bottom - 76))}px`;
+            confirmButton.style.bottom = 'auto';
+        };
+        placeConfirmInsideGame();
+        requestAnimationFrame(placeConfirmInsideGame);
+        window.setTimeout(placeConfirmInsideGame, 120);
+        window.addEventListener('resize', placeConfirmInsideGame, { passive: true, once: true });
+
+        this.input.setDefaultCursor('default');
+        this.game.canvas.style.cursor = 'default';
 
         const finishReveal =
             (): void => {
