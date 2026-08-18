@@ -447,6 +447,13 @@ this.phaseChangedHandlers.forEach(
 
   private freshRejoinInFlight = false;
 
+  /*
+   * v0.10.10.221: foreground/background transitions must not force a
+   * reconnect while the existing socket is still perfectly healthy.
+   * A short ping probe owns resume recovery; only a failed probe escalates.
+   */
+  private resumeProbeGeneration = 0;
+
   private readonly roundResultHandlers =
     new Set<RoundResultHandler>();
 
@@ -526,6 +533,18 @@ this.phaseChangedHandlers.forEach(
 
     this.createdRoomHostSessionId =
       room.sessionId;
+
+    /*
+     * Hosts need exactly the same recovery identity as joiners. Previously
+     * lastJoinedRoomId/lastJoinOptions were only populated by joinRoomById(),
+     * so a host that locked the phone or minimized Chrome could not use the
+     * stable-clientKey handoff path at all.
+     */
+    this.lastJoinedRoomId = room.roomId;
+    this.lastJoinOptions = {
+      playerName: options.playerName,
+      password: options.password ?? "",
+    };
 
 
     /*
@@ -1036,6 +1055,7 @@ private async attemptFreshRejoin(
     if (
       this.room !== sourceRoom ||
       this.freshRejoinInFlight ||
+      this.manualReconnectInFlight ||
       !this.lastJoinedRoomId ||
       !this.lastJoinOptions
     ) {
@@ -1374,40 +1394,91 @@ this.manualReconnectInFlight = false;
         }
 
         /*
-         * v0.10.10.220 MOBILE LIFECYCLE RECOVERY:
-         * iOS/Android can suspend JS completely after Home, screen lock,
-         * app switching, PWA backgrounding or OS power saving. The websocket
-         * may already be dead by the time JS resumes, so immediately try BOTH
-         * reconnection-token recovery and a fresh stable-clientKey rejoin.
+         * v0.10.10.221 CONNECTION STABILITY:
+         * Do NOT reconnect merely because the browser regained focus.
+         * Alt-tab, Home, lock-screen and app switching are normal user
+         * actions, and many browsers keep the existing websocket alive.
+         * Forcing token reconnect + fresh rejoin in parallel here caused
+         * healthy sessions to replace themselves and was a major source of
+         * "random kicks while painting".
+         *
+         * First probe the current room. Only a probe that does not answer
+         * within a generous foreground window escalates to recovery.
          */
-        this.notifyConnectionIssue(reason);
-        this.lastRoomPingAt = Math.min(
-          this.lastRoomPingAt,
-          now - 2200,
-        );
+        const generation = ++this.resumeProbeGeneration;
+        let answered = false;
 
-        void this.attemptManualReconnect(room);
-        void this.attemptFreshRejoin(room);
+        const markHealthy = (): void => {
+          if (
+            answered ||
+            generation !== this.resumeProbeGeneration ||
+            this.room !== room
+          ) {
+            return;
+          }
 
-        [250, 800, 1800, 3500, 6500, 11000, 18000, 28000, 42000, 60000]
-          .forEach((delay) => {
-            globalThis.setTimeout(() => {
-              if (
-                this.room !== room ||
-                !this.connectionIssueNotified ||
-                (typeof navigator !== "undefined" && !navigator.onLine)
-              ) {
-                return;
-              }
+          answered = true;
+          this.lastRoomPingAt = Date.now();
 
-              if (typeof document !== "undefined" && document.hidden) {
-                return;
-              }
+          if (this.connectionIssueNotified) {
+            this.clearConnectionIssue();
+          }
 
-              void this.attemptManualReconnect(room);
-              void this.attemptFreshRejoin(room);
-            }, delay);
-          });
+          this.requestLobbySnapshot();
+          this.requestPaintReadyState();
+        };
+
+        try {
+          room.ping(markHealthy);
+        } catch {
+          // Closed/half-open transport: the timeout below escalates recovery.
+        }
+
+        globalThis.setTimeout(() => {
+          if (
+            answered ||
+            generation !== this.resumeProbeGeneration ||
+            this.room !== room ||
+            !isActiveRound() ||
+            (typeof document !== "undefined" && document.hidden)
+          ) {
+            return;
+          }
+
+          this.notifyConnectionIssue(reason);
+          this.lastRoomPingAt = Math.min(
+            this.lastRoomPingAt,
+            Date.now() - 9000,
+          );
+
+          /*
+           * Recovery is deliberately staged, never parallel. Token reconnect
+           * gets first chance to preserve the exact sessionId. A fresh
+           * stable-clientKey handoff is the fallback only if the old Room is
+           * still current a little later.
+           */
+          void this.attemptManualReconnect(room);
+
+          [2600, 5200, 9000, 15000, 24000, 36000, 52000, 72000]
+            .forEach((delay) => {
+              globalThis.setTimeout(() => {
+                if (
+                  this.room !== room ||
+                  !this.connectionIssueNotified ||
+                  (typeof navigator !== "undefined" && !navigator.onLine) ||
+                  (typeof document !== "undefined" && document.hidden)
+                ) {
+                  return;
+                }
+
+                if (delay <= 5200) {
+                  void this.attemptManualReconnect(room);
+                } else {
+                  void this.attemptFreshRejoin(room);
+                }
+              }, delay);
+            });
+        }, 1800);
       };
 
     const handleVisibilityChange =
@@ -1572,7 +1643,7 @@ this.manualReconnectInFlight = false;
 
           if (
             activeRound &&
-            silentFor >= 1500
+            silentFor >= 8000
           ) {
             this.notifyConnectionIssue(
               "ping_timeout",
@@ -1587,10 +1658,10 @@ this.manualReconnectInFlight = false;
            */
           if (
             activeRound &&
-            silentFor >= 1800 &&
+            silentFor >= 10000 &&
             now -
               this.lastManualReconnectAt >=
-              450
+              1800
           ) {
             void this.attemptManualReconnect(
               room,
@@ -1602,7 +1673,7 @@ this.manualReconnectInFlight = false;
             this.connectionIssueStartedAt > 0 &&
             now -
               this.connectionIssueStartedAt >=
-              2400 &&
+              12000 &&
             (
               typeof navigator ===
                 "undefined" ||
@@ -1614,7 +1685,7 @@ this.manualReconnectInFlight = false;
             );
           }
         },
-        650,
+        1800,
       );
 
     this.roomHealthCleanup =
@@ -2537,16 +2608,21 @@ this.manualReconnectInFlight = false;
                 : Number.POSITIVE_INFINITY;
 
             /*
-             * After a real mobile resume, give the handoff path a full 90s.
-             * Do not throw the player to the lobby while the OS is still
-             * bringing Wi-Fi/cellular and the websocket stack back online.
+             * Mobile/desktop background recovery gets a long foreground grace
+             * window. Browsers may need tens of seconds after unlock/focus to
+             * restore radio, DNS and websocket scheduling. Do not send the
+             * player to the public lobby while recovery is still plausible.
              */
-            if (backgroundTabRecovery && visibleFor < 90000) {
+            if (backgroundTabRecovery && visibleFor < 180000) {
               void this.attemptManualReconnect(room);
-              void this.attemptFreshRejoin(room);
+
+              if (visibleFor >= 5000) {
+                void this.attemptFreshRejoin(room);
+              }
+
               globalThis.setTimeout(
                 terminalCheck,
-                Math.max(1500, Math.min(5000, 90500 - visibleFor)),
+                Math.max(2000, Math.min(7000, 180500 - visibleFor)),
               );
               return;
             }
@@ -2559,7 +2635,7 @@ this.manualReconnectInFlight = false;
 
           globalThis.setTimeout(
             terminalCheck,
-            backgroundTabRecovery ? 18000 : 11000,
+            backgroundTabRecovery ? 30000 : 20000,
           );
 
           return;
