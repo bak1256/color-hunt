@@ -3265,6 +3265,7 @@ export class GameScene extends Phaser.Scene {
         event: KeyboardEvent,
     ) => void;
     private chatViewportHandler?: () => void;
+    private chatVirtualKeyboardGeometryHandler?: () => void;
     private chatFocusArmed = false;
 
     /*
@@ -5209,6 +5210,23 @@ export class GameScene extends Phaser.Scene {
                 );
 
                 this.updateChatKeyboardOffset();
+
+                /*
+                 * Some Android keyboards expose their final geometry one or
+                 * two animation frames after focus. Re-measure without moving
+                 * or resizing the game canvas.
+                 */
+                window.requestAnimationFrame(
+                    () => this.updateChatKeyboardOffset(),
+                );
+                window.setTimeout(
+                    () => this.updateChatKeyboardOffset(),
+                    80,
+                );
+                window.setTimeout(
+                    () => this.updateChatKeyboardOffset(),
+                    220,
+                );
             },
         );
 
@@ -5274,6 +5292,37 @@ export class GameScene extends Phaser.Scene {
             (): void => {
                 this.updateChatKeyboardOffset();
             };
+
+        /*
+         * v0.10.10.234:
+         * With navigator.virtualKeyboard.overlaysContent=true, visualViewport
+         * may no longer resize when the keyboard opens. In that mode the
+         * reliable signal is VirtualKeyboard.geometrychange.
+         *
+         * The Phaser canvas remains completely untouched; only the DOM chat
+         * panel is re-anchored immediately above the keyboard.
+         */
+        const chatVirtualKeyboard =
+            (
+                navigator as Navigator & {
+                    virtualKeyboard?: {
+                        addEventListener?: (
+                            type: 'geometrychange',
+                            listener: EventListener,
+                        ) => void;
+                    };
+                }
+            ).virtualKeyboard;
+
+        this.chatVirtualKeyboardGeometryHandler =
+            (): void => {
+                this.updateChatKeyboardOffset();
+            };
+
+        chatVirtualKeyboard?.addEventListener?.(
+            'geometrychange',
+            this.chatVirtualKeyboardGeometryHandler,
+        );
 
         window.visualViewport
             ?.addEventListener(
@@ -5535,6 +5584,13 @@ export class GameScene extends Phaser.Scene {
                 )
                 : 0;
 
+        /*
+         * overlaysContent keeps window.innerHeight unchanged, so
+         * visualViewport alone can report 0 even while the keyboard is open.
+         * boundingRect.height is therefore authoritative on supported Chrome /
+         * Android devices. Browsers without the API fall back to
+         * visualViewport below.
+         */
         const visualViewportKeyboardOffset =
             viewport
                 ? Math.max(
@@ -5710,6 +5766,30 @@ export class GameScene extends Phaser.Scene {
                 this.chatKeyboardHandler,
                 true,
             );
+        }
+
+        if (
+            this.chatVirtualKeyboardGeometryHandler
+        ) {
+            const chatVirtualKeyboard =
+                (
+                    navigator as Navigator & {
+                        virtualKeyboard?: {
+                            removeEventListener?: (
+                                type: 'geometrychange',
+                                listener: EventListener,
+                            ) => void;
+                        };
+                    }
+                ).virtualKeyboard;
+
+            chatVirtualKeyboard?.removeEventListener?.(
+                'geometrychange',
+                this.chatVirtualKeyboardGeometryHandler,
+            );
+
+            this.chatVirtualKeyboardGeometryHandler =
+                undefined;
         }
 
         if (
