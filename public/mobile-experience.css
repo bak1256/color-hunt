@@ -6879,3 +6879,55 @@ html.colorhunt-mobile .colorhunt-avatar-editor {
 html.colorhunt-mobile .colorhunt-avatar-editor canvas {
   touch-action: none !important;
 }
+
+/* ============================================================
+   v0.10.10.209 — practice rail inside frame + avatar first-open centering
+   ============================================================ */
+
+/* The custom rail is positioned by JS from the Practice card's live rect. */
+.colorhunt-practice-scroll-affordance {
+  position: fixed !important;
+  width: 10px !important;
+  min-width: 10px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 999px !important;
+  z-index: 95 !important;
+  pointer-events: none !important;
+  overflow: hidden !important;
+}
+.colorhunt-practice-scroll-affordance__track {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 10px !important;
+  height: 100% !important;
+  padding: 2px !important;
+  box-sizing: border-box !important;
+  border-radius: 999px !important;
+  background: rgba(228, 234, 219, .98) !important;
+  box-shadow: inset 0 0 0 1px rgba(86,119,88,.28) !important;
+}
+.colorhunt-practice-scroll-affordance__track i {
+  width: 6px !important;
+  min-height: 38px !important;
+  border-radius: 999px !important;
+  background: #67966c !important;
+}
+
+/* Keep enough inner breathing room so content never sits under the rail. */
+.colorhunt-practice-card {
+  padding-right: max(20px, calc(12px + env(safe-area-inset-right))) !important;
+}
+
+/* Avatar preview itself must not inherit any transform/positioning from generic mobile canvas rules. */
+html.colorhunt-mobile .colorhunt-avatar-editor canvas {
+  position: static !important;
+  inset: auto !important;
+  transform: none !important;
+  translate: none !important;
+  max-width: none !important;
+  max-height: none !important;
+}

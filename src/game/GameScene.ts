@@ -8566,8 +8566,6 @@ export class GameScene extends Phaser.Scene {
             'colorhunt-practice-scroll-affordance';
 
         scrollAffordance.innerHTML = `
-            <span class="colorhunt-practice-scroll-affordance__arrow">↓</span>
-            <span class="colorhunt-practice-scroll-affordance__label">SCROLL</span>
             <span class="colorhunt-practice-scroll-affordance__track">
                 <i></i>
             </span>
@@ -8601,6 +8599,30 @@ export class GameScene extends Phaser.Scene {
 
         const syncPracticeScrollAffordance =
             (): void => {
+                /*
+                 * v0.10.10.209: keep the permanent rail INSIDE the rounded
+                 * Practice card.  Positioning from the card rect avoids the
+                 * rail drifting outside the modal on phones with different
+                 * viewport/safe-area geometry.
+                 */
+                const cardRect =
+                    card.getBoundingClientRect();
+
+                const railInset = 8;
+                const railTopInset = 14;
+                const railBottomInset = 14;
+
+                scrollAffordance.style.left =
+                    `${Math.max(0, cardRect.right - railInset - 10)}px`;
+                scrollAffordance.style.right =
+                    'auto';
+                scrollAffordance.style.top =
+                    `${Math.max(0, cardRect.top + railTopInset)}px`;
+                scrollAffordance.style.bottom =
+                    'auto';
+                scrollAffordance.style.height =
+                    `${Math.max(60, cardRect.height - railTopInset - railBottomInset)}px`;
+
                 const maxScroll =
                     Math.max(
                         0,
@@ -13242,6 +13264,12 @@ export class GameScene extends Phaser.Scene {
          */
         let editorPanX = 0;
         let editorPanY = 0;
+        /*
+         * v0.10.10.209: until the player actually touches the preview,
+         * repeatedly re-center it after responsive layout settles. This
+         * prevents device-dependent first-open offsets on mobile browsers.
+         */
+        let editorViewportTouched = false;
         let panning = false;
         let panPointerId = -1;
         let panStartScreen:
@@ -13258,9 +13286,9 @@ export class GameScene extends Phaser.Scene {
          * Use one shared center for rendering AND pointer inversion.
          */
         const editorCharacterCenterX =
-            40;
+            39.5;
         const editorCharacterCenterY =
-            62.5;
+            62;
         const editorPixelScale =
             3;
 
@@ -14062,6 +14090,7 @@ export class GameScene extends Phaser.Scene {
             'pointerdown',
             (event) => {
                 event.preventDefault();
+                editorViewportTouched = true;
 
                 activePointers.set(
                     event.pointerId,
@@ -14597,6 +14626,31 @@ export class GameScene extends Phaser.Scene {
         overlay.appendChild(card);
         document.body.appendChild(
             overlay,
+        );
+
+        const recenterAvatarEditorIfUntouched =
+            (): void => {
+                if (editorViewportTouched) {
+                    return;
+                }
+
+                editorPanX = 0;
+                editorPanY = 0;
+                hoverPoint = undefined;
+                replay();
+            };
+
+        /* Responsive CSS / visualViewport can settle over several frames. */
+        requestAnimationFrame(
+            recenterAvatarEditorIfUntouched,
+        );
+        window.setTimeout(
+            recenterAvatarEditorIfUntouched,
+            80,
+        );
+        window.setTimeout(
+            recenterAvatarEditorIfUntouched,
+            220,
         );
 
         this.menuModalOverlay =
@@ -31672,6 +31726,7 @@ ${shareUrl}`,
         document.body.appendChild(
             overlay,
         );
+
 
         this.menuModalOverlay =
             overlay;
