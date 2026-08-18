@@ -277,7 +277,15 @@ export type PaintReadyStateHandler = (
 ) => void;
 
 export class MultiplayerClient {
-  private client: Client;
+  /*
+   * V1010237_BACKGROUND_RESUME_POLICY
+   * Hidden/minimized is NOT a leave signal.
+   * Never close/recreate the room merely because document.hidden, blur,
+   * pagehide, or visibilitychange fired. Transport close/error remains the
+   * authority for reconnect; the server now preserves the same session for
+   * five minutes.
+   */
+private client: Client;
   private readonly serverUrl: string;
   private room?: Room<NetworkGameState>;
   private callbacks?: any;
