@@ -6566,3 +6566,124 @@ html.colorhunt-mobile .colorhunt-main-lobby .ch-lobby-guide span {
     grid-template-columns: 1fr 1fr;
   }
 }
+
+/* ============================================================
+   v0.10.10.205 — practice modal scroll/header + arrow map picker
+   ============================================================ */
+
+/* Keep a real, always-visible scrollbar; remove only the old SCROLL text badge. */
+.colorhunt-practice-card {
+  overflow-y: scroll !important;
+  scrollbar-width: auto;
+  scrollbar-color: #67966c #e4eadb;
+  overscroll-behavior: contain;
+  position: relative;
+}
+.colorhunt-practice-card::-webkit-scrollbar { width: 10px; }
+.colorhunt-practice-card::-webkit-scrollbar-track {
+  background: #e4eadb;
+  border-radius: 999px;
+}
+.colorhunt-practice-card::-webkit-scrollbar-thumb {
+  background: #67966c;
+  border: 2px solid #e4eadb;
+  border-radius: 999px;
+}
+.colorhunt-practice-scroll-affordance { display: none !important; }
+
+/* Header stays visually above scrolling content, so content never peeks over it. */
+.colorhunt-practice-head {
+  position: sticky !important;
+  top: -12px;
+  z-index: 30;
+  margin: -12px -12px 8px;
+  padding: 12px 12px 10px !important;
+  background: linear-gradient(180deg, #fff9e8 0%, #fff9e8 86%, rgba(255,249,232,.96) 100%);
+  border-bottom: 1px solid rgba(117,166,110,.24);
+  box-shadow: 0 5px 10px rgba(53,82,61,.08);
+}
+@media (pointer: coarse) {
+  .colorhunt-practice-head {
+    top: -8px;
+    margin: -8px -8px 7px;
+    padding: 8px 8px 8px !important;
+  }
+}
+
+/* Compact map picker: < thumbnail >  MAP NAME */
+.colorhunt-practice-map--compact {
+  display: block !important;
+  padding: 9px 10px !important;
+}
+.colorhunt-practice-map-title {
+  display: block;
+  margin-bottom: 7px;
+}
+.colorhunt-practice-map-picker {
+  display: grid;
+  grid-template-columns: 34px minmax(84px, 132px) 34px minmax(90px, 1fr);
+  gap: 7px;
+  align-items: center;
+}
+.colorhunt-practice-map-preview {
+  width: 100% !important;
+  height: 72px !important;
+  aspect-ratio: 4 / 3;
+  object-fit: cover !important;
+  border-radius: 9px;
+}
+.colorhunt-practice-map-arrow {
+  width: 34px;
+  height: 48px;
+  padding: 0;
+  border: 1px solid #9db79a;
+  border-radius: 9px;
+  background: #fffdf4;
+  color: #35523d;
+  font: inherit;
+  font-size: 27px;
+  font-weight: 1000;
+  line-height: 1;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.colorhunt-practice-map-arrow:active {
+  transform: translateY(1px);
+  background: #eaf4df;
+}
+.colorhunt-practice-map-name {
+  min-width: 0;
+  color: #31553a;
+  font-size: 14px;
+  font-weight: 1000;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.colorhunt-practice-map--compact > select[hidden] { display: none !important; }
+
+@media (max-width: 700px), (max-height: 520px) {
+  .colorhunt-practice-map-picker {
+    grid-template-columns: 30px minmax(72px, 108px) 30px minmax(76px, 1fr);
+    gap: 5px;
+  }
+  .colorhunt-practice-map-preview { height: 58px !important; }
+  .colorhunt-practice-map-arrow {
+    width: 30px;
+    height: 42px;
+    font-size: 23px;
+  }
+  .colorhunt-practice-map-name { font-size: 11px; }
+}
+
+/* Keep the share-help sentence on one line; scale it down rather than orphaning '요.'. */
+.colorhunt-hider-share-note {
+  max-width: none !important;
+  width: 100%;
+  box-sizing: border-box;
+  white-space: nowrap !important;
+  overflow: visible !important;
+  overflow-wrap: normal !important;
+  word-break: keep-all !important;
+  font-size: clamp(7px, 1.55vw, 10px) !important;
+  letter-spacing: -0.025em;
+}

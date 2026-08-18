@@ -8468,8 +8468,13 @@ export class GameScene extends Phaser.Scene {
 
             <div class="colorhunt-practice-map colorhunt-practice-map--compact">
                 <strong class="colorhunt-practice-map-title">🗺️ ${tr('연습 맵')}</strong>
-                <img class="colorhunt-practice-map-preview" data-practice-map-preview src="/assets/backgrounds/${this.practiceMap}.png" alt="${tr('연습 맵 미리보기')}">
-                <select data-practice-map aria-label="${tr('연습 맵')}">
+                <div class="colorhunt-practice-map-picker">
+                    <button type="button" class="colorhunt-practice-map-arrow" data-practice-map-prev aria-label="${tr('이전 맵')}">‹</button>
+                    <img class="colorhunt-practice-map-preview" data-practice-map-preview src="/assets/backgrounds/${this.practiceMap}.png" alt="${tr('연습 맵 미리보기')}">
+                    <button type="button" class="colorhunt-practice-map-arrow" data-practice-map-next aria-label="${tr('다음 맵')}">›</button>
+                    <strong class="colorhunt-practice-map-name" data-practice-map-name>${this.getMapDisplayName(this.practiceMap)}</strong>
+                </div>
+                <select data-practice-map aria-label="${tr('연습 맵')}" hidden>
                     ${mapOptions}
                 </select>
             </div>
@@ -8817,13 +8822,45 @@ export class GameScene extends Phaser.Scene {
                 '[data-practice-map-preview]',
             );
 
+        const mapName =
+            card.querySelector<HTMLElement>(
+                '[data-practice-map-name]',
+            );
+
         const syncPracticeMapPreview = (): void => {
             const selected = mapSelect?.value ?? this.practiceMap;
             if (mapPreview && /^map(?:[1-9]|1[01])$/.test(selected)) {
                 mapPreview.src = `/assets/backgrounds/${selected}.png`;
                 mapPreview.alt = `${tr('연습 맵 미리보기')} · ${this.getMapDisplayName(selected)}`;
             }
+            if (mapName && /^map(?:[1-9]|1[01])$/.test(selected)) {
+                mapName.textContent = this.getMapDisplayName(selected);
+            }
         };
+
+        const stepPracticeMap = (delta: number): void => {
+            if (!mapSelect) {
+                return;
+            }
+
+            const match = /^map(\d+)$/.exec(mapSelect.value);
+            const current = match ? Number(match[1]) : 1;
+            const total = 11;
+            const next = ((current - 1 + delta + total) % total) + 1;
+            mapSelect.value = `map${next}`;
+            this.practiceMap = mapSelect.value;
+            syncPracticeMapPreview();
+        };
+
+        card.querySelector('[data-practice-map-prev]')?.addEventListener(
+            'click',
+            () => stepPracticeMap(-1),
+        );
+
+        card.querySelector('[data-practice-map-next]')?.addEventListener(
+            'click',
+            () => stepPracticeMap(1),
+        );
 
         if (mapSelect) {
             mapSelect.value = this.practiceMap;
