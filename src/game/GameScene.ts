@@ -28622,8 +28622,7 @@ export class GameScene extends Phaser.Scene {
                  * Once the final shell has actually been fired, end practice
                  * immediately with an explicit ammo-depletion reason.
                  */
-                this.showPracticeResult(
-                    false,
+                this.revealPracticeBotsBeforeResult(
                     'ammo',
                 );
                 return;
@@ -31456,14 +31455,39 @@ ${shareUrl}`,
         );
     }
 
-    private revealPracticeBotsBeforeResult(): void {
+    private revealPracticeBotsBeforeResult(
+        reason:
+            'time' |
+            'ammo' =
+                'time',
+    ): void {
+        if (
+            this.practiceMode !==
+                'hunter'
+        ) {
+            return;
+        }
+
+        this.phase =
+            'hiderVictory';
         this.canShoot = false;
         this.clearAllAimingVisuals();
+        this.stopAllBgm();
 
         /*
-         * Keep the real camouflaged Practice characters on screen, but make
-         * every survivor impossible to miss before the result modal opens.
+         * v0.10.10.212:
+         * Practice failure is a learning moment, not an auto-dismiss toast.
+         * Pull the camera back to the complete 960x540 map, make every
+         * surviving BOT flash red, and keep the reveal on screen until the
+         * player explicitly confirms it.
          */
+        this.resetGameplayCamera();
+        this.cameras.main
+            .stopFollow()
+            .removeBounds()
+            .setZoom(1)
+            .setScroll(0, 0);
+
         this.networkPlayerManager
             .setNamesVisible(
                 true,
@@ -31471,6 +31495,8 @@ ${shareUrl}`,
 
         const revealMarkers:
             Phaser.GameObjects.GameObject[] = [];
+        const revealTweens:
+            Phaser.Tweens.Tween[] = [];
 
         this.hiders.forEach(
             (
@@ -31485,37 +31511,104 @@ ${shareUrl}`,
                     this.add.circle(
                         hider.centerX,
                         hider.centerY,
-                        34,
-                        0xffc247,
-                        0.12,
+                        39,
+                        0xff2b2b,
+                        0.08,
                     )
                         .setStrokeStyle(
-                            4,
-                            0xffd45c,
+                            5,
+                            0xff2b2b,
                             1,
                         )
                         .setDepth(
                             4998,
                         );
 
+                revealMarkers.push(
+                    ring,
+                );
+
+                revealTweens.push(
+                    this.tweens.add({
+                        targets: ring,
+                        scale: 1.25,
+                        alpha: {
+                            from: 0.35,
+                            to: 1,
+                        },
+                        duration: 420,
+                        yoyo: true,
+                        repeat: -1,
+                    }),
+                );
+
+                this.getAllPartObjects(
+                    hider,
+                ).forEach(
+                    (part) => {
+                        const bounds =
+                            part.getBounds();
+                        const overlay =
+                            part instanceof
+                                Phaser.GameObjects.Arc
+                                ? this.add.circle(
+                                    bounds.centerX,
+                                    bounds.centerY,
+                                    Math.max(
+                                        bounds.width,
+                                        bounds.height,
+                                    ) / 2,
+                                    0xff2020,
+                                    0.72,
+                                )
+                                : this.add.rectangle(
+                                    bounds.centerX,
+                                    bounds.centerY,
+                                    bounds.width,
+                                    bounds.height,
+                                    0xff2020,
+                                    0.72,
+                                );
+
+                        overlay.setDepth(
+                            4997,
+                        );
+                        revealMarkers.push(
+                            overlay,
+                        );
+                        revealTweens.push(
+                            this.tweens.add({
+                                targets: overlay,
+                                alpha: {
+                                    from: 0.18,
+                                    to: 0.92,
+                                },
+                                duration: 360,
+                                yoyo: true,
+                                repeat: -1,
+                            }),
+                        );
+                    },
+                );
+
                 const label =
                     this.add.text(
                         hider.centerX,
-                        hider.centerY - 48,
-                        `👀 BOT ${index + 1} · ${tr('여기!')}`,
+                        hider.centerY - 50,
+                        `BOT ${index + 1}`,
                         {
                             fontFamily:
                                 'Arial, sans-serif',
                             fontSize:
-                                '14px',
+                                '15px',
                             fontStyle:
                                 'bold',
                             color:
                                 '#ffffff',
                             backgroundColor:
-                                '#d96d2ae8',
+                                '#c91f1fe8',
                             padding: {
-                                x: 7,
+                                x: 8,
                                 y: 4,
                             },
                         },
@@ -31528,41 +31621,52 @@ ${shareUrl}`,
                         );
 
                 revealMarkers.push(
-                    ring,
                     label,
                 );
-
-                this.tweens.add({
-                    targets: ring,
-                    scale: 1.22,
-                    alpha: 0.9,
-                    duration: 320,
-                    yoyo: true,
-                    repeat: 3,
-                });
             },
         );
 
         this.showStatus(
-            tr('시간 종료! 찾지 못한 봇의 위치를 공개합니다.'),
+            reason ===
+                'ammo'
+                ? tr('탄약 소진! 남은 봇의 위치를 확인하세요.')
+                : tr('시간 종료! 남은 봇의 위치를 확인하세요.'),
         );
 
         this.cameras.main.flash(
-            220,
+            180,
             255,
-            190,
-            70,
+            80,
+            80,
         );
 
-        this.time.delayedCall(
-            2000,
-            () => {
+        const confirmButton =
+            document.createElement(
+                'button',
+            );
+        confirmButton.type =
+            'button';
+        confirmButton.className =
+            'colorhunt-practice-reveal-confirm';
+        confirmButton.textContent =
+            `✓ ${tr('위치 확인 완료')}`;
+        document.body.appendChild(
+            confirmButton,
+        );
+
+        const finishReveal =
+            (): void => {
+                confirmButton.remove();
+                revealTweens.forEach(
+                    (tween) => {
+                        tween.stop();
+                    },
+                );
                 revealMarkers.forEach(
                     (object) => {
                         object.destroy();
                     },
                 );
-
                 this.networkPlayerManager
                     .setNamesVisible(
                         false,
@@ -31574,9 +31678,16 @@ ${shareUrl}`,
                 ) {
                     this.showPracticeResult(
                         false,
-                        'time',
+                        reason,
                     );
                 }
+            };
+
+        confirmButton.addEventListener(
+            'click',
+            finishReveal,
+            {
+                once: true,
             },
         );
     }
@@ -31830,7 +31941,9 @@ ${shareUrl}`,
         ) {
             this.phase =
                 'hiderVictory';
-            this.revealPracticeBotsBeforeResult();
+            this.revealPracticeBotsBeforeResult(
+                'time',
+            );
             return;
         }
 

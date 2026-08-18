@@ -7007,3 +7007,39 @@ html.colorhunt-mobile .colorhunt-avatar-editor canvas {
     border: 2px solid #e4eadb !important;
   }
 }
+
+
+/* ============================================================
+   v0.10.10.212 — Hunter practice failure reveal confirmation
+   ============================================================ */
+.colorhunt-practice-reveal-confirm {
+  position: fixed;
+  left: 50%;
+  bottom: max(22px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 12050;
+  min-width: 210px;
+  min-height: 54px;
+  padding: 12px 24px;
+  border: 3px solid #f3efd9;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #73a979 0%, #4d895d 100%);
+  color: #fff;
+  box-shadow: 0 5px 0 #355f42, 0 10px 24px rgba(0,0,0,.28);
+  font: 800 18px/1.15 Arial, sans-serif;
+  letter-spacing: .02em;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.colorhunt-practice-reveal-confirm:active {
+  transform: translate(-50%, 3px);
+  box-shadow: 0 2px 0 #355f42, 0 6px 16px rgba(0,0,0,.24);
+}
+html.colorhunt-mobile .colorhunt-practice-reveal-confirm {
+  bottom: max(14px, env(safe-area-inset-bottom));
+  min-width: 190px;
+  min-height: 48px;
+  padding: 10px 20px;
+  border-radius: 14px;
+  font-size: 16px;
+}
