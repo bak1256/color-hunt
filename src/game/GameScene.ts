@@ -13222,6 +13222,14 @@ export class GameScene extends Phaser.Scene {
             >
         >,
     ): void {
+        /*
+         * A new Room did not exist when registerMultiplayerEvents() ran.
+         * Attach room-scoped rejection/countdown listeners immediately before
+         * processing its phase so server messages cannot race the UI.
+         */
+        this.attachJoinRejectedListener();
+        this.attachRoleDisconnectCountdownListener();
+
         this.destroyMainLobbyDom();
         window.removeEventListener(
             'resize',
@@ -13278,6 +13286,122 @@ export class GameScene extends Phaser.Scene {
 
         const joinedPhase =
             room.state?.phase ?? 'lobby';
+
+        /*
+         * v0.10.10.238.3 EMERGENCY ROLELESS MID-GAME GATE
+         *
+         * A newly invited client can complete the transport join before the
+         * server's join_rejected message reaches GameScene. If we immediately
+         * apply the room's active phase here, that client visually enters the
+         * live match with NO authoritative PlayerState/role.
+         *
+         * Active phases are allowed ONLY after the server has actually created
+         * or restored this session's local player. Reconnects pass this gate
+         * because their PlayerState is authoritative; brand-new invite users
+         * do not.
+         */
+        const activeJoinedPhase =
+            joinedPhase === 'countdown' ||
+            joinedPhase === 'paint' ||
+            joinedPhase === 'hunt';
+
+        const authoritativeLocalPlayer =
+            multiplayerClient.getLocalPlayer();
+
+        if (
+            activeJoinedPhase &&
+            !authoritativeLocalPlayer
+        ) {
+            this.localNetworkPlayerReady =
+                false;
+
+            /*
+             * Do not render one frame of the active game. Stay in the neutral
+             * lobby presentation while waiting briefly for either:
+             *  - a legitimate reconnect PlayerState, or
+             *  - server rejection / transport close.
+             */
+            this.enterLobbyPhase();
+            this.hideChatUi(true);
+            this.destroyWaitingRoomDom();
+            this.networkPlayerManager
+                .clearAllPlayers();
+
+            let attempts = 0;
+
+            const resolveActiveJoin =
+                (): void => {
+                    if (
+                        multiplayerClient.getRoom() !==
+                            room
+                    ) {
+                        return;
+                    }
+
+                    const localPlayer =
+                        multiplayerClient.getLocalPlayer();
+
+                    if (localPlayer) {
+                        /*
+                         * Legitimate reconnect: the server restored ownership.
+                         * Rebuild the current authoritative phase only now.
+                         */
+                        this.localNetworkPlayerReady =
+                            true;
+
+                        this.networkPlayerManager
+                            .syncPlayersFromCurrentRoom();
+
+                        this.applyNetworkPhase(
+                            room.state?.phase ??
+                                joinedPhase,
+                            room.state?.phaseEndsAt ??
+                                0,
+                        );
+
+                        this.hideLegacySinglePlayerActors();
+                        this.roomTransitionInProgress =
+                            false;
+                        this.updateLobbyUi();
+                        return;
+                    }
+
+                    attempts += 1;
+
+                    if (attempts < 8) {
+                        this.time.delayedCall(
+                            120,
+                            resolveActiveJoin,
+                        );
+                        return;
+                    }
+
+                    /*
+                     * No local PlayerState after ~1 second means this is not a
+                     * valid participant in the active round. Return using the
+                     * SAME cleanup path as the lobby leave button, even if the
+                     * join_rejected packet was missed due to listener timing.
+                     */
+                    void (
+                        async () => {
+                            await this.leaveCurrentRoomToLobby();
+
+                            this.showStatus(
+                                tr(
+                                    '이미 게임이 진행 중입니다. 게임이 끝난 후 다시 참가해주세요.',
+                                ),
+                            );
+                        }
+                    )();
+                };
+
+            this.time.delayedCall(
+                80,
+                resolveActiveJoin,
+            );
+
+            return;
+        }
 
         this.applyNetworkPhase(
             joinedPhase,
