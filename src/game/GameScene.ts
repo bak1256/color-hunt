@@ -8609,19 +8609,25 @@ export class GameScene extends Phaser.Scene {
                     card.getBoundingClientRect();
 
                 const railInset = 8;
-                const railTopInset = 14;
-                const railBottomInset = 14;
+                /*
+                 * v0.10.10.210: the horizontal placement was already good.
+                 * Keep it untouched, but make the rail consume the Practice
+                 * card's full usable vertical span. A tiny 5px inner inset
+                 * keeps the rounded top/bottom border visible without the
+                 * rail ever protruding outside the modal.
+                 */
+                const railVerticalInset = 5;
 
                 scrollAffordance.style.left =
                     `${Math.max(0, cardRect.right - railInset - 10)}px`;
                 scrollAffordance.style.right =
                     'auto';
                 scrollAffordance.style.top =
-                    `${Math.max(0, cardRect.top + railTopInset)}px`;
+                    `${Math.max(0, cardRect.top + railVerticalInset)}px`;
                 scrollAffordance.style.bottom =
                     'auto';
                 scrollAffordance.style.height =
-                    `${Math.max(60, cardRect.height - railTopInset - railBottomInset)}px`;
+                    `${Math.max(60, cardRect.height - railVerticalInset * 2)}px`;
 
                 const maxScroll =
                     Math.max(

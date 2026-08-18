@@ -6931,3 +6931,37 @@ html.colorhunt-mobile .colorhunt-avatar-editor canvas {
   max-width: none !important;
   max-height: none !important;
 }
+
+
+/* ============================================================
+   v0.10.10.210 — exact Practice rail height + true avatar canvas fit
+   ============================================================ */
+
+/*
+ * Older mobile rules centered the helper with translateY(-50%).
+ * JS now supplies the exact live modal top/height, so any transform would
+ * pull the rail above the rounded frame. Keep X exactly as calculated by JS
+ * and only cancel that stale vertical transform.
+ */
+.colorhunt-practice-scroll-affordance {
+  transform: none !important;
+}
+
+/*
+ * Generic mobile canvas rules force width/height:auto !important. That made
+ * the 240x360 avatar canvas overflow the smaller responsive preview frame,
+ * so phones only saw a lower/right crop even though the logical character
+ * coordinates themselves were centered. Force this editor canvas alone to
+ * fill its frame; the logical canvas center then maps to the visible frame
+ * center on every device size.
+ */
+html.colorhunt-mobile .colorhunt-avatar-editor canvas {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
+  margin: 0 !important;
+  object-fit: fill !important;
+  align-self: stretch !important;
+  justify-self: stretch !important;
+}
