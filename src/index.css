@@ -30,3 +30,25 @@ body {
 #root {
   min-height: 100dvh;
 }
+
+
+/* V101023812_DESKTOP_DOCUMENT_LOCK */
+/*
+ * The desktop game is a single-screen application. Remove the accidental
+ * 1~few-pixel document scroll range that used to trigger Phaser/DOM viewport
+ * remeasurement. Mobile owns its own viewport rules elsewhere.
+ */
+@media (pointer: fine) and (min-width: 769px) {
+  html,
+  body,
+  #root {
+    width: 100%;
+    height: 100dvh;
+    min-height: 100dvh;
+    overflow: hidden !important;
+  }
+
+  body {
+    margin: 0;
+  }
+}

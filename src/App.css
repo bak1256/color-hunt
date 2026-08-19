@@ -145,3 +145,80 @@ html.colorhunt-mobile .game-container {
 .colorhunt-paint-dock--paint-pass-through {
   pointer-events: none !important;
 }
+
+
+/* V101023812_DESKTOP_FIXED_FIRST_VIEWPORT */
+/*
+ * Desktop lobby/game shell stability
+ * ----------------------------------
+ * Phaser is authored at 960x540 (16:9). Previously the desktop
+ * .game-container had width but no explicit aspect-ratio/height.
+ * Phaser.Scale.FIT therefore participated in document-flow measurement while
+ * the page itself could still scroll. Scroll/viewport callbacks could then
+ * re-measure the canvas, making the map appear to slowly resize underneath
+ * the fixed DOM lobby.
+ *
+ * Desktop now has one stable first-screen geometry:
+ * - document does not vertically scroll
+ * - app width also respects available viewport height
+ * - game container owns an explicit 16:9 box from the first layout pass
+ * - canvas fills that box and no longer changes merely because page scroll did
+ *
+ * Touch/mobile/fold rules are intentionally untouched.
+ */
+@media (pointer: fine) and (min-width: 769px) {
+  .app {
+    /*
+     * Reserve ~126px for top/bottom padding + eyebrow/title/header gap.
+     * On normal desktop monitors the existing 1100px cap still wins.
+     * On a short laptop window, width shrinks just enough to keep the complete
+     * 16:9 game inside one viewport instead of creating a tiny page scrollbar.
+     */
+    width: min(
+      1100px,
+      calc(100% - 32px),
+      calc((100dvh - 126px) * 16 / 9)
+    ) !important;
+
+    min-width: 0;
+    min-height: 100dvh;
+    height: 100dvh;
+    margin: 0 auto;
+    padding: 16px 0 12px !important;
+
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+
+    overflow: hidden;
+  }
+
+  .game-header {
+    flex: 0 0 auto;
+    margin-bottom: 12px !important;
+  }
+
+  .game-container {
+    flex: 0 0 auto;
+    width: 100% !important;
+    height: auto !important;
+    aspect-ratio: 16 / 9;
+    min-width: 0;
+    min-height: 0;
+    max-width: 100%;
+    max-height: calc(100dvh - 126px);
+
+    margin: 0 auto;
+    overflow: hidden !important;
+    contain: layout paint;
+  }
+
+  .game-container canvas {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 100% !important;
+    max-height: 100% !important;
+    margin: 0 !important;
+  }
+}
