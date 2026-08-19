@@ -79,6 +79,8 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010296_REMOVE_INVALID_COUNTDOWN_RECOVERY_CHECK: countdown is already excluded by TypeScript narrowing at zero-time recovery. */
+    /* V1010295_CLIENT_UI_PHASE_RECOVERY: cough text removed, help toggle, all-phase zero timer recovery. */
     /* V1010294_MOBILE_HUNTER_FART_UI_POLISH: zero-GAS visibility, joystick center sync, readable detection, longer fart words. */
     /* V1010293_MOBILE_HUNTER_FART_VISION_CONTROLS: mobile GAS button, stable FIRE aim, readable fart FX, body-safe vision. */
     /* V1010292_MOBILE_AVATAR_JOIN_STABILITY: compact avatar payload + progressive mobile join rendering. */
@@ -7682,54 +7684,39 @@ export class GameScene extends Phaser.Scene {
                 );
             };
 
-        const show =
+        const toggle =
             (
                 event:
                     Event,
             ): void => {
                 event.preventDefault();
                 event.stopPropagation();
-                updatePanel();
-                panel.hidden = false;
-                root.classList.add(
-                    'colorhunt-controls-help--open',
-                );
+
+                const opening =
+                    panel.hidden;
+
+                if (opening) {
+                    updatePanel();
+                    panel.hidden = false;
+                    root.classList.add(
+                        'colorhunt-controls-help--open',
+                    );
+                } else {
+                    panel.hidden = true;
+                    root.classList.remove(
+                        'colorhunt-controls-help--open',
+                    );
+                }
             };
 
-        const hide =
-            (
-                event?:
-                    Event,
-            ): void => {
-                event?.preventDefault();
-                panel.hidden = true;
-                root.classList.remove(
-                    'colorhunt-controls-help--open',
-                );
-            };
-
+        /*
+         * V1010295_CLIENT_UI_PHASE_RECOVERY: operation help is a true toggle.
+         * One tap opens it, the next tap closes it.
+         * Do not bind pointerup/pointerleave to close anymore.
+         */
         button.addEventListener(
-            'pointerdown',
-            show,
-        );
-        button.addEventListener(
-            'pointerup',
-            hide,
-        );
-        button.addEventListener(
-            'pointercancel',
-            hide,
-        );
-        button.addEventListener(
-            'pointerleave',
-            hide,
-        );
-        button.addEventListener(
-            'touchend',
-            hide,
-            {
-                passive: false,
-            },
+            'click',
+            toggle,
         );
 
         this.controlsHelpViewportHandler =
@@ -37011,7 +36998,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     private showHiderReaction(
-        event: NetworkHiderReaction,
+        _event: NetworkHiderReaction,
         _kind: 'cough',
     ): void {
         if (
@@ -37020,43 +37007,11 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
+        /*
+         * V1010295_CLIENT_UI_PHASE_RECOVERY: Fart detection must not reveal the Hider's exact position
+         * with floating COUGH text. Keep only the non-positional comedy sound.
+         */
         this.playComedySound('cough');
-
-        const labels = {
-            ko: '콜록!!',
-            ja: 'ゴホッ!!',
-            en: 'COUGH!!',
-            zh: '咳咳!!',
-        } as const;
-
-        const t =
-            this.add.text(
-                event.x,
-                event.y - 48,
-                labels[getLanguage()],
-                {
-                    fontFamily: 'monospace',
-                    fontSize: '18px',
-                    fontStyle: 'bold',
-                    color: '#fff6cf',
-                    stroke: '#442f24',
-                    strokeThickness: 5,
-                },
-            )
-                .setOrigin(0.5)
-                .setDepth(21000)
-                .setScale(0.4);
-
-        this.tweens.add({
-            targets: t,
-            y: event.y - 78,
-            scale: 1.15,
-            angle: 0,
-            alpha: 0,
-            duration: 700,
-            ease: 'Back.Out',
-            onComplete: () => t.destroy(),
-        });
     }
 
     private showPoopBurst(
@@ -37807,19 +37762,44 @@ export class GameScene extends Phaser.Scene {
                  * online tab.  Re-apply authoritative server phase instead
                  * of leaving the UI frozen at PAINT 0 / TIME 0.
                  */
+                /*
+                 * V1010295_CLIENT_UI_PHASE_RECOVERY: reconnection may return to the SAME phase with a fresh
+                 * authoritative deadline. Re-apply it too; otherwise Hunt can
+                 * remain frozen forever at TIME 0.
+                 */
+                const authoritativeDeadlineIsLive =
+                    Number.isFinite(
+                        serverEndsAt,
+                    ) &&
+                    serverEndsAt >
+                        Date.now();
+
                 if (
                     serverPhase !==
-                    this.phase
+                        this.phase ||
+                    authoritativeDeadlineIsLive
                 ) {
                     this.applyNetworkPhase(
                         serverPhase,
                         serverEndsAt,
                     );
-                    return;
+
+                    if (
+                        serverPhase !==
+                            this.phase
+                    ) {
+                        return;
+                    }
                 }
 
                 multiplayerClient
                     .requestLobbySnapshot();
+
+                multiplayerClient
+                    .requestPaintReadyState();
+
+                multiplayerClient
+                    .requestRoundPaintState();
 
                 /*
                  * A client that lost connectivity during Paint can otherwise
@@ -37828,7 +37808,9 @@ export class GameScene extends Phaser.Scene {
                  * short grace period, then fail safely back to the main menu.
                  */
                 if (
-                    this.phase === 'paint'
+                    this.phase === 'paint' ||
+                    this.phase === 'hunt' ||
+                    this.phase === 'finished'
                 ) {
                     if (
                         this.phaseExpiredSince <= 0

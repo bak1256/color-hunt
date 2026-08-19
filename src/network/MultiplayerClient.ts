@@ -345,6 +345,8 @@ private client: Client;
   private deliveredPhase:
     NetworkGamePhase | "" = "";
 
+  /* V1010295_ALL_PHASE_RECONNECT: every room phase is reconnect-safe. */
+
   private lastStablePhase:
     NetworkGamePhase = "lobby";
 
@@ -1588,7 +1590,8 @@ this.manualReconnectInFlight = false;
     const isActiveRound = (): boolean =>
       this.lastStablePhase === "countdown" ||
       this.lastStablePhase === "paint" ||
-      this.lastStablePhase === "hunt";
+      this.lastStablePhase === "hunt" ||
+      this.lastStablePhase === "finished";
 
     const markAppBackground =
       (): void => {
@@ -1998,6 +2001,28 @@ this.manualReconnectInFlight = false;
         this.requestPaintReadyState();
         this.requestAvatarPresets();
         this.requestRoundPaintState();
+
+        /*
+         * V1010295_ALL_PHASE_RECONNECT: repeated pulses are cheap and make same-phase recovery
+         * deterministic on suspended mobile browsers.
+         */
+        [120, 420, 1100].forEach(
+          (delay) => {
+            globalThis.setTimeout(
+              () => {
+                if (this.room !== room) {
+                  return;
+                }
+
+                this.deliveredPhase = "";
+                this.requestLobbySnapshot();
+                this.requestPaintReadyState();
+                this.requestRoundPaintState();
+              },
+              delay,
+            );
+          },
+        );
 
         this.lastConfirmedTransportDropAt = 0;
         this.browserOfflineCycleActive = false;
@@ -2763,11 +2788,15 @@ this.manualReconnectInFlight = false;
           ) &&
           (
             this.lastStablePhase ===
+              "lobby" ||
+            this.lastStablePhase ===
               "countdown" ||
             this.lastStablePhase ===
               "paint" ||
             this.lastStablePhase ===
-              "hunt"
+              "hunt" ||
+            this.lastStablePhase ===
+              "finished"
           ) &&
           (
             typeof navigator ===
