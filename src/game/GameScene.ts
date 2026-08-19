@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010271_STABILIZE_PRACTICE_FART_AND_BGM: restore BGM and make Practice fart/poop state deterministic. */
     /* V1010270_PRACTICE_GAS_COOLDOWN_HARDFIX: replace Practice GAS update loop with unconditional cooling. */
     /* V1010269_PRACTICE_LOCAL_HUNTER_GAS_DISPLAY_FIX: Practice Hunter counts as local; poop HUD shows live GAS. */
     /* V1010268_PRACTICE_GAS_COMBO_FIX: Practice GAS cools during poop and passes detected combo flag. */
@@ -276,6 +277,7 @@ export class GameScene extends Phaser.Scene {
     private audioGuardRestoreTimer?: number;
     private audioGuardPreviousMute = false;
     private audioVisibilityHandler?: () => void;
+    private audioGuardHidden = false;
 
     /*
      * V1010262_POOP_LABEL_BRIGHT_FART_VFX_FLUSH: one-shot visual effects that must NEVER resume after a long
@@ -4190,6 +4192,18 @@ export class GameScene extends Phaser.Scene {
     private readonly practiceFartCost = 36;
     private readonly practiceFartRecoverPerSecond = 0.75;
     private readonly practicePoopDurationMs = 14_000;
+    private readonly practicePoopGasCoolPerSecond =
+        100 /
+        (
+            this.practicePoopDurationMs /
+            1000
+        );
+
+    /*
+     * V1010271_STABILIZE_PRACTICE_FART_AND_BGM: Practice owns its own authoritative poop timer.
+     * localPoopUntil remains a shared HUD mirror only.
+     */
+    private practicePoopUntil = 0;
 
     /*
      * Hider Practice record-shot flow.
@@ -5492,6 +5506,13 @@ export class GameScene extends Phaser.Scene {
                     this.updateHunterPracticeFart(
                         delta,
                     );
+
+                    /*
+                     * V1010271_STABILIZE_PRACTICE_FART_AND_BGM: Practice previously never ran this updater, so
+                     * tears / footprints / poop expiry visuals did not animate.
+                     */
+                    this.updatePoopComedyEffects();
+
                     this.syncHunterPracticeVisuals();
                     this.networkPlayerManager
                         .update(
@@ -11674,25 +11695,26 @@ export class GameScene extends Phaser.Scene {
             Date.now();
 
         const pooped =
-            this.localPoopUntil >
+            this.practicePoopUntil >
             now;
 
         /*
-         * V1010270_PRACTICE_GAS_COOLDOWN_HARDFIX
-         *
-         * GAS is pressure, not remaining fuel.
-         * It MUST cool every Hunt frame, including during the poop debuff.
-         *
-         * 0.75/sec:
-         * 100 -> ~89.5 during a 14 sec poop penalty.
+         * Normal play cools very slowly.
+         * Once MAX causes an accident, the 14-second punishment doubles as a
+         * full pressure-release period: 100 -> 0 by debuff end.
          */
+        const coolPerSecond =
+            pooped
+                ? this.practicePoopGasCoolPerSecond
+                : this.practiceFartRecoverPerSecond;
+
         const previousGauge =
             this.fartGauge;
 
         this.fartGauge =
             Phaser.Math.Clamp(
                 previousGauge -
-                    this.practiceFartRecoverPerSecond *
+                    coolPerSecond *
                         (
                             delta /
                             1000
@@ -11701,22 +11723,19 @@ export class GameScene extends Phaser.Scene {
                 100,
             );
 
-        /*
-         * Update often enough that the bar visibly moves instead of appearing
-         * frozen at MAX.
-         */
         if (
             Math.abs(
-                this.fartGauge -
-                    previousGauge,
+                previousGauge -
+                    this.fartGauge,
             ) >
-                0.0001
+            0.0001
         ) {
             this.updateFartHud();
         }
 
         /*
-         * No farting while suffering the accident.
+         * HARD INPUT LOCK during the accident.
+         * No fourth/fifth fart can fire while practicePoopUntil is active.
          */
         if (
             !pooped &&
@@ -11727,15 +11746,14 @@ export class GameScene extends Phaser.Scene {
             this.useHunterPracticeFart();
         }
 
-        /*
-         * Penalty expired. GAS has already been cooling the whole time;
-         * only clear the movement-debuff state here.
-         */
         if (
             !pooped &&
-            this.localPoopUntil >
+            this.practicePoopUntil >
                 0
         ) {
+            this.practicePoopUntil =
+                0;
+
             this.localPoopUntil =
                 0;
 
@@ -11743,31 +11761,44 @@ export class GameScene extends Phaser.Scene {
                 this.practiceHunterSessionId,
             );
 
+            /*
+             * The punishment is also a full reset.
+             */
+            this.fartGauge =
+                0;
+
             this.updateFartHud();
         }
     }
 
     private useHunterPracticeFart(): void {
-        const now = Date.now();
+        const now =
+            Date.now();
 
-        const gaugeBefore =
-            this.fartGauge;
+        /*
+         * Defensive second lock. Even if this method is accidentally called
+         * from another input path, an active accident cannot fire again.
+         */
+        if (
+            this.practicePoopUntil >
+            now
+        ) {
+            return;
+        }
 
         const nextGauge =
-            gaugeBefore +
+            this.fartGauge +
             this.practiceFartCost;
 
         const willPoop =
-            nextGauge >= 100;
+            nextGauge >=
+            100;
 
-        /*
-         * Third press is still a REAL fart.
-         * It performs burst + cough + ! detection first, then the accident.
-         */
         this.fartGauge =
-            Math.min(
-                100,
+            Phaser.Math.Clamp(
                 nextGauge,
+                0,
+                100,
             );
 
         const soundTier =
@@ -11777,6 +11808,9 @@ export class GameScene extends Phaser.Scene {
                     ? 2
                     : 1;
 
+        /*
+         * Third press remains a REAL detecting fart.
+         */
         this.showFartBurst({
             hunterId:
                 this.practiceHunterSessionId,
@@ -11789,14 +11823,17 @@ export class GameScene extends Phaser.Scene {
             soundTier,
         });
 
-        let detected = false;
+        let detected =
+            false;
 
         this.hiders.forEach(
             (
                 hider,
                 index,
             ) => {
-                if (!hider.alive) {
+                if (
+                    !hider.alive
+                ) {
                     return;
                 }
 
@@ -11810,12 +11847,13 @@ export class GameScene extends Phaser.Scene {
 
                 if (
                     distance >
-                        this.practiceFartRadius
+                    this.practiceFartRadius
                 ) {
                     return;
                 }
 
-                detected = true;
+                detected =
+                    true;
 
                 this.showHiderReaction(
                     {
@@ -11835,16 +11873,33 @@ export class GameScene extends Phaser.Scene {
             },
         );
 
-        if (detected) {
+        /*
+         * On the poop-combo press, showPoopBurst will replace the ordinary !
+         * with the combined special effect.
+         */
+        if (
+            detected &&
+            !willPoop
+        ) {
             this.showHunterDetectionAlert(
                 'cough',
             );
         }
 
-        if (willPoop) {
-            this.localPoopUntil =
+        if (
+            willPoop
+        ) {
+            this.practicePoopUntil =
                 now +
                 this.practicePoopDurationMs;
+
+            this.localPoopUntil =
+                this.practicePoopUntil;
+
+            this.poopedHuntersUntil.set(
+                this.practiceHunterSessionId,
+                this.practicePoopUntil,
+            );
 
             this.showPoopBurst({
                 hunterId:
@@ -11856,12 +11911,9 @@ export class GameScene extends Phaser.Scene {
                 y:
                     this.player.y,
                 poopUntil:
-                    this.localPoopUntil,
+                    this.practicePoopUntil,
                 serverNow:
                     now,
-                /*
-                 * V1010268_PRACTICE_GAS_COMBO_FIX: Practice mirrors server v266 authoritative combo flag.
-                 */
                 detected,
             });
         }
@@ -12343,6 +12395,7 @@ export class GameScene extends Phaser.Scene {
             Date.now();
 
         this.fartGauge = 0;
+        this.practicePoopUntil = 0;
         this.localPoopUntil = 0;
         this.poopedHuntersUntil.delete(
             this.practiceHunterSessionId,
@@ -24066,7 +24119,7 @@ export class GameScene extends Phaser.Scene {
                     'hunter'
                     ? this.practiceHunterMoveSpeed *
                         (
-                            this.localPoopUntil >
+                            this.practicePoopUntil >
                                 Date.now()
                                 ? 0.4
                                 : 1
@@ -24138,6 +24191,12 @@ export class GameScene extends Phaser.Scene {
 
         const distance =
             this.practiceHunterMoveSpeed *
+            (
+                this.practicePoopUntil >
+                    Date.now()
+                    ? 0.4
+                    : 1
+            ) *
             (
                 delta /
                 1000
@@ -33825,7 +33884,11 @@ export class GameScene extends Phaser.Scene {
         }
 
         const pooped =
-            this.localPoopUntil >
+            (
+                this.practiceMode === 'hunter'
+                    ? this.practicePoopUntil
+                    : this.localPoopUntil
+            ) >
             Date.now();
 
         this.fartGaugeLabel.setText(
@@ -33898,17 +33961,29 @@ export class GameScene extends Phaser.Scene {
 
         this.audioVisibilityHandler =
             (): void => {
-                if (document.hidden) {
+                if (
+                    document.hidden
+                ) {
+                    /*
+                     * Ignore duplicate hidden events. Previously a second event
+                     * could save "true" as the previous mute state and make BGM
+                     * remain muted forever after return.
+                     */
+                    if (
+                        this.audioGuardHidden
+                    ) {
+                        return;
+                    }
+
+                    this.audioGuardHidden =
+                        true;
+
                     this.audioGuardPreviousMute =
                         this.sound.mute;
 
                     this.sound.mute =
                         true;
 
-                    /*
-                     * V1010261_GAS_THIRD_FART_FOCUS_FIX: discard one-shot audio already in flight instead
-                     * of letting the browser deliver it all after focus returns.
-                     */
                     this.shotgunSound?.stop();
                     this.hitSound?.stop();
                     this.hunterHitConfirmSound?.stop();
@@ -33928,19 +34003,11 @@ export class GameScene extends Phaser.Scene {
                         window.clearTimeout(
                             this.audioGuardRestoreTimer,
                         );
+
                         this.audioGuardRestoreTimer =
                             undefined;
                     }
 
-                    /*
-                     * Procedural fart/comedy audio bypasses Phaser.Sound,
-                     * so suspend that AudioContext as well.
-                     */
-                    /*
-                     * Do not pause one-shot VFX and later resume them.
-                     * Destroy them now so a long background stay cannot dump
-                     * old shotgun/fart visuals on focus.
-                     */
                     this.clearTransientGameplayVfx();
 
                     if (
@@ -33955,16 +34022,35 @@ export class GameScene extends Phaser.Scene {
                     return;
                 }
 
+                if (
+                    !this.audioGuardHidden
+                ) {
+                    return;
+                }
+
+                this.audioGuardHidden =
+                    false;
+
                 /*
-                 * Let throttled Phaser timers flush SILENTLY first.
-                 * Most stale one-shot effects fire immediately after focus.
+                 * Restore BGM/master audio IMMEDIATELY.
+                 * The 2.2s grace now suppresses only one-shot SFX/VFX, not BGM.
                  */
+                this.sound.mute =
+                    this.audioGuardPreviousMute;
+
                 this.suppressEffectsUntil =
                     Date.now() +
                     2200;
 
-                this.sound.mute =
-                    true;
+                /*
+                 * Browser audio backends can report the loop as stopped after a
+                 * long background pause. Re-sync the correct phase BGM now.
+                 */
+                if (
+                    !this.sound.mute
+                ) {
+                    this.syncPhaseMusic();
+                }
 
                 if (
                     this.audioGuardRestoreTimer !==
@@ -33986,9 +34072,6 @@ export class GameScene extends Phaser.Scene {
                             ) {
                                 return;
                             }
-
-                            this.sound.mute =
-                                this.audioGuardPreviousMute;
 
                             this.suppressEffectsUntil =
                                 0;
@@ -34016,6 +34099,7 @@ export class GameScene extends Phaser.Scene {
                         'visibilitychange',
                         this.audioVisibilityHandler,
                     );
+
                     this.audioVisibilityHandler =
                         undefined;
                 }
@@ -34027,8 +34111,23 @@ export class GameScene extends Phaser.Scene {
                     window.clearTimeout(
                         this.audioGuardRestoreTimer,
                     );
+
                     this.audioGuardRestoreTimer =
                         undefined;
+                }
+
+                /*
+                 * Never leave the SoundManager muted because the scene shut down
+                 * while the tab happened to be hidden.
+                 */
+                if (
+                    this.audioGuardHidden
+                ) {
+                    this.sound.mute =
+                        this.audioGuardPreviousMute;
+
+                    this.audioGuardHidden =
+                        false;
                 }
             },
         );
@@ -35238,7 +35337,26 @@ export class GameScene extends Phaser.Scene {
         this.poopedHuntersUntil.forEach((until, hunterId) => {
             if (until <= now) {
                 this.poopedHuntersUntil.delete(hunterId); this.lastPoopTrailAt.delete(hunterId); this.lastPoopTearAt.delete(hunterId);
-                if (hunterId === multiplayerClient.getSessionId()) { this.localPoopUntil = 0; this.networkPlayerManager?.setLocalHunterSpeedMultiplier(1); this.updateFartHud(); }
+                if (
+                    hunterId ===
+                        multiplayerClient.getSessionId() ||
+                    (
+                        this.practiceMode === 'hunter' &&
+                        hunterId ===
+                            this.practiceHunterSessionId
+                    )
+                ) {
+                    if (
+                        this.practiceMode === 'hunter'
+                    ) {
+                        this.practicePoopUntil = 0;
+                        this.fartGauge = 0;
+                    }
+
+                    this.localPoopUntil = 0;
+                    this.networkPlayerManager?.setLocalHunterSpeedMultiplier(1);
+                    this.updateFartHud();
+                }
                 return;
             }
             const p = this.networkPlayerManager?.getPlayerPosition(hunterId); if (!p) return;
