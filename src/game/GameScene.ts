@@ -2211,6 +2211,21 @@ export class GameScene extends Phaser.Scene {
                 );
             };
 
+        const getNativePinchCenterY =
+            (): number => {
+                const points =
+                    [...this.mobileNativePinchPointers.values()];
+
+                if (points.length < 2) {
+                    return 0;
+                }
+
+                return (
+                    points[0].y +
+                    points[1].y
+                ) / 2;
+            };
+
         const beginNativePinch =
             (): void => {
                 if (
@@ -2225,6 +2240,37 @@ export class GameScene extends Phaser.Scene {
                 this.mobileNativePinchDistance =
                     getNativePinchDistance();
                 this.mobilePinchDistance = 0;
+
+                /*
+                 * Snapshot the camera position once at gesture start.
+                 * Pan range is deliberately conservative: enough to pull the
+                 * Hider's legs above the palette without letting the character
+                 * disappear far off-screen.
+                 */
+                this.mobileNativePinchCenterY =
+                    getNativePinchCenterY();
+                this.mobileNativePinchBaseScrollY =
+                    this.cameras.main.scrollY;
+
+                const panWorldRange =
+                    Math.min(
+                        120,
+                        Math.max(
+                            55,
+                            90 /
+                                Math.max(
+                                    0.75,
+                                    this.cameras.main.zoom,
+                                ),
+                        ),
+                    );
+
+                this.mobileNativePinchMinScrollY =
+                    this.mobileNativePinchBaseScrollY -
+                    panWorldRange;
+                this.mobileNativePinchMaxScrollY =
+                    this.mobileNativePinchBaseScrollY +
+                    panWorldRange;
 
                 this.stopMobileNativeEyedropperDrag();
                 this.releaseMobilePaintPointer();
@@ -2328,17 +2374,55 @@ export class GameScene extends Phaser.Scene {
                     distance -
                     this.mobileNativePinchDistance;
 
-                if (Math.abs(delta) < 7) {
-                    return;
+                /*
+                 * Two-finger midpoint movement pans only on Y.
+                 * Screen pixels are converted to world units by current zoom.
+                 *
+                 * Fingers move UP -> midpoint delta is negative -> scrollY
+                 * increases -> the character appears to move UP on screen.
+                 */
+                const centerY =
+                    getNativePinchCenterY();
+
+                const centerDeltaY =
+                    centerY -
+                    this.mobileNativePinchCenterY;
+
+                if (
+                    Math.abs(centerDeltaY) >= 1
+                ) {
+                    const zoomForPan =
+                        Math.max(
+                            0.01,
+                            this.cameras.main.zoom,
+                        );
+
+                    const targetScrollY =
+                        this.mobileNativePinchBaseScrollY -
+                        centerDeltaY /
+                            zoomForPan;
+
+                    this.cameras.main.scrollY =
+                        Phaser.Math.Clamp(
+                            targetScrollY,
+                            this.mobileNativePinchMinScrollY,
+                            this.mobileNativePinchMaxScrollY,
+                        );
                 }
 
-                const zoom =
-                    this.adjustPaintWorldZoom(
-                        delta > 0 ? -1 : 1,
-                    );
+                let zoom =
+                    this.cameras.main.zoom;
 
-                this.mobileNativePinchDistance =
-                    distance;
+                if (Math.abs(delta) >= 7) {
+                    zoom =
+                        this.adjustPaintWorldZoom(
+                            delta > 0 ? -1 : 1,
+                        );
+
+                    this.mobileNativePinchDistance =
+                        distance;
+                }
+
                 this.mobileNativePinchSuppressClickUntil =
                     performance.now() + 500;
 
@@ -2349,7 +2433,7 @@ export class GameScene extends Phaser.Scene {
                     [
                         tr(`ZOOM ${zoom.toFixed(2)}x`),
                         tr(`BRUSH ${this.brushSize}`),
-                        tr('두 손가락: 확대/축소'),
+                        tr('두 손가락: 확대/축소 · 상하 이동'),
                     ].join('\n'),
                 );
 
@@ -2387,6 +2471,7 @@ export class GameScene extends Phaser.Scene {
 
                     this.mobileNativePinchActive = false;
                     this.mobileNativePinchDistance = 0;
+                    this.mobileNativePinchCenterY = 0;
                     this.mobilePinchActive = false;
                     this.mobilePinchDistance = 0;
 
@@ -3983,6 +4068,17 @@ export class GameScene extends Phaser.Scene {
         new Map<number, Phaser.Math.Vector2>();
     private mobileNativePinchDistance = 0;
     private mobileNativePinchActive = false;
+
+    /*
+     * V101023836_MOBILE_PINCH_VERTICAL_PAN
+     * Two-finger vertical pan is layered onto the existing native pinch owner.
+     * We move only the paint camera; player/world/paint coordinates never move.
+     */
+    private mobileNativePinchCenterY = 0;
+    private mobileNativePinchBaseScrollY = 0;
+    private mobileNativePinchMinScrollY = 0;
+    private mobileNativePinchMaxScrollY = 0;
+
     private mobileNativePinchSuppressClickUntil = 0;
     private mobileNativePinchDownHandler?: (event: PointerEvent) => void;
     private mobileNativePinchMoveHandler?: (event: PointerEvent) => void;
