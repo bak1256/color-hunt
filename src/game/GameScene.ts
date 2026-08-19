@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010282_FART_RADIUS_110: Practice fart detection radius = 110. */
     /* V1010281_FART_INPUT_COOLDOWN: 900ms deliberate fart cadence. */
     /* V1010280_SMOOTH_GAS_8S_RECOVER2: main-match GAS smooth per-frame drain, 8s accident. */
     /* V1010277_GAS_10S_LINEAR_DRAIN: Practice/main-match poop = 10s, GAS drains 100 -> 0. */
@@ -4202,7 +4203,7 @@ export class GameScene extends Phaser.Scene {
         125;
 
     /* V1010246_SPACE_PRACTICE_FART: local mirror of the multiplayer fart rules. */
-    private readonly practiceFartRadius = 150;
+    private readonly practiceFartRadius = 110;
     private readonly practiceFartCost = 36;
     private readonly practiceFartRecoverPerSecond = 0.75;
     private readonly practicePoopDurationMs = 8_000;
