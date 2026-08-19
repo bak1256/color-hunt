@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010276_ISOLATE_PRACTICE_FROM_NETWORK: Practice remains local even if a stale room reconnects. */
     /* V1010273_REMOVE_OBSOLETE_PRACTICE_GAS_COOL_CONSTANT: v272 drains Practice GAS directly from remaining debuff time. */
     /* V1010272_PRACTICE_POOP_STATE_MACHINE: isolated deterministic Practice poop state machine. */
     /* V1010271_STABILIZE_PRACTICE_FART_AND_BGM: restore BGM and make Practice fart/poop state deterministic. */
@@ -5490,7 +5491,15 @@ export class GameScene extends Phaser.Scene {
         if (this.phase === 'hunt') {
             this.fadeHunterControlsHintIfMoving();
 
-            if (!multiplayerClient.isConnected()) {
+            if (
+                this.practiceMode ===
+                    'hunter' ||
+                !multiplayerClient.isConnected()
+            ) {
+                /*
+                 * V1010276_ISOLATE_PRACTICE_FROM_NETWORK: reconnecting transport must not stop the local Practice
+                 * state machine. Practice remains authoritative until exit.
+                 */
                 this.updateHunterMovement(delta);
 
                 if (
@@ -8397,6 +8406,17 @@ export class GameScene extends Phaser.Scene {
 
         this.networkUnsubscribers.push(
             multiplayerClient.onFartState((state: NetworkFartState) => {
+                /*
+                 * V1010276_ISOLATE_PRACTICE_FROM_NETWORK: network fart_state previously overwrote Practice GAS,
+                 * producing the fill -> reset -> refill loop.
+                 */
+                if (
+                    this.practiceMode !==
+                    null
+                ) {
+                    return;
+                }
+
                 this.fartGauge = Phaser.Math.Clamp(state.gauge, 0, 100);
                 const localNow = Date.now();
                 this.localPoopUntil = state.poopUntil > state.serverNow
@@ -8409,16 +8429,37 @@ export class GameScene extends Phaser.Scene {
         );
         this.networkUnsubscribers.push(
             multiplayerClient.onFartBurst((event: NetworkFartBurst) => {
+                if (
+                    this.practiceMode !==
+                    null
+                ) {
+                    return;
+                }
+
                 this.showFartBurst(event);
             }),
         );
         this.networkUnsubscribers.push(
             multiplayerClient.onPoopBurst((event: NetworkPoopBurst) => {
+                if (
+                    this.practiceMode !==
+                    null
+                ) {
+                    return;
+                }
+
                 this.showPoopBurst(event);
             }),
         );
         this.networkUnsubscribers.push(
             multiplayerClient.onHiderCough((event: NetworkHiderReaction) => {
+                if (
+                    this.practiceMode !==
+                    null
+                ) {
+                    return;
+                }
+
                 this.showHiderReaction(event, 'cough');
             }),
         );
@@ -8433,6 +8474,13 @@ export class GameScene extends Phaser.Scene {
         );
         this.networkUnsubscribers.push(
             multiplayerClient.onFartDetected((reaction) => {
+                if (
+                    this.practiceMode !==
+                    null
+                ) {
+                    return;
+                }
+
                 if (
                     reaction === 'cough' &&
                     this.localPoopUntil <=
@@ -12534,6 +12582,13 @@ export class GameScene extends Phaser.Scene {
         this.practiceMode =
             'hunter';
 
+        /*
+         * V1010276_ISOLATE_PRACTICE_FROM_NETWORK: a delayed reconnect must not make GameScene treat Practice
+         * as a live multiplayer match.
+         */
+        this.multiplayerSessionActive =
+            false;
+
         /* Remove any lobby/avatar preview player before Practice renders. */
         this.networkPlayerManager.clearAllPlayers();
         this.lobbyAvatarPresetsBySession.clear();
@@ -14955,6 +15010,19 @@ export class GameScene extends Phaser.Scene {
     }
 
     private isMultiplayerSession(): boolean {
+        /*
+         * V1010276_ISOLATE_PRACTICE_FROM_NETWORK: Practice is a fully local sandbox.
+         *
+         * A stale Room / reconnect can become connected again while Practice
+         * is running. That must NEVER flip Practice back into multiplayer mode.
+         */
+        if (
+            this.practiceMode !==
+            null
+        ) {
+            return false;
+        }
+
         return (
             this.multiplayerSessionActive ||
             multiplayerClient.isConnected() ||
@@ -14967,6 +15035,18 @@ export class GameScene extends Phaser.Scene {
     private updateNetworkPlayers(
         delta: number,
     ): void {
+        /*
+         * V1010276_ISOLATE_PRACTICE_FROM_NETWORK: Practice owns movement/fart input locally.
+         * Never let stale multiplayer state consume SPACE or move a second
+         * Hunter while Practice is active.
+         */
+        if (
+            this.practiceMode !==
+            null
+        ) {
+            return;
+        }
+
         if (
             this.isMultiplayerSession() &&
             this.phase === 'hunt'
