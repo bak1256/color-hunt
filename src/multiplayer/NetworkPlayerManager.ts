@@ -47,6 +47,7 @@ type NetworkPlayerView = {
 };
 
 export class NetworkPlayerManager {
+  /* V1010286B_LOBBY_AVATAR_EXACT_RENDER_PATHFIX: saved avatar strokes replay continuously with editor-equivalent geometry. */
   private readonly scene: Phaser.Scene;
   private readonly gameWidth: number;
   private readonly gameHeight: number;
@@ -2573,6 +2574,104 @@ export class NetworkPlayerManager {
     );
   }
 
+  private expandLobbyAvatarStrokePoints(
+    points: NetworkPaintPoint[],
+  ): NetworkPaintPoint[] {
+    if (
+      points.length <=
+      1
+    ) {
+      return points.map(
+        (point) => ({
+          x: point.x,
+          y: point.y,
+        }),
+      );
+    }
+
+    const expanded:
+      NetworkPaintPoint[] = [];
+
+    for (
+      let index = 1;
+      index < points.length;
+      index += 1
+    ) {
+      const from =
+        points[index - 1];
+      const to =
+        points[index];
+
+      const dx =
+        to.x - from.x;
+      const dy =
+        to.y - from.y;
+
+      const steps =
+        Math.max(
+          Math.abs(
+            Math.round(dx),
+          ),
+          Math.abs(
+            Math.round(dy),
+          ),
+          1,
+        );
+
+      for (
+        let step = 0;
+        step <= steps;
+        step += 1
+      ) {
+        if (
+          index > 1 &&
+          step === 0
+        ) {
+          continue;
+        }
+
+        const t =
+          step / steps;
+
+        const point = {
+          x:
+            Math.round(
+              Phaser.Math.Linear(
+                from.x,
+                to.x,
+                t,
+              ),
+            ),
+          y:
+            Math.round(
+              Phaser.Math.Linear(
+                from.y,
+                to.y,
+                t,
+              ),
+            ),
+        };
+
+        const previous =
+          expanded[
+            expanded.length - 1
+          ];
+
+        if (
+          !previous ||
+          previous.x !== point.x ||
+          previous.y !== point.y
+        ) {
+          expanded.push(
+            point,
+          );
+        }
+      }
+    }
+
+    return expanded;
+  }
+
   applyLobbyAvatarPresetProgressive(
     sessionId: string,
     strokes: NetworkPaintStroke[],
@@ -2635,7 +2734,9 @@ export class NetworkPlayerManager {
     const commands =
       strokes.flatMap(
         (stroke) =>
-          stroke.points.map(
+          this.expandLobbyAvatarStrokePoints(
+            stroke.points,
+          ).map(
             (point) => ({
               point,
               color:
@@ -2814,7 +2915,12 @@ export class NetworkPlayerManager {
 
     strokes.forEach(
       (stroke) => {
-        stroke.points.forEach(
+        const points =
+          this.expandLobbyAvatarStrokePoints(
+            stroke.points,
+          );
+
+        points.forEach(
           (point) => {
             this.stampMaskedPaintBrush(
               view,

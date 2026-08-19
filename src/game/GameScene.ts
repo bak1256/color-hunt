@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010286_AVATAR_EDITOR_PRO_PAINT: Hider-grade lobby avatar painting + exact brush semantics. */
     /* V1010285_AVATAR_PRESET_FULL_POINTS: preserve full lobby-avatar strokes into waiting room. */
     /* V1010283_MOBILE_NO_TEXT_SELECTION: disable game UI text selection except chat/editable fields. */
     /* V1010282_FART_RADIUS_110: Practice fart detection radius = 110. */
@@ -16109,7 +16110,25 @@ export class GameScene extends Phaser.Scene {
             document.createElement('div');
 
         hint.textContent =
-            tr('휠: 확대/축소 · Ctrl+휠: 브러시 · 모바일: 두 손가락 확대');
+            this.mobileControlsEnabled
+                ? (
+                    getLanguage() === 'ja'
+                        ? '1本指: 塗る · 2本指: ズーム · ●/■ ブラシ · 💧スポイト · ╱直線'
+                        : getLanguage() === 'en'
+                            ? '1 finger: paint · 2 fingers: zoom · ●/■ brush · 💧 eyedropper · ╱ line'
+                            : getLanguage() === 'zh'
+                                ? '单指涂色 · 双指缩放 · ●/■画笔 · 💧吸管 · ╱直线'
+                                : '한 손가락: 색칠 · 두 손가락: 확대 · ●/■ 브러시 · 💧 스포이드 · ╱ 직선'
+                )
+                : (
+                    getLanguage() === 'ja'
+                        ? 'ドラッグ: 塗る · 右クリック: スポイト · Shift+ドラッグ: 直線 · ホイール: ズーム · Ctrl+ホイール: ブラシ'
+                        : getLanguage() === 'en'
+                            ? 'Drag: paint · Right click: eyedropper · Shift+drag: line · Wheel: zoom · Ctrl+wheel: brush'
+                            : getLanguage() === 'zh'
+                                ? '拖动涂色 · 右键吸管 · Shift+拖动直线 · 滚轮缩放 · Ctrl+滚轮画笔'
+                                : '드래그: 색칠 · 우클릭: 스포이드 · Shift+드래그: 직선 · 휠: 확대 · Ctrl+휠: 브러시'
+                );
 
         Object.assign(
             hint.style,
@@ -16201,6 +16220,26 @@ export class GameScene extends Phaser.Scene {
             0x3b82f6;
 
         let selectedSize = 3;
+
+        /*
+         * V1010286_AVATAR_EDITOR_PRO_PAINT: customization editor uses the SAME semantic brush model as
+         * NetworkPlayerManager / Hider paint.
+         *
+         * size = actual pixel DIAMETER, not radius.
+         */
+        let selectedShape: NetworkBrushShape =
+            'circle';
+        let eyedropperArmed =
+            false;
+        let straightLineArmed =
+            false;
+        let straightLineStart:
+            NetworkPaintPoint |
+            undefined;
+
+        const redoStrokes:
+            NetworkPaintStroke[] = [];
+
         /*
          * v0.10.10.207:
          * The mobile editor used to open at 1.8x, which could leave only a
@@ -16384,7 +16423,7 @@ export class GameScene extends Phaser.Scene {
                         nextSize,
                     ),
                     1,
-                    8,
+                    12,
                 );
 
             sizeInput.value =
@@ -16549,6 +16588,135 @@ export class GameScene extends Phaser.Scene {
             context.globalAlpha = 1;
         };
 
+        const expandSegmentPoints = (
+            from: NetworkPaintPoint,
+            to: NetworkPaintPoint,
+        ): NetworkPaintPoint[] => {
+            const dx =
+                to.x -
+                from.x;
+            const dy =
+                to.y -
+                from.y;
+
+            const steps =
+                Math.max(
+                    Math.abs(dx),
+                    Math.abs(dy),
+                    1,
+                );
+
+            const result:
+                NetworkPaintPoint[] = [];
+
+            for (
+                let step = 0;
+                step <= steps;
+                step += 1
+            ) {
+                const t =
+                    step /
+                    steps;
+
+                const point = {
+                    x:
+                        Math.round(
+                            Phaser.Math.Linear(
+                                from.x,
+                                to.x,
+                                t,
+                            ),
+                        ),
+                    y:
+                        Math.round(
+                            Phaser.Math.Linear(
+                                from.y,
+                                to.y,
+                                t,
+                            ),
+                        ),
+                };
+
+                const previous =
+                    result[
+                        result.length -
+                        1
+                    ];
+
+                if (
+                    !previous ||
+                    previous.x !==
+                        point.x ||
+                    previous.y !==
+                        point.y
+                ) {
+                    result.push(
+                        point,
+                    );
+                }
+            }
+
+            return result;
+        };
+
+        const expandStrokePoints = (
+            points:
+                NetworkPaintPoint[],
+        ): NetworkPaintPoint[] => {
+            if (
+                points.length <=
+                1
+            ) {
+                return points.map(
+                    (point) => ({
+                        x: point.x,
+                        y: point.y,
+                    }),
+                );
+            }
+
+            const expanded:
+                NetworkPaintPoint[] = [];
+
+            for (
+                let index = 1;
+                index <
+                points.length;
+                index += 1
+            ) {
+                const segment =
+                    expandSegmentPoints(
+                        points[
+                            index -
+                            1
+                        ],
+                        points[index],
+                    );
+
+                segment.forEach(
+                    (
+                        point,
+                        segmentIndex,
+                    ) => {
+                        if (
+                            index >
+                                1 &&
+                            segmentIndex ===
+                                0
+                        ) {
+                            return;
+                        }
+
+                        expanded.push(
+                            point,
+                        );
+                    },
+                );
+            }
+
+            return expanded;
+        };
+
         const paintStroke = (
             stroke:
                 NetworkPaintStroke,
@@ -16559,42 +16727,90 @@ export class GameScene extends Phaser.Scene {
                     .toString(16)
                     .padStart(6, '0')}`;
 
-            stroke.points.forEach(
-                (point) => {
-                    const radius =
-                        stroke.size <= 1
-                            ? 0
-                            : stroke.size;
+            const diameter =
+                Math.max(
+                    1,
+                    Math.round(
+                        stroke.size,
+                    ),
+                );
 
+            const minOffset =
+                -Math.floor(
+                    diameter /
+                        2,
+                );
+
+            const maxOffset =
+                minOffset +
+                diameter -
+                1;
+
+            const centerOffset =
+                (
+                    minOffset +
+                    maxOffset
+                ) /
+                2;
+
+            const circleRadius =
+                Math.max(
+                    0.5,
+                    diameter /
+                        2 -
+                        0.25,
+                );
+
+            const renderPoints =
+                expandStrokePoints(
+                    stroke.points,
+                );
+
+            renderPoints.forEach(
+                (point) => {
                     for (
-                        let oy = -radius;
-                        oy <= radius;
+                        let oy =
+                            minOffset;
+                        oy <=
+                            maxOffset;
                         oy += 1
                     ) {
                         for (
-                            let ox = -radius;
-                            ox <= radius;
+                            let ox =
+                                minOffset;
+                            ox <=
+                                maxOffset;
                             ox += 1
                         ) {
                             if (
                                 stroke.shape !==
-                                    'square' &&
-                                ox * ox +
-                                    oy * oy >
-                                    radius *
-                                        radius
+                                    'square'
                             ) {
-                                continue;
+                                const dx =
+                                    ox -
+                                    centerOffset;
+                                const dy =
+                                    oy -
+                                    centerOffset;
+
+                                if (
+                                    dx * dx +
+                                        dy * dy >
+                                    circleRadius *
+                                        circleRadius
+                                ) {
+                                    continue;
+                                }
                             }
 
                             drawBodyPixel(
                                 Math.round(
                                     point.x +
-                                    ox,
+                                        ox,
                                 ),
                                 Math.round(
                                     point.y +
-                                    oy,
+                                        oy,
                                 ),
                                 color,
                                 alpha,
@@ -16618,7 +16834,8 @@ export class GameScene extends Phaser.Scene {
                             selectedColor,
                         size:
                             selectedSize,
-                        shape: 'circle',
+                        shape:
+                            selectedShape,
                         points: [
                             hoverPoint,
                         ],
@@ -16643,22 +16860,41 @@ export class GameScene extends Phaser.Scene {
                         editorZoom,
                     );
 
-                context.beginPath();
-                context.arc(
-                    center.x,
-                    center.y,
+                const previewDiameter =
                     Math.max(
-                        3,
-                        (
-                            selectedSize +
-                            0.9
-                        ) *
-                            3 *
-                            editorZoom,
-                    ),
-                    0,
-                    Math.PI * 2,
-                );
+                        1,
+                        selectedSize,
+                    ) *
+                    editorPixelScale *
+                    editorZoom;
+
+                context.beginPath();
+
+                if (
+                    selectedShape ===
+                    'square'
+                ) {
+                    context.rect(
+                        center.x -
+                            previewDiameter /
+                                2,
+                        center.y -
+                            previewDiameter /
+                                2,
+                        previewDiameter,
+                        previewDiameter,
+                    );
+                } else {
+                    context.arc(
+                        center.x,
+                        center.y,
+                        previewDiameter /
+                            2,
+                        0,
+                        Math.PI * 2,
+                    );
+                }
+
                 context.stroke();
             };
 
@@ -16724,7 +16960,8 @@ export class GameScene extends Phaser.Scene {
                             selectedColor,
                         size:
                             selectedSize,
-                        shape: 'circle',
+                        shape:
+                            selectedShape,
                         points:
                             currentPoints,
                     },
@@ -16867,7 +17104,7 @@ export class GameScene extends Phaser.Scene {
 
         sizeInput.type = 'range';
         sizeInput.min = '1';
-        sizeInput.max = '8';
+        sizeInput.max = '12';
         sizeInput.step = '1';
         sizeInput.value =
             String(selectedSize);
@@ -16918,17 +17155,41 @@ export class GameScene extends Phaser.Scene {
                             selectedColor,
                         size:
                             selectedSize,
-                        shape: 'circle',
+                        shape:
+                            selectedShape,
+                        /*
+                         * Points are already gap-filled. v285 server accepts
+                         * up to 600, so preserve the full legitimate gesture.
+                         */
                         points:
                             currentPoints.slice(
                                 0,
-                                500,
+                                600,
                             ),
                     });
                 }
 
+                if (
+                    paintStarted &&
+                    currentPoints.length >
+                        0
+                ) {
+                    redoStrokes.length =
+                        0;
+                }
+
                 drawing = false;
                 paintStarted = false;
+                straightLineStart =
+                    undefined;
+
+                if (
+                    !this.mobileControlsEnabled
+                ) {
+                    straightLineArmed =
+                        false;
+                }
+
                 pendingPointerId = -1;
                 pendingStartScreen =
                     undefined;
@@ -17012,6 +17273,15 @@ export class GameScene extends Phaser.Scene {
             };
 
         canvas.addEventListener(
+            'contextmenu',
+            (
+                event,
+            ) => {
+                event.preventDefault();
+            },
+        );
+
+        canvas.addEventListener(
             'wheel',
             (event) => {
                 event.preventDefault();
@@ -17072,6 +17342,91 @@ export class GameScene extends Phaser.Scene {
                         event.clientX,
                         event.clientY,
                     );
+
+                const sampleEditorColor =
+                    (): void => {
+                        const rect =
+                            canvas.getBoundingClientRect();
+
+                        const px =
+                            Phaser.Math.Clamp(
+                                Math.floor(
+                                    (
+                                        event.clientX -
+                                        rect.left
+                                    ) /
+                                    Math.max(
+                                        1,
+                                        rect.width,
+                                    ) *
+                                    canvas.width,
+                                ),
+                                0,
+                                canvas.width -
+                                    1,
+                            );
+
+                        const py =
+                            Phaser.Math.Clamp(
+                                Math.floor(
+                                    (
+                                        event.clientY -
+                                        rect.top
+                                    ) /
+                                    Math.max(
+                                        1,
+                                        rect.height,
+                                    ) *
+                                    canvas.height,
+                                ),
+                                0,
+                                canvas.height -
+                                    1,
+                            );
+
+                        const pixel =
+                            ctx.getImageData(
+                                px,
+                                py,
+                                1,
+                                1,
+                            ).data;
+
+                        if (
+                            pixel[3] <=
+                            0
+                        ) {
+                            return;
+                        }
+
+                        selectedColor =
+                            (
+                                pixel[0] <<
+                                16
+                            ) |
+                            (
+                                pixel[1] <<
+                                8
+                            ) |
+                            pixel[2];
+
+                        eyedropperArmed =
+                            false;
+
+                        replay();
+                    };
+
+                if (
+                    event.button ===
+                        2 ||
+                    eyedropperArmed
+                ) {
+                    sampleEditorColor();
+                    drawing = false;
+                    paintStarted = false;
+                    pendingPointerId = -1;
+                    return;
+                }
 
                 /*
                  * Dragging EMPTY background pans the avatar. A touch that
@@ -17243,11 +17598,29 @@ export class GameScene extends Phaser.Scene {
 
                     paintStarted = true;
 
-                    currentPoints = [
+                    const startPoint =
                         canvasToLogical(
                             pendingStartScreen.x,
                             pendingStartScreen.y,
-                        ),
+                        );
+
+                    straightLineStart =
+                        startPoint;
+
+                    /*
+                     * Desktop mirrors Hider paint: hold Shift while dragging.
+                     * Mobile uses the dedicated LINE tool button below.
+                     */
+                    if (
+                        !this.mobileControlsEnabled &&
+                        event.shiftKey
+                    ) {
+                        straightLineArmed =
+                            true;
+                    }
+
+                    currentPoints = [
+                        startPoint,
                     ];
                 }
 
@@ -17263,14 +17636,42 @@ export class GameScene extends Phaser.Scene {
                         1
                     ];
 
-                if (
-                    !last ||
-                    last.x !== point.x ||
-                    last.y !== point.y
-                ) {
+                if (!last) {
                     currentPoints.push(
                         point,
                     );
+                } else if (
+                    last.x !== point.x ||
+                    last.y !== point.y
+                ) {
+                    if (
+                        straightLineArmed &&
+                        straightLineStart
+                    ) {
+                        currentPoints =
+                            expandSegmentPoints(
+                                straightLineStart,
+                                point,
+                            );
+                    } else {
+                        const segment =
+                            expandSegmentPoints(
+                                last,
+                                point,
+                            );
+
+                        segment
+                            .slice(1)
+                            .forEach(
+                                (
+                                    interpolated,
+                                ) => {
+                                    currentPoints.push(
+                                        interpolated,
+                                    );
+                                },
+                            );
+                    }
                 }
 
                 replay();
@@ -17336,6 +17737,200 @@ export class GameScene extends Phaser.Scene {
             },
         );
 
+        const toolRow =
+            document.createElement(
+                'div',
+            );
+
+        Object.assign(
+            toolRow.style,
+            {
+                display:
+                    'flex',
+                gap:
+                    '5px',
+                justifyContent:
+                    'center',
+                alignItems:
+                    'center',
+                flexWrap:
+                    'wrap',
+                marginTop:
+                    '5px',
+            },
+        );
+
+        const makeToolButton = (
+            label: string,
+            titleText: string,
+        ): HTMLButtonElement => {
+            const button =
+                document.createElement(
+                    'button',
+                );
+
+            button.type =
+                'button';
+            button.textContent =
+                label;
+            button.title =
+                titleText;
+
+            Object.assign(
+                button.style,
+                {
+                    minWidth:
+                        this.mobileControlsEnabled
+                            ? '44px'
+                            : '38px',
+                    minHeight:
+                        this.mobileControlsEnabled
+                            ? '38px'
+                            : '30px',
+                    padding:
+                        '4px 7px',
+                    border:
+                        '2px solid #78966f',
+                    borderRadius:
+                        '8px',
+                    background:
+                        '#f3f6e9',
+                    color:
+                        '#35523d',
+                    fontWeight:
+                        '800',
+                    fontSize:
+                        this.mobileControlsEnabled
+                            ? '13px'
+                            : '11px',
+                    cursor:
+                        'pointer',
+                    touchAction:
+                        'manipulation',
+                    userSelect:
+                        'none',
+                },
+            );
+
+            return button;
+        };
+
+        const circleTool =
+            makeToolButton(
+                '●',
+                'Circle brush',
+            );
+
+        const squareTool =
+            makeToolButton(
+                '■',
+                'Square brush',
+            );
+
+        const eyedropperTool =
+            makeToolButton(
+                '💧',
+                'Eyedropper',
+            );
+
+        const straightTool =
+            makeToolButton(
+                '╱',
+                'Straight line',
+            );
+
+        const refreshToolStates =
+            (): void => {
+                circleTool.style
+                    .background =
+                    selectedShape ===
+                        'circle'
+                        ? '#cfe8c6'
+                        : '#f3f6e9';
+
+                squareTool.style
+                    .background =
+                    selectedShape ===
+                        'square'
+                        ? '#cfe8c6'
+                        : '#f3f6e9';
+
+                eyedropperTool.style
+                    .background =
+                    eyedropperArmed
+                        ? '#cde9ff'
+                        : '#f3f6e9';
+
+                straightTool.style
+                    .background =
+                    straightLineArmed
+                        ? '#ffe0a8'
+                        : '#f3f6e9';
+            };
+
+        circleTool.addEventListener(
+            'click',
+            () => {
+                selectedShape =
+                    'circle';
+                refreshToolStates();
+                replay();
+            },
+        );
+
+        squareTool.addEventListener(
+            'click',
+            () => {
+                selectedShape =
+                    'square';
+                refreshToolStates();
+                replay();
+            },
+        );
+
+        eyedropperTool.addEventListener(
+            'click',
+            () => {
+                eyedropperArmed =
+                    !eyedropperArmed;
+
+                if (
+                    eyedropperArmed
+                ) {
+                    straightLineArmed =
+                        false;
+                }
+
+                refreshToolStates();
+            },
+        );
+
+        straightTool.addEventListener(
+            'click',
+            () => {
+                straightLineArmed =
+                    !straightLineArmed;
+
+                if (
+                    straightLineArmed
+                ) {
+                    eyedropperArmed =
+                        false;
+                }
+
+                refreshToolStates();
+            },
+        );
+
+        refreshToolStates();
+
+        toolRow.append(
+            circleTool,
+            squareTool,
+            eyedropperTool,
+            straightTool,
+        );
+
         const actionRow =
             document.createElement('div');
 
@@ -17393,7 +17988,37 @@ export class GameScene extends Phaser.Scene {
                 '#78966f',
                 () => {
                     finishStroke();
-                    strokes.pop();
+
+                    const removed =
+                        strokes.pop();
+
+                    if (removed) {
+                        redoStrokes.push(
+                            removed,
+                        );
+                    }
+
+                    replay();
+                },
+            );
+
+        const redo =
+            makeButton(
+                '↷ ' +
+                    tr('다시'),
+                '#6d8f9e',
+                () => {
+                    finishStroke();
+
+                    const restored =
+                        redoStrokes.pop();
+
+                    if (restored) {
+                        strokes.push(
+                            restored,
+                        );
+                    }
+
                     replay();
                 },
             );
@@ -17405,6 +18030,7 @@ export class GameScene extends Phaser.Scene {
                 () => {
                     finishStroke();
                     strokes.length = 0;
+                    redoStrokes.length = 0;
                     replay();
                 },
             );
@@ -17472,6 +18098,7 @@ export class GameScene extends Phaser.Scene {
 
         actionRow.append(
             undo,
+            redo,
             clear,
             cancel,
             save,
@@ -17494,6 +18121,7 @@ export class GameScene extends Phaser.Scene {
 
         sideControls.append(
             controls,
+            toolRow,
             actionRow,
         );
 
