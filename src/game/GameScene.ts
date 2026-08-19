@@ -27771,6 +27771,86 @@ export class GameScene extends Phaser.Scene {
 
                 this.updatePaintPreview(pointer);
 
+                /*
+                 * v0.10.10.238.27:
+                 * PC Hider drag-in painting.
+                 *
+                 * Previously a stroke could only start when POINTER_DOWN itself
+                 * landed on a paintable Hider pixel. If the player pressed just
+                 * outside the character and dragged onto it, paintLocalPlayer()
+                 * returned null on pointer-down, isPainting stayed false, and
+                 * POINTER_MOVE exited forever.
+                 *
+                 * While the desktop left button is held, allow the first
+                 * paintable pixel entered by the drag to become the stroke
+                 * origin. Mobile keeps its separate precision-drag contract.
+                 */
+                if (
+                    !this.mobileControlsEnabled &&
+                    this.phase === 'paint' &&
+                    pointer.isDown &&
+                    pointer.leftButtonDown() &&
+                    !this.isPainting &&
+                    (
+                        (
+                            this.isMultiplayerSession() &&
+                            multiplayerClient
+                                .getLocalPlayer()
+                                ?.role === 'hider'
+                        ) ||
+                        this.practiceMode ===
+                            'hider'
+                    )
+                ) {
+                    const dragInTarget =
+                        this.getPaintInputWorldPoint(
+                            pointer,
+                        );
+
+                    const dragInPoint =
+                        this.networkPlayerManager
+                            .paintLocalPlayer(
+                                dragInTarget.x,
+                                dragInTarget.y,
+                                this.brushTextureKey,
+                                this.paintColor,
+                                this.brushSize,
+                                this.brushShape,
+                            );
+
+                    if (dragInPoint) {
+                        this.playPaintSound();
+                        this.isPainting = true;
+                        this.activeStrokeTargetSessionId =
+                            this.networkPlayerManager
+                                .getLocalSessionId() ?? '';
+                        this.activeStrokePoints = [
+                            dragInPoint,
+                        ];
+                        this.currentStrokeHistoryPoints = [
+                            dragInPoint,
+                        ];
+
+                        this.straightLineStart = {
+                            x: dragInPoint.x,
+                            y: dragInPoint.y,
+                        };
+
+                        this.straightLineStartWorld =
+                            dragInTarget.clone();
+
+                        this.straightLineModeActive =
+                            Boolean(
+                                this.shiftPaintKey
+                                    ?.isDown,
+                            );
+
+                        this.updateStraightLinePreview(
+                            pointer,
+                        );
+                    }
+                }
+
                 if (
                     this.phase !== 'paint' ||
                     !this.isPainting ||
