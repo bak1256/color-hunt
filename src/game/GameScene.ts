@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010280_SMOOTH_GAS_8S_RECOVER2: main-match GAS smooth per-frame drain, 8s accident. */
     /* V1010277_GAS_10S_LINEAR_DRAIN: Practice/main-match poop = 10s, GAS drains 100 -> 0. */
     /* V1010276_ISOLATE_PRACTICE_FROM_NETWORK: Practice remains local even if a stale room reconnects. */
     /* V1010273_REMOVE_OBSOLETE_PRACTICE_GAS_COOL_CONSTANT: v272 drains Practice GAS directly from remaining debuff time. */
@@ -4195,7 +4196,7 @@ export class GameScene extends Phaser.Scene {
     private readonly practiceFartRadius = 150;
     private readonly practiceFartCost = 36;
     private readonly practiceFartRecoverPerSecond = 0.75;
-    private readonly practicePoopDurationMs = 10_000;
+    private readonly practicePoopDurationMs = 8_000;
 
     /*
      * V1010271_STABILIZE_PRACTICE_FART_AND_BGM: Practice owns its own authoritative poop timer.
@@ -8408,8 +8409,7 @@ export class GameScene extends Phaser.Scene {
         this.networkUnsubscribers.push(
             multiplayerClient.onFartState((state: NetworkFartState) => {
                 /*
-                 * V1010276_ISOLATE_PRACTICE_FROM_NETWORK: network fart_state previously overwrote Practice GAS,
-                 * producing the fill -> reset -> refill loop.
+                 * V1010280_SMOOTH_GAS_8S_RECOVER2: Practice remains fully local.
                  */
                 if (
                     this.practiceMode !==
@@ -8418,13 +8418,47 @@ export class GameScene extends Phaser.Scene {
                     return;
                 }
 
-                this.fartGauge = Phaser.Math.Clamp(state.gauge, 0, 100);
-                const localNow = Date.now();
-                this.localPoopUntil = state.poopUntil > state.serverNow
-                    ? localNow + (state.poopUntil - state.serverNow) : 0;
-                this.networkPlayerManager?.setLocalHunterSpeedMultiplier(
-                    this.localPoopUntil > localNow ? 0.4 : 1,
-                );
+                const localNow =
+                    Date.now();
+
+                const nextLocalPoopUntil =
+                    state.poopUntil >
+                    state.serverNow
+                        ? localNow +
+                            (
+                                state.poopUntil -
+                                state.serverNow
+                            )
+                        : 0;
+
+                this.localPoopUntil =
+                    nextLocalPoopUntil;
+
+                const pooped =
+                    nextLocalPoopUntil >
+                    localNow;
+
+                /*
+                 * While pooped, don't snap rendered GAS to the server's
+                 * ~250ms samples. The local render loop uses the authoritative
+                 * deadline to animate smoothly every frame.
+                 */
+                if (!pooped) {
+                    this.fartGauge =
+                        Phaser.Math.Clamp(
+                            state.gauge,
+                            0,
+                            100,
+                        );
+                }
+
+                this.networkPlayerManager
+                    ?.setLocalHunterSpeedMultiplier(
+                        pooped
+                            ? 0.4
+                            : 1,
+                    );
+
                 this.updateFartHud();
             }),
         );
@@ -10206,25 +10240,25 @@ export class GameScene extends Phaser.Scene {
                         skill:
                             '💨 Space 방구 탐지 · 가스에 닿은 봇은 콜록!',
                         risk:
-                            '💩 방구를 쓸수록 GAS가 차오릅니다. MAX면 10초간 사고 발생 · 이동속도 -60% · 근처 봇은 딱 한 번 비웃습니다.',
+                            '💩 방구를 쓸수록 GAS가 차오릅니다. MAX면 8초간 사고 발생 · 이동속도 -60% · 근처 봇은 딱 한 번 비웃습니다.',
                     },
                     ja: {
                         skill:
                             '💨 Spaceでおなら探知 · ガスに触れたBOTはゴホッ！',
                         risk:
-                            '💩 おならを使うほどGASが上昇。MAXで10秒間事故発生 · 移動速度-60% · 近くのBOTは一度だけ大笑いします。',
+                            '💩 おならを使うほどGASが上昇。MAXで8秒間事故発生 · 移動速度-60% · 近くのBOTは一度だけ大笑いします。',
                     },
                     en: {
                         skill:
                             '💨 Space: fart detector · Bots touched by the gas cough!',
                         risk:
-                            '💩 Every fart fills GAS. Hit MAX and suffer a 10s accident · -60% move speed · a nearby Bot laughs once.',
+                            '💩 Every fart fills GAS. Hit MAX and suffer an 8s accident · -60% move speed · a nearby Bot laughs once.',
                     },
                     zh: {
                         skill:
                             '💨 Space放屁探测 · 被气体碰到的BOT会咳嗽！',
                         risk:
-                            '💩 每次放屁都会增加GAS。达到MAX会进入10秒事故状态 · 移速-60% · 附近BOT只会嘲笑一次。',
+                            '💩 每次放屁都会增加GAS。达到MAX会进入8秒事故状态 · 移速-60% · 附近BOT只会嘲笑一次。',
                     },
                 } as const
             )[getLanguage()];
@@ -35629,8 +35663,7 @@ export class GameScene extends Phaser.Scene {
                 this.fartGauge =
                     Phaser.Math.Clamp(
                         (
-                            localPoopRemainingMs /
-                            10_000
+                            localPoopRemainingMs / 8_000
                         ) *
                             100,
                         0,
