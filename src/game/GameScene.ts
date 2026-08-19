@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010261_GAS_THIRD_FART_FOCUS_FIX: stable GAS fixed HUD; 3rd fart detects; poop text below Hunter; stronger focus flush. */
     /* V1010260_REMOVE_LAUGH_LEFTOVERS: remove obsolete laugh-counter leftovers after v259. */
     /* V1010259_SIMPLIFY_POOP_HUD_FOCUS: pause laugh counterplay; clear poop notices; fixed GAS/chat stack; focus SFX/VFX guard. */
     /* V1010258_HUNTER_CONTROLS_HINT_EXACT: exact-source Hunter Practice/main-match bottom controls + movement fade. */
@@ -11708,42 +11709,28 @@ export class GameScene extends Phaser.Scene {
 
         const gaugeBefore =
             this.fartGauge;
+
         const nextGauge =
             gaugeBefore +
             this.practiceFartCost;
 
-        if (nextGauge >= 100) {
-            this.localPoopUntil =
-                now +
-                this.practicePoopDurationMs;
+        const willPoop =
+            nextGauge >= 100;
 
-            this.fartGauge = 100;
-            this.showPoopBurst({
-                hunterId:
-                    this.practiceHunterSessionId,
-                hunterName:
-                    'HUNTER',
-                x:
-                    this.player.x,
-                y:
-                    this.player.y,
-                poopUntil:
-                    this.localPoopUntil,
-                serverNow:
-                    now,
-            });
-
-            this.updateFartHud();
-            return;
-        }
-
+        /*
+         * Third press is still a REAL fart.
+         * It performs burst + cough + ! detection first, then the accident.
+         */
         this.fartGauge =
-            nextGauge;
+            Math.min(
+                100,
+                nextGauge,
+            );
 
         const soundTier =
-            nextGauge >= 72
+            this.fartGauge >= 72
                 ? 3
-                : nextGauge >= 36
+                : this.fartGauge >= 36
                     ? 2
                     : 1;
 
@@ -11759,8 +11746,7 @@ export class GameScene extends Phaser.Scene {
             soundTier,
         });
 
-        let detected =
-            false;
+        let detected = false;
 
         this.hiders.forEach(
             (
@@ -11810,6 +11796,27 @@ export class GameScene extends Phaser.Scene {
             this.showHunterDetectionAlert(
                 'cough',
             );
+        }
+
+        if (willPoop) {
+            this.localPoopUntil =
+                now +
+                this.practicePoopDurationMs;
+
+            this.showPoopBurst({
+                hunterId:
+                    this.practiceHunterSessionId,
+                hunterName:
+                    'HUNTER',
+                x:
+                    this.player.x,
+                y:
+                    this.player.y,
+                poopUntil:
+                    this.localPoopUntil,
+                serverNow:
+                    now,
+            });
         }
 
         this.updateFartHud();
@@ -33551,9 +33558,9 @@ export class GameScene extends Phaser.Scene {
                 0xffffff,
                 1,
             );
-        this.fartHudContainer = this.add.container(18, 94, [
+        this.fartHudContainer = this.add.container(18, 88, [
             fartBg, this.fartGaugeGraphics, this.fartGaugeLabel,
-        ]).setDepth(25000).setScrollFactor(0).setVisible(false);
+        ]).setDepth(25001).setScrollFactor(0).setVisible(false);
         this.updateFartHud();
 
         this.targetText = this.add
@@ -33682,25 +33689,13 @@ export class GameScene extends Phaser.Scene {
             );
 
         /*
-         * V1010245_FART_HUD_AUDIO_POLISH: GAS HUD follows directly under Ammo/HEAT even when the
-         * weapon HUD is moved/rescaled by viewport layout code.
-         */
-        /*
-         * V1010252_AUDIO_FART_HUD_FINAL_POLISH: same screen X as weapon HUD, directly underneath it.
-         * fixed-HUD transform code compensates camera zoom for BOTH panels.
+         * V1010261_GAS_THIRD_FART_FOCUS_FIX: position/scale are owned exclusively by fixedHudBaseTransforms.
+         * Base = (18,88), directly below Ammo/HEAT.
          */
         this.fartHudContainer
-            .setPosition(
-                18,
-                88,
-            )
-            .setScrollFactor(
-                0,
-            )
-            .setDepth(
-                25001,
-            );
-        this.fartHudContainer.setVisible(Boolean(visible));
+            .setScrollFactor(0)
+            .setDepth(25001)
+            .setVisible(Boolean(visible));
 
 
         this.fartGaugeGraphics.clear();
@@ -33796,6 +33791,19 @@ export class GameScene extends Phaser.Scene {
                     this.sound.mute =
                         true;
 
+                    /*
+                     * V1010261_GAS_THIRD_FART_FOCUS_FIX: discard one-shot audio already in flight instead
+                     * of letting the browser deliver it all after focus returns.
+                     */
+                    this.shotgunSound?.stop();
+                    this.hitSound?.stop();
+                    this.hunterHitConfirmSound?.stop();
+                    this.countdownBeepSound?.stop();
+                    this.countdownStartSound?.stop();
+                    this.victorySound?.stop();
+                    this.paintSound?.stop();
+                    this.heartbeatSound?.stop();
+
                     this.suppressEffectsUntil =
                         Number.POSITIVE_INFINITY;
 
@@ -33814,6 +33822,8 @@ export class GameScene extends Phaser.Scene {
                      * Procedural fart/comedy audio bypasses Phaser.Sound,
                      * so suspend that AudioContext as well.
                      */
+                    this.tweens.pauseAll();
+
                     if (
                         this.comedyAudioContext &&
                         this.comedyAudioContext.state ===
@@ -33832,7 +33842,7 @@ export class GameScene extends Phaser.Scene {
                  */
                 this.suppressEffectsUntil =
                     Date.now() +
-                    1500;
+                    2200;
 
                 this.sound.mute =
                     true;
@@ -33861,10 +33871,12 @@ export class GameScene extends Phaser.Scene {
                             this.sound.mute =
                                 this.audioGuardPreviousMute;
 
+                            this.tweens.resumeAll();
+
                             this.suppressEffectsUntil =
                                 0;
                         },
-                        1500,
+                        2200,
                     );
             };
 
@@ -34877,7 +34889,7 @@ export class GameScene extends Phaser.Scene {
             const t =
                 this.add.text(
                     event.x,
-                    event.y - 70,
+                    event.y + 30,
                     labels[getLanguage()],
                     {
                         fontFamily:
@@ -34904,7 +34916,7 @@ export class GameScene extends Phaser.Scene {
                 scale:
                     1.15,
                 y:
-                    event.y - 100,
+                    event.y + 54,
                 duration:
                     260,
                 ease:
