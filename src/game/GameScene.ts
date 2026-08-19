@@ -2207,6 +2207,62 @@ export class GameScene extends Phaser.Scene {
                     );
                 }
 
+                /*
+                 * V101023831_EYEDROPPER_PINCH_TAKEOVER
+                 *
+                 * Eyedropper stays selected after sampling. On the next touch,
+                 * the normal paint listener immediately starts another native
+                 * pipette drag and captures finger #1. That prevents a later
+                 * finger #2 from becoming a clean camera pinch.
+                 *
+                 * As soon as TWO real world touches exist, pinch owns both
+                 * fingers even while the eyedropper tool remains selected.
+                 * Cancel only the active pipette drag/capture; do NOT turn the
+                 * eyedropper tool off.
+                 */
+                if (
+                    this.mobileControlsEnabled &&
+                    this.phase === 'paint' &&
+                    this.eyedropperArmed
+                ) {
+                    const activeWorldTouches =
+                        [...this.mobileTouchPoints.entries()]
+                            .filter(
+                                ([id, point]) =>
+                                    this.isMobilePointerActuallyDown(
+                                        id,
+                                    ) &&
+                                    id !==
+                                        this.mobileMovePointerId &&
+                                    id !==
+                                        this.mobileAimPointerId &&
+                                    id !==
+                                        this.mobileFirePointerId &&
+                                    !this.isMobileControlScreenPoint(
+                                        point.x,
+                                        point.y,
+                                    ),
+                            )
+                            .length;
+
+                    if (activeWorldTouches >= 2) {
+                        this.stopMobileNativeEyedropperDrag();
+                        this.releaseMobilePaintPointer();
+                        this.eyedropperPointerId = -1;
+
+                        this.hideMobilePaintPrecisionGuide();
+                        this.paintPreview?.setVisible(false);
+                        this.hideEyedropperMagnifier();
+
+                        /*
+                         * First call arms pinch distance. Subsequent pointermove
+                         * events in the global mobile listener perform zoom.
+                         */
+                        this.updateMobilePinchGesture();
+                        return;
+                    }
+                }
+
                 if (
                     this.mobileFirePointerId >=
                         0 &&
