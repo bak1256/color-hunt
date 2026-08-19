@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010300_CLIENT_MOBILE_UI_GHOST_GAS_FIX: mobile UI proportions, single status dot, GAS reset, zero-player room filter. */
     /* V1010299_UI_LAYOUT_BGM_HOTFIX: restore lobby icons, stable status dot, rebuild mobile waiting room, anchor gameplay BGM inside canvas. */
     /* V1010298_UNIFIED_BGM_MOBILE_WAITING_LOBBY_POLISH: unified BGM, full mobile waiting room, visible room status, lock icons. */
     /* V1010297_CONTROLS_HELP_TOGGLE_FIX: controls help toggle listens to the pointerdown event forwarded by every UI. */
@@ -19892,8 +19893,8 @@ export class GameScene extends Phaser.Scene {
                     rect.height *
                         (
                             landscapeCanvas
-                                ? 0.96
-                                : 0.96
+                                ? 0.985
+                                : 0.985
                         ),
                 );
 
@@ -19914,9 +19915,12 @@ export class GameScene extends Phaser.Scene {
             const renderedHeight =
                 designHeight * scale;
 
+            const mobileRightInset =
+                2;
+
             const left =
                 rect.right -
-                horizontalInset -
+                mobileRightInset -
                 renderedWidth;
 
             const top =
@@ -20888,8 +20892,46 @@ export class GameScene extends Phaser.Scene {
              * read-only status rows so players can see server activity without
              * accidentally trying to join a round that has already started.
              */
+            /*
+             * V1010300_CLIENT_MOBILE_UI_GHOST_GAS_FIX: even if the Colyseus room-list endpoint briefly returns an
+             * already-empty room during disposal/cache convergence, never show
+             * a 0-player public room to users.
+             */
+            const visibleRooms =
+                rooms.filter(
+                    (
+                        room:
+                            PublicRoomInfo,
+                    ) => {
+                        const metadataCount =
+                            Number(
+                                room.metadata
+                                    ?.playerCount,
+                            );
+
+                        const transportCount =
+                            Number(
+                                room.clients,
+                            );
+
+                        const count =
+                            Number.isFinite(
+                                metadataCount,
+                            )
+                                ? metadataCount
+                                : transportCount;
+
+                        return (
+                            Number.isFinite(
+                                count,
+                            ) &&
+                            count > 0
+                        );
+                    },
+                );
+
             const sortedRooms =
-                [...rooms].sort((a, b) => {
+                [...visibleRooms].sort((a, b) => {
                     const aPhase =
                         String(a.metadata?.phase ?? 'lobby');
                     const bPhase =
@@ -21016,7 +21058,7 @@ export class GameScene extends Phaser.Scene {
                                     ? 'is-open'
                                     : 'is-playing'
                             }">
-                                <i aria-hidden="true">●</i>
+                                <i aria-hidden="true"></i>
                                 ${
                                     available
                                         ? trPhase(
@@ -24880,6 +24922,116 @@ export class GameScene extends Phaser.Scene {
                         font-size: 10px !important;
                     }
 
+                    /*
+                     * V1010300_CLIENT_MOBILE_UI_GHOST_GAS_FIX: keep the original lobby-action icon frame.
+                     * Only constrain the glyph inside it. v299's 42px frame
+                     * override broke the original desktop/mobile proportions.
+                     */
+                    .ch-lobby-action-icon {
+                        box-sizing: border-box !important;
+                        flex-shrink: 0 !important;
+                        overflow: hidden !important;
+                        transform: none !important;
+                    }
+
+                    .ch-lobby-action--public .ch-lobby-action-icon {
+                        width: revert !important;
+                        min-width: revert !important;
+                        height: revert !important;
+                        font-size: 30px !important;
+                        line-height: 1 !important;
+                    }
+
+                    .ch-lobby-action--private .ch-lobby-action-icon,
+                    .ch-lobby-action--join .ch-lobby-action-icon {
+                        width: revert !important;
+                        min-width: revert !important;
+                        height: revert !important;
+                        font-size: 21px !important;
+                        line-height: 1 !important;
+                    }
+
+                    /*
+                     * A single 9x9 CSS circle. The <i> element itself is empty,
+                     * so no text glyph can appear beside/under it.
+                     */
+                    .ch-lobby-room-status > i {
+                        display: inline-block !important;
+                        width: 9px !important;
+                        min-width: 9px !important;
+                        max-width: 9px !important;
+                        height: 9px !important;
+                        min-height: 9px !important;
+                        max-height: 9px !important;
+                        padding: 0 !important;
+                        margin: 0 5px 0 0 !important;
+                        border: 0 !important;
+                        border-radius: 50% !important;
+                        background: currentColor !important;
+                        box-shadow: none !important;
+                        font-size: 0 !important;
+                        line-height: 0 !important;
+                        flex: 0 0 9px !important;
+                    }
+
+                    /*
+                     * Mobile waiting-room role row:
+                     * buttons = first row, volunteer count = its OWN second row.
+                     * Never let "헌터 지원 0명" sit on top of the buttons/timing.
+                     */
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-role-wrap {
+                        display: grid !important;
+                        grid-template-rows: auto 18px !important;
+                        grid-template-columns: minmax(0, 1fr) !important;
+                        align-items: stretch !important;
+                        gap: 2px !important;
+                        min-height: 58px !important;
+                        padding: 2px 0 !important;
+                        overflow: visible !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-role {
+                        display: grid !important;
+                        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+                        gap: 5px !important;
+                        min-height: 38px !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-role button {
+                        width: 100% !important;
+                        min-width: 0 !important;
+                        min-height: 38px !important;
+                        padding: 5px 4px !important;
+                        font-size: 11px !important;
+                        line-height: 1.05 !important;
+                        white-space: nowrap !important;
+                        overflow: hidden !important;
+                        text-overflow: ellipsis !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-role-status {
+                        position: static !important;
+                        display: flex !important;
+                        align-items: center !important;
+                        justify-content: center !important;
+                        width: 100% !important;
+                        min-width: 0 !important;
+                        min-height: 18px !important;
+                        height: 18px !important;
+                        margin: 0 !important;
+                        padding: 0 4px !important;
+                        box-sizing: border-box !important;
+                        font-size: 10px !important;
+                        line-height: 1 !important;
+                        white-space: nowrap !important;
+                        overflow: hidden !important;
+                        text-overflow: ellipsis !important;
+                    }
+
                     @media (pointer: coarse), (max-width: 760px) {
                         .ch-lobby-room-status {
                             display: inline-flex !important;
@@ -26172,6 +26324,25 @@ export class GameScene extends Phaser.Scene {
         }
 
         if (phase === 'lobby') {
+            /*
+             * V1010300_CLIENT_MOBILE_UI_GHOST_GAS_FIX: GAS belongs to one Hunt only.
+             * Never carry the previous Hunter's pressure into Lobby/next round.
+             */
+            this.fartGauge = 0;
+            this.lastFartUseAt = 0;
+            this.localPoopUntil = 0;
+            this.poopedHuntersUntil.clear();
+
+            this.networkPlayerManager
+                ?.setLocalHunterSpeedMultiplier(
+                    1,
+                );
+
+            this.updateFartHud();
+
+            this.fartHudContainer
+                ?.setVisible(false);
+
             this.spectatorSessionId = '';
             this.spectatorCycleIndex = -1;
 
@@ -26460,6 +26631,25 @@ export class GameScene extends Phaser.Scene {
         }
 
         if (phase === 'finished') {
+            /*
+             * V1010300_CLIENT_MOBILE_UI_GHOST_GAS_FIX: Finished is outside Hunt. Reset and hide GAS immediately,
+             * including mobile where the fixed HUD could otherwise linger.
+             */
+            this.fartGauge = 0;
+            this.lastFartUseAt = 0;
+            this.localPoopUntil = 0;
+            this.poopedHuntersUntil.clear();
+
+            this.networkPlayerManager
+                ?.setLocalHunterSpeedMultiplier(
+                    1,
+                );
+
+            this.updateFartHud();
+
+            this.fartHudContainer
+                ?.setVisible(false);
+
             const authoritativeWinner =
                 multiplayerClient.getRoom()
                     ?.state.winner;
