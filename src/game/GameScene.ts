@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010277_GAS_10S_LINEAR_DRAIN: Practice/main-match poop = 10s, GAS drains 100 -> 0. */
     /* V1010276_ISOLATE_PRACTICE_FROM_NETWORK: Practice remains local even if a stale room reconnects. */
     /* V1010273_REMOVE_OBSOLETE_PRACTICE_GAS_COOL_CONSTANT: v272 drains Practice GAS directly from remaining debuff time. */
     /* V1010272_PRACTICE_POOP_STATE_MACHINE: isolated deterministic Practice poop state machine. */
@@ -4194,7 +4195,7 @@ export class GameScene extends Phaser.Scene {
     private readonly practiceFartRadius = 150;
     private readonly practiceFartCost = 36;
     private readonly practiceFartRecoverPerSecond = 0.75;
-    private readonly practicePoopDurationMs = 14_000;
+    private readonly practicePoopDurationMs = 10_000;
 
     /*
      * V1010271_STABILIZE_PRACTICE_FART_AND_BGM: Practice owns its own authoritative poop timer.
@@ -10205,25 +10206,25 @@ export class GameScene extends Phaser.Scene {
                         skill:
                             '💨 Space 방구 탐지 · 가스에 닿은 봇은 콜록!',
                         risk:
-                            '💩 방구를 쓸수록 GAS가 차오릅니다. MAX면 14초간 사고 발생 · 이동속도 -60% · 근처 봇은 딱 한 번 비웃습니다.',
+                            '💩 방구를 쓸수록 GAS가 차오릅니다. MAX면 10초간 사고 발생 · 이동속도 -60% · 근처 봇은 딱 한 번 비웃습니다.',
                     },
                     ja: {
                         skill:
                             '💨 Spaceでおなら探知 · ガスに触れたBOTはゴホッ！',
                         risk:
-                            '💩 おならを使うほどGASが上昇。MAXで14秒間事故発生 · 移動速度-60% · 近くのBOTは一度だけ大笑いします。',
+                            '💩 おならを使うほどGASが上昇。MAXで10秒間事故発生 · 移動速度-60% · 近くのBOTは一度だけ大笑いします。',
                     },
                     en: {
                         skill:
                             '💨 Space: fart detector · Bots touched by the gas cough!',
                         risk:
-                            '💩 Every fart fills GAS. Hit MAX and suffer a 14s accident · -60% move speed · a nearby Bot laughs once.',
+                            '💩 Every fart fills GAS. Hit MAX and suffer a 10s accident · -60% move speed · a nearby Bot laughs once.',
                     },
                     zh: {
                         skill:
                             '💨 Space放屁探测 · 被气体碰到的BOT会咳嗽！',
                         risk:
-                            '💩 每次放屁都会增加GAS。达到MAX会进入14秒事故状态 · 移速-60% · 附近BOT只会嘲笑一次。',
+                            '💩 每次放屁都会增加GAS。达到MAX会进入10秒事故状态 · 移速-60% · 附近BOT只会嘲笑一次。',
                     },
                 } as const
             )[getLanguage()];
@@ -35229,6 +35230,13 @@ export class GameScene extends Phaser.Scene {
             this.localPoopUntil =
                 localUntil;
 
+            if (
+                this.practiceMode !== 'hunter'
+            ) {
+                this.fartGauge = 100;
+                this.updateFartHud();
+            }
+
             this.networkPlayerManager
                 ?.setLocalHunterSpeedMultiplier(
                     0.4,
@@ -35599,6 +35607,49 @@ export class GameScene extends Phaser.Scene {
     }
 
     private updatePoopComedyEffects(): void {
+        /*
+         * V1010277_GAS_10S_LINEAR_DRAIN: multiplayer local Hunter mirrors Practice GAS animation.
+         * localPoopUntil is converted from authoritative server time in
+         * onFartState(). During the debuff, display a smooth 100 -> 0 drain.
+         */
+        if (
+            this.practiceMode !== 'hunter' &&
+            this.localPoopUntil > 0
+        ) {
+            const localPoopRemainingMs =
+                Math.max(
+                    0,
+                    this.localPoopUntil -
+                        Date.now(),
+                );
+
+            if (
+                localPoopRemainingMs > 0
+            ) {
+                this.fartGauge =
+                    Phaser.Math.Clamp(
+                        (
+                            localPoopRemainingMs /
+                            10_000
+                        ) *
+                            100,
+                        0,
+                        100,
+                    );
+
+                this.updateFartHud();
+            } else if (
+                this.fartGauge > 0
+            ) {
+                /*
+                 * Never leave the HUD at ~90% when the debuff expires.
+                 * The next server fart_state remains authoritative afterward.
+                 */
+                this.fartGauge = 0;
+                this.updateFartHud();
+            }
+        }
+
         const now = Date.now();
         this.poopedHuntersUntil.forEach((until, hunterId) => {
             if (until <= now) {
