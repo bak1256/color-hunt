@@ -7473,3 +7473,38 @@ html.colorhunt-mobile .colorhunt-practice-desktop-hint {
     gap: 4px;
   }
 }
+
+
+/* V1010238162_ENGLISH_LOBBY_START_FIT */
+/*
+ * English-only final fit.
+ *
+ * START GAME is wider than the KO/JA/ZH labels. The BGM + Controls group is
+ * intentionally kept unchanged; only the English heading is compacted enough
+ * to leave a real visual gap instead of letting the BGM chip cover the final E.
+ *
+ * No frame height / button position / other language layout changes.
+ */
+.ch-lobby-actions-title-row h2.ch-lobby-start-title--en {
+  font-size: 14px !important;
+  letter-spacing: -0.045em !important;
+  padding-right: 5px !important;
+  white-space: nowrap !important;
+  overflow: visible !important;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+}
+
+/* Give the English title a few more pixels on normal desktop without
+   changing the overall right panel width. */
+.ch-lobby-actions-title-row:has(
+  h2.ch-lobby-start-title--en
+) {
+  gap: 4px !important;
+}
+
+.ch-lobby-actions-title-row:has(
+  h2.ch-lobby-start-title--en
+) .ch-lobby-inline-actions {
+  gap: 4px !important;
+}

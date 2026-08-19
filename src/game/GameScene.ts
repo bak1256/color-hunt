@@ -16439,7 +16439,7 @@ export class GameScene extends Phaser.Scene {
 
                 <section class="ch-lobby-actions">
                     <div class="ch-lobby-actions-title-row">
-                        <h2>🎮 ${tr('게임 시작하기')}</h2>
+                        <h2 class="${getLanguage() === 'en' ? 'ch-lobby-start-title--en' : ''}">🎮 ${tr('게임 시작하기')}</h2><!-- V1010238162_ENGLISH_LOBBY_START_FIT -->
                         <div class="ch-lobby-inline-actions">
                             <button
                                 type="button"
