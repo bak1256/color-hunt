@@ -160,6 +160,8 @@ export class GameScene extends Phaser.Scene {
     private undoPaintKey!: Phaser.Input.Keyboard.Key;
     private redoPaintKey!: Phaser.Input.Keyboard.Key;
     private shiftPaintKey!: Phaser.Input.Keyboard.Key;
+    /* V1010246_SPACE_PRACTICE_FART: Hunt skill uses Space; Shift remains paint straight-line only. */
+    private fartKey!: Phaser.Input.Keyboard.Key;
     private controlPaintKey!: Phaser.Input.Keyboard.Key;
 
     /*
@@ -4145,6 +4147,13 @@ export class GameScene extends Phaser.Scene {
     private readonly practiceHunterMoveSpeed =
         125;
 
+    /* V1010246_SPACE_PRACTICE_FART: local mirror of the multiplayer fart rules. */
+    private readonly practiceFartRadius = 150;
+    private readonly practiceFartCost = 34;
+    private readonly practiceFartRecoverPerSecond = 7;
+    private readonly practicePoopDurationMs = 6_000;
+    private practiceLastLaughAt = 0;
+
     /*
      * Hider Practice record-shot flow.
      * Timer starts on the first REAL paint pixel, not when the mode opens.
@@ -5438,6 +5447,9 @@ export class GameScene extends Phaser.Scene {
                     this.practiceMode ===
                         'hunter'
                 ) {
+                    this.updateHunterPracticeFart(
+                        delta,
+                    );
                     this.syncHunterPracticeVisuals();
                     this.networkPlayerManager
                         .update(
@@ -6470,7 +6482,7 @@ export class GameScene extends Phaser.Scene {
                 lobby: '대기실 · 마우스로 선택 · Enter 채팅',
                 paint: '색칠 · 드래그 칠하기 · 우클릭 스포이드 · 휠 줌 · Ctrl+휠 붓 크기',
                 straight: '직선 · Shift를 누른 채 드래그하면 직선으로 칠해집니다',
-                hunt: '사냥 · WASD 이동 · 마우스 조준 · 좌클릭 발사',
+                hunt: '사냥 · WASD 이동 · 마우스 조준 · 좌클릭 발사 · Space 방구 탐지',
                 mobileLobby: '대기실 · 버튼 터치 · 채팅칸 터치',
                 mobilePaint: '색칠 · 손가락으로 칠하기 · 핀치 확대/축소 · 아래 도구로 붓 변경',
                 mobileStraight: '직선 · 브러시를 길게 누르면 주황색 이펙트와 함께 직선 모드가 켜집니다',
@@ -6483,7 +6495,7 @@ export class GameScene extends Phaser.Scene {
                 lobby: 'ロビー · マウス選択 · Enterでチャット',
                 paint: 'ペイント · ドラッグ塗り · 右クリックでスポイト · ホイールズーム · Ctrl+ホイールでブラシ',
                 straight: '直線 · Shiftを押しながらドラッグすると直線で塗れます',
-                hunt: 'ハント · WASD移動 · マウス照準 · 左クリック射撃',
+                hunt: 'ハント · WASD移動 · マウス照準 · 左クリック射撃 · Spaceでおなら探知',
                 mobileLobby: 'ロビー · ボタン操作 · 入力欄タップでチャット',
                 mobilePaint: 'ペイント · 指で塗る · ピンチズーム · 下のツールでブラシ変更',
                 mobileStraight: '直線 · ブラシを長押しするとオレンジの合図で直線モードになります',
@@ -6496,7 +6508,7 @@ export class GameScene extends Phaser.Scene {
                 lobby: 'Lobby · Click UI · Enter to chat',
                 paint: 'Paint · Drag · Right-click eyedropper · Wheel zoom · Ctrl+wheel brush size',
                 straight: 'Straight line · Hold Shift while dragging to paint a straight line',
-                hunt: 'Hunt · WASD move · Mouse aim · Left click fire',
+                hunt: 'Hunt · WASD move · Mouse aim · Left click fire · Space fart detector',
                 mobileLobby: 'Lobby · Tap buttons · Tap chat field to type',
                 mobilePaint: 'Paint · Paint with one finger · Pinch to zoom · Bottom tools change brush',
                 mobileStraight: 'Straight line · Long-press the brush until the orange cue appears, then drag',
@@ -6509,7 +6521,7 @@ export class GameScene extends Phaser.Scene {
                 lobby: '大厅：鼠标选择界面 · Enter 打开聊天',
                 paint: '涂色 · 拖动涂色 · 右键吸管 · 滚轮缩放 · Ctrl+滚轮调画笔',
                 straight: '直线 · 按住 Shift 拖动即可画直线',
-                hunt: '狩猎：WASD/方向键移动 · 鼠标瞄准 · 左键射击',
+                hunt: '狩猎：WASD/方向键移动 · 鼠标瞄准 · 左键射击 · Space放屁探测',
                 mobileLobby: '大厅：点击屏幕按钮 · 点击聊天输入框聊天',
                 mobilePaint: '涂色 · 单指涂色 · 双指缩放 · 使用底部工具切换画笔',
                 mobileStraight: '直线 · 长按画笔，出现橙色提示后拖动即可画直线',
@@ -10048,6 +10060,36 @@ export class GameScene extends Phaser.Scene {
                 },
             ).join('');
 
+        const fartPracticeCopy =
+            (
+                {
+                    ko: {
+                        skill:
+                            '💨 Space 방구 탐지 · 가스에 닿은 봇은 콜록!',
+                        risk:
+                            '💩 게이지를 무리해서 쓰면 6초간 똥 지림 · 이동속도 -50% · 근처 봇이 깔깔 웃습니다.',
+                    },
+                    ja: {
+                        skill:
+                            '💨 Spaceでおなら探知 · ガスに触れたBOTはゴホッ！',
+                        risk:
+                            '💩 ゲージ不足で無理に出すと6秒間おもらし · 移動速度-50% · 近くのBOTに大笑いされます。',
+                    },
+                    en: {
+                        skill:
+                            '💨 Space: fart detector · Bots touched by the gas cough!',
+                        risk:
+                            '💩 Force it with low gas and you poop yourself for 6s · -50% move speed · nearby Bots burst out laughing.',
+                    },
+                    zh: {
+                        skill:
+                            '💨 Space放屁探测 · 被气体碰到的BOT会咳嗽！',
+                        risk:
+                            '💩 气槽不足还硬放会拉裤子6秒 · 移速-50% · 附近BOT会笑出声。',
+                    },
+                } as const
+            )[getLanguage()];
+
         card.innerHTML = `
             <header class="colorhunt-practice-head">
                 <div>
@@ -10089,6 +10131,10 @@ export class GameScene extends Phaser.Scene {
                     <div class="colorhunt-practice-mode-copy">
                         <strong>${tr('헌터 연습')}</strong>
                         <p class="colorhunt-practice-purpose"><strong>${tr('왜 연습하나요?')}</strong><br>${tr('위장한 상대를 빠르게 발견하고, 제한 탄약과 과열을 관리하며 정확히 사격하는 감각을 익힙니다.')}</p>
+                        <div class="colorhunt-practice-hider-tips">
+                            <span>${fartPracticeCopy.skill}</span>
+                            <span>${fartPracticeCopy.risk}</span>
+                        </div>
 
                         <div class="colorhunt-practice-time">
                             <div class="colorhunt-practice-time-title">
@@ -11546,6 +11592,277 @@ export class GameScene extends Phaser.Scene {
             );
     }
 
+    /* V1010246_SPACE_PRACTICE_FART */
+    private updateHunterPracticeFart(
+        delta: number,
+    ): void {
+        if (
+            this.practiceMode !== 'hunter' ||
+            this.phase !== 'hunt'
+        ) {
+            return;
+        }
+
+        const now = Date.now();
+        const pooped =
+            this.localPoopUntil > now;
+
+        if (!pooped) {
+            const nextGauge =
+                Phaser.Math.Clamp(
+                    this.fartGauge +
+                        this.practiceFartRecoverPerSecond *
+                            (
+                                delta /
+                                1000
+                            ),
+                    0,
+                    100,
+                );
+
+            if (
+                Math.abs(
+                    nextGauge -
+                    this.fartGauge,
+                ) >= 0.02
+            ) {
+                this.fartGauge =
+                    nextGauge;
+                this.updateFartHud();
+            }
+        }
+
+        if (
+            Phaser.Input.Keyboard.JustDown(
+                this.fartKey,
+            ) &&
+            !pooped
+        ) {
+            this.useHunterPracticeFart();
+        }
+
+        if (
+            this.localPoopUntil >
+                now
+        ) {
+            this.updateHunterPracticePoopDetection(
+                now,
+            );
+        } else if (
+            this.localPoopUntil >
+                0
+        ) {
+            this.localPoopUntil = 0;
+            this.poopedHuntersUntil.delete(
+                this.practiceHunterSessionId,
+            );
+            this.updateFartHud();
+        }
+    }
+
+    private useHunterPracticeFart(): void {
+        const now = Date.now();
+
+        if (
+            this.fartGauge <
+                this.practiceFartCost
+        ) {
+            this.localPoopUntil =
+                now +
+                this.practicePoopDurationMs;
+
+            this.fartGauge = 0;
+
+            this.showPoopBurst({
+                hunterId:
+                    this.practiceHunterSessionId,
+                x:
+                    this.player.x,
+                y:
+                    this.player.y,
+                poopUntil:
+                    this.localPoopUntil,
+                serverNow:
+                    now,
+            });
+
+            /*
+             * showPoopBurst recognizes multiplayer session IDs for the speed
+             * setter. Practice movement reads localPoopUntil directly.
+             */
+            this.updateFartHud();
+            return;
+        }
+
+        const gaugeBefore =
+            this.fartGauge;
+
+        this.fartGauge =
+            Phaser.Math.Clamp(
+                this.fartGauge -
+                    this.practiceFartCost,
+                0,
+                100,
+            );
+
+        const soundTier =
+            gaugeBefore >= 67
+                ? 1
+                : gaugeBefore >= 34
+                    ? 2
+                    : 3;
+
+        this.showFartBurst({
+            hunterId:
+                this.practiceHunterSessionId,
+            x:
+                this.player.x,
+            y:
+                this.player.y,
+            radius:
+                this.practiceFartRadius,
+            soundTier,
+        });
+
+        let detected =
+            false;
+
+        this.hiders.forEach(
+            (
+                hider,
+                index,
+            ) => {
+                if (!hider.alive) {
+                    return;
+                }
+
+                const distance =
+                    Phaser.Math.Distance.Between(
+                        this.player.x,
+                        this.player.y,
+                        hider.centerX,
+                        hider.centerY,
+                    );
+
+                if (
+                    distance >
+                        this.practiceFartRadius
+                ) {
+                    return;
+                }
+
+                detected = true;
+
+                this.showHiderReaction(
+                    {
+                        hunterId:
+                            this.practiceHunterSessionId,
+                        hiderId:
+                            this.getPracticeBotSessionId(
+                                index,
+                            ),
+                        x:
+                            hider.centerX,
+                        y:
+                            hider.centerY,
+                    },
+                    'cough',
+                );
+            },
+        );
+
+        if (detected) {
+            this.showHunterDetectionAlert(
+                'cough',
+            );
+        }
+
+        this.updateFartHud();
+    }
+
+    private updateHunterPracticePoopDetection(
+        now: number,
+    ): void {
+        if (
+            now -
+                this.practiceLastLaughAt <
+                1_400
+        ) {
+            return;
+        }
+
+        let laughingHider:
+            {
+                index: number;
+                x: number;
+                y: number;
+            } |
+            undefined;
+
+        this.hiders.some(
+            (
+                hider,
+                index,
+            ) => {
+                if (!hider.alive) {
+                    return false;
+                }
+
+                const distance =
+                    Phaser.Math.Distance.Between(
+                        this.player.x,
+                        this.player.y,
+                        hider.centerX,
+                        hider.centerY,
+                    );
+
+                if (
+                    distance >
+                        this.practiceFartRadius
+                ) {
+                    return false;
+                }
+
+                laughingHider = {
+                    index,
+                    x:
+                        hider.centerX,
+                    y:
+                        hider.centerY,
+                };
+
+                return true;
+            },
+        );
+
+        if (!laughingHider) {
+            return;
+        }
+
+        this.practiceLastLaughAt =
+            now;
+
+        this.showHiderReaction(
+            {
+                hunterId:
+                    this.practiceHunterSessionId,
+                hiderId:
+                    this.getPracticeBotSessionId(
+                        laughingHider.index,
+                    ),
+                x:
+                    laughingHider.x,
+                y:
+                    laughingHider.y,
+            },
+            'laugh',
+        );
+
+        this.showHunterDetectionAlert(
+            'laugh',
+        );
+    }
+
     private syncHunterPracticeVisuals(): void {
         if (
             this.practiceMode !==
@@ -11899,6 +12216,14 @@ export class GameScene extends Phaser.Scene {
             0;
         this.practiceStartedAt =
             Date.now();
+
+        this.fartGauge = 100;
+        this.localPoopUntil = 0;
+        this.practiceLastLaughAt = 0;
+        this.poopedHuntersUntil.delete(
+            this.practiceHunterSessionId,
+        );
+        this.updateFartHud();
 
         /*
          * Practice must use the exact selected Hunt duration BEFORE startHunt
@@ -14436,7 +14761,7 @@ export class GameScene extends Phaser.Scene {
         if (
             this.phase === 'hunt' &&
             this.networkPlayerManager.isLocalHunter() &&
-            Phaser.Input.Keyboard.JustDown(this.shiftPaintKey)
+            Phaser.Input.Keyboard.JustDown(this.fartKey)
         ) {
             multiplayerClient.sendFart();
         }
@@ -23612,7 +23937,13 @@ export class GameScene extends Phaser.Scene {
             (
                 this.practiceMode ===
                     'hunter'
-                    ? this.practiceHunterMoveSpeed
+                    ? this.practiceHunterMoveSpeed *
+                        (
+                            this.localPoopUntil >
+                                Date.now()
+                                ? 0.5
+                                : 1
+                        )
                     : this.playerSpeed
             ) *
             (
@@ -32912,6 +33243,10 @@ export class GameScene extends Phaser.Scene {
             Phaser.Input.Keyboard.KeyCodes.SHIFT,
         );
 
+        this.fartKey = keyboard.addKey(
+            Phaser.Input.Keyboard.KeyCodes.SPACE,
+        );
+
         this.controlPaintKey = keyboard.addKey(
             Phaser.Input.Keyboard.KeyCodes.CTRL,
         );
@@ -33232,7 +33567,12 @@ export class GameScene extends Phaser.Scene {
     /* V1010242_HUNTER_FART_SKILL */
     private updateFartHud(): void {
         if (!this.fartHudContainer || !this.fartGaugeGraphics || !this.fartGaugeLabel) return;
-        const visible = this.phase === 'hunt' && this.networkPlayerManager?.isLocalHunter();
+        const visible =
+            this.phase === 'hunt' &&
+            (
+                this.networkPlayerManager?.isLocalHunter() ||
+                this.practiceMode === 'hunter'
+            );
 
         /*
          * V1010245_FART_HUD_AUDIO_POLISH: GAS HUD follows directly under Ammo/HEAT even when the
@@ -33249,7 +33589,11 @@ export class GameScene extends Phaser.Scene {
         this.fartGaugeGraphics.fillStyle(0x7fa95b, 1).fillRoundedRect(8, 23, 204 * pct, 10, 5);
         this.fartGaugeGraphics.lineStyle(2, 0x40523a, 1).strokeRoundedRect(8, 23, 204, 10, 5);
         const pooped = this.localPoopUntil > Date.now();
-        this.fartGaugeLabel.setText(pooped ? '💩 ...50% SPEED' : '💨 GAS ' + Math.round(this.fartGauge) + '%  [SHIFT]');
+        this.fartGaugeLabel.setText(
+            pooped
+                ? '💩 ...50% SPEED'
+                : '💨 GAS ' + Math.round(this.fartGauge) + '%  [SPACE]',
+        );
     }
 
     private getComedyAudioContext(): AudioContext | undefined {
