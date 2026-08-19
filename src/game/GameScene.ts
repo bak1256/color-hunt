@@ -2229,9 +2229,6 @@ export class GameScene extends Phaser.Scene {
                         [...this.mobileTouchPoints.entries()]
                             .filter(
                                 ([id, point]) =>
-                                    this.isMobilePointerActuallyDown(
-                                        id,
-                                    ) &&
                                     id !==
                                         this.mobileMovePointerId &&
                                     id !==
@@ -2967,23 +2964,23 @@ export class GameScene extends Phaser.Scene {
     }
 
     private pruneMobileTouchPoints(): void {
-        [
-            ...this.mobileTouchPoints
-                .keys(),
-        ].forEach(
-            (id) => {
-                if (
-                    !this.isMobilePointerActuallyDown(
-                        id,
-                    )
-                ) {
-                    this.mobileTouchPoints.delete(
-                        id,
-                    );
-                }
-            },
-        );
-
+        /*
+         * V101023832_STABLE_MOBILE_PINCH_OWNERSHIP
+         *
+         * Do NOT prune world touches from Phaser Pointer.isDown here.
+         * The mobile eyedropper also uses native window-level PointerEvent /
+         * TouchEvent capture. During that hand-off Phaser can transiently report
+         * the first real finger as not-down even though it is still physically
+         * held. That was the intermittent "eyedropper -> pinch sometimes works"
+         * race.
+         *
+         * mobileTouchPoints is lifecycle-owned instead:
+         *   POINTER_DOWN -> add
+         *   POINTER_UP / POINTER_UP_OUTSIDE -> delete
+         *   fresh primary touch -> clear stale previous gesture
+         *
+         * Joystick/fire stale ownership still has its own safety release paths.
+         */
         if (
             this.mobileTouchPoints.size <
             2
@@ -3013,9 +3010,6 @@ export class GameScene extends Phaser.Scene {
             [...this.mobileTouchPoints.entries()]
                 .filter(
                     ([id, point]) =>
-                        this.isMobilePointerActuallyDown(
-                            id,
-                        ) &&
                         id !==
                             this.mobileMovePointerId &&
                         id !==
@@ -27393,9 +27387,6 @@ export class GameScene extends Phaser.Scene {
                         [...this.mobileTouchPoints.entries()]
                             .filter(
                                 ([id, point]) =>
-                                    this.isMobilePointerActuallyDown(
-                                        id,
-                                    ) &&
                                     id !==
                                         this.mobileMovePointerId &&
                                     id !==
@@ -29607,12 +29598,12 @@ export class GameScene extends Phaser.Scene {
                     this.stopMobileNativeEyedropperDrag();
 
                     /*
-                     * V101023830B_EYEDROPPER_PINCH_CLEANUP
-                     * After a native mobile eyedropper gesture finishes, clear
-                     * stale touch/pinch ownership so the NEXT two real fingers
-                     * can immediately become a fresh camera pinch.
+                     * V101023832_STABLE_MOBILE_PINCH_OWNERSHIP
+                     * Do not clear mobileTouchPoints from the native eyedropper
+                     * callback. Native and Phaser end events can arrive in
+                     * different orders; clearing the whole map here can erase a
+                     * newly registered real finger. releasePointer owns removal.
                      */
-                    this.mobileTouchPoints.clear();
                     this.mobilePinchDistance = 0;
                     this.mobilePinchActive = false;
                     this.eyedropperPointerId = -1;
