@@ -8782,6 +8782,14 @@ export class GameScene extends Phaser.Scene {
                                 this.localPaintHistory.length > 0 &&
                                 multiplayerClient.isConnected()
                             ) {
+                                /*
+                                 * V101023837_CLIENT_PAINT_STABILITY: immediately restore freshest local paint
+                                 * after reconnect without rebroadcasting strokes.
+                                 */
+                                this.rebuildLocalPaintFromHistory(
+                                    false,
+                                );
+
                                 multiplayerClient
                                     .sendReconnectPaintSnapshot(
                                         this.localPaintHistory,
@@ -14603,7 +14611,7 @@ export class GameScene extends Phaser.Scene {
             }
 
             return parsed
-                .slice(0, 80)
+                .slice(0, 120) /* V101023837_CLIENT_PAINT_STABILITY: match editor save limit */
                 .filter(
                     (stroke) =>
                         stroke &&
@@ -28999,8 +29007,9 @@ export class GameScene extends Phaser.Scene {
 
         if (
             multiplayerClient.isConnected() &&
-            this.activeStrokePoints.length >= 24
+            this.activeStrokePoints.length >= 48
         ) {
+            /* V101023837_CLIENT_PAINT_STABILITY: reduce simultaneous-painter WebSocket message frequency */
             this.flushActivePaintStrokeChunk(
                 true,
             );
@@ -29167,7 +29176,9 @@ export class GameScene extends Phaser.Scene {
         this.clearStraightLinePreview();
     }
 
-    private rebuildLocalPaintFromHistory(): void {
+    private rebuildLocalPaintFromHistory(
+        broadcast = true,
+    ): void {
         const sessionId =
             this.practiceMode ===
                 'hider'
@@ -29227,6 +29238,7 @@ export class GameScene extends Phaser.Scene {
         );
 
         if (
+            broadcast &&
             this.isMultiplayerSession()
         ) {
             multiplayerClient
@@ -29252,6 +29264,7 @@ export class GameScene extends Phaser.Scene {
                 );
 
                 if (
+                    broadcast &&
                     this.isMultiplayerSession()
                 ) {
                     multiplayerClient
