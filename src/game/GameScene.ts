@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010294_MOBILE_HUNTER_FART_UI_POLISH: zero-GAS visibility, joystick center sync, readable detection, longer fart words. */
     /* V1010293_MOBILE_HUNTER_FART_VISION_CONTROLS: mobile GAS button, stable FIRE aim, readable fart FX, body-safe vision. */
     /* V1010292_MOBILE_AVATAR_JOIN_STABILITY: compact avatar payload + progressive mobile join rendering. */
     /* V1010291_REMOVE_UNUSED_AVATAR_MOBILE_FLAG: cleanup after replacing patchwork with solid navy. */
@@ -2325,13 +2326,13 @@ export class GameScene extends Phaser.Scene {
             (): string => {
                 switch (getLanguage()) {
                     case 'ja':
-                        return '💨\n探知';
+                        return '💨\nオナラ!';
                     case 'en':
-                        return '💨\nDETECT';
+                        return '💨\nFART!';
                     case 'zh':
-                        return '💨\n探测';
+                        return '💨\n放屁!';
                     default:
-                        return '💨\n탐지';
+                        return '💨\n방구!';
                 }
             };
 
@@ -4004,6 +4005,11 @@ export class GameScene extends Phaser.Scene {
                 tr('조준'),
             )
             .setVisible(showHunterCombat);
+
+        if (showHunterCombat) {
+            this.updateFartHud();
+        }
+
         this.mobileFireButton
             ?.setVisible(showHunterCombat);
         this.mobileFireLabel
@@ -4015,26 +4021,47 @@ export class GameScene extends Phaser.Scene {
         this.mobileFartLabel
             ?.setText(
                 getLanguage() === 'ja'
-                    ? '💨\n探知'
+                    ? '💨\nオナラ!'
                     : getLanguage() === 'en'
-                        ? '💨\nDETECT'
+                        ? '💨\nFART!'
                         : getLanguage() === 'zh'
-                            ? '💨\n探测'
-                            : '💨\n탐지',
+                            ? '💨\n放屁!'
+                            : '💨\n방구!',
             )
             .setVisible(showHunterCombat);
 
-        if (
-            canMove &&
-            this.mobileMoveLabel
-        ) {
-            this.setFixedHudScreenPosition(
-                this.mobileMoveLabel,
-                82,
+        if (canMove) {
+            const moveControlY =
                 this.phase === 'hunt'
-                    ? 268
-                    : 193,
-            );
+                    ? 350
+                    : 275;
+
+            if (this.mobileMoveBase) {
+                this.setFixedHudScreenPosition(
+                    this.mobileMoveBase,
+                    82,
+                    moveControlY,
+                );
+            }
+
+            if (
+                this.mobileMovePointerId < 0 &&
+                this.mobileMoveKnob
+            ) {
+                this.setFixedHudScreenPosition(
+                    this.mobileMoveKnob,
+                    82,
+                    moveControlY,
+                );
+            }
+
+            if (this.mobileMoveLabel) {
+                this.setFixedHudScreenPosition(
+                    this.mobileMoveLabel,
+                    82,
+                    moveControlY - 82,
+                );
+            }
         }
 
         if (
@@ -36831,8 +36858,12 @@ export class GameScene extends Phaser.Scene {
                 0,
             duration:
                 fartTier === 3
-                    ? 1050
-                    : 800,
+                    ? 1800
+                    : 1500,
+            hold:
+                fartTier === 3
+                    ? 260
+                    : 180,
             ease:
                 'Back.Out',
             onComplete:
@@ -36907,11 +36938,19 @@ export class GameScene extends Phaser.Scene {
                             '22px',
                         fontStyle:
                             'bold',
+                        color:
+                            '#ffe45c',
                         stroke:
-                            '#ffffff',
+                            '#111820',
                         strokeThickness:
                             7,
-                    },
+                        backgroundColor:
+                            'rgba(17,24,32,0.42)',
+                        padding: {
+                            x: 7,
+                            y: 3,
+                        },
+},
                 ),
             )
                 .setOrigin(
