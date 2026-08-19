@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010287_AVATAR_EDITOR_HIDER_PALETTE: avatar editor reuses Hider palette UX + mobile floating tools. */
     /* V1010286_AVATAR_EDITOR_PRO_PAINT: Hider-grade lobby avatar painting + exact brush semantics. */
     /* V1010285_AVATAR_PRESET_FULL_POINTS: preserve full lobby-avatar strokes into waiting room. */
     /* V1010283_MOBILE_NO_TEXT_SELECTION: disable game UI text selection except chat/editable fields. */
@@ -16186,6 +16187,121 @@ export class GameScene extends Phaser.Scene {
             canvas,
         );
 
+        /*
+         * V1010287_AVATAR_EDITOR_HIDER_PALETTE: Mobile tool cursor.
+         *
+         * Hider paint keeps the active brush/pipette visible above the finger.
+         * Recreate that UX inside the DOM avatar editor so the finger never
+         * hides the actual tool position.
+         */
+        const floatingTool =
+            document.createElement(
+                'div',
+            );
+
+        Object.assign(
+            floatingTool.style,
+            {
+                position:
+                    'absolute',
+                left:
+                    '0',
+                top:
+                    '0',
+                width:
+                    '38px',
+                height:
+                    '38px',
+                display:
+                    'none',
+                alignItems:
+                    'center',
+                justifyContent:
+                    'center',
+                pointerEvents:
+                    'none',
+                zIndex:
+                    '20',
+                transform:
+                    'translate(-50%, -118%)',
+                filter:
+                    'drop-shadow(0 2px 2px rgba(0,0,0,.32))',
+            },
+        );
+
+        const brushCursorSvg =
+            `<svg viewBox="0 0 48 48" width="38" height="38" aria-hidden="true">
+                <g transform="rotate(-34 24 24)">
+                    <rect x="21" y="4" width="7" height="25" rx="3.5"
+                        fill="#c99862" stroke="#4c392c" stroke-width="2"/>
+                    <path d="M18 26 Q24 20 31 27 L29 38 Q24 44 18 38 Z"
+                        fill="#f5eee2" stroke="#4c392c" stroke-width="2"/>
+                    <path d="M20 33 Q24 29 29 33"
+                        fill="none" stroke="#ffffff" stroke-width="2"/>
+                </g>
+            </svg>`;
+
+        const dropperCursorSvg =
+            `<svg viewBox="0 0 48 48" width="38" height="38" aria-hidden="true">
+                <g transform="rotate(-38 24 24)">
+                    <path d="M18 7 L31 20 L27 24 L14 11 Z"
+                        fill="#dce9ef" stroke="#304b54" stroke-width="2.4"/>
+                    <path d="M16 13 L27 24 L17 34 L9 38 L13 30 L23 20"
+                        fill="#eef8fb" stroke="#304b54" stroke-width="2.4"/>
+                    <circle cx="12" cy="39" r="4"
+                        fill="#3b82f6" stroke="#ffffff" stroke-width="1.5"/>
+                </g>
+            </svg>`;
+
+        floatingTool.innerHTML =
+            brushCursorSvg;
+
+        canvasFrame.appendChild(
+            floatingTool,
+        );
+
+        const updateFloatingTool =
+            (
+                clientX: number,
+                clientY: number,
+            ): void => {
+                if (
+                    !this.mobileControlsEnabled
+                ) {
+                    floatingTool.style
+                        .display =
+                        'none';
+                    return;
+                }
+
+                const frameRect =
+                    canvasFrame
+                        .getBoundingClientRect();
+
+                floatingTool.style.left =
+                    `${clientX -
+                        frameRect.left}px`;
+
+                floatingTool.style.top =
+                    `${clientY -
+                        frameRect.top}px`;
+
+                floatingTool.innerHTML =
+                    eyedropperArmed
+                        ? dropperCursorSvg
+                        : brushCursorSvg;
+
+                floatingTool.style.display =
+                    'flex';
+            };
+
+        const hideFloatingTool =
+            (): void => {
+                floatingTool.style
+                    .display =
+                    'none';
+            };
+
         const context =
             canvas.getContext('2d');
 
@@ -16201,20 +16317,22 @@ export class GameScene extends Phaser.Scene {
          */
         const ctx = context;
 
-        const palette = [
-            '#111827',
-            '#ffffff',
-            '#ef4444',
-            '#f97316',
-            '#facc15',
-            '#22c55e',
-            '#14b8a6',
-            '#38bdf8',
-            '#3b82f6',
-            '#8b5cf6',
-            '#ec4899',
-            '#8b5a2b',
-        ];
+        /*
+         * V1010287_AVATAR_EDITOR_HIDER_PALETTE: customization shares the exact same palette as Hider paint.
+         * One palette definition means future Hider color changes automatically
+         * appear here too.
+         */
+        const palette =
+            this.standardPaintColors
+                .map(
+                    (color) =>
+                        `#${color
+                            .toString(16)
+                            .padStart(
+                                6,
+                                '0',
+                            )}`,
+                );
 
         let selectedColor =
             0x3b82f6;
@@ -16985,6 +17103,11 @@ export class GameScene extends Phaser.Scene {
                 justifyContent: 'center',
                 marginTop: '4px',
                 maxWidth: '290px',
+                padding: '6px',
+                boxSizing: 'border-box',
+                border: '2px solid #b9c9a8',
+                borderRadius: '10px',
+                background: '#f7f3df',
             },
         );
 
@@ -16996,18 +17119,46 @@ export class GameScene extends Phaser.Scene {
                     );
 
                 swatch.type = 'button';
+                swatch.dataset.avatarColor =
+                    String(
+                        Number.parseInt(
+                            color.slice(1),
+                            16,
+                        ),
+                    );
+                swatch.setAttribute(
+                    'aria-label',
+                    color,
+                );
 
                 Object.assign(
                     swatch.style,
                     {
-                        width: '25px',
-                        height: '25px',
+                        width:
+                            this.mobileControlsEnabled
+                                ? '29px'
+                                : '25px',
+                        height:
+                            this.mobileControlsEnabled
+                                ? '29px'
+                                : '25px',
                         padding: '0',
                         border:
-                            '2px solid #53695a',
-                        borderRadius: '7px',
+                            selectedColor ===
+                            Number.parseInt(
+                                color.slice(1),
+                                16,
+                            )
+                                ? '3px solid #35523d'
+                                : '2px solid #788b70',
+                        borderRadius:
+                            '50%',
                         background: color,
                         cursor: 'pointer',
+                        boxShadow:
+                            '0 1px 2px rgba(0,0,0,.16)',
+                        touchAction:
+                            'manipulation',
                     },
                 );
 
@@ -17020,6 +17171,36 @@ export class GameScene extends Phaser.Scene {
                                 16,
                             );
 
+                        eyedropperArmed =
+                            false;
+
+                        controls
+                            .querySelectorAll(
+                                'button[data-avatar-color]',
+                            )
+                            .forEach(
+                                (
+                                    node,
+                                ) => {
+                                    const element =
+                                        node as
+                                            HTMLButtonElement;
+
+                                    const value =
+                                        Number(
+                                            element.dataset
+                                                .avatarColor,
+                                        );
+
+                                    element.style.border =
+                                        value ===
+                                        selectedColor
+                                            ? '3px solid #35523d'
+                                            : '2px solid #788b70';
+                                },
+                            );
+
+                        refreshToolStates();
                         replay();
                     },
                 );
@@ -17317,6 +17498,11 @@ export class GameScene extends Phaser.Scene {
                 event.preventDefault();
                 editorViewportTouched = true;
 
+                updateFloatingTool(
+                    event.clientX,
+                    event.clientY,
+                );
+
                 activePointers.set(
                     event.pointerId,
                     {
@@ -17413,6 +17599,34 @@ export class GameScene extends Phaser.Scene {
                         eyedropperArmed =
                             false;
 
+                        refreshToolStates();
+
+                        controls
+                            .querySelectorAll(
+                                'button[data-avatar-color]',
+                            )
+                            .forEach(
+                                (
+                                    node,
+                                ) => {
+                                    const element =
+                                        node as
+                                            HTMLButtonElement;
+
+                                    const value =
+                                        Number(
+                                            element.dataset
+                                                .avatarColor,
+                                        );
+
+                                    element.style.border =
+                                        value ===
+                                        selectedColor
+                                            ? '3px solid #35523d'
+                                            : '2px solid #788b70';
+                                },
+                            );
+
                         replay();
                     };
 
@@ -17481,6 +17695,11 @@ export class GameScene extends Phaser.Scene {
         canvas.addEventListener(
             'pointermove',
             (event) => {
+                updateFloatingTool(
+                    event.clientX,
+                    event.clientY,
+                );
+
                 if (
                     panning &&
                     panPointerId ===
@@ -17682,6 +17901,8 @@ export class GameScene extends Phaser.Scene {
             (
                 event: PointerEvent,
             ): void => {
+                hideFloatingTool();
+
                 activePointers.delete(
                     event.pointerId,
                 );
@@ -17730,6 +17951,8 @@ export class GameScene extends Phaser.Scene {
             'pointerleave',
             () => {
                 if (!drawing) {
+                    hideFloatingTool();
+
                     hoverPoint =
                         undefined;
                     replay();
@@ -17746,23 +17969,84 @@ export class GameScene extends Phaser.Scene {
             toolRow.style,
             {
                 display:
-                    'flex',
+                    'grid',
+                gridTemplateColumns:
+                    this.mobileControlsEnabled
+                        ? 'repeat(4, minmax(58px, 1fr))'
+                        : 'repeat(4, minmax(54px, 1fr))',
                 gap:
                     '5px',
-                justifyContent:
-                    'center',
-                alignItems:
-                    'center',
-                flexWrap:
-                    'wrap',
+                width:
+                    '100%',
+                padding:
+                    '6px',
+                boxSizing:
+                    'border-box',
+                border:
+                    '2px solid #b9c9a8',
+                borderRadius:
+                    '10px',
+                background:
+                    '#eef4df',
                 marginTop:
                     '5px',
             },
         );
 
+        const circleSvg =
+            `<svg viewBox="0 0 32 32" aria-hidden="true">
+                <circle cx="16" cy="15" r="8"/>
+                <path d="M6 26L13 19"/>
+            </svg>`;
+
+        const squareSvg =
+            `<svg viewBox="0 0 32 32" aria-hidden="true">
+                <rect x="8" y="7" width="16" height="16" rx="2"/>
+                <path d="M5 27L12 20"/>
+            </svg>`;
+
+        const dropperSvg =
+            `<svg viewBox="0 0 32 32" aria-hidden="true">
+                <path d="M20 5l7 7-4 4-2-2-9 9-5 2 2-5 9-9-2-2z"/>
+                <path d="M7 25h8"/>
+            </svg>`;
+
+        const lineSvg =
+            `<svg viewBox="0 0 32 32" aria-hidden="true">
+                <path d="M7 25L25 7"/>
+                <circle cx="7" cy="25" r="2.4"/>
+                <circle cx="25" cy="7" r="2.4"/>
+            </svg>`;
+
+        const getAvatarToolLabel =
+            (
+                ko: string,
+                ja: string,
+                en: string,
+                zh: string,
+            ): string => {
+                switch (
+                    getLanguage()
+                ) {
+                    case 'ja':
+                        return ja;
+                    case 'en':
+                        return en;
+                    case 'zh':
+                        return zh;
+                    default:
+                        return ko;
+                }
+            };
+
         const makeToolButton = (
+            key:
+                'circle' |
+                'square' |
+                'eyedropper' |
+                'line',
             label: string,
-            titleText: string,
+            svg: string,
         ): HTMLButtonElement => {
             const button =
                 document.createElement(
@@ -17771,38 +18055,43 @@ export class GameScene extends Phaser.Scene {
 
             button.type =
                 'button';
-            button.textContent =
-                label;
-            button.title =
-                titleText;
+
+            button.dataset.tool =
+                key;
+
+            button.innerHTML =
+                `<span style="
+                    display:block;
+                    width:26px;
+                    height:26px;
+                    margin:0 auto 2px;
+                ">${svg}</span><span>${label}</span>`;
 
             Object.assign(
                 button.style,
                 {
-                    minWidth:
-                        this.mobileControlsEnabled
-                            ? '44px'
-                            : '38px',
                     minHeight:
                         this.mobileControlsEnabled
-                            ? '38px'
-                            : '30px',
+                            ? '56px'
+                            : '48px',
                     padding:
-                        '4px 7px',
+                        '4px 3px',
                     border:
-                        '2px solid #78966f',
+                        '2px solid #91aa82',
                     borderRadius:
                         '8px',
                     background:
-                        '#f3f6e9',
+                        '#fbf8e9',
                     color:
                         '#35523d',
                     fontWeight:
                         '800',
                     fontSize:
                         this.mobileControlsEnabled
-                            ? '13px'
-                            : '11px',
+                            ? '11px'
+                            : '10px',
+                    lineHeight:
+                        '14px',
                     cursor:
                         'pointer',
                     touchAction:
@@ -17812,117 +18101,198 @@ export class GameScene extends Phaser.Scene {
                 },
             );
 
+            button
+                .querySelector(
+                    'svg',
+                )
+                ?.setAttribute(
+                    'style',
+                    'width:100%;height:100%;fill:none;stroke:#35523d;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;',
+                );
+
             return button;
         };
 
         const circleTool =
             makeToolButton(
-                '●',
-                'Circle brush',
+                'circle',
+                getAvatarToolLabel(
+                    '원형',
+                    '丸筆',
+                    'Circle',
+                    '圆形',
+                ),
+                circleSvg,
             );
 
         const squareTool =
             makeToolButton(
-                '■',
-                'Square brush',
+                'square',
+                getAvatarToolLabel(
+                    '사각형',
+                    '四角',
+                    'Square',
+                    '方形',
+                ),
+                squareSvg,
             );
 
         const eyedropperTool =
             makeToolButton(
-                '💧',
-                'Eyedropper',
+                'eyedropper',
+                getAvatarToolLabel(
+                    '스포이드',
+                    'スポイト',
+                    'Eyedropper',
+                    '吸管',
+                ),
+                dropperSvg,
             );
 
         const straightTool =
             makeToolButton(
-                '╱',
-                'Straight line',
+                'line',
+                getAvatarToolLabel(
+                    '직선',
+                    '直線',
+                    'Line',
+                    '直线',
+                ),
+                lineSvg,
             );
 
         const refreshToolStates =
             (): void => {
-                circleTool.style
-                    .background =
-                    selectedShape ===
-                        'circle'
-                        ? '#cfe8c6'
-                        : '#f3f6e9';
+                const applyState =
+                    (
+                        button:
+                            HTMLButtonElement,
+                        active:
+                            boolean,
+                    ): void => {
+                        button.style.background =
+                            active
+                                ? '#cfe6bd'
+                                : '#fbf8e9';
 
-                squareTool.style
-                    .background =
-                    selectedShape ===
-                        'square'
-                        ? '#cfe8c6'
-                        : '#f3f6e9';
+                        button.style.borderColor =
+                            active
+                                ? '#4f855a'
+                                : '#91aa82';
 
-                eyedropperTool.style
-                    .background =
-                    eyedropperArmed
-                        ? '#cde9ff'
-                        : '#f3f6e9';
+                        button.style.boxShadow =
+                            active
+                                ? 'inset 0 0 0 2px rgba(79,133,90,.16)'
+                                : 'none';
+                    };
 
-                straightTool.style
-                    .background =
-                    straightLineArmed
-                        ? '#ffe0a8'
-                        : '#f3f6e9';
+                applyState(
+                    circleTool,
+                    !eyedropperArmed &&
+                        selectedShape ===
+                            'circle' &&
+                        !straightLineArmed,
+                );
+
+                applyState(
+                    squareTool,
+                    !eyedropperArmed &&
+                        selectedShape ===
+                            'square' &&
+                        !straightLineArmed,
+                );
+
+                applyState(
+                    eyedropperTool,
+                    eyedropperArmed,
+                );
+
+                applyState(
+                    straightTool,
+                    straightLineArmed,
+                );
             };
 
         circleTool.addEventListener(
-            'click',
-            () => {
+            'pointerdown',
+            (
+                event,
+            ) => {
+                event.preventDefault();
+                event.stopPropagation();
+
                 selectedShape =
                     'circle';
+                eyedropperArmed =
+                    false;
+                straightLineArmed =
+                    false;
+
                 refreshToolStates();
                 replay();
             },
         );
 
         squareTool.addEventListener(
-            'click',
-            () => {
+            'pointerdown',
+            (
+                event,
+            ) => {
+                event.preventDefault();
+                event.stopPropagation();
+
                 selectedShape =
                     'square';
+                eyedropperArmed =
+                    false;
+                straightLineArmed =
+                    false;
+
                 refreshToolStates();
                 replay();
             },
         );
 
         eyedropperTool.addEventListener(
-            'click',
-            () => {
-                eyedropperArmed =
-                    !eyedropperArmed;
+            'pointerdown',
+            (
+                event,
+            ) => {
+                event.preventDefault();
+                event.stopPropagation();
 
-                if (
-                    eyedropperArmed
-                ) {
-                    straightLineArmed =
-                        false;
-                }
+                /*
+                 * Same contract as Hider mobile palette:
+                 * tapping eyedropper SELECTS it; tapping again does not
+                 * accidentally toggle back to brush.
+                 */
+                eyedropperArmed =
+                    true;
+                straightLineArmed =
+                    false;
 
                 refreshToolStates();
+                replay();
             },
         );
 
         straightTool.addEventListener(
-            'click',
-            () => {
-                straightLineArmed =
-                    !straightLineArmed;
+            'pointerdown',
+            (
+                event,
+            ) => {
+                event.preventDefault();
+                event.stopPropagation();
 
-                if (
-                    straightLineArmed
-                ) {
-                    eyedropperArmed =
-                        false;
-                }
+                straightLineArmed =
+                    true;
+                eyedropperArmed =
+                    false;
 
                 refreshToolStates();
+                replay();
             },
         );
-
-        refreshToolStates();
 
         toolRow.append(
             circleTool,
@@ -17930,6 +18300,8 @@ export class GameScene extends Phaser.Scene {
             eyedropperTool,
             straightTool,
         );
+
+        refreshToolStates();
 
         const actionRow =
             document.createElement('div');
