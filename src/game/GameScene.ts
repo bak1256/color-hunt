@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010281_FART_INPUT_COOLDOWN: 900ms deliberate fart cadence. */
     /* V1010280_SMOOTH_GAS_8S_RECOVER2: main-match GAS smooth per-frame drain, 8s accident. */
     /* V1010277_GAS_10S_LINEAR_DRAIN: Practice/main-match poop = 10s, GAS drains 100 -> 0. */
     /* V1010276_ISOLATE_PRACTICE_FROM_NETWORK: Practice remains local even if a stale room reconnects. */
@@ -328,6 +329,14 @@ export class GameScene extends Phaser.Scene {
     private fartGaugeLabel!: Phaser.GameObjects.Text;
     /* V1010247_FART_ULTIMATE_BALANCE: GAS now means danger/pressure; 0 safe -> 100 accident. */
     private fartGauge = 0;
+
+    /*
+     * V1010281_FART_INPUT_COOLDOWN: one deliberate fart at a time.
+     * "뿌웅~ ... 뿌웅~" instead of accidental SPACE 따다닥.
+     */
+    private readonly fartUseCooldownMs = 900;
+    private lastFartUseAt = 0;
+
     private localPoopUntil = 0;
     private poopedHuntersUntil = new Map<string, number>();
     private lastPoopTrailAt = new Map<string, number>();
@@ -8585,6 +8594,7 @@ export class GameScene extends Phaser.Scene {
                     this.hunterReserve = 12;
                     this.hunterMaxReserve = 12;
                     this.fartGauge = 0;
+                    this.lastFartUseAt = 0;
                     this.localPoopUntil = 0;
                     this.poopedHuntersUntil.clear();
                     this.networkPlayerManager.setLocalHunterSpeedMultiplier(1);
@@ -11879,7 +11889,19 @@ export class GameScene extends Phaser.Scene {
                 this.fartKey,
             )
         ) {
-            this.useHunterPracticeFart();
+            const now =
+                Date.now();
+
+            if (
+                now -
+                    this.lastFartUseAt >=
+                this.fartUseCooldownMs
+            ) {
+                this.lastFartUseAt =
+                    now;
+
+                this.useHunterPracticeFart();
+            }
         }
     }
 
@@ -11893,6 +11915,23 @@ export class GameScene extends Phaser.Scene {
 
         const now =
             Date.now();
+
+        /*
+         * Input handler normally owns lastFartUseAt. Keep this method tolerant
+         * of direct calls by allowing the just-recorded same-frame use, but
+         * rejecting any other bypass inside the 900ms window.
+         */
+        if (
+            this.lastFartUseAt > 0 &&
+            now -
+                this.lastFartUseAt >
+                40 &&
+            now -
+                this.lastFartUseAt <
+                this.fartUseCooldownMs
+        ) {
+            return;
+        }
 
         const nextGauge =
             this.fartGauge +
@@ -12664,6 +12703,7 @@ export class GameScene extends Phaser.Scene {
             Date.now();
 
         this.fartGauge = 0;
+        this.lastFartUseAt = 0;
         this.practicePoopRemainingMs = 0;
         this.practicePoopUntil = 0;
         this.localPoopUntil = 0;
@@ -15235,7 +15275,19 @@ export class GameScene extends Phaser.Scene {
             this.networkPlayerManager.isLocalHunter() &&
             Phaser.Input.Keyboard.JustDown(this.fartKey)
         ) {
-            multiplayerClient.sendFart();
+            const now =
+                Date.now();
+
+            if (
+                now -
+                    this.lastFartUseAt >=
+                this.fartUseCooldownMs
+            ) {
+                this.lastFartUseAt =
+                    now;
+
+                multiplayerClient.sendFart();
+            }
         }
 
         this.updatePoopComedyEffects();
