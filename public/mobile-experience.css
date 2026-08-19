@@ -7420,3 +7420,56 @@ html.colorhunt-mobile .colorhunt-practice-desktop-hint {
     height: 11px;
   }
 }
+
+
+/* V101023816_LOBBY_ACTION_TITLE_NO_CLIP */
+/*
+ * Lobby right-column heading:
+ * Japanese/English translations are wider than Korean and were being clipped
+ * by the BGM / Controls buttons. Keep everything on one row, but let the title
+ * own a flexible min-width and scale down slightly when space is tight.
+ */
+.ch-lobby-actions-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ch-lobby-actions-title-row h2 {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: none !important;
+  margin: 0;
+  padding: 0;
+  white-space: nowrap;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  font-size: clamp(15px, 1.55vw, 20px) !important;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.ch-lobby-inline-actions {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 6px;
+  min-width: max-content;
+}
+
+/* On narrower desktop/fold widths, preserve the buttons and gently reduce
+   only the heading. No wrapping, so the lobby frame height never changes. */
+@media (max-width: 1120px) {
+  .ch-lobby-actions-title-row h2 {
+    font-size: clamp(14px, 1.65vw, 18px) !important;
+    letter-spacing: -0.035em;
+  }
+
+  .ch-lobby-actions-title-row {
+    gap: 6px;
+  }
+
+  .ch-lobby-inline-actions {
+    gap: 4px;
+  }
+}
