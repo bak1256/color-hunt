@@ -30897,6 +30897,19 @@ export class GameScene extends Phaser.Scene {
         const pointer =
             this.input.activePointer;
 
+        /*
+         * V101023825_HUNTER_DESKTOP_AIM_SCREEN_LOCK
+         * Desktop hunter aim is anchored to the physical mouse SCREEN position.
+         * If the hunter/camera moves while the mouse stays still, convert the
+         * unchanged pointer.x/y through the CURRENT camera transform.
+         */
+        const desktopAimWorld =
+            !this.mobileControlsEnabled
+                ? this.getPointerWorldPoint(
+                    pointer,
+                )
+                : undefined;
+
         const usingMobileAim =
             this.mobileControlsEnabled &&
             (
@@ -30913,8 +30926,10 @@ export class GameScene extends Phaser.Scene {
                 : Phaser.Math.Angle.Between(
                     origin.x,
                     origin.y,
-                    pointer.worldX,
-                    pointer.worldY,
+                    desktopAimWorld?.x ??
+                        pointer.worldX,
+                    desktopAimWorld?.y ??
+                        pointer.worldY,
                 );
 
         this.hunterFocusAngle =
@@ -31000,8 +31015,10 @@ export class GameScene extends Phaser.Scene {
             );
         } else {
             this.drawCrosshair(
-                pointer.worldX,
-                pointer.worldY,
+                desktopAimWorld?.x ??
+                    pointer.worldX,
+                desktopAimWorld?.y ??
+                    pointer.worldY,
             );
         }
     }
@@ -31254,11 +31271,27 @@ export class GameScene extends Phaser.Scene {
                 ) &&
                 this.mobileAimHasDirection
                     ? this.mobileAimAngle
-                    : Phaser.Math.Angle.Between(
-                        origin.x,
-                        origin.y,
-                        pointer.worldX,
-                        pointer.worldY,
+                    : (
+                        !this.mobileControlsEnabled
+                            ? (() => {
+                                const desktopAimWorld =
+                                    this.getPointerWorldPoint(
+                                        pointer,
+                                    );
+
+                                return Phaser.Math.Angle.Between(
+                                    origin.x,
+                                    origin.y,
+                                    desktopAimWorld.x,
+                                    desktopAimWorld.y,
+                                );
+                            })()
+                            : Phaser.Math.Angle.Between(
+                                origin.x,
+                                origin.y,
+                                pointer.worldX,
+                                pointer.worldY,
+                            )
                     )
             );
 
