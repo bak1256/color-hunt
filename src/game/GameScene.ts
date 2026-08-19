@@ -21078,9 +21078,14 @@ export class GameScene extends Phaser.Scene {
             this.hunterVisionRangeScreen /
             zoom;
 
+        /*
+         * V101023838_HUNT_BALANCE
+         * Hunter FOV widened from 72° total to 100° total.
+         * Range remains unchanged.
+         */
         const halfAngle =
             Phaser.Math.DegToRad(
-                36,
+                50,
             );
 
         const arcSteps = 18;

@@ -1398,17 +1398,28 @@ export class NetworkPlayerManager {
 
     direction.normalize();
 
-    const speed =
-      view.role === "hunter"
-        ? this.hunterMoveSpeed
-        : this.hiderMoveSpeed;
-
-    const distance =
-      speed * (delta / 1000);
-
     const roomPhase =
       multiplayerClient.getRoom()
         ?.state?.phase;
+
+    /*
+     * V101023838_HUNT_BALANCE
+     * Hiders keep normal speed in lobby/paint/practice, but during the real
+     * Hunt phase their movement is exactly 50% of the previous value.
+     * Hunter speed is unchanged.
+     */
+    const speed =
+      view.role === "hunter"
+        ? this.hunterMoveSpeed
+        : this.hiderMoveSpeed *
+          (
+            roomPhase === "hunt"
+              ? 0.5
+              : 1
+          );
+
+    const distance =
+      speed * (delta / 1000);
 
     const maxMovementX =
       roomPhase === "lobby"
