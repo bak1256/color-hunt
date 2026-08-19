@@ -26943,10 +26943,44 @@ export class GameScene extends Phaser.Scene {
         const currentTarget =
             this.getPaintInputWorldPoint(pointer);
 
+        /*
+         * V101023828_PAINT_DRAG_UNDO_EYEDROPPER
+         * A mobile freehand gesture may begin outside the Hider. Do not require
+         * the original touch-down pixel to be paintable. Instead, wait until the
+         * held brush actually enters the body and make THAT first legal pixel
+         * the stroke origin.
+         */
         if (!this.mobilePaintDotCommitted) {
-            if (!this.commitMobilePendingDot()) {
-                this.clearMobilePendingPaint(false);
-                return true;
+            const startPoint =
+                this.networkPlayerManager
+                    .paintLocalPlayer(
+                        this.mobilePendingPaintStartWorld.x,
+                        this.mobilePendingPaintStartWorld.y,
+                        this.brushTextureKey,
+                        this.paintColor,
+                        this.brushSize,
+                        this.brushShape,
+                    );
+
+            if (startPoint) {
+                this.playPaintSound();
+                this.isPainting = true;
+                this.activeStrokeTargetSessionId =
+                    this.networkPlayerManager
+                        .getLocalSessionId() ?? '';
+                this.activeStrokePoints = [startPoint];
+                this.currentStrokeHistoryPoints = [startPoint];
+                this.straightLineStart = {
+                    x: startPoint.x,
+                    y: startPoint.y,
+                };
+                this.straightLineStartWorld =
+                    this.mobilePendingPaintStartWorld.clone();
+                this.mobilePaintDotCommitted = true;
+
+                if (this.practiceMode === 'hider') {
+                    this.markPracticeHiderPaintStarted();
+                }
             }
         }
 
@@ -26961,7 +26995,35 @@ export class GameScene extends Phaser.Scene {
                     this.brushShape,
                 );
 
-        if (currentPoint) {
+        /*
+         * Original touch-down was outside: remain pending until the CURRENT
+         * brush target reaches a legal Hider pixel.
+         */
+        if (!this.mobilePaintDotCommitted) {
+            if (!currentPoint) {
+                this.showMobilePendingPaintPreview(pointer);
+                return true;
+            }
+
+            this.playPaintSound();
+            this.isPainting = true;
+            this.activeStrokeTargetSessionId =
+                this.networkPlayerManager
+                    .getLocalSessionId() ?? '';
+            this.activeStrokePoints = [currentPoint];
+            this.currentStrokeHistoryPoints = [currentPoint];
+            this.straightLineStart = {
+                x: currentPoint.x,
+                y: currentPoint.y,
+            };
+            this.straightLineStartWorld =
+                currentTarget.clone();
+            this.mobilePaintDotCommitted = true;
+
+            if (this.practiceMode === 'hider') {
+                this.markPracticeHiderPaintStarted();
+            }
+        } else if (currentPoint) {
             this.interpolateActivePaintStroke(currentPoint);
         }
 
@@ -28609,6 +28671,19 @@ export class GameScene extends Phaser.Scene {
          *
          * Every client receives the same ordered paint_stroke messages.
          */
+        /*
+         * V101023828_PAINT_DRAG_UNDO_EYEDROPPER
+         * Dense masked reset for exact Undo/Redo. The former two-stamp reset
+         * missed narrow limbs and edge pixels, leaving colored crumbs behind.
+         */
+        const resetPoints: NetworkPaintPoint[] = [];
+
+        for (let y = 0; y <= 120; y += 6) {
+            for (let x = 0; x <= 80; x += 6) {
+                resetPoints.push({ x, y });
+            }
+        }
+
         const resetStroke:
             NetworkPaintStroke = {
                 targetSessionId:
@@ -28616,19 +28691,11 @@ export class GameScene extends Phaser.Scene {
                 color:
                     0xf5eee2,
                 size:
-                    20,
+                    8,
                 shape:
                     'square',
-                points: [
-                    {
-                        x: 40,
-                        y: 48,
-                    },
-                    {
-                        x: 40,
-                        y: 78,
-                    },
-                ],
+                points:
+                    resetPoints,
             };
 
         resetStroke.points.forEach(
@@ -30531,8 +30598,13 @@ export class GameScene extends Phaser.Scene {
         const scaleY =
             container.scaleY || 1;
 
+        /*
+         * V101023828_PAINT_DRAG_UNDO_EYEDROPPER
+         * Pixel-addressing, not nearest-point rounding. This avoids hopping to
+         * the adjacent texel around 1px edges such as Hider legs.
+         */
         const textureX =
-            Math.round(
+            Math.floor(
                 (
                     worldX -
                     container.x
@@ -30542,7 +30614,7 @@ export class GameScene extends Phaser.Scene {
             );
 
         const textureY =
-            Math.round(
+            Math.floor(
                 (
                     worldY -
                     container.y
