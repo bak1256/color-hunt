@@ -27317,20 +27317,57 @@ export class GameScene extends Phaser.Scene {
 
                     this.pruneMobileTouchPoints();
 
+                    /*
+                     * V101023829_MOBILE_PINCH_PRIORITY
+                     *
+                     * The global mobile POINTER_DOWN listener records a real
+                     * touch in mobileTouchPoints BEFORE this paint-input
+                     * listener runs. Therefore checking
+                     * !mobileTouchPoints.has(pointer.id) is too late for the
+                     * second finger: it has already been inserted and can be
+                     * mistaken for another paint gesture.
+                     *
+                     * Give two-finger camera pinch absolute priority. Keep the
+                     * first finger's pending paint state untouched here; when
+                     * the fingers actually move far enough,
+                     * updateMobilePinchGesture() will cancel/finish paint and
+                     * own both fingers as camera input.
+                     */
+                    const activeWorldTouches =
+                        [...this.mobileTouchPoints.entries()]
+                            .filter(
+                                ([id, point]) =>
+                                    this.isMobilePointerActuallyDown(
+                                        id,
+                                    ) &&
+                                    id !==
+                                        this.mobileMovePointerId &&
+                                    id !==
+                                        this.mobileAimPointerId &&
+                                    id !==
+                                        this.mobileFirePointerId &&
+                                    !this.isMobileControlScreenPoint(
+                                        point.x,
+                                        point.y,
+                                    ),
+                            )
+                            .length;
+
                     const trueSecondFinger =
                         this.isNativeTouchPointer(
                             pointer,
                         ) &&
-                        this.mobileTouchPoints.size >=
-                            1 &&
-                        !this.mobileTouchPoints.has(
-                            pointer.id,
-                        );
+                        activeWorldTouches >= 2;
 
                     if (
                         this.mobilePinchActive ||
                         trueSecondFinger
                     ) {
+                        /*
+                         * Arm pinch immediately from the already tracked two
+                         * touches. Do NOT capture finger #2 as a brush pointer.
+                         */
+                        this.updateMobilePinchGesture();
                         return;
                     }
                 }
