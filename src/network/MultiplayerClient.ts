@@ -453,6 +453,11 @@ this.phaseChangedHandlers.forEach(
 
   private freshRejoinInFlight = false;
 
+  /* v0.10.10.239: recovery escalation only follows REAL transport evidence. */
+  private lastConfirmedTransportDropAt = 0;
+  private browserOfflineCycleActive = false;
+  private recoveryEscalationGeneration = 0;
+
   /*
    * v0.10.10.221: foreground/background transitions must not force a
    * reconnect while the existing socket is still perfectly healthy.
@@ -1070,9 +1075,39 @@ this.phaseChangedHandlers.forEach(
               sessionId,
             )
           ) {
+            const removedPlayer =
+              this.snapshotPlayers.get(
+                sessionId,
+              );
+
             this.snapshotPlayers.delete(
               sessionId,
             );
+
+            /*
+             * v0.10.10.239 GHOST SNAPSHOT CLEANUP:
+             * A plain lobby_snapshot can be the only authoritative source
+             * after a mobile handoff. If a stale session disappeared from the
+             * snapshot, emit the same removal event as Schema onRemove so the
+             * renderer cannot keep a ghost actor in the lobby.
+             */
+            if (removedPlayer) {
+              this.playerRemovedHandlers.forEach(
+                (handler) => {
+                  try {
+                    handler(
+                      sessionId,
+                      removedPlayer,
+                    );
+                  } catch (error) {
+                    console.error(
+                      "[Chameleon Hunt] Snapshot stale-player removal failed",
+                      { sessionId, error },
+                    );
+                  }
+                },
+              );
+            }
           }
         },
       );
@@ -1115,11 +1150,15 @@ this.phaseChangedHandlers.forEach(
 
 private async attemptFreshRejoin(
     sourceRoom: Room<NetworkGameState>,
+    forceDuringManualReconnect = false,
   ): Promise<void> {
     if (
       this.room !== sourceRoom ||
       this.freshRejoinInFlight ||
-      this.manualReconnectInFlight ||
+      (
+        this.manualReconnectInFlight &&
+        !forceDuringManualReconnect
+      ) ||
       !this.lastJoinedRoomId ||
       !this.lastJoinOptions
     ) {
@@ -1242,13 +1281,65 @@ private async attemptFreshRejoin(
     }
   }
 
+  private scheduleConfirmedFreshRecovery(
+    sourceRoom: Room<NetworkGameState>,
+    delayMs = 6500,
+  ): void {
+    const generation =
+      ++this.recoveryEscalationGeneration;
+
+    globalThis.setTimeout(
+      () => {
+        if (
+          generation !==
+            this.recoveryEscalationGeneration ||
+          this.room !== sourceRoom ||
+          !this.connectionIssueNotified ||
+          this.freshRejoinInFlight ||
+          (
+            typeof navigator !== "undefined" &&
+            !navigator.onLine
+          )
+        ) {
+          return;
+        }
+
+        const now = Date.now();
+        const confirmedRecently =
+          this.browserOfflineCycleActive ||
+          (
+            this.lastConfirmedTransportDropAt > 0 &&
+            now - this.lastConfirmedTransportDropAt <
+              30_000
+          );
+
+        if (!confirmedRecently) {
+          return;
+        }
+
+        /*
+         * v0.10.10.239 HARD RECOVERY:
+         * The server can transfer the stable clientKey identity onto a fresh
+         * session and supersede the stale transport. Do this only after a REAL
+         * offline/drop signal and only after normal SDK recovery had time to
+         * work. This breaks the previous 5-minute deadlock where a dead socket
+         * kept its reservation but never delivered READY/phase updates.
+         */
+        void this.attemptFreshRejoin(
+          sourceRoom,
+          true,
+        );
+      },
+      delayMs,
+    );
+  }
+
   private async attemptManualReconnect(
     sourceRoom: Room<NetworkGameState>,
   ): Promise<void> {
     if (
       this.room !== sourceRoom ||
       this.manualReconnectInFlight ||
-      this.freshRejoinInFlight ||
       sourceRoom.reconnection
         .isReconnecting
     ) {
@@ -1406,14 +1497,21 @@ this.room = room;
       Date.now();
     this.connectionIssueNotified =
       false;
-    /* V1010241_SINGLE_RECOVERY_OWNER: do not clear an in-flight recovery owner inside attachRoom(). */
+this.manualReconnectInFlight = false;
     this.lastManualReconnectAt = 0;
+    this.lastConfirmedTransportDropAt = 0;
+    this.browserOfflineCycleActive = false;
+    this.recoveryEscalationGeneration += 1;
 
     const handleBrowserOffline =
       (): void => {
         if (this.room !== room) {
           return;
         }
+
+        this.browserOfflineCycleActive = true;
+        this.lastConfirmedTransportDropAt =
+          Date.now();
 
         this.notifyConnectionIssue(
           "browser_offline",
@@ -1437,12 +1535,16 @@ this.room = room;
           );
 
         /*
-         * Wi-Fi -> cellular often leaves the previous TCP connection in a
-         * half-open state. Start a token-based reconnection immediately
-         * instead of waiting for the browser socket timeout.
+         * First give the official token reconnect a chance. If this was a
+         * confirmed offline cycle and the old socket is still unusable after
+         * 6.5s, escalate once to the stable-clientKey fresh handoff.
          */
         void this.attemptManualReconnect(
           room,
+        );
+        this.scheduleConfirmedFreshRecovery(
+          room,
+          6500,
         );
       };
 
@@ -1712,7 +1814,7 @@ this.room = room;
 
           if (
             activeRound &&
-            silentFor >= 8000
+            silentFor >= 15_000
           ) {
             this.notifyConnectionIssue(
               "ping_timeout",
@@ -1720,27 +1822,38 @@ this.room = room;
           }
 
           /*
-           * Wi-Fi -> cellular can leave the old TCP socket half-open.
-           * Do NOT call leave(false) here: that can race the SDK's own Room
-           * lifecycle and leave the game UI detached. Use the official
-           * reconnection token as a manual fallback instead.
+           * v0.10.10.239 FALSE-DROP GUARD:
+           * Mobile GC, Phaser frame stalls and browser timer throttling may
+           * delay a ping callback without the WebSocket being broken. A ping
+           * timeout alone MUST NEVER replace a healthy Room. Escalate transport
+           * recovery only when navigator.offline or Room.onDrop proved a real
+           * connectivity event.
            */
+          const confirmedTransportProblem =
+            this.browserOfflineCycleActive ||
+            (
+              this.lastConfirmedTransportDropAt > 0 &&
+              now -
+                this.lastConfirmedTransportDropAt <
+                30_000
+            );
+
           if (
             activeRound &&
-            silentFor >= 12000 &&
+            confirmedTransportProblem &&
+            silentFor >= 15_000 &&
             !room.reconnection
               .isReconnecting &&
             now -
               this.lastManualReconnectAt >=
               5000
           ) {
-            /*
-             * Only a genuinely half-open transport gets a manual token
-             * reconnect. Fresh rejoin is NEVER launched by the watchdog;
-             * it is reserved for final onLeave after the old reservation ends.
-             */
             void this.attemptManualReconnect(
               room,
+            );
+            this.scheduleConfirmedFreshRecovery(
+              room,
+              6500,
             );
           }
         },
@@ -1805,8 +1918,21 @@ this.room = room;
           return;
         }
 
+        this.lastConfirmedTransportDropAt =
+          Date.now();
+
         this.notifyConnectionIssue(
           reason,
+        );
+
+        /*
+         * Let SDK auto-reconnect own the first few seconds. If it cannot
+         * recover this confirmed drop, fresh clientKey handoff becomes the
+         * single bounded escape hatch instead of waiting up to five minutes.
+         */
+        this.scheduleConfirmedFreshRecovery(
+          room,
+          6500,
         );
 
         /*
@@ -1836,6 +1962,9 @@ this.room = room;
         this.requestAvatarPresets();
         this.requestRoundPaintState();
 
+        this.lastConfirmedTransportDropAt = 0;
+        this.browserOfflineCycleActive = false;
+        this.recoveryEscalationGeneration += 1;
         this.clearConnectionIssue();
 
         [80, 220, 650].forEach(

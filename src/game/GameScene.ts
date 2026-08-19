@@ -358,16 +358,18 @@ export class GameScene extends Phaser.Scene {
                     this.localPaintReady,
                 );
 
-            /* V101023840D_MOBILE_RECONNECT_CONVERGENCE: carry READY intent across a mobile session handoff */
-            [120, 360, 800, 1600].forEach(
+            /*
+             * v0.10.10.239 MOBILE READY INTENT:
+             * If the user taps READY while a recovered transport/session is
+             * still converging, repeat the idempotent intent. The server is
+             * authoritative and the latest boolean wins.
+             */
+            [120, 360, 800, 1600, 3200].forEach(
                 (delay) => {
                     this.time.delayedCall(
                         delay,
                         () => {
-                            if (
-                                this.phase !== 'paint' ||
-                                !multiplayerClient.isConnected()
-                            ) {
+                            if (this.phase !== 'paint') {
                                 return;
                             }
 
@@ -377,6 +379,19 @@ export class GameScene extends Phaser.Scene {
                             multiplayerClient.requestPaintReadyState();
                         },
                     );
+                },
+            );
+
+            this.time.delayedCall(
+                80,
+                () => {
+                    if (
+                        this.phase ===
+                            'paint'
+                    ) {
+                        multiplayerClient
+                            .requestPaintReadyState();
+                    }
                 },
             );
         } else if (
@@ -2220,21 +2235,6 @@ export class GameScene extends Phaser.Scene {
                 );
             };
 
-        const getNativePinchCenterY =
-            (): number => {
-                const points =
-                    [...this.mobileNativePinchPointers.values()];
-
-                if (points.length < 2) {
-                    return 0;
-                }
-
-                return (
-                    points[0].y +
-                    points[1].y
-                ) / 2;
-            };
-
         const beginNativePinch =
             (): void => {
                 if (
@@ -2249,37 +2249,6 @@ export class GameScene extends Phaser.Scene {
                 this.mobileNativePinchDistance =
                     getNativePinchDistance();
                 this.mobilePinchDistance = 0;
-
-                /*
-                 * Snapshot the camera position once at gesture start.
-                 * Pan range is deliberately conservative: enough to pull the
-                 * Hider's legs above the palette without letting the character
-                 * disappear far off-screen.
-                 */
-                this.mobileNativePinchCenterY =
-                    getNativePinchCenterY();
-                this.mobileNativePinchBaseScrollY =
-                    this.cameras.main.scrollY;
-
-                const panWorldRange =
-                    Math.min(
-                        120,
-                        Math.max(
-                            55,
-                            90 /
-                                Math.max(
-                                    0.75,
-                                    this.cameras.main.zoom,
-                                ),
-                        ),
-                    );
-
-                this.mobileNativePinchMinScrollY =
-                    this.mobileNativePinchBaseScrollY -
-                    panWorldRange;
-                this.mobileNativePinchMaxScrollY =
-                    this.mobileNativePinchBaseScrollY +
-                    panWorldRange;
 
                 this.stopMobileNativeEyedropperDrag();
                 this.releaseMobilePaintPointer();
@@ -2383,55 +2352,17 @@ export class GameScene extends Phaser.Scene {
                     distance -
                     this.mobileNativePinchDistance;
 
-                /*
-                 * Two-finger midpoint movement pans only on Y.
-                 * Screen pixels are converted to world units by current zoom.
-                 *
-                 * Fingers move UP -> midpoint delta is negative -> scrollY
-                 * increases -> the character appears to move UP on screen.
-                 */
-                const centerY =
-                    getNativePinchCenterY();
-
-                const centerDeltaY =
-                    centerY -
-                    this.mobileNativePinchCenterY;
-
-                if (
-                    Math.abs(centerDeltaY) >= 1
-                ) {
-                    const zoomForPan =
-                        Math.max(
-                            0.01,
-                            this.cameras.main.zoom,
-                        );
-
-                    const targetScrollY =
-                        this.mobileNativePinchBaseScrollY -
-                        centerDeltaY /
-                            zoomForPan;
-
-                    this.cameras.main.scrollY =
-                        Phaser.Math.Clamp(
-                            targetScrollY,
-                            this.mobileNativePinchMinScrollY,
-                            this.mobileNativePinchMaxScrollY,
-                        );
+                if (Math.abs(delta) < 7) {
+                    return;
                 }
 
-                let zoom =
-                    this.cameras.main.zoom;
+                const zoom =
+                    this.adjustPaintWorldZoom(
+                        delta > 0 ? -1 : 1,
+                    );
 
-                if (Math.abs(delta) >= 7) {
-                    zoom =
-                        this.adjustPaintWorldZoom(
-                            delta > 0 ? -1 : 1,
-                        );
-
-                    this.mobileNativePinchDistance =
-                        distance;
-                }
-
+                this.mobileNativePinchDistance =
+                    distance;
                 this.mobileNativePinchSuppressClickUntil =
                     performance.now() + 500;
 
@@ -2442,7 +2373,7 @@ export class GameScene extends Phaser.Scene {
                     [
                         tr(`ZOOM ${zoom.toFixed(2)}x`),
                         tr(`BRUSH ${this.brushSize}`),
-                        tr('두 손가락: 확대/축소 · 상하 이동'),
+                        tr('두 손가락: 확대/축소'),
                     ].join('\n'),
                 );
 
@@ -2480,7 +2411,6 @@ export class GameScene extends Phaser.Scene {
 
                     this.mobileNativePinchActive = false;
                     this.mobileNativePinchDistance = 0;
-                    this.mobileNativePinchCenterY = 0;
                     this.mobilePinchActive = false;
                     this.mobilePinchDistance = 0;
 
@@ -4077,17 +4007,6 @@ export class GameScene extends Phaser.Scene {
         new Map<number, Phaser.Math.Vector2>();
     private mobileNativePinchDistance = 0;
     private mobileNativePinchActive = false;
-
-    /*
-     * V101023836_MOBILE_PINCH_VERTICAL_PAN
-     * Two-finger vertical pan is layered onto the existing native pinch owner.
-     * We move only the paint camera; player/world/paint coordinates never move.
-     */
-    private mobileNativePinchCenterY = 0;
-    private mobileNativePinchBaseScrollY = 0;
-    private mobileNativePinchMinScrollY = 0;
-    private mobileNativePinchMaxScrollY = 0;
-
     private mobileNativePinchSuppressClickUntil = 0;
     private mobileNativePinchDownHandler?: (event: PointerEvent) => void;
     private mobileNativePinchMoveHandler?: (event: PointerEvent) => void;
@@ -8791,14 +8710,6 @@ export class GameScene extends Phaser.Scene {
                                 this.localPaintHistory.length > 0 &&
                                 multiplayerClient.isConnected()
                             ) {
-                                /*
-                                 * V101023837_CLIENT_PAINT_STABILITY: immediately restore freshest local paint
-                                 * after reconnect without rebroadcasting strokes.
-                                 */
-                                this.rebuildLocalPaintFromHistory(
-                                    false,
-                                );
-
                                 multiplayerClient
                                     .sendReconnectPaintSnapshot(
                                         this.localPaintHistory,
@@ -8808,8 +8719,10 @@ export class GameScene extends Phaser.Scene {
                     );
 
                     /*
-                     * V101023840D_MOBILE_RECONNECT_CONVERGENCE: mobile Schema/session/phase can settle on different
-                     * ticks. Reconcile cheap authoritative state repeatedly.
+                     * v0.10.10.239 RECOVERY CONVERGENCE:
+                     * sessionId, Schema, phase and READY may settle on different
+                     * mobile ticks. Rebuild cheap authoritative state repeatedly
+                     * so a Hider cannot remain visually stuck at Paint 0s.
                      */
                     [0, 120, 360, 800, 1600, 3200].forEach(
                         (delay) => {
@@ -11824,22 +11737,6 @@ export class GameScene extends Phaser.Scene {
         this.finishActivePaintStroke();
         this.isPainting = false;
 
-        /*
-         * V101023841_PRACTICE_BRUSH_CLEANUP
-         * Hider Practice uses the real production Paint preview. Finishing the
-         * stroke stops painting, but the last stationary brush preview can stay
-         * visible. Explicitly scrub every transient paint-tool visual before
-         * returning to Practice selection / entering Hunter Practice.
-         */
-        this.paintPreview?.setVisible(false);
-        this.clearStraightLinePreview();
-        this.hideMobilePaintPrecisionGuide();
-        this.hideEyedropperMagnifier();
-        this.eyedropperArmed = false;
-        this.eyedropperPointerId = -1;
-        this.clearMobilePendingPaint();
-        this.input.setDefaultCursor('default');
-
         this.rebuildPracticeHiders(
             3,
         );
@@ -14672,7 +14569,7 @@ export class GameScene extends Phaser.Scene {
             }
 
             return parsed
-                .slice(0, 120) /* V101023837_CLIENT_PAINT_STABILITY: match editor save limit */
+                .slice(0, 80)
                 .filter(
                     (stroke) =>
                         stroke &&
@@ -16414,151 +16311,8 @@ export class GameScene extends Phaser.Scene {
                 () => {
                     finishStroke();
 
-                    /*
-                     * V101023839_AVATAR_RASTER_SAVE
-                     *
-                     * The editor can display up to 500 points in one stroke,
-                     * but legacy preset reload/server paths accept only 240
-                     * points per stroke. A long drag could therefore look fully
-                     * painted here and later reopen with white/beige holes.
-                     *
-                     * Save the FINAL visible avatar as a compact raster:
-                     * - resolve stroke layering into exact body pixels
-                     * - group pixels by final color
-                     * - split into <= 240-point chunks
-                     * - use size=1, so replay is deterministic pixel-for-pixel
-                     *
-                     * This stays compatible with the existing server limits and
-                     * usually produces far fewer than 120 strokes.
-                     */
-                    const finalPixelColors =
-                        new Map<number, number>();
-
-                    strokes.forEach(
-                        (stroke) => {
-                            const radius =
-                                stroke.size <= 1
-                                    ? 0
-                                    : stroke.size;
-
-                            stroke.points.forEach(
-                                (point) => {
-                                    for (
-                                        let oy = -radius;
-                                        oy <= radius;
-                                        oy += 1
-                                    ) {
-                                        for (
-                                            let ox = -radius;
-                                            ox <= radius;
-                                            ox += 1
-                                        ) {
-                                            if (
-                                                stroke.shape !==
-                                                    'square' &&
-                                                ox * ox +
-                                                    oy * oy >
-                                                    radius *
-                                                        radius
-                                            ) {
-                                                continue;
-                                            }
-
-                                            const x =
-                                                Math.round(
-                                                    point.x +
-                                                        ox,
-                                                );
-                                            const y =
-                                                Math.round(
-                                                    point.y +
-                                                        oy,
-                                                );
-
-                                            if (
-                                                !insideBody(
-                                                    x,
-                                                    y,
-                                                )
-                                            ) {
-                                                continue;
-                                            }
-
-                                            finalPixelColors.set(
-                                                y * 80 + x,
-                                                stroke.color,
-                                            );
-                                        }
-                                    }
-                                },
-                            );
-                        },
-                    );
-
-                    const pointsByColor =
-                        new Map<
-                            number,
-                            NetworkPaintPoint[]
-                        >();
-
-                    finalPixelColors.forEach(
-                        (
-                            color,
-                            key,
-                        ) => {
-                            const points =
-                                pointsByColor.get(
-                                    color,
-                                ) ?? [];
-
-                            points.push({
-                                x: key % 80,
-                                y: Math.floor(
-                                    key / 80,
-                                ),
-                            });
-
-                            pointsByColor.set(
-                                color,
-                                points,
-                            );
-                        },
-                    );
-
-                    const compactPreset:
-                        NetworkPaintStroke[] = [];
-
-                    pointsByColor.forEach(
-                        (
-                            points,
-                            color,
-                        ) => {
-                            for (
-                                let offset = 0;
-                                offset <
-                                points.length;
-                                offset += 240
-                            ) {
-                                compactPreset.push({
-                                    targetSessionId:
-                                        '',
-                                    color,
-                                    size: 1,
-                                    shape:
-                                        'circle',
-                                    points:
-                                        points.slice(
-                                            offset,
-                                            offset +
-                                                240,
-                                        ),
-                                });
-                            }
-                        },
-                    );
-
                     this.lobbyAvatarPreset =
-                        compactPreset.slice(
+                        strokes.slice(
                             0,
                             120,
                         );
@@ -21282,14 +21036,9 @@ export class GameScene extends Phaser.Scene {
             this.hunterVisionRangeScreen /
             zoom;
 
-        /*
-         * V101023838_HUNT_BALANCE
-         * Hunter FOV widened from 72° total to 100° total.
-         * Range remains unchanged.
-         */
         const halfAngle =
             Phaser.Math.DegToRad(
-                50,
+                36,
             );
 
         const arcSteps = 18;
@@ -29216,9 +28965,8 @@ export class GameScene extends Phaser.Scene {
 
         if (
             multiplayerClient.isConnected() &&
-            this.activeStrokePoints.length >= 48
+            this.activeStrokePoints.length >= 24
         ) {
-            /* V101023837_CLIENT_PAINT_STABILITY: reduce simultaneous-painter WebSocket message frequency */
             this.flushActivePaintStrokeChunk(
                 true,
             );
@@ -29385,9 +29133,7 @@ export class GameScene extends Phaser.Scene {
         this.clearStraightLinePreview();
     }
 
-    private rebuildLocalPaintFromHistory(
-        broadcast = true,
-    ): void {
+    private rebuildLocalPaintFromHistory(): void {
         const sessionId =
             this.practiceMode ===
                 'hider'
@@ -29447,7 +29193,6 @@ export class GameScene extends Phaser.Scene {
         );
 
         if (
-            broadcast &&
             this.isMultiplayerSession()
         ) {
             multiplayerClient
@@ -29473,7 +29218,6 @@ export class GameScene extends Phaser.Scene {
                 );
 
                 if (
-                    broadcast &&
                     this.isMultiplayerSession()
                 ) {
                     multiplayerClient
@@ -31487,204 +31231,19 @@ export class GameScene extends Phaser.Scene {
         return null;
     }
 
-    /*
-     * V101023834_EYEDROPPER_VISIBLE_COLOR
-     * Return the color that is actually VISIBLE under the pipette tip.
-     *
-     * Drag-in painting intentionally records stroke points outside the Hider,
-     * while the RenderTexture is clipped by the Hider silhouette mask.
-     * Looking only at paint history therefore made the eyedropper report a
-     * hidden paint color while the user was visibly pointing at background.
-     *
-     * The same silhouette test also lets an unpainted Hider pixel return its
-     * visible base color instead of incorrectly falling through to background.
-     */
-    /*
-     * V101023835_EYEDROPPER_EXACT_RASTER_MASK
-     *
-     * v238.34 used an approximate circle/rectangle silhouette.
-     * The visible Hider body is actually the exact 80x120 raster texture
-     * generated by NetworkPlayerManager ("network-hider-pixel-body").
-     *
-     * Eyedropper must use that exact alpha mask, otherwise 1px gaps around
-     * head/arms/legs can be incorrectly treated as body and return the beige
-     * base color even though the pipette tip is visibly outside the character.
-     */
-    private isWorldPointInsideLocalHiderSilhouette(
-        worldX: number,
-        worldY: number,
-    ): boolean {
-        if (
-            !this.networkPlayerManager
-                ?.isLocalHider?.()
-        ) {
-            return false;
-        }
-
-        const container =
-            this.networkPlayerManager
-                .getLocalPlayerContainer();
-
-        if (!container) {
-            return false;
-        }
-
-        const scaleX =
-            container.scaleX || 1;
-        const scaleY =
-            container.scaleY || 1;
-
-        const textureX =
-            Math.floor(
-                (
-                    worldX -
-                    container.x
-                ) /
-                    scaleX +
-                    40,
-            );
-
-        const textureY =
-            Math.floor(
-                (
-                    worldY -
-                    container.y
-                ) /
-                    scaleY +
-                    60,
-            );
-
-        if (
-            textureX < 0 ||
-            textureY < 0 ||
-            textureX >= 80 ||
-            textureY >= 120
-        ) {
-            return false;
-        }
-
-        const textureKey =
-            'network-hider-pixel-body';
-
-        if (
-            !this.textures.exists(
-                textureKey,
-            )
-        ) {
-            return false;
-        }
-
-        const source =
-            this.textures
-                .get(textureKey)
-                .getSourceImage() as
-                    | HTMLCanvasElement
-                    | HTMLImageElement;
-
-        if (
-            !source ||
-            source.width <= 0 ||
-            source.height <= 0
-        ) {
-            return false;
-        }
-
-        /*
-         * Reuse the same 1x1 canvas already used by the mobile eyedropper.
-         * No new canvas allocation is performed during pointer movement.
-         */
-        if (
-            !this.mobileEyedropperSampleCanvas
-        ) {
-            this.mobileEyedropperSampleCanvas =
-                document.createElement(
-                    'canvas',
-                );
-            this.mobileEyedropperSampleCanvas.width =
-                1;
-            this.mobileEyedropperSampleCanvas.height =
-                1;
-
-            this.mobileEyedropperSampleContext =
-                this.mobileEyedropperSampleCanvas
-                    .getContext(
-                        '2d',
-                        {
-                            willReadFrequently:
-                                true,
-                        },
-                    ) ?? undefined;
-        }
-
-        const context =
-            this.mobileEyedropperSampleContext;
-
-        if (!context) {
-            return false;
-        }
-
-        context.clearRect(
-            0,
-            0,
-            1,
-            1,
-        );
-
-        context.drawImage(
-            source,
-            textureX,
-            textureY,
-            1,
-            1,
-            0,
-            0,
-            1,
-            1,
-        );
-
-        const alpha =
-            context.getImageData(
-                0,
-                0,
-                1,
-                1,
-            ).data[3];
-
-        return alpha > 8;
-    }
-
     private getEyedropperColorAtWorld(
         worldX: number,
         worldY: number,
     ): number | null {
-        if (
-            this.isWorldPointInsideLocalHiderSilhouette(
+        return (
+            this.sampleOwnPaintHistoryColorAtWorld(
+                worldX,
+                worldY,
+            ) ??
+            this.sampleBackgroundColorAtWorld(
                 worldX,
                 worldY,
             )
-        ) {
-            /*
-             * Inside the exact visible raster:
-             * painted pixel -> sampled paint color
-             * untouched body pixel -> visible beige base body color
-             */
-            return (
-                this.sampleOwnPaintHistoryColorAtWorld(
-                    worldX,
-                    worldY,
-                ) ??
-                0xf5eee2
-            );
-        }
-
-        /*
-         * Outside the exact visible raster, ALWAYS sample background.
-         * Never allow hidden/off-body paint history to leak beige/body colors
-         * into the pipette preview.
-         */
-        return this.sampleBackgroundColorAtWorld(
-            worldX,
-            worldY,
         );
     }
 
