@@ -79,6 +79,8 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010260_REMOVE_LAUGH_LEFTOVERS: remove obsolete laugh-counter leftovers after v259. */
+    /* V1010259_SIMPLIFY_POOP_HUD_FOCUS: pause laugh counterplay; clear poop notices; fixed GAS/chat stack; focus SFX/VFX guard. */
     /* V1010258_HUNTER_CONTROLS_HINT_EXACT: exact-source Hunter Practice/main-match bottom controls + movement fade. */
     /* V1010253_SMALL_ALERT_RESTORE_GAS: compact poop alerts + stable GAS HUD visibility. */
     /* V1010252_AUDIO_FART_HUD_FINAL_POLISH: audio resume guard + punchier fart bank + unified Hunt HUD. */
@@ -4169,7 +4171,6 @@ export class GameScene extends Phaser.Scene {
     private readonly practiceFartCost = 36;
     private readonly practiceFartRecoverPerSecond = 0.75;
     private readonly practicePoopDurationMs = 14_000;
-    private practicePoopLaughTriggered = false;
 
     /*
      * Hider Practice record-shot flow.
@@ -8379,14 +8380,20 @@ export class GameScene extends Phaser.Scene {
                 this.showHiderReaction(event, 'cough');
             }),
         );
+        /*
+         * V1010259_SIMPLIFY_POOP_HUD_FOCUS: laugh counter-detection is intentionally paused.
+         * Keep the network message compatible, but do not render/play it.
+         */
         this.networkUnsubscribers.push(
-            multiplayerClient.onHiderLaugh((event: NetworkHiderReaction) => {
-                this.showHiderReaction(event, 'laugh');
+            multiplayerClient.onHiderLaugh((_event: NetworkHiderReaction) => {
+                // intentionally ignored
             }),
         );
         this.networkUnsubscribers.push(
             multiplayerClient.onFartDetected((reaction) => {
-                this.showHunterDetectionAlert(reaction);
+                if (reaction === 'cough') {
+                    this.showHunterDetectionAlert('cough');
+                }
             }),
         );
 
@@ -11680,7 +11687,10 @@ export class GameScene extends Phaser.Scene {
             this.localPoopUntil >
                 now
         ) {
-            this.updateHunterPracticePoopDetection();
+            /*
+             * V1010259_SIMPLIFY_POOP_HUD_FOCUS: poop now means only a movement penalty.
+             * No Hider laugh counter-detection while slowed.
+             */
         } else if (
             this.localPoopUntil >
                 0
@@ -11708,9 +11718,6 @@ export class GameScene extends Phaser.Scene {
                 this.practicePoopDurationMs;
 
             this.fartGauge = 100;
-            this.practicePoopLaughTriggered =
-                false;
-
             this.showPoopBurst({
                 hunterId:
                     this.practiceHunterSessionId,
@@ -11806,86 +11813,6 @@ export class GameScene extends Phaser.Scene {
         }
 
         this.updateFartHud();
-    }
-
-    private updateHunterPracticePoopDetection(): void {
-        /* V1010248_UNUSED_NOW_FIX: once-per-accident laugh no longer needs a timestamp. */
-        if (
-            this.practicePoopLaughTriggered
-        ) {
-            return;
-        }
-
-        let laughingHider:
-            {
-                index: number;
-                x: number;
-                y: number;
-            } |
-            undefined;
-
-        this.hiders.some(
-            (
-                hider,
-                index,
-            ) => {
-                if (!hider.alive) {
-                    return false;
-                }
-
-                const distance =
-                    Phaser.Math.Distance.Between(
-                        this.player.x,
-                        this.player.y,
-                        hider.centerX,
-                        hider.centerY,
-                    );
-
-                if (
-                    distance >
-                        this.practiceFartRadius
-                ) {
-                    return false;
-                }
-
-                laughingHider = {
-                    index,
-                    x:
-                        hider.centerX,
-                    y:
-                        hider.centerY,
-                };
-
-                return true;
-            },
-        );
-
-        if (!laughingHider) {
-            return;
-        }
-
-        this.practicePoopLaughTriggered =
-            true;
-
-        this.showHiderReaction(
-            {
-                hunterId:
-                    this.practiceHunterSessionId,
-                hiderId:
-                    this.getPracticeBotSessionId(
-                        laughingHider.index,
-                    ),
-                x:
-                    laughingHider.x,
-                y:
-                    laughingHider.y,
-            },
-            'laugh',
-        );
-
-        this.showHunterDetectionAlert(
-            'laugh',
-        );
     }
 
     private syncHunterPracticeVisuals(): void {
@@ -12363,7 +12290,6 @@ export class GameScene extends Phaser.Scene {
 
         this.fartGauge = 0;
         this.localPoopUntil = 0;
-        this.practicePoopLaughTriggered = false;
         this.poopedHuntersUntil.delete(
             this.practiceHunterSessionId,
         );
@@ -22880,6 +22806,7 @@ export class GameScene extends Phaser.Scene {
             this.statusText,
             this.ammoText,
             this.hunterWeaponHudContainer,
+            this.fartHudContainer,
             this.targetText,
             this.paintColorText,
             this.brushSizeText,
@@ -33905,7 +33832,7 @@ export class GameScene extends Phaser.Scene {
                  */
                 this.suppressEffectsUntil =
                     Date.now() +
-                    900;
+                    1500;
 
                 this.sound.mute =
                     true;
@@ -33937,7 +33864,7 @@ export class GameScene extends Phaser.Scene {
                             this.suppressEffectsUntil =
                                 0;
                         },
-                        900,
+                        1500,
                     );
             };
 
@@ -34676,6 +34603,10 @@ export class GameScene extends Phaser.Scene {
     }
 
     private showFartBurst(event: NetworkFartBurst): void {
+        if (this.shouldSuppressOneShotAudio()) {
+            return;
+        }
+
         this.playComedySound('fart', event.soundTier);
         const g = this.add.graphics().setDepth(18000);
         g.lineStyle(5, 0x9bc56b, 0.8).strokeCircle(0, 0, event.radius);
@@ -34689,62 +34620,193 @@ export class GameScene extends Phaser.Scene {
         }
     }
 
-    private showHunterDetectionAlert(reaction: 'cough' | 'laugh'): void {
+    private showHunterDetectionAlert(_reaction: 'cough'): void {
+        if (
+            this.shouldSuppressOneShotAudio()
+        ) {
+            return;
+        }
+
         this.playComedySound('boing');
-        const p = this.networkPlayerManager?.getLocalPlayerPosition(); if (!p) return;
-        const text = this.add.text(p.x, p.y - 58, reaction === 'laugh' ? '‼️' : '❗', { fontSize: '38px', fontStyle: 'bold', stroke: '#ffffff', strokeThickness: 7 }).setOrigin(0.5).setDepth(22000).setScale(0.2);
-        this.tweens.add({ targets: text, scale: 1.35, y: p.y - 82, duration: 180, yoyo: true, hold: 220, ease: 'Back.Out', onComplete: () => text.destroy() });
+
+        const p =
+            this.networkPlayerManager
+                ?.getLocalPlayerPosition();
+
+        if (!p) {
+            return;
+        }
+
+        const text =
+            this.add.text(
+                p.x,
+                p.y - 58,
+                '❗',
+                {
+                    fontSize: '38px',
+                    fontStyle: 'bold',
+                    stroke: '#ffffff',
+                    strokeThickness: 7,
+                },
+            )
+                .setOrigin(0.5)
+                .setDepth(22000)
+                .setScale(0.2);
+
+        this.tweens.add({
+            targets: text,
+            scale: 1.35,
+            y: p.y - 82,
+            duration: 180,
+            yoyo: true,
+            hold: 220,
+            ease: 'Back.Out',
+            onComplete: () => text.destroy(),
+        });
     }
 
-    private showHiderReaction(event: NetworkHiderReaction, kind: 'cough' | 'laugh'): void {
-        this.playComedySound(kind);
-        const labels = kind === 'laugh' ? { ko: 'ㅋㅋㅋㅋㅋㅋ!', ja: 'ギャハハハ!!', en: 'HAHAHAHA!!', zh: '哈哈哈哈!!' } : { ko: '콜록!!', ja: 'ゴホッ!!', en: 'COUGH!!', zh: '咳咳!!' };
-        const t = this.add.text(event.x, event.y - 48, labels[getLanguage()], { fontFamily: 'monospace', fontSize: kind === 'laugh' ? '20px' : '18px', fontStyle: 'bold', color: '#fff6cf', stroke: '#442f24', strokeThickness: 5 }).setOrigin(0.5).setDepth(21000).setScale(0.4);
-        this.tweens.add({ targets: t, y: event.y - 78, scale: 1.15, angle: kind === 'laugh' ? { from: -8, to: 8 } : 0, alpha: 0, duration: kind === 'laugh' ? 950 : 700, ease: 'Back.Out', onComplete: () => t.destroy() });
+    private showHiderReaction(
+        event: NetworkHiderReaction,
+        _kind: 'cough',
+    ): void {
+        if (
+            this.shouldSuppressOneShotAudio()
+        ) {
+            return;
+        }
+
+        this.playComedySound('cough');
+
+        const labels = {
+            ko: '콜록!!',
+            ja: 'ゴホッ!!',
+            en: 'COUGH!!',
+            zh: '咳咳!!',
+        } as const;
+
+        const t =
+            this.add.text(
+                event.x,
+                event.y - 48,
+                labels[getLanguage()],
+                {
+                    fontFamily: 'monospace',
+                    fontSize: '18px',
+                    fontStyle: 'bold',
+                    color: '#fff6cf',
+                    stroke: '#442f24',
+                    strokeThickness: 5,
+                },
+            )
+                .setOrigin(0.5)
+                .setDepth(21000)
+                .setScale(0.4);
+
+        this.tweens.add({
+            targets: t,
+            y: event.y - 78,
+            scale: 1.15,
+            angle: 0,
+            alpha: 0,
+            duration: 700,
+            ease: 'Back.Out',
+            onComplete: () => t.destroy(),
+        });
     }
 
     private showPoopBurst(event: NetworkPoopBurst): void {
-        const localUntil = Date.now() + Math.max(0, event.poopUntil - event.serverNow);
-        this.poopedHuntersUntil.set(event.hunterId, localUntil);
-        if (event.hunterId === multiplayerClient.getSessionId()) {
-            this.localPoopUntil = localUntil;
-
+        if (this.shouldSuppressOneShotAudio()) {
             /*
-             * V1010252_AUDIO_FART_HUD_FINAL_POLISH: first-time-friendly explanation of the laugh counter-clue.
-             * Keep the tone deadpan; the situation itself is the joke.
+             * Still apply authoritative state below, but suppress the stale
+             * burst/audio/text that may arrive while returning from another tab.
              */
-            const poopHint =
-                (
-                    {
-                        ko:
-                            '💩 사고 발생! 지금 누가 근처에서 비웃는다면… 축하합니다. 하이더가 바로 근처에 있습니다.',
-                        ja:
-                            '💩 事故発生！この状態で近くから笑い声がしたら…おめでとうございます。ハイダーがすぐ近くです。',
-                        en:
-                            '💩 ACCIDENT! If someone laughs nearby now... congratulations. A Hider is very close.',
-                        zh:
-                            '💩 事故发生！如果这时附近传来笑声……恭喜，Hider就在你旁边。',
-                    } as const
-                )[getLanguage()];
+        }
 
-            const hint =
+        const localUntil =
+            Date.now() +
+            Math.max(
+                0,
+                event.poopUntil -
+                    event.serverNow,
+            );
+
+        this.poopedHuntersUntil.set(
+            event.hunterId,
+            localUntil,
+        );
+
+        const localSessionId =
+            multiplayerClient.getSessionId();
+
+        const localRole =
+            multiplayerClient
+                .getLocalPlayer()
+                ?.role;
+
+        if (
+            event.hunterId ===
+            localSessionId
+        ) {
+            this.localPoopUntil =
+                localUntil;
+
+            this.networkPlayerManager
+                ?.setLocalHunterSpeedMultiplier(
+                    0.4,
+                );
+        }
+
+        /*
+         * V1010259_SIMPLIFY_POOP_HUD_FOCUS: concise, immediately understandable rule.
+         * Place BELOW the Hider/hourglass/Hunter icon row, not above it.
+         */
+        if (
+            !this.shouldSuppressOneShotAudio() &&
+            (
+                event.hunterId ===
+                    localSessionId ||
+                localRole ===
+                    'hider'
+            )
+        ) {
+            const message =
+                event.hunterId ===
+                    localSessionId
+                    ? (
+                        {
+                            ko: '💩 똥을 지려서 느려졌습니다!  이동속도 -60%',
+                            ja: '💩 漏らして遅くなった！  移動速度 -60%',
+                            en: '💩 You pooped yourself and slowed down!  Move speed -60%',
+                            zh: '💩 拉裤子了，移动变慢！  移速 -60%',
+                        } as const
+                    )[getLanguage()]
+                    : (
+                        {
+                            ko: `💩 ${event.hunterName || '헌터'}가 똥을 지려 느려졌습니다!`,
+                            ja: `💩 ${event.hunterName || 'ハンター'}がお漏らしして遅くなりました！`,
+                            en: `💩 ${event.hunterName || 'Hunter'} pooped themselves and slowed down!`,
+                            zh: `💩 ${event.hunterName || '猎人'}拉裤子了，移动变慢！`,
+                        } as const
+                    )[getLanguage()];
+
+            const notice =
                 this.add.text(
                     this.gameWidth / 2,
-                    78,
-                    poopHint,
+                    112,
+                    message,
                     {
                         fontFamily:
                             'monospace',
                         fontSize:
                             this.mobileControlsEnabled
-                                ? '10px'
-                                : '12px',
+                                ? '11px'
+                                : '13px',
                         fontStyle:
                             'bold',
                         color:
                             '#fff8df',
                         backgroundColor:
-                            'rgba(69,45,30,0.88)',
+                            'rgba(69,45,30,0.92)',
                         stroke:
                             '#3b2418',
                         strokeThickness:
@@ -34752,13 +34814,13 @@ export class GameScene extends Phaser.Scene {
                         align:
                             'center',
                         padding: {
-                            x: 8,
-                            y: 5,
+                            x: 10,
+                            y: 6,
                         },
                         wordWrap: {
                             width:
                                 Math.min(
-                                    430,
+                                    520,
                                     this.gameWidth -
                                         80,
                                 ),
@@ -34781,130 +34843,82 @@ export class GameScene extends Phaser.Scene {
 
             this.tweens.add({
                 targets:
-                    hint,
+                    notice,
                 alpha:
                     1,
                 y:
-                    84,
+                    118,
                 duration:
-                    150,
+                    160,
                 hold:
-                    2400,
+                    1900,
                 yoyo:
                     true,
                 onComplete:
                     () =>
-                        hint.destroy(),
+                        notice.destroy(),
             });
-            this.networkPlayerManager?.setLocalHunterSpeedMultiplier(0.4);
         }
-        this.playComedySound('cry');
-
-        const localRole =
-            multiplayerClient
-                .getLocalPlayer()
-                ?.role;
 
         if (
-            localRole === 'hider' &&
-            event.hunterName
+            !this.shouldSuppressOneShotAudio()
         ) {
-            const notice =
-                (
-                    {
-                        ko:
-                            '⚠ ' +
-                            event.hunterName +
-                            ' 헌터가 똥을 지렸습니다. 침착하게 거리를 유지하십시오.',
-                        ja:
-                            '⚠ ハンター「' +
-                            event.hunterName +
-                            '」がお漏らししました。落ち着いて距離を取りましょう。',
-                        en:
-                            '⚠ Hunter ' +
-                            event.hunterName +
-                            ' has pooped themselves. Please remain calm and keep your distance.',
-                        zh:
-                            '⚠ 猎人“' +
-                            event.hunterName +
-                            '”拉裤子了。请保持冷静并拉开距离。',
-                    } as const
-                )[getLanguage()];
+            this.playComedySound(
+                'cry',
+            );
 
-            const warning =
+            const labels = {
+                ko: '💩 똥 지렸다!!',
+                ja: '💩 も…漏らした!!',
+                en: '💩 I POOPED MYSELF!!',
+                zh: '💩 拉裤子了!!',
+            } as const;
+
+            const t =
                 this.add.text(
-                    this.gameWidth / 2,
-                    78,
-                    notice,
+                    event.x,
+                    event.y - 70,
+                    labels[getLanguage()],
                     {
                         fontFamily:
                             'monospace',
                         fontSize:
-                            this.mobileControlsEnabled
-                                ? '10px'
-                                : '12px',
+                            '22px',
                         fontStyle:
                             'bold',
                         color:
-                            '#fff8dc',
-                        backgroundColor:
-                            'rgba(67,45,30,0.88)',
+                            '#fff6cf',
                         stroke:
-                            '#3b2418',
+                            '#5a3421',
                         strokeThickness:
-                            2,
-                        align:
-                            'center',
-                        padding: {
-                            x: 8,
-                            y: 5,
-                        },
-                        wordWrap: {
-                            width:
-                                Math.min(
-                                    430,
-                                    this.gameWidth -
-                                        80,
-                                ),
-                        },
+                            6,
                     },
                 )
-                    .setOrigin(
-                        0.5,
-                        0,
-                    )
-                    .setScrollFactor(
-                        0,
-                    )
-                    .setDepth(
-                        27000,
-                    )
-                    .setAlpha(
-                        0,
-                    );
+                    .setOrigin(0.5)
+                    .setDepth(23000)
+                    .setScale(0.25);
 
             this.tweens.add({
                 targets:
-                    warning,
-                alpha:
-                    1,
+                    t,
+                scale:
+                    1.15,
                 y:
-                    84,
+                    event.y - 100,
                 duration:
-                    150,
-                hold:
-                    2200,
+                    260,
+                ease:
+                    'Back.Out',
                 yoyo:
                     true,
+                hold:
+                    900,
                 onComplete:
                     () =>
-                        warning.destroy(),
+                        t.destroy(),
             });
         }
 
-        const labels = { ko: '💩 똥 지렸다!!', ja: '💩 も…漏らした!!', en: '💩 I POOPED MYSELF!!', zh: '💩 拉裤子了!!' };
-        const t = this.add.text(event.x, event.y - 70, labels[getLanguage()], { fontFamily: 'monospace', fontSize: '22px', fontStyle: 'bold', color: '#fff6cf', stroke: '#5a3421', strokeThickness: 6 }).setOrigin(0.5).setDepth(23000).setScale(0.25);
-        this.tweens.add({ targets: t, scale: 1.15, y: event.y - 100, duration: 260, ease: 'Back.Out', yoyo: true, hold: 900, onComplete: () => t.destroy() });
         this.updateFartHud();
     }
 
