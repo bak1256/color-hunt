@@ -160,6 +160,7 @@ export class GameScene extends Phaser.Scene {
     private undoPaintKey!: Phaser.Input.Keyboard.Key;
     private redoPaintKey!: Phaser.Input.Keyboard.Key;
     private shiftPaintKey!: Phaser.Input.Keyboard.Key;
+    /* V1010247_FART_ULTIMATE_BALANCE */
     /* V1010246_SPACE_PRACTICE_FART: Hunt skill uses Space; Shift remains paint straight-line only. */
     private fartKey!: Phaser.Input.Keyboard.Key;
     private controlPaintKey!: Phaser.Input.Keyboard.Key;
@@ -287,7 +288,8 @@ export class GameScene extends Phaser.Scene {
     private fartHudContainer!: Phaser.GameObjects.Container;
     private fartGaugeGraphics!: Phaser.GameObjects.Graphics;
     private fartGaugeLabel!: Phaser.GameObjects.Text;
-    private fartGauge = 100;
+    /* V1010247_FART_ULTIMATE_BALANCE: GAS now means danger/pressure; 0 safe -> 100 accident. */
+    private fartGauge = 0;
     private localPoopUntil = 0;
     private poopedHuntersUntil = new Map<string, number>();
     private lastPoopTrailAt = new Map<string, number>();
@@ -4149,10 +4151,10 @@ export class GameScene extends Phaser.Scene {
 
     /* V1010246_SPACE_PRACTICE_FART: local mirror of the multiplayer fart rules. */
     private readonly practiceFartRadius = 150;
-    private readonly practiceFartCost = 34;
-    private readonly practiceFartRecoverPerSecond = 7;
-    private readonly practicePoopDurationMs = 6_000;
-    private practiceLastLaughAt = 0;
+    private readonly practiceFartCost = 36;
+    private readonly practiceFartRecoverPerSecond = 0.75;
+    private readonly practicePoopDurationMs = 14_000;
+    private practicePoopLaughTriggered = false;
 
     /*
      * Hider Practice record-shot flow.
@@ -8324,7 +8326,7 @@ export class GameScene extends Phaser.Scene {
                 this.localPoopUntil = state.poopUntil > state.serverNow
                     ? localNow + (state.poopUntil - state.serverNow) : 0;
                 this.networkPlayerManager?.setLocalHunterSpeedMultiplier(
-                    this.localPoopUntil > localNow ? 0.5 : 1,
+                    this.localPoopUntil > localNow ? 0.4 : 1,
                 );
                 this.updateFartHud();
             }),
@@ -8411,7 +8413,7 @@ export class GameScene extends Phaser.Scene {
                     this.weaponOverheatedUntil = 0;
                     this.hunterReserve = 12;
                     this.hunterMaxReserve = 12;
-                    this.fartGauge = 100;
+                    this.fartGauge = 0;
                     this.localPoopUntil = 0;
                     this.poopedHuntersUntil.clear();
                     this.networkPlayerManager.setLocalHunterSpeedMultiplier(1);
@@ -10067,25 +10069,25 @@ export class GameScene extends Phaser.Scene {
                         skill:
                             '💨 Space 방구 탐지 · 가스에 닿은 봇은 콜록!',
                         risk:
-                            '💩 게이지를 무리해서 쓰면 6초간 똥 지림 · 이동속도 -50% · 근처 봇이 깔깔 웃습니다.',
+                            '💩 방구를 쓸수록 GAS가 차오릅니다. MAX면 14초간 사고 발생 · 이동속도 -60% · 근처 봇은 딱 한 번 비웃습니다.',
                     },
                     ja: {
                         skill:
                             '💨 Spaceでおなら探知 · ガスに触れたBOTはゴホッ！',
                         risk:
-                            '💩 ゲージ不足で無理に出すと6秒間おもらし · 移動速度-50% · 近くのBOTに大笑いされます。',
+                            '💩 おならを使うほどGASが上昇。MAXで14秒間事故発生 · 移動速度-60% · 近くのBOTは一度だけ大笑いします。',
                     },
                     en: {
                         skill:
                             '💨 Space: fart detector · Bots touched by the gas cough!',
                         risk:
-                            '💩 Force it with low gas and you poop yourself for 6s · -50% move speed · nearby Bots burst out laughing.',
+                            '💩 Every fart fills GAS. Hit MAX and suffer a 14s accident · -60% move speed · a nearby Bot laughs once.',
                     },
                     zh: {
                         skill:
                             '💨 Space放屁探测 · 被气体碰到的BOT会咳嗽！',
                         risk:
-                            '💩 气槽不足还硬放会拉裤子6秒 · 移速-50% · 附近BOT会笑出声。',
+                            '💩 每次放屁都会增加GAS。达到MAX会进入14秒事故状态 · 移速-60% · 附近BOT只会嘲笑一次。',
                     },
                 } as const
             )[getLanguage()];
@@ -11610,7 +11612,7 @@ export class GameScene extends Phaser.Scene {
         if (!pooped) {
             const nextGauge =
                 Phaser.Math.Clamp(
-                    this.fartGauge +
+                    this.fartGauge -
                         this.practiceFartRecoverPerSecond *
                             (
                                 delta /
@@ -11645,9 +11647,7 @@ export class GameScene extends Phaser.Scene {
             this.localPoopUntil >
                 now
         ) {
-            this.updateHunterPracticePoopDetection(
-                now,
-            );
+            this.updateHunterPracticePoopDetection();
         } else if (
             this.localPoopUntil >
                 0
@@ -11663,19 +11663,26 @@ export class GameScene extends Phaser.Scene {
     private useHunterPracticeFart(): void {
         const now = Date.now();
 
-        if (
-            this.fartGauge <
-                this.practiceFartCost
-        ) {
+        const gaugeBefore =
+            this.fartGauge;
+        const nextGauge =
+            gaugeBefore +
+            this.practiceFartCost;
+
+        if (nextGauge >= 100) {
             this.localPoopUntil =
                 now +
                 this.practicePoopDurationMs;
 
-            this.fartGauge = 0;
+            this.fartGauge = 100;
+            this.practicePoopLaughTriggered =
+                false;
 
             this.showPoopBurst({
                 hunterId:
                     this.practiceHunterSessionId,
+                hunterName:
+                    'HUNTER',
                 x:
                     this.player.x,
                 y:
@@ -11686,31 +11693,19 @@ export class GameScene extends Phaser.Scene {
                     now,
             });
 
-            /*
-             * showPoopBurst recognizes multiplayer session IDs for the speed
-             * setter. Practice movement reads localPoopUntil directly.
-             */
             this.updateFartHud();
             return;
         }
 
-        const gaugeBefore =
-            this.fartGauge;
-
         this.fartGauge =
-            Phaser.Math.Clamp(
-                this.fartGauge -
-                    this.practiceFartCost,
-                0,
-                100,
-            );
+            nextGauge;
 
         const soundTier =
-            gaugeBefore >= 67
-                ? 1
-                : gaugeBefore >= 34
+            nextGauge >= 72
+                ? 3
+                : nextGauge >= 36
                     ? 2
-                    : 3;
+                    : 1;
 
         this.showFartBurst({
             hunterId:
@@ -11780,13 +11775,10 @@ export class GameScene extends Phaser.Scene {
         this.updateFartHud();
     }
 
-    private updateHunterPracticePoopDetection(
-        now: number,
-    ): void {
+    private updateHunterPracticePoopDetection(): void {
+        /* V1010248_UNUSED_NOW_FIX: once-per-accident laugh no longer needs a timestamp. */
         if (
-            now -
-                this.practiceLastLaughAt <
-                1_400
+            this.practicePoopLaughTriggered
         ) {
             return;
         }
@@ -11839,8 +11831,8 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
-        this.practiceLastLaughAt =
-            now;
+        this.practicePoopLaughTriggered =
+            true;
 
         this.showHiderReaction(
             {
@@ -12217,9 +12209,9 @@ export class GameScene extends Phaser.Scene {
         this.practiceStartedAt =
             Date.now();
 
-        this.fartGauge = 100;
+        this.fartGauge = 0;
         this.localPoopUntil = 0;
-        this.practiceLastLaughAt = 0;
+        this.practicePoopLaughTriggered = false;
         this.poopedHuntersUntil.delete(
             this.practiceHunterSessionId,
         );
@@ -23941,7 +23933,7 @@ export class GameScene extends Phaser.Scene {
                         (
                             this.localPoopUntil >
                                 Date.now()
-                                ? 0.5
+                                ? 0.4
                                 : 1
                         )
                     : this.playerSpeed
@@ -33446,12 +33438,34 @@ export class GameScene extends Phaser.Scene {
                 .setVisible(false);
 
         this.fartGaugeGraphics = this.add.graphics();
-        this.fartGaugeLabel = this.add.text(8, 8, '💨 GAS', {
-            fontFamily: 'monospace', fontSize: '12px', fontStyle: 'bold',
-            color: '#26352b', stroke: '#ffffff', strokeThickness: 3,
-        });
-        const fartBg = this.add.rectangle(110, 18, 230, 42, 0xfff8e8, 0.985)
-            .setOrigin(0.5).setStrokeStyle(3, 0xffffff, 1);
+        this.fartGaugeLabel = this.add.text(
+            0,
+            13,
+            '💨 GAS',
+            {
+                fontFamily: 'monospace',
+                fontSize: '13px',
+                fontStyle: 'bold',
+                color: '#17211c',
+                stroke: '#ffffff',
+                strokeThickness: 3,
+            },
+        ).setOrigin(0, 0.5);
+
+        /*
+         * Same 230px card width as weapon HUD. The actual GAS bar below uses
+         * the exact HEAT x/width/height for visual rhythm.
+         */
+        const fartBg = this.add.rectangle(
+            110,
+            18,
+            230,
+            42,
+            0xfff8e8,
+            0.985,
+        )
+            .setOrigin(0.5)
+            .setStrokeStyle(3, 0xffffff, 1);
         this.fartHudContainer = this.add.container(18, 94, [
             fartBg, this.fartGaugeGraphics, this.fartGaugeLabel,
         ]).setDepth(25000).setScrollFactor(0).setVisible(false);
@@ -33580,19 +33594,81 @@ export class GameScene extends Phaser.Scene {
          */
         this.fartHudContainer.setPosition(
             this.hunterWeaponHudContainer?.x ?? 18,
-            (this.hunterWeaponHudContainer?.y ?? 18) + 78,
+            (this.hunterWeaponHudContainer?.y ?? 18) + 72,
         );
         this.fartHudContainer.setVisible(Boolean(visible));
         this.fartGaugeGraphics.clear();
-        const pct = Phaser.Math.Clamp(this.fartGauge / 100, 0, 1);
-        this.fartGaugeGraphics.fillStyle(0xd7e8b0, 1).fillRoundedRect(8, 23, 204, 10, 5);
-        this.fartGaugeGraphics.fillStyle(0x7fa95b, 1).fillRoundedRect(8, 23, 204 * pct, 10, 5);
-        this.fartGaugeGraphics.lineStyle(2, 0x40523a, 1).strokeRoundedRect(8, 23, 204, 10, 5);
-        const pooped = this.localPoopUntil > Date.now();
+
+        const pct =
+            Phaser.Math.Clamp(
+                this.fartGauge / 100,
+                0,
+                1,
+            );
+
+        /* Exact HEAT geometry. */
+        const barX = 42;
+        const barY = 22;
+        const barWidth = 174;
+        const barHeight = 18;
+
+        this.fartGaugeGraphics
+            .fillStyle(
+                0x252d29,
+                0.22,
+            )
+            .fillRoundedRect(
+                barX,
+                barY,
+                barWidth,
+                barHeight,
+                3,
+            );
+
+        /*
+         * Pressure grows safe -> warning -> danger, like HEAT.
+         */
+        let gasColor =
+            0x55a95d;
+
+        if (this.fartGauge >= 72) {
+            gasColor = 0xd83a34;
+        } else if (
+            this.fartGauge >= 36
+        ) {
+            gasColor = 0xf1c84b;
+        }
+
+        if (pct > 0) {
+            this.fartGaugeGraphics
+                .fillStyle(
+                    gasColor,
+                    1,
+                )
+                .fillRoundedRect(
+                    barX,
+                    barY,
+                    Math.max(
+                        2,
+                        barWidth * pct,
+                    ),
+                    barHeight,
+                    3,
+                );
+        }
+
+        const pooped =
+            this.localPoopUntil >
+            Date.now();
+
         this.fartGaugeLabel.setText(
             pooped
-                ? '💩 ...50% SPEED'
-                : '💨 GAS ' + Math.round(this.fartGauge) + '%  [SPACE]',
+                ? '💩 GAS MAX · SPEED -60%'
+                : '💨 GAS ' +
+                    Math.round(
+                        this.fartGauge,
+                    ) +
+                    '%  [SPACE]',
         );
     }
 
@@ -33966,9 +34042,112 @@ export class GameScene extends Phaser.Scene {
         this.poopedHuntersUntil.set(event.hunterId, localUntil);
         if (event.hunterId === multiplayerClient.getSessionId()) {
             this.localPoopUntil = localUntil;
-            this.networkPlayerManager?.setLocalHunterSpeedMultiplier(0.5);
+            this.networkPlayerManager?.setLocalHunterSpeedMultiplier(0.4);
         }
         this.playComedySound('cry');
+
+        const localRole =
+            multiplayerClient
+                .getLocalPlayer()
+                ?.role;
+
+        if (
+            localRole === 'hider' &&
+            event.hunterName
+        ) {
+            const notice =
+                (
+                    {
+                        ko:
+                            '⚠ ' +
+                            event.hunterName +
+                            ' 헌터가 똥을 지렸습니다. 침착하게 거리를 유지하십시오.',
+                        ja:
+                            '⚠ ハンター「' +
+                            event.hunterName +
+                            '」がお漏らししました。落ち着いて距離を取りましょう。',
+                        en:
+                            '⚠ Hunter ' +
+                            event.hunterName +
+                            ' has pooped themselves. Please remain calm and keep your distance.',
+                        zh:
+                            '⚠ 猎人“' +
+                            event.hunterName +
+                            '”拉裤子了。请保持冷静并拉开距离。',
+                    } as const
+                )[getLanguage()];
+
+            const warning =
+                this.add.text(
+                    this.gameWidth / 2,
+                    122,
+                    notice,
+                    {
+                        fontFamily:
+                            'monospace',
+                        fontSize:
+                            this.mobileControlsEnabled
+                                ? '14px'
+                                : '17px',
+                        fontStyle:
+                            'bold',
+                        color:
+                            '#fff8dc',
+                        backgroundColor:
+                            'rgba(67,45,30,0.92)',
+                        stroke:
+                            '#3b2418',
+                        strokeThickness:
+                            3,
+                        align:
+                            'center',
+                        padding: {
+                            x: 14,
+                            y: 9,
+                        },
+                        wordWrap: {
+                            width:
+                                Math.min(
+                                    620,
+                                    this.gameWidth -
+                                        36,
+                                ),
+                        },
+                    },
+                )
+                    .setOrigin(
+                        0.5,
+                        0,
+                    )
+                    .setScrollFactor(
+                        0,
+                    )
+                    .setDepth(
+                        27000,
+                    )
+                    .setAlpha(
+                        0,
+                    );
+
+            this.tweens.add({
+                targets:
+                    warning,
+                alpha:
+                    1,
+                y:
+                    132,
+                duration:
+                    180,
+                hold:
+                    2500,
+                yoyo:
+                    true,
+                onComplete:
+                    () =>
+                        warning.destroy(),
+            });
+        }
+
         const labels = { ko: '💩 똥 지렸다!!', ja: '💩 も…漏らした!!', en: '💩 I POOPED MYSELF!!', zh: '💩 拉裤子了!!' };
         const t = this.add.text(event.x, event.y - 70, labels[getLanguage()], { fontFamily: 'monospace', fontSize: '22px', fontStyle: 'bold', color: '#fff6cf', stroke: '#5a3421', strokeThickness: 6 }).setOrigin(0.5).setDepth(23000).setScale(0.25);
         this.tweens.add({ targets: t, scale: 1.15, y: event.y - 100, duration: 260, ease: 'Back.Out', yoyo: true, hold: 900, onComplete: () => t.destroy() });

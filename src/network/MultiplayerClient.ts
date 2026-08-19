@@ -101,7 +101,13 @@ export type NetworkFartBurst = {
   hunterId: string; x: number; y: number; radius: number; soundTier: number;
 };
 export type NetworkPoopBurst = {
-  hunterId: string; x: number; y: number; poopUntil: number; serverNow: number;
+  hunterId: string;
+  hunterName?: string;
+  x: number;
+  y: number;
+  poopUntil: number;
+  serverNow: number;
+  /* V1010247_FART_ULTIMATE_BALANCE */
 };
 export type NetworkHiderReaction = {
   hunterId: string; hiderId: string; x: number; y: number;
