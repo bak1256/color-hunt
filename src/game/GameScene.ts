@@ -29549,6 +29549,17 @@ export class GameScene extends Phaser.Scene {
 
                     this.releaseMobilePaintPointer();
                     this.stopMobileNativeEyedropperDrag();
+
+                    /*
+                     * V101023830B_EYEDROPPER_PINCH_CLEANUP
+                     * After a native mobile eyedropper gesture finishes, clear
+                     * stale touch/pinch ownership so the NEXT two real fingers
+                     * can immediately become a fresh camera pinch.
+                     */
+                    this.mobileTouchPoints.clear();
+                    this.mobilePinchDistance = 0;
+                    this.mobilePinchActive = false;
+                    this.eyedropperPointerId = -1;
                 };
 
             window.addEventListener(
