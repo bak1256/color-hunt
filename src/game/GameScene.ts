@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010270_PRACTICE_GAS_COOLDOWN_HARDFIX: replace Practice GAS update loop with unconditional cooling. */
     /* V1010269_PRACTICE_LOCAL_HUNTER_GAS_DISPLAY_FIX: Practice Hunter counts as local; poop HUD shows live GAS. */
     /* V1010268_PRACTICE_GAS_COMBO_FIX: Practice GAS cools during poop and passes detected combo flag. */
     /* V1010267_REMOVE_RECENT_DETECTION_TIME: v266 uses server detected flag; timestamp removed. */
@@ -11669,17 +11670,28 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
-        const now = Date.now();
+        const now =
+            Date.now();
+
         const pooped =
-            this.localPoopUntil > now;
+            this.localPoopUntil >
+            now;
 
         /*
-         * V1010268_PRACTICE_GAS_COMBO_FIX: GAS is pressure, so it keeps cooling even while the Hunter
-         * is suffering the poop movement debuff.
+         * V1010270_PRACTICE_GAS_COOLDOWN_HARDFIX
+         *
+         * GAS is pressure, not remaining fuel.
+         * It MUST cool every Hunt frame, including during the poop debuff.
+         *
+         * 0.75/sec:
+         * 100 -> ~89.5 during a 14 sec poop penalty.
          */
-        const nextGauge =
+        const previousGauge =
+            this.fartGauge;
+
+        this.fartGauge =
             Phaser.Math.Clamp(
-                this.fartGauge -
+                previousGauge -
                     this.practiceFartRecoverPerSecond *
                         (
                             delta /
@@ -11689,47 +11701,48 @@ export class GameScene extends Phaser.Scene {
                 100,
             );
 
+        /*
+         * Update often enough that the bar visibly moves instead of appearing
+         * frozen at MAX.
+         */
         if (
             Math.abs(
-                nextGauge -
-                this.fartGauge,
-            ) >= 0.02
+                this.fartGauge -
+                    previousGauge,
+            ) >
+                0.0001
         ) {
-            this.fartGauge =
-                nextGauge;
             this.updateFartHud();
         }
 
+        /*
+         * No farting while suffering the accident.
+         */
         if (
+            !pooped &&
             Phaser.Input.Keyboard.JustDown(
                 this.fartKey,
-            ) &&
-            !pooped
+            )
         ) {
             this.useHunterPracticeFart();
         }
 
+        /*
+         * Penalty expired. GAS has already been cooling the whole time;
+         * only clear the movement-debuff state here.
+         */
         if (
-            this.localPoopUntil >
-                now
-        ) {
-            /*
-             * V1010259_SIMPLIFY_POOP_HUD_FOCUS: poop now means only a movement penalty.
-             * No Hider laugh counter-detection while slowed.
-             */
-        } else if (
+            !pooped &&
             this.localPoopUntil >
                 0
         ) {
-            this.localPoopUntil = 0;
+            this.localPoopUntil =
+                0;
+
             this.poopedHuntersUntil.delete(
                 this.practiceHunterSessionId,
             );
 
-            /*
-             * GAS has already been cooling during the penalty, so expose the
-             * current reduced percentage immediately when the debuff ends.
-             */
             this.updateFartHud();
         }
     }
