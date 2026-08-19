@@ -16296,31 +16296,101 @@ export class GameScene extends Phaser.Scene {
         const currentLanguage =
             getLanguage();
 
+        /*
+         * v0.10.10.238.13 LANGUAGE FLAG SVG
+         *
+         * Windows/Chrome can render regional-indicator emoji as plain
+         * "KR / JP / US / CN" text instead of color flags, depending on the
+         * installed emoji font. Use tiny inline SVG flags so the lobby always
+         * looks identical on PC, Fold and mobile.
+         */
+        const languageFlagSvg = (
+            code: GameLanguage,
+        ): string => {
+            if (code === 'ko') {
+                return `
+                    <svg class="ch-language-flag" viewBox="0 0 24 16" aria-hidden="true">
+                        <rect width="24" height="16" rx="1.5" fill="#fff"/>
+                        <path d="M12 4a4 4 0 0 1 0 8a2 2 0 0 0 0-4a2 2 0 0 1 0-4z" fill="#d94b55"/>
+                        <path d="M12 12a4 4 0 0 1 0-8a2 2 0 0 0 0 4a2 2 0 0 1 0 4z" fill="#3568b8"/>
+                        <g stroke="#202020" stroke-width=".75">
+                            <path d="M3 3l3 2M3.7 2l3 2M17.3 12l3 2M18 11l3 2"/>
+                            <path d="M18 3l3-2M17.3 4l3-2M3.7 14l3-2M3 13l3-2"/>
+                        </g>
+                    </svg>
+                `;
+            }
+
+            if (code === 'ja') {
+                return `
+                    <svg class="ch-language-flag" viewBox="0 0 24 16" aria-hidden="true">
+                        <rect width="24" height="16" rx="1.5" fill="#fff"/>
+                        <circle cx="12" cy="8" r="4" fill="#d83a45"/>
+                    </svg>
+                `;
+            }
+
+            if (code === 'en') {
+                return `
+                    <svg class="ch-language-flag" viewBox="0 0 24 16" aria-hidden="true">
+                        <rect width="24" height="16" rx="1.5" fill="#fff"/>
+                        <g fill="#c83d4b">
+                            <rect y="0" width="24" height="2"/>
+                            <rect y="4" width="24" height="2"/>
+                            <rect y="8" width="24" height="2"/>
+                            <rect y="12" width="24" height="2"/>
+                        </g>
+                        <rect width="10.5" height="8.5" fill="#3b5790"/>
+                        <g fill="#fff">
+                            <circle cx="2" cy="2" r=".55"/><circle cx="5" cy="2" r=".55"/><circle cx="8" cy="2" r=".55"/>
+                            <circle cx="3.5" cy="4.3" r=".55"/><circle cx="6.5" cy="4.3" r=".55"/><circle cx="9" cy="4.3" r=".55"/>
+                            <circle cx="2" cy="6.6" r=".55"/><circle cx="5" cy="6.6" r=".55"/><circle cx="8" cy="6.6" r=".55"/>
+                        </g>
+                    </svg>
+                `;
+            }
+
+            return `
+                <svg class="ch-language-flag" viewBox="0 0 24 16" aria-hidden="true">
+                    <rect width="24" height="16" rx="1.5" fill="#de3b3b"/>
+                    <polygon points="4,2 4.8,4.2 7.2,4.2 5.25,5.6 6,7.9 4,6.55 2,7.9 2.75,5.6 .8,4.2 3.2,4.2" fill="#ffd74a"/>
+                    <circle cx="8.5" cy="2.8" r=".65" fill="#ffd74a"/>
+                    <circle cx="10.2" cy="4.5" r=".65" fill="#ffd74a"/>
+                    <circle cx="10.1" cy="6.7" r=".65" fill="#ffd74a"/>
+                    <circle cx="8.4" cy="8" r=".65" fill="#ffd74a"/>
+                </svg>
+            `;
+        };
+
         const languages:
             Array<{
                 code: GameLanguage;
                 label: string;
-                flag: string;
+                flagMarkup: string;
             }> = [
                 {
                     code: 'ko',
                     label: '한국어',
-                    flag: '🇰🇷',
+                    flagMarkup:
+                        languageFlagSvg('ko'),
                 },
                 {
                     code: 'ja',
                     label: '日本語',
-                    flag: '🇯🇵',
+                    flagMarkup:
+                        languageFlagSvg('ja'),
                 },
                 {
                     code: 'en',
                     label: 'English',
-                    flag: '🇺🇸',
+                    flagMarkup:
+                        languageFlagSvg('en'),
                 },
                 {
                     code: 'zh',
                     label: '中文',
-                    flag: '🇨🇳',
+                    flagMarkup:
+                        languageFlagSvg('zh'),
                 },
             ];
 
@@ -16438,7 +16508,7 @@ export class GameScene extends Phaser.Scene {
                                         : ''
                                 }"
                             >
-                                <span>${language.flag}</span>
+                                <span class="ch-language-flag-wrap">${language.flagMarkup}</span>
                                 ${language.label}
                             </button>
                         `,

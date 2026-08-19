@@ -7368,3 +7368,55 @@ html.colorhunt-mobile .colorhunt-practice-desktop-hint {
     gap: 4px !important;
   }
 }
+
+
+/* V101023813_LANGUAGE_FLAG_SVG */
+/*
+ * Real inline flag SVGs instead of OS-dependent emoji.
+ * Fixes Windows Chrome showing KR / JP / US / CN letters or blank glyphs.
+ */
+.ch-lobby-language .ch-language-flag-wrap {
+  display: inline-flex !important;
+  width: 20px;
+  height: 14px;
+  margin-right: 6px !important;
+  vertical-align: middle;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+.ch-lobby-language .ch-language-flag {
+  display: block;
+  width: 20px;
+  height: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(47, 73, 55, .22);
+  border-radius: 2px;
+  box-sizing: border-box;
+  background: #fff;
+}
+
+.ch-lobby-language button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ch-lobby-language button.is-active .ch-language-flag {
+  border-color: rgba(255,255,255,.7);
+  box-shadow: 0 0 0 1px rgba(42,87,52,.14);
+}
+
+@media (max-width: 760px) {
+  .ch-lobby-language .ch-language-flag-wrap {
+    width: 16px;
+    height: 11px;
+    margin-right: 4px !important;
+  }
+
+  .ch-lobby-language .ch-language-flag {
+    width: 16px;
+    height: 11px;
+  }
+}
