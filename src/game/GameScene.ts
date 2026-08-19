@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010250_RECOVER_FART_SOUND_HUD_CHAT: recovered v249 sound/HUD/chat polish after partial patch. */
     /* V1010244_FART_RADIUS_REFERENCE_FIX: server owns fart detection radius; client no longer stores it. */
     /* V1010243_FART_UNUSED_RADIUS_FIX: removed unused client-only fartRadius; server owns detection radius. */
     private readonly gameWidth = 960;
@@ -6112,10 +6113,15 @@ export class GameScene extends Phaser.Scene {
          */
         const logicalTop =
             this.phase === 'hunt'
-                ? 92
+                ? 154
                 : this.phase === 'paint'
                     ? 10
                     : 8;
+
+        /*
+         * V1010251_CHATROOT_HUNT_OFFSET_FIX: Hunt chat is DOM-based (chatRoot). 154 logical px clears
+         * weapon/HEAT + GAS instead of overlapping the new fart gauge.
+         */
 
         const maxChatHeight =
             coarsePointer &&
@@ -33444,7 +33450,7 @@ export class GameScene extends Phaser.Scene {
             '💨 GAS',
             {
                 fontFamily: 'monospace',
-                fontSize: '13px',
+                fontSize: '12px',
                 fontStyle: 'bold',
                 color: '#17211c',
                 stroke: '#ffffff',
@@ -33458,14 +33464,14 @@ export class GameScene extends Phaser.Scene {
          */
         const fartBg = this.add.rectangle(
             110,
-            18,
-            230,
-            42,
+            17,
+            220,
+            36,
             0xfff8e8,
-            0.985,
+            0.975,
         )
             .setOrigin(0.5)
-            .setStrokeStyle(3, 0xffffff, 1);
+            .setStrokeStyle(2, 0xffffff, 1);
         this.fartHudContainer = this.add.container(18, 94, [
             fartBg, this.fartGaugeGraphics, this.fartGaugeLabel,
         ]).setDepth(25000).setScrollFactor(0).setVisible(false);
@@ -33597,6 +33603,8 @@ export class GameScene extends Phaser.Scene {
             (this.hunterWeaponHudContainer?.y ?? 18) + 72,
         );
         this.fartHudContainer.setVisible(Boolean(visible));
+
+
         this.fartGaugeGraphics.clear();
 
         const pct =
@@ -33608,9 +33616,9 @@ export class GameScene extends Phaser.Scene {
 
         /* Exact HEAT geometry. */
         const barX = 42;
-        const barY = 22;
-        const barWidth = 174;
-        const barHeight = 18;
+        const barY = 19;
+        const barWidth = 168;
+        const barHeight = 12;
 
         this.fartGaugeGraphics
             .fillStyle(
@@ -33749,76 +33757,377 @@ export class GameScene extends Phaser.Scene {
 
         if (kind === 'fart') {
             /*
-             * Realer "pffrrrt": low noisy airflow + fluttering low oscillator.
-             * Higher tier gets longer/rougher rather than simply higher-pitched.
+             * V1010250_RECOVER_FART_SOUND_HUD_CHAT: 3 GAS tiers x 3 randomized fart patterns.
+             * Less static, more rounded comic "ppoong / ppuuung / ppureureuk".
              */
-            const duration =
-                tier >= 3
-                    ? 0.78
-                    : tier === 2
-                        ? 0.58
-                        : 0.40;
+            const variant =
+                Math.floor(
+                    Math.random() * 3,
+                );
 
-            makeNoise(
-                duration,
-                tier >= 3 ? 0.48 : 0.40,
-                210 + tier * 18,
-            );
+            const playToneBurst = (
+                startAt: number,
+                duration: number,
+                startFreq: number,
+                endFreq: number,
+                gainValue: number,
+                wave:
+                    OscillatorType =
+                    'sine',
+                flutterHz = 0,
+            ): void => {
+                const osc =
+                    ctx.createOscillator();
+                const g =
+                    ctx.createGain();
 
-            const osc =
-                ctx.createOscillator();
-            const oscGain =
-                ctx.createGain();
+                osc.type = wave;
+                osc.frequency.setValueAtTime(
+                    startFreq,
+                    startAt,
+                );
+                osc.frequency.exponentialRampToValueAtTime(
+                    Math.max(
+                        20,
+                        endFreq,
+                    ),
+                    startAt + duration,
+                );
 
-            osc.type = 'sawtooth';
-            osc.frequency.setValueAtTime(
-                74 + tier * 5,
-                now,
-            );
-            osc.frequency.exponentialRampToValueAtTime(
-                42,
-                now + duration,
-            );
+                g.gain.setValueAtTime(
+                    0.0001,
+                    startAt,
+                );
+                g.gain.exponentialRampToValueAtTime(
+                    gainValue,
+                    startAt + 0.018,
+                );
+                g.gain.exponentialRampToValueAtTime(
+                    0.0001,
+                    startAt + duration,
+                );
 
-            /*
-             * Fast gain wobble makes a "prrrt" texture instead of one clean
-             * synth note.
-             */
-            const lfo =
-                ctx.createOscillator();
-            const lfoGain =
-                ctx.createGain();
-            lfo.frequency.value =
-                tier >= 3 ? 23 : 18;
-            lfoGain.gain.value = 0.17;
+                if (flutterHz > 0) {
+                    const lfo =
+                        ctx.createOscillator();
+                    const lfoGain =
+                        ctx.createGain();
 
-            oscGain.gain.setValueAtTime(
-                0.23,
-                now,
-            );
-            oscGain.gain.exponentialRampToValueAtTime(
-                0.0001,
-                now + duration,
-            );
+                    lfo.frequency.value =
+                        flutterHz;
+                    lfoGain.gain.value =
+                        gainValue * 0.28;
 
-            lfo.connect(lfoGain);
-            lfoGain.connect(oscGain.gain);
-            osc.connect(oscGain);
-            oscGain.connect(ctx.destination);
+                    lfo.connect(
+                        lfoGain,
+                    );
+                    lfoGain.connect(
+                        g.gain,
+                    );
 
-            osc.start(now);
-            lfo.start(now);
-            osc.stop(now + duration);
-            lfo.stop(now + duration);
+                    lfo.start(
+                        startAt,
+                    );
+                    lfo.stop(
+                        startAt + duration,
+                    );
+                }
 
-            if (tier >= 3) {
-                makeNoise(
-                    0.20,
-                    0.24,
-                    130,
-                    now + 0.46,
+                osc.connect(
+                    g,
+                );
+                g.connect(
+                    ctx.destination,
+                );
+
+                osc.start(
+                    startAt,
+                );
+                osc.stop(
+                    startAt + duration,
+                );
+            };
+
+            const addBreath = (
+                startAt: number,
+                duration: number,
+                amount = 0.035,
+            ): void => {
+                const length =
+                    Math.max(
+                        1,
+                        Math.floor(
+                            ctx.sampleRate *
+                                duration,
+                        ),
+                    );
+
+                const buffer =
+                    ctx.createBuffer(
+                        1,
+                        length,
+                        ctx.sampleRate,
+                    );
+
+                const data =
+                    buffer.getChannelData(
+                        0,
+                    );
+
+                for (
+                    let i = 0;
+                    i < length;
+                    i++
+                ) {
+                    const t =
+                        i / length;
+                    const env =
+                        Math.sin(
+                            Math.PI * t,
+                        );
+
+                    data[i] =
+                        (
+                            Math.random() *
+                                2 -
+                            1
+                        ) *
+                        env *
+                        0.08;
+                }
+
+                const src =
+                    ctx.createBufferSource();
+                src.buffer =
+                    buffer;
+
+                const filter =
+                    ctx.createBiquadFilter();
+                filter.type =
+                    'lowpass';
+                filter.frequency.value =
+                    240;
+
+                const g =
+                    ctx.createGain();
+                g.gain.setValueAtTime(
+                    amount,
+                    startAt,
+                );
+                g.gain.exponentialRampToValueAtTime(
+                    0.0001,
+                    startAt + duration,
+                );
+
+                src.connect(
+                    filter,
+                );
+                filter.connect(
+                    g,
+                );
+                g.connect(
+                    ctx.destination,
+                );
+                src.start(
+                    startAt,
+                );
+            };
+
+            if (tier <= 1) {
+                if (variant === 0) {
+                    /* 뽀옹~ */
+                    playToneBurst(
+                        now,
+                        0.48,
+                        112,
+                        68,
+                        0.33,
+                        'sine',
+                        8,
+                    );
+                    addBreath(
+                        now,
+                        0.42,
+                        0.025,
+                    );
+                } else if (
+                    variant === 1
+                ) {
+                    /* 뿌웅~ */
+                    playToneBurst(
+                        now,
+                        0.42,
+                        96,
+                        56,
+                        0.35,
+                        'triangle',
+                        12,
+                    );
+                    addBreath(
+                        now,
+                        0.36,
+                        0.027,
+                    );
+                } else {
+                    /* 뿌욱 */
+                    playToneBurst(
+                        now,
+                        0.24,
+                        90,
+                        50,
+                        0.38,
+                        'triangle',
+                        16,
+                    );
+                }
+
+                return;
+            }
+
+            if (tier === 2) {
+                if (variant === 0) {
+                    /* 뿌오오옹 */
+                    playToneBurst(
+                        now,
+                        0.80,
+                        106,
+                        50,
+                        0.40,
+                        'sine',
+                        10,
+                    );
+                    playToneBurst(
+                        now + 0.24,
+                        0.50,
+                        84,
+                        46,
+                        0.14,
+                        'triangle',
+                        15,
+                    );
+                    addBreath(
+                        now,
+                        0.72,
+                        0.030,
+                    );
+                } else if (
+                    variant === 1
+                ) {
+                    /* 뿌우웅우 */
+                    playToneBurst(
+                        now,
+                        0.60,
+                        94,
+                        54,
+                        0.41,
+                        'triangle',
+                        13,
+                    );
+                    playToneBurst(
+                        now + 0.46,
+                        0.28,
+                        72,
+                        50,
+                        0.21,
+                        'sine',
+                        10,
+                    );
+                } else {
+                    /* 뿌우우욱 */
+                    playToneBurst(
+                        now,
+                        0.68,
+                        90,
+                        42,
+                        0.43,
+                        'triangle',
+                        17,
+                    );
+                    addBreath(
+                        now,
+                        0.58,
+                        0.032,
+                    );
+                }
+
+                return;
+            }
+
+            if (variant === 0) {
+                /* 뿌드득 */
+                [
+                    0,
+                    0.11,
+                    0.22,
+                ].forEach(
+                    (
+                        offset,
+                        index,
+                    ) => {
+                        playToneBurst(
+                            now +
+                                offset,
+                            0.15,
+                            86 -
+                                index *
+                                    5,
+                            46,
+                            0.34,
+                            'sawtooth',
+                            22,
+                        );
+                    },
+                );
+            } else if (
+                variant === 1
+            ) {
+                /* 뿌르륵 */
+                playToneBurst(
+                    now,
+                    0.64,
+                    82,
+                    40,
+                    0.42,
+                    'sawtooth',
+                    26,
+                );
+                addBreath(
+                    now,
+                    0.56,
+                    0.035,
+                );
+            } else {
+                /* 뿌부부붇 */
+                [
+                    0,
+                    0.09,
+                    0.18,
+                    0.27,
+                ].forEach(
+                    (
+                        offset,
+                        index,
+                    ) => {
+                        playToneBurst(
+                            now +
+                                offset,
+                            0.13,
+                            84 -
+                                index *
+                                    4,
+                            44,
+                            0.33,
+                            index %
+                                2 ===
+                                0
+                                ? 'triangle'
+                                : 'sawtooth',
+                            24,
+                        );
+                    },
                 );
             }
+
             return;
         }
 
