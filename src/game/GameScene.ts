@@ -31169,19 +31169,145 @@ export class GameScene extends Phaser.Scene {
         return null;
     }
 
+    /*
+     * V101023834_EYEDROPPER_VISIBLE_COLOR
+     * Return the color that is actually VISIBLE under the pipette tip.
+     *
+     * Drag-in painting intentionally records stroke points outside the Hider,
+     * while the RenderTexture is clipped by the Hider silhouette mask.
+     * Looking only at paint history therefore made the eyedropper report a
+     * hidden paint color while the user was visibly pointing at background.
+     *
+     * The same silhouette test also lets an unpainted Hider pixel return its
+     * visible base color instead of incorrectly falling through to background.
+     */
+    private isWorldPointInsideLocalHiderSilhouette(
+        worldX: number,
+        worldY: number,
+    ): boolean {
+        if (
+            !this.networkPlayerManager
+                ?.isLocalHider?.()
+        ) {
+            return false;
+        }
+
+        const container =
+            this.networkPlayerManager
+                .getLocalPlayerContainer();
+
+        if (!container) {
+            return false;
+        }
+
+        const scaleX =
+            container.scaleX || 1;
+        const scaleY =
+            container.scaleY || 1;
+
+        const x =
+            (
+                worldX -
+                container.x
+            ) /
+                scaleX +
+            40;
+
+        const y =
+            (
+                worldY -
+                container.y
+            ) /
+                scaleY +
+            60;
+
+        /*
+         * Multiplayer Hider paint texture uses an 80x120 local surface.
+         * Its visible body is the same SD silhouette used by painting:
+         * head, torso, two arms and two legs.
+         *
+         * Half-pixel rectangle edges intentionally mirror the body geometry
+         * instead of rounding first; this keeps narrow leg/edge sampling stable.
+         */
+        const cx = 40;
+        const cy = 60;
+
+        const dxHead = x - cx;
+        const dyHead = y - (cy - 22);
+
+        const inHead =
+            dxHead * dxHead +
+                dyHead * dyHead <=
+            13 * 13;
+
+        const inBody =
+            x >= cx - 10.5 &&
+            x <= cx + 10.5 &&
+            y >= cy - 10.5 &&
+            y <= cy + 12.5;
+
+        const inLeftArm =
+            x >= cx - 17.5 &&
+            x <= cx - 10.5 &&
+            y >= cy - 8 &&
+            y <= cy + 10;
+
+        const inRightArm =
+            x >= cx + 10.5 &&
+            x <= cx + 17.5 &&
+            y >= cy - 8 &&
+            y <= cy + 10;
+
+        const inLeftLeg =
+            x >= cx - 10 &&
+            x <= cx - 2 &&
+            y >= cy + 12 &&
+            y <= cy + 27;
+
+        const inRightLeg =
+            x >= cx + 2 &&
+            x <= cx + 10 &&
+            y >= cy + 12 &&
+            y <= cy + 27;
+
+        return (
+            inHead ||
+            inBody ||
+            inLeftArm ||
+            inRightArm ||
+            inLeftLeg ||
+            inRightLeg
+        );
+    }
+
     private getEyedropperColorAtWorld(
         worldX: number,
         worldY: number,
     ): number | null {
-        return (
-            this.sampleOwnPaintHistoryColorAtWorld(
+        const insideLocalHider =
+            this.isWorldPointInsideLocalHiderSilhouette(
                 worldX,
                 worldY,
-            ) ??
-            this.sampleBackgroundColorAtWorld(
-                worldX,
-                worldY,
-            )
+            );
+
+        if (insideLocalHider) {
+            return (
+                this.sampleOwnPaintHistoryColorAtWorld(
+                    worldX,
+                    worldY,
+                ) ??
+                0xf5eee2
+            );
+        }
+
+        /*
+         * Never expose paint-history colors outside the silhouette.
+         * Those points can legitimately exist after outside -> inside drag,
+         * but the body mask clips them and the player actually sees background.
+         */
+        return this.sampleBackgroundColorAtWorld(
+            worldX,
+            worldY,
         );
     }
 
