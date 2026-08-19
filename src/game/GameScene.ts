@@ -9295,6 +9295,8 @@ export class GameScene extends Phaser.Scene {
             number;
         precision:
             number;
+        map?:
+            string;
         at:
             number;
     }> {
@@ -9320,6 +9322,8 @@ export class GameScene extends Phaser.Scene {
                             number;
                         precision:
                             number;
+                        map?:
+                            string;
                         at:
                             number;
                     }>
@@ -9401,6 +9405,8 @@ export class GameScene extends Phaser.Scene {
                                 number;
                             precision:
                                 number;
+                            map?:
+                                string;
                             at:
                                 number;
                         }>
@@ -9428,6 +9434,9 @@ export class GameScene extends Phaser.Scene {
                     this.practiceBotCount,
                 precision:
                     this.practiceBotPrecision,
+                /* V101023814_RANKING_MAP */
+                map:
+                    this.practiceMap,
                 at:
                     Date.now(),
             });
@@ -10121,8 +10130,15 @@ export class GameScene extends Phaser.Scene {
                                 'div',
                             );
 
+                        const rankingMap =
+                            record.map
+                                ? this.getMapDisplayName(
+                                    record.map,
+                                )
+                                : tr('맵 미상');
+
                         row.innerHTML =
-                            `<b>${index + 1}</b><span>${this.formatPracticeTime(record.elapsedMs)}</span><small>${record.botCount} BOT · ${record.precision}%</small>`;
+                            `<b>${index + 1}</b><span>${this.formatPracticeTime(record.elapsedMs)}</span><small>🗺️ ${rankingMap} · ${record.botCount} BOT · ${record.precision}%</small>`;
 
                         rankingRoot.appendChild(
                             row,
@@ -34569,7 +34585,7 @@ ${shareUrl}`,
                             record,
                             index,
                         ) =>
-                            `<div class="colorhunt-practice-result-rank"><b>${index + 1}</b><span>${this.formatPracticeTime(record.elapsedMs)}</span><small>${record.botCount} BOT · ${record.precision}%</small></div>`,
+                            `<div class="colorhunt-practice-result-rank"><b>${index + 1}</b><span>${this.formatPracticeTime(record.elapsedMs)}</span><small>🗺️ ${record.map ? this.getMapDisplayName(record.map) : tr('맵 미상')} · ${record.botCount} BOT · ${record.precision}%</small></div>`,
                     )
                     .join('')
                 : `<div class="colorhunt-practice-result-empty">${tr('아직 기록이 없습니다.')}</div>`;
@@ -34601,6 +34617,7 @@ ${shareUrl}`,
             </p>
 
             <div class="colorhunt-practice-result-meta">
+                <span>🗺️ ${this.getMapDisplayName(this.practiceMap)}</span>
                 <span>${this.practiceHuntDuration}s</span>
                 <span>${this.practiceBotCount} BOT</span>
                 <span>${tr('위장 난이도')} ${this.practiceBotPrecision}%</span>
