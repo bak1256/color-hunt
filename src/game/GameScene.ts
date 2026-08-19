@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010298_UNIFIED_BGM_MOBILE_WAITING_LOBBY_POLISH: unified BGM, full mobile waiting room, visible room status, lock icons. */
     /* V1010297_CONTROLS_HELP_TOGGLE_FIX: controls help toggle listens to the pointerdown event forwarded by every UI. */
     /* V1010296_REMOVE_INVALID_COUNTDOWN_RECOVERY_CHECK: countdown is already excluded by TypeScript narrowing at zero-time recovery. */
     /* V1010295_CLIENT_UI_PHASE_RECOVERY: cough text removed, help toggle, all-phase zero timer recovery. */
@@ -291,6 +292,14 @@ export class GameScene extends Phaser.Scene {
     private bgmEnabled =
         localStorage.getItem('chameleon-hunt-bgm-enabled') !== 'false';
     private bgmToggleButton!: Phaser.GameObjects.Text;
+
+    /*
+     * V1010298_UNIFIED_BGM_MOBILE_WAITING_LOBBY_POLISH: legacy Phaser BGM chip stays hidden for compatibility only.
+     * All visible BGM controls use the same DOM visual language.
+     */
+    private unifiedBgmButton?: HTMLButtonElement;
+    private unifiedUiStyle?: HTMLStyleElement;
+
     private lastPaintSoundAt = 0;
 
     /* V1010252_AUDIO_FART_HUD_FINAL_POLISH: suppress queued/background SFX around tab visibility changes. */
@@ -19043,8 +19052,9 @@ export class GameScene extends Phaser.Scene {
         this.mainLobbyRoomList =
             undefined;
 
-        this.bgmToggleButton
-            ?.setVisible(true);
+        this.setUnifiedBgmButtonVisible(
+            true,
+        );
     }
 
     private updateMainLobbyDomPosition(): void {
@@ -19395,7 +19405,7 @@ export class GameScene extends Phaser.Scene {
                     </div>
 
                     <button type="button" class="ch-lobby-action ch-lobby-action--public">
-                        <span class="ch-lobby-action-icon">＋</span>
+                        <span class="ch-lobby-action-icon" aria-hidden="true">🔓</span>
                         <span>
                             <strong>${tr('공개방 만들기')}</strong>
                             <small>${tr('누구나 참여할 수 있는 방을 만들어요')}</small>
@@ -19403,7 +19413,7 @@ export class GameScene extends Phaser.Scene {
                     </button>
 
                     <button type="button" class="ch-lobby-action ch-lobby-action--private">
-                        <span class="ch-lobby-action-icon">▣</span>
+                        <span class="ch-lobby-action-icon" aria-hidden="true">🔒</span>
                         <span>
                             <strong>${tr('비공개방 만들기')}</strong>
                             <small>${tr('비밀번호를 설정해 방을 만들어요')}</small>
@@ -19411,7 +19421,7 @@ export class GameScene extends Phaser.Scene {
                     </button>
 
                     <button type="button" class="ch-lobby-action ch-lobby-action--join">
-                        <span class="ch-lobby-action-icon">♟</span>
+                        <span class="ch-lobby-action-icon" aria-hidden="true">🔒</span>
                         <span>
                             <strong>${tr('비공개방 참가')}</strong>
                             <small>${tr('초대코드를 입력해 방에 참여해요')}</small>
@@ -19473,8 +19483,9 @@ export class GameScene extends Phaser.Scene {
          * Hide the old floating Phaser chip here so there is only one BGM
          * control and the visual language stays consistent.
          */
-        this.bgmToggleButton
-            ?.setVisible(false);
+        this.setUnifiedBgmButtonVisible(
+            false,
+        );
 
         this.mainLobbyRoomList =
             root.querySelector(
@@ -19781,8 +19792,9 @@ export class GameScene extends Phaser.Scene {
         this.waitingRoomPaintButtons = [];
         this.waitingRoomHuntButtons = [];
 
-        this.bgmToggleButton
-            ?.setVisible(true);
+        this.setUnifiedBgmButtonVisible(
+            true,
+        );
     }
 
     private updateWaitingRoomDomPosition(): void {
@@ -19836,8 +19848,13 @@ export class GameScene extends Phaser.Scene {
          * merely because the phone model changed.
          */
         if (touch) {
-            const designWidth = 300;
-            const designHeight = 460;
+            /*
+             * V1010298_UNIFIED_BGM_MOBILE_WAITING_LOBBY_POLISH: taller/wider mobile authoring canvas.
+             * Inner CSS is enlarged, while uniform scaling still protects
+             * unusual foldables and aspect ratios.
+             */
+            const designWidth = 400;
+            const designHeight = 540;
 
             const availableWidth =
                 Math.max(
@@ -19861,8 +19878,8 @@ export class GameScene extends Phaser.Scene {
                         rect.width *
                             (
                                 landscapeCanvas
-                                    ? 0.31
-                                    : 0.36
+                                    ? 0.48
+                                    : 0.94
                             ),
                     ),
                 );
@@ -19873,8 +19890,8 @@ export class GameScene extends Phaser.Scene {
                     rect.height *
                         (
                             landscapeCanvas
-                                ? 0.92
-                                : 0.78
+                                ? 0.96
+                                : 0.96
                         ),
                 );
 
@@ -20405,8 +20422,9 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
-        this.bgmToggleButton
-            ?.setVisible(false);
+        this.setUnifiedBgmButtonVisible(
+            false,
+        );
 
         const inlineBgm =
             this.waitingRoomRoot
@@ -20660,8 +20678,9 @@ export class GameScene extends Phaser.Scene {
             true,
         );
 
-        this.bgmToggleButton
-            ?.setVisible(true);
+        this.setUnifiedBgmButtonVisible(
+            true,
+        );
 
         this.destroyWaitingRoomDom();
         this.refreshDomTranslations();
@@ -20995,7 +21014,7 @@ export class GameScene extends Phaser.Scene {
                                     ? 'is-open'
                                     : 'is-playing'
                             }">
-                                <i></i>
+                                <i aria-hidden="true">●</i>
                                 ${
                                     available
                                         ? trPhase(
@@ -24419,47 +24438,326 @@ export class GameScene extends Phaser.Scene {
     }
 
     private createBgmToggleButton(): void {
-        this.bgmToggleButton = this.add
-            .text(
-                this.gameWidth - 12,
-                10,
+        /*
+         * V1010298_UNIFIED_BGM_MOBILE_WAITING_LOBBY_POLISH
+         * Keep the old Phaser text object only because older code paths still
+         * synchronize its label. It is NEVER visible or interactive.
+         */
+        this.bgmToggleButton =
+            this.add.text(
+                -9999,
+                -9999,
                 this.bgmEnabled
                     ? tr('♫ BGM ON')
                     : tr('♫ BGM OFF'),
                 {
-                    fontFamily: 'monospace',
-                    fontSize: '11px',
-                    fontStyle: 'bold',
-                    color: '#ffffff',
-                    backgroundColor: '#284f3ee8',
-                    padding: { x: 8, y: 5 },
+                    fontFamily:
+                        'monospace',
+                    fontSize:
+                        '1px',
+                    color:
+                        '#ffffff',
                 },
             )
-            .setOrigin(1, 0)
-            .setScrollFactor(0)
-            .setDepth(5000)
-            .setInteractive({ useHandCursor: true });
+                .setVisible(false)
+                .setScrollFactor(0)
+                .setDepth(-1000);
 
-        this.bgmToggleButton.on(
-            'pointerdown',
+        const installStyle =
+            (): void => {
+                if (
+                    this.unifiedUiStyle ||
+                    typeof document ===
+                        'undefined'
+                ) {
+                    return;
+                }
+
+                const style =
+                    document.createElement(
+                        'style',
+                    );
+
+                style.dataset
+                    .colorhuntUnifiedUi =
+                    'V1010298_UNIFIED_BGM_MOBILE_WAITING_LOBBY_POLISH';
+
+                style.textContent = `
+                    .ch-unified-bgm,
+                    .ch-lobby-inline-bgm,
+                    .ch-waiting-bgm-inline {
+                        appearance: none !important;
+                        border: 2px solid rgba(126, 169, 139, .92) !important;
+                        border-radius: 11px !important;
+                        background: linear-gradient(180deg, #315f4c, #254a3c) !important;
+                        color: #fff !important;
+                        box-shadow: 0 2px 7px rgba(0,0,0,.22) !important;
+                        font-weight: 900 !important;
+                        letter-spacing: .02em !important;
+                        white-space: nowrap !important;
+                        touch-action: manipulation !important;
+                        user-select: none !important;
+                    }
+
+                    .ch-unified-bgm {
+                        position: fixed;
+                        top: max(8px, env(safe-area-inset-top));
+                        right: max(10px, env(safe-area-inset-right));
+                        z-index: 30050;
+                        min-height: 36px;
+                        padding: 7px 11px;
+                        font-size: 12px;
+                        line-height: 1;
+                    }
+
+                    /*
+                     * Mobile waiting room: use almost all available height,
+                     * enlarge useful content and throw away decorative gaps.
+                     */
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-shell {
+                        box-sizing: border-box !important;
+                        height: 100% !important;
+                        padding: 10px 11px !important;
+                        gap: 7px !important;
+                        overflow: hidden !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-header {
+                        min-height: 48px !important;
+                        gap: 7px !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-header-copy strong {
+                        font-size: 21px !important;
+                        line-height: 1.08 !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-kicker,
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale small {
+                        font-size: 12px !important;
+                        line-height: 1.15 !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-header-actions {
+                        gap: 5px !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-header-actions button {
+                        min-height: 38px !important;
+                        padding: 6px 9px !important;
+                        font-size: 12px !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-info {
+                        min-height: 54px !important;
+                        padding: 7px 8px !important;
+                        font-size: 14px !important;
+                        line-height: 1.2 !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-info strong {
+                        font-size: 16px !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-map {
+                        min-height: 55px !important;
+                        padding: 5px 7px !important;
+                        gap: 7px !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-map button {
+                        width: 44px !important;
+                        min-width: 44px !important;
+                        height: 42px !important;
+                        font-size: 20px !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-map-text {
+                        font-size: 17px !important;
+                        font-weight: 900 !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-role-wrap {
+                        padding: 5px 0 !important;
+                        gap: 5px !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-role {
+                        gap: 6px !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-role button {
+                        min-height: 43px !important;
+                        padding: 7px 9px !important;
+                        font-size: 14px !important;
+                        line-height: 1.1 !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-role-status {
+                        min-height: 20px !important;
+                        font-size: 12px !important;
+                        line-height: 1.15 !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-timing {
+                        gap: 7px !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-timing section {
+                        padding: 7px !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-timing-title {
+                        margin-bottom: 5px !important;
+                        font-size: 13px !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-time-options {
+                        gap: 5px !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-time-options button {
+                        min-height: 38px !important;
+                        padding: 5px 4px !important;
+                        font-size: 14px !important;
+                        font-weight: 900 !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-start {
+                        min-height: 48px !important;
+                        padding: 8px 10px !important;
+                        font-size: 17px !important;
+                        font-weight: 900 !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-footer {
+                        gap: 6px !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-footer button {
+                        min-height: 40px !important;
+                        padding: 6px 7px !important;
+                        font-size: 12px !important;
+                        line-height: 1.1 !important;
+                    }
+
+                    /*
+                     * Room status dot must remain visible on tiny mobile rows.
+                     */
+                    .ch-lobby-room-status > i {
+                        display: inline-block !important;
+                        flex: 0 0 auto !important;
+                        width: auto !important;
+                        height: auto !important;
+                        margin-right: 5px !important;
+                        font-style: normal !important;
+                        font-size: 11px !important;
+                        line-height: 1 !important;
+                        opacity: 1 !important;
+                        visibility: visible !important;
+                    }
+
+                    .ch-lobby-room-status.is-open > i {
+                        color: #35c878 !important;
+                    }
+
+                    .ch-lobby-room-status.is-playing > i {
+                        color: #ff8a66 !important;
+                    }
+
+                    @media (pointer: coarse), (max-width: 760px) {
+                        .ch-lobby-room-status {
+                            display: inline-flex !important;
+                            align-items: center !important;
+                            justify-content: flex-start !important;
+                            min-width: 0 !important;
+                            font-size: clamp(10px, 2.8vw, 13px) !important;
+                            white-space: nowrap !important;
+                        }
+
+                        .ch-lobby-room-status > i {
+                            font-size: 10px !important;
+                            margin-right: 3px !important;
+                        }
+
+                        .ch-lobby-action-icon {
+                            font-size: clamp(22px, 6vw, 30px) !important;
+                            line-height: 1 !important;
+                        }
+                    }
+                `;
+
+                document.head.appendChild(
+                    style,
+                );
+
+                this.unifiedUiStyle =
+                    style;
+            };
+
+        installStyle();
+
+        const button =
+            document.createElement(
+                'button',
+            );
+
+        button.type =
+            'button';
+        button.className =
+            'ch-unified-bgm';
+
+        const refresh =
+            (): void => {
+                button.textContent =
+                    this.bgmEnabled
+                        ? tr('♫ BGM ON')
+                        : tr('♫ BGM OFF');
+            };
+
+        refresh();
+
+        button.addEventListener(
+            'click',
             (
-                _pointer: Phaser.Input.Pointer,
-                _localX: number,
-                _localY: number,
-                event: Phaser.Types.Input.EventData,
+                event,
             ) => {
-                /*
-                 * BGM 버튼 클릭이 월드 POINTER_DOWN까지 전달되어
-                 * Hider 첫 클릭이 사격/페인트로 처리되지 않게 막습니다.
-                 */
+                event.preventDefault();
                 event.stopPropagation();
 
-                this.audioUnlocked = true;
-                this.bgmEnabled = !this.bgmEnabled;
+                this.audioUnlocked =
+                    true;
+                this.bgmEnabled =
+                    !this.bgmEnabled;
 
                 localStorage.setItem(
                     'chameleon-hunt-bgm-enabled',
-                    String(this.bgmEnabled),
+                    String(
+                        this.bgmEnabled,
+                    ),
                 );
 
                 const label =
@@ -24467,9 +24765,20 @@ export class GameScene extends Phaser.Scene {
                         ? tr('♫ BGM ON')
                         : tr('♫ BGM OFF');
 
-                this.bgmToggleButton.setText(
-                    label,
-                );
+                this.bgmToggleButton
+                    .setText(
+                        label,
+                    );
+
+                this.mainLobbyRoot
+                    ?.querySelector<
+                        HTMLButtonElement
+                    >(
+                        '.ch-lobby-inline-bgm',
+                    )
+                    ?.replaceChildren(
+                        label,
+                    );
 
                 this.waitingRoomRoot
                     ?.querySelector<
@@ -24481,9 +24790,62 @@ export class GameScene extends Phaser.Scene {
                         label,
                     );
 
+                refresh();
                 this.syncPhaseMusic();
             },
         );
+
+        document.body.appendChild(
+            button,
+        );
+
+        this.unifiedBgmButton =
+            button;
+
+        this.events.once(
+            Phaser.Scenes.Events.SHUTDOWN,
+            () => {
+                this.unifiedBgmButton
+                    ?.remove();
+
+                this.unifiedBgmButton =
+                    undefined;
+
+                this.unifiedUiStyle
+                    ?.remove();
+
+                this.unifiedUiStyle =
+                    undefined;
+            },
+        );
+    }
+
+    private setUnifiedBgmButtonVisible(
+        visible: boolean,
+    ): void {
+        if (
+            !this.unifiedBgmButton
+        ) {
+            return;
+        }
+
+        this.unifiedBgmButton.style
+            .display =
+            visible
+                ? ''
+                : 'none';
+
+        this.unifiedBgmButton
+            .textContent =
+            this.bgmEnabled
+                ? tr('♫ BGM ON')
+                : tr('♫ BGM OFF');
+
+        /*
+         * Legacy Phaser chip can never return visually.
+         */
+        this.bgmToggleButton
+            ?.setVisible(false);
     }
 
     private stopAllBgm(): void {
