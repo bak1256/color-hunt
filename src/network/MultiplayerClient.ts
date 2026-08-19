@@ -90,6 +90,28 @@ export type WeaponStateHandler = (
   state: NetworkWeaponState,
 ) => void;
 
+/* V1010242_HUNTER_FART_SKILL */
+export type NetworkFartState = {
+  gauge: number;
+  poopUntil: number;
+  serverNow: number;
+  radius: number;
+};
+export type NetworkFartBurst = {
+  hunterId: string; x: number; y: number; radius: number; soundTier: number;
+};
+export type NetworkPoopBurst = {
+  hunterId: string; x: number; y: number; poopUntil: number; serverNow: number;
+};
+export type NetworkHiderReaction = {
+  hunterId: string; hiderId: string; x: number; y: number;
+};
+export type FartStateHandler = (state: NetworkFartState) => void;
+export type FartBurstHandler = (event: NetworkFartBurst) => void;
+export type PoopBurstHandler = (event: NetworkPoopBurst) => void;
+export type HiderReactionHandler = (event: NetworkHiderReaction) => void;
+export type FartDetectedHandler = (reaction: 'cough' | 'laugh') => void;
+
 export type ResetRoundHandler =
   () => void;
 
@@ -398,6 +420,13 @@ this.phaseChangedHandlers.forEach(
 
   private readonly weaponStateHandlers =
     new Set<WeaponStateHandler>();
+
+  private readonly fartStateHandlers = new Set<FartStateHandler>();
+  private readonly fartBurstHandlers = new Set<FartBurstHandler>();
+  private readonly poopBurstHandlers = new Set<PoopBurstHandler>();
+  private readonly hiderCoughHandlers = new Set<HiderReactionHandler>();
+  private readonly hiderLaughHandlers = new Set<HiderReactionHandler>();
+  private readonly fartDetectedHandlers = new Set<FartDetectedHandler>();
 
   private readonly resetRoundHandlers =
     new Set<ResetRoundHandler>();
@@ -2619,6 +2648,26 @@ this.manualReconnectInFlight = false;
       },
     );
 
+    room.onMessage<NetworkFartState>('fart_state', (state) => {
+      this.fartStateHandlers.forEach((handler) => handler(state));
+    });
+    room.onMessage<NetworkFartBurst>('fart_burst', (event) => {
+      this.fartBurstHandlers.forEach((handler) => handler(event));
+    });
+    room.onMessage<NetworkPoopBurst>('poop_burst', (event) => {
+      this.poopBurstHandlers.forEach((handler) => handler(event));
+    });
+    room.onMessage<NetworkHiderReaction>('hider_cough', (event) => {
+      this.hiderCoughHandlers.forEach((handler) => handler(event));
+    });
+    room.onMessage<NetworkHiderReaction>('hider_laugh', (event) => {
+      this.hiderLaughHandlers.forEach((handler) => handler(event));
+    });
+    room.onMessage<{ reaction?: 'cough' | 'laugh' }>('fart_detected', (event) => {
+      const reaction = event?.reaction === 'laugh' ? 'laugh' : 'cough';
+      this.fartDetectedHandlers.forEach((handler) => handler(reaction));
+    });
+
 
     room.onMessage<
       NetworkRoundResult
@@ -2908,6 +2957,10 @@ this.manualReconnectInFlight = false;
         angle,
       },
     );
+  }
+
+  sendFart(): void {
+    this.room?.send('fart_use', { pressedAt: Date.now() });
   }
 
   sendMapSelection(
@@ -3448,6 +3501,31 @@ this.manualReconnectInFlight = false;
     };
   }
 
+
+  onFartState(handler: FartStateHandler): () => void {
+    this.fartStateHandlers.add(handler);
+    return () => this.fartStateHandlers.delete(handler);
+  }
+  onFartBurst(handler: FartBurstHandler): () => void {
+    this.fartBurstHandlers.add(handler);
+    return () => this.fartBurstHandlers.delete(handler);
+  }
+  onPoopBurst(handler: PoopBurstHandler): () => void {
+    this.poopBurstHandlers.add(handler);
+    return () => this.poopBurstHandlers.delete(handler);
+  }
+  onHiderCough(handler: HiderReactionHandler): () => void {
+    this.hiderCoughHandlers.add(handler);
+    return () => this.hiderCoughHandlers.delete(handler);
+  }
+  onHiderLaugh(handler: HiderReactionHandler): () => void {
+    this.hiderLaughHandlers.add(handler);
+    return () => this.hiderLaughHandlers.delete(handler);
+  }
+  onFartDetected(handler: FartDetectedHandler): () => void {
+    this.fartDetectedHandlers.add(handler);
+    return () => this.fartDetectedHandlers.delete(handler);
+  }
 
   onRoundResult(
     handler: RoundResultHandler,

@@ -9,6 +9,10 @@ import {
     type NetworkShotFired,
     type NetworkHunterAim,
     type NetworkWeaponState,
+    type NetworkFartState,
+    type NetworkFartBurst,
+    type NetworkPoopBurst,
+    type NetworkHiderReaction,
     type NetworkRoundResult,
     type NetworkChatMessage,
     type PublicRoomInfo,
@@ -75,6 +79,8 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010244_FART_RADIUS_REFERENCE_FIX: server owns fart detection radius; client no longer stores it. */
+    /* V1010243_FART_UNUSED_RADIUS_FIX: removed unused client-only fartRadius; server owns detection radius. */
     private readonly gameWidth = 960;
     private readonly gameHeight = 540;
 
@@ -274,6 +280,17 @@ export class GameScene extends Phaser.Scene {
     private hunterHeatGraphics!: Phaser.GameObjects.Graphics;
     private hunterHeatLabel!: Phaser.GameObjects.Text;
     private hunterOverheatLabel!: Phaser.GameObjects.Text;
+
+    /* V1010242_HUNTER_FART_SKILL: comedy detector HUD/effects. */
+    private fartHudContainer!: Phaser.GameObjects.Container;
+    private fartGaugeGraphics!: Phaser.GameObjects.Graphics;
+    private fartGaugeLabel!: Phaser.GameObjects.Text;
+    private fartGauge = 100;
+    private localPoopUntil = 0;
+    private poopedHuntersUntil = new Map<string, number>();
+    private lastPoopTrailAt = new Map<string, number>();
+    private lastPoopTearAt = new Map<string, number>();
+    private comedyAudioContext?: AudioContext;
 
     private targetText!: Phaser.GameObjects.Text;
 
@@ -8289,6 +8306,44 @@ export class GameScene extends Phaser.Scene {
 
 
         this.networkUnsubscribers.push(
+            multiplayerClient.onFartState((state: NetworkFartState) => {
+                this.fartGauge = Phaser.Math.Clamp(state.gauge, 0, 100);
+                const localNow = Date.now();
+                this.localPoopUntil = state.poopUntil > state.serverNow
+                    ? localNow + (state.poopUntil - state.serverNow) : 0;
+                this.networkPlayerManager?.setLocalHunterSpeedMultiplier(
+                    this.localPoopUntil > localNow ? 0.5 : 1,
+                );
+                this.updateFartHud();
+            }),
+        );
+        this.networkUnsubscribers.push(
+            multiplayerClient.onFartBurst((event: NetworkFartBurst) => {
+                this.showFartBurst(event);
+            }),
+        );
+        this.networkUnsubscribers.push(
+            multiplayerClient.onPoopBurst((event: NetworkPoopBurst) => {
+                this.showPoopBurst(event);
+            }),
+        );
+        this.networkUnsubscribers.push(
+            multiplayerClient.onHiderCough((event: NetworkHiderReaction) => {
+                this.showHiderReaction(event, 'cough');
+            }),
+        );
+        this.networkUnsubscribers.push(
+            multiplayerClient.onHiderLaugh((event: NetworkHiderReaction) => {
+                this.showHiderReaction(event, 'laugh');
+            }),
+        );
+        this.networkUnsubscribers.push(
+            multiplayerClient.onFartDetected((reaction) => {
+                this.showHunterDetectionAlert(reaction);
+            }),
+        );
+
+        this.networkUnsubscribers.push(
             multiplayerClient.onRoundResult(
                 (
                     result: NetworkRoundResult,
@@ -8344,6 +8399,11 @@ export class GameScene extends Phaser.Scene {
                     this.weaponOverheatedUntil = 0;
                     this.hunterReserve = 12;
                     this.hunterMaxReserve = 12;
+                    this.fartGauge = 100;
+                    this.localPoopUntil = 0;
+                    this.poopedHuntersUntil.clear();
+                    this.networkPlayerManager.setLocalHunterSpeedMultiplier(1);
+                    this.updateFartHud();
                     this.clearStatus();
                 },
             ),
@@ -14372,6 +14432,16 @@ export class GameScene extends Phaser.Scene {
                 -1,
                 1,
             );
+
+        if (
+            this.phase === 'hunt' &&
+            this.networkPlayerManager.isLocalHunter() &&
+            Phaser.Input.Keyboard.JustDown(this.shiftPaintKey)
+        ) {
+            multiplayerClient.sendFart();
+        }
+
+        this.updatePoopComedyEffects();
 
         this.networkPlayerManager.moveLocalPlayer(
             directionX,
@@ -33040,6 +33110,18 @@ export class GameScene extends Phaser.Scene {
                 .setScrollFactor(0)
                 .setVisible(false);
 
+        this.fartGaugeGraphics = this.add.graphics();
+        this.fartGaugeLabel = this.add.text(8, 8, '💨 GAS', {
+            fontFamily: 'monospace', fontSize: '12px', fontStyle: 'bold',
+            color: '#26352b', stroke: '#ffffff', strokeThickness: 3,
+        });
+        const fartBg = this.add.rectangle(110, 18, 230, 42, 0xfff8e8, 0.985)
+            .setOrigin(0.5).setStrokeStyle(3, 0xffffff, 1);
+        this.fartHudContainer = this.add.container(18, 88, [
+            fartBg, this.fartGaugeGraphics, this.fartGaugeLabel,
+        ]).setDepth(25000).setScrollFactor(0).setVisible(false);
+        this.updateFartHud();
+
         this.targetText = this.add
             .text(
                 this.gameWidth - 20,
@@ -33144,6 +33226,126 @@ export class GameScene extends Phaser.Scene {
         this.ammoText.setColor(
             '#26352b',
         );
+    }
+
+
+    /* V1010242_HUNTER_FART_SKILL */
+    private updateFartHud(): void {
+        if (!this.fartHudContainer || !this.fartGaugeGraphics || !this.fartGaugeLabel) return;
+        const visible = this.phase === 'hunt' && this.networkPlayerManager?.isLocalHunter();
+        this.fartHudContainer.setVisible(Boolean(visible));
+        this.fartGaugeGraphics.clear();
+        const pct = Phaser.Math.Clamp(this.fartGauge / 100, 0, 1);
+        this.fartGaugeGraphics.fillStyle(0xd7e8b0, 1).fillRoundedRect(8, 23, 204, 10, 5);
+        this.fartGaugeGraphics.fillStyle(0x7fa95b, 1).fillRoundedRect(8, 23, 204 * pct, 10, 5);
+        this.fartGaugeGraphics.lineStyle(2, 0x40523a, 1).strokeRoundedRect(8, 23, 204, 10, 5);
+        const pooped = this.localPoopUntil > Date.now();
+        this.fartGaugeLabel.setText(pooped ? '💩 ...50% SPEED' : '💨 GAS ' + Math.round(this.fartGauge) + '%  [SHIFT]');
+    }
+
+    private getComedyAudioContext(): AudioContext | undefined {
+        try {
+            if (!this.comedyAudioContext) this.comedyAudioContext = new AudioContext();
+            if (this.comedyAudioContext.state === 'suspended') void this.comedyAudioContext.resume();
+            return this.comedyAudioContext;
+        } catch { return undefined; }
+    }
+
+    private playComedySound(kind: 'fart' | 'boing' | 'cough' | 'laugh' | 'cry', tier = 2): void {
+        const ctx = this.getComedyAudioContext();
+        if (!ctx) return;
+        const now = ctx.currentTime;
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(0.22, now + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + (kind === 'laugh' ? 0.72 : 0.42));
+        gain.connect(ctx.destination);
+        if (kind === 'fart') {
+            const buffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.55), ctx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.exp(-i / data.length * 4);
+            const src = ctx.createBufferSource(); src.buffer = buffer;
+            const filter = ctx.createBiquadFilter(); filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(120 + tier * 35, now);
+            filter.frequency.exponentialRampToValueAtTime(55, now + 0.5);
+            src.connect(filter); filter.connect(gain); src.start(now);
+            const osc = ctx.createOscillator(); osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(70 + tier * 18, now); osc.frequency.exponentialRampToValueAtTime(38, now + 0.45);
+            osc.connect(gain); osc.start(now); osc.stop(now + 0.48); return;
+        }
+        const notes = kind === 'boing' ? [220, 620] : kind === 'cough' ? [130, 90] : kind === 'laugh' ? [360, 520, 390, 560] : [420, 330, 250];
+        notes.forEach((freq, i) => {
+            const osc = ctx.createOscillator(); const g = ctx.createGain();
+            osc.type = kind === 'laugh' ? 'square' : 'triangle'; osc.frequency.value = freq;
+            const t = now + i * (kind === 'laugh' ? 0.14 : 0.09);
+            g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(kind === 'laugh' ? 0.09 : 0.12, t + 0.015); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.13);
+            osc.connect(g); g.connect(ctx.destination); osc.start(t); osc.stop(t + 0.14);
+        });
+    }
+
+    private showFartBurst(event: NetworkFartBurst): void {
+        this.playComedySound('fart', event.soundTier);
+        const g = this.add.graphics().setDepth(18000);
+        g.lineStyle(5, 0x9bc56b, 0.8).strokeCircle(0, 0, event.radius);
+        g.fillStyle(0xb7d87e, 0.12).fillCircle(0, 0, event.radius);
+        g.setPosition(event.x, event.y).setScale(0.15).setAlpha(0.9);
+        this.tweens.add({ targets: g, scaleX: 1, scaleY: 1, alpha: 0, duration: 850, ease: 'Cubic.Out', onComplete: () => g.destroy() });
+        for (let i = 0; i < 12; i++) {
+            const a = Math.PI * 2 * i / 12 + Math.random() * 0.3;
+            const puff = this.add.circle(event.x, event.y, 5 + Math.random() * 5, 0xa9cf73, 0.5).setDepth(17999);
+            this.tweens.add({ targets: puff, x: event.x + Math.cos(a) * event.radius, y: event.y + Math.sin(a) * event.radius, alpha: 0, scale: 1.8, duration: 700 + Math.random() * 250, onComplete: () => puff.destroy() });
+        }
+    }
+
+    private showHunterDetectionAlert(reaction: 'cough' | 'laugh'): void {
+        this.playComedySound('boing');
+        const p = this.networkPlayerManager?.getLocalPlayerPosition(); if (!p) return;
+        const text = this.add.text(p.x, p.y - 58, reaction === 'laugh' ? '‼️' : '❗', { fontSize: '38px', fontStyle: 'bold', stroke: '#ffffff', strokeThickness: 7 }).setOrigin(0.5).setDepth(22000).setScale(0.2);
+        this.tweens.add({ targets: text, scale: 1.35, y: p.y - 82, duration: 180, yoyo: true, hold: 220, ease: 'Back.Out', onComplete: () => text.destroy() });
+    }
+
+    private showHiderReaction(event: NetworkHiderReaction, kind: 'cough' | 'laugh'): void {
+        this.playComedySound(kind);
+        const labels = kind === 'laugh' ? { ko: 'ㅋㅋㅋㅋㅋㅋ!', ja: 'ギャハハハ!!', en: 'HAHAHAHA!!', zh: '哈哈哈哈!!' } : { ko: '콜록!!', ja: 'ゴホッ!!', en: 'COUGH!!', zh: '咳咳!!' };
+        const t = this.add.text(event.x, event.y - 48, labels[getLanguage()], { fontFamily: 'monospace', fontSize: kind === 'laugh' ? '20px' : '18px', fontStyle: 'bold', color: '#fff6cf', stroke: '#442f24', strokeThickness: 5 }).setOrigin(0.5).setDepth(21000).setScale(0.4);
+        this.tweens.add({ targets: t, y: event.y - 78, scale: 1.15, angle: kind === 'laugh' ? { from: -8, to: 8 } : 0, alpha: 0, duration: kind === 'laugh' ? 950 : 700, ease: 'Back.Out', onComplete: () => t.destroy() });
+    }
+
+    private showPoopBurst(event: NetworkPoopBurst): void {
+        const localUntil = Date.now() + Math.max(0, event.poopUntil - event.serverNow);
+        this.poopedHuntersUntil.set(event.hunterId, localUntil);
+        if (event.hunterId === multiplayerClient.getSessionId()) {
+            this.localPoopUntil = localUntil;
+            this.networkPlayerManager?.setLocalHunterSpeedMultiplier(0.5);
+        }
+        this.playComedySound('cry');
+        const labels = { ko: '💩 똥 지렸다!!', ja: '💩 も…漏らした!!', en: '💩 I POOPED MYSELF!!', zh: '💩 拉裤子了!!' };
+        const t = this.add.text(event.x, event.y - 70, labels[getLanguage()], { fontFamily: 'monospace', fontSize: '22px', fontStyle: 'bold', color: '#fff6cf', stroke: '#5a3421', strokeThickness: 6 }).setOrigin(0.5).setDepth(23000).setScale(0.25);
+        this.tweens.add({ targets: t, scale: 1.15, y: event.y - 100, duration: 260, ease: 'Back.Out', yoyo: true, hold: 900, onComplete: () => t.destroy() });
+        this.updateFartHud();
+    }
+
+    private updatePoopComedyEffects(): void {
+        const now = Date.now();
+        this.poopedHuntersUntil.forEach((until, hunterId) => {
+            if (until <= now) {
+                this.poopedHuntersUntil.delete(hunterId); this.lastPoopTrailAt.delete(hunterId); this.lastPoopTearAt.delete(hunterId);
+                if (hunterId === multiplayerClient.getSessionId()) { this.localPoopUntil = 0; this.networkPlayerManager?.setLocalHunterSpeedMultiplier(1); this.updateFartHud(); }
+                return;
+            }
+            const p = this.networkPlayerManager?.getPlayerPosition(hunterId); if (!p) return;
+            const lastTrail = this.lastPoopTrailAt.get(hunterId) ?? 0;
+            if (now - lastTrail > 230) {
+                this.lastPoopTrailAt.set(hunterId, now);
+                const footprint = this.add.ellipse(p.x, p.y + 15, 10, 6, 0x8b5a2b, 0.5).setDepth(120);
+                this.tweens.add({ targets: footprint, alpha: 0, scale: 0.6, duration: 1600, onComplete: () => footprint.destroy() });
+            }
+            const lastTear = this.lastPoopTearAt.get(hunterId) ?? 0;
+            if (now - lastTear > 340) {
+                this.lastPoopTearAt.set(hunterId, now);
+                [-1, 1].forEach((side) => { const tear = this.add.circle(p.x + side * 8, p.y - 18, 3, 0x6ec8ff, 0.9).setDepth(22001); this.tweens.add({ targets: tear, x: tear.x + side * 10, y: tear.y + 24, alpha: 0, duration: 520, onComplete: () => tear.destroy() }); });
+            }
+        });
     }
 
     private updateTargetText(): void {

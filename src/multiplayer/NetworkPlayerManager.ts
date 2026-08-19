@@ -93,6 +93,8 @@ export class NetworkPlayerManager {
 
   private readonly hiderMoveSpeed = 180;
   private readonly hunterMoveSpeed = 125;
+  /* V1010242_HUNTER_FART_SKILL: poop debuff. */
+  private localHunterSpeedMultiplier = 1;
   private readonly sendInterval = 16;
   private lastSendTime = 0;
   private recentSentPositions:
@@ -1419,7 +1421,9 @@ export class NetworkPlayerManager {
           );
 
     const distance =
-      speed * (delta / 1000);
+      speed *
+      (view.role === 'hunter' ? this.localHunterSpeedMultiplier : 1) *
+      (delta / 1000);
 
     const maxMovementX =
       roomPhase === "lobby"
@@ -1826,6 +1830,14 @@ export class NetworkPlayerManager {
         "hunter" &&
       multiplayerClient.getLocalPlayer()
         ?.role === "hunter"
+    );
+  }
+
+  setLocalHunterSpeedMultiplier(multiplier: number): void {
+    this.localHunterSpeedMultiplier = Phaser.Math.Clamp(
+      Number.isFinite(multiplier) ? multiplier : 1,
+      0.1,
+      1,
     );
   }
 
