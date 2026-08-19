@@ -350,20 +350,25 @@ export class GameScene extends Phaser.Scene {
             );
 
         if (role === 'hider') {
-            this.localPaintReady =
+            /*
+             * v0.10.10.240 READY INTENT LOCK:
+             * Capture the user's tap as an immutable intent. During reconnect,
+             * a delayed authoritative snapshot from the OLD session can briefly
+             * report ready=false and overwrite this.localPaintReady. If retries
+             * read the mutable UI flag, they accidentally send false and cancel
+             * the READY tap. Every retry for this tap must send the captured value.
+             */
+            const desiredReady =
                 !this.localPaintReady;
+
+            this.localPaintReady =
+                desiredReady;
 
             multiplayerClient
                 .sendPaintReady(
-                    this.localPaintReady,
+                    desiredReady,
                 );
 
-            /*
-             * v0.10.10.239 MOBILE READY INTENT:
-             * If the user taps READY while a recovered transport/session is
-             * still converging, repeat the idempotent intent. The server is
-             * authoritative and the latest boolean wins.
-             */
             [120, 360, 800, 1600, 3200].forEach(
                 (delay) => {
                     this.time.delayedCall(
@@ -374,7 +379,7 @@ export class GameScene extends Phaser.Scene {
                             }
 
                             multiplayerClient.sendPaintReady(
-                                this.localPaintReady,
+                                desiredReady,
                             );
                             multiplayerClient.requestPaintReadyState();
                         },
@@ -8735,10 +8740,25 @@ export class GameScene extends Phaser.Scene {
 
                                     this.networkPlayerManager
                                         .syncPlayersFromCurrentRoom();
-                                    this.networkPlayerManager
-                                        .restoreAllPlayerVisibility();
-                                    this.networkPlayerManager
-                                        .normalizeLocalPlayerForGameplay();
+
+                                    /*
+                                     * v0.10.10.240 PAINT VISUAL RECOVERY:
+                                     * normalizeLocalPlayerForGameplay() is a Hunt
+                                     * normalizer. Calling it repeatedly during Paint
+                                     * clears customization mode / paint zoom and can
+                                     * make the reconnecting Hunter body disappear while
+                                     * the Room itself is healthy. Keep Paint in Paint.
+                                     */
+                                    if (this.phase === 'hunt') {
+                                        this.networkPlayerManager
+                                            .normalizeLocalPlayerForGameplay();
+                                        this.networkPlayerManager
+                                            .restoreAllPlayerVisibility();
+                                    } else if (this.phase === 'paint') {
+                                        this.networkPlayerManager
+                                            .showOnlyLocalPlayer();
+                                        this.centerPaintCameraOnLocalPlayer();
+                                    }
 
                                     multiplayerClient.requestLobbySnapshot();
                                     multiplayerClient.requestPaintReadyState();
@@ -29133,7 +29153,9 @@ export class GameScene extends Phaser.Scene {
         this.clearStraightLinePreview();
     }
 
-    private rebuildLocalPaintFromHistory(): void {
+    private rebuildLocalPaintFromHistory(
+        broadcast = true,
+    ): void {
         const sessionId =
             this.practiceMode ===
                 'hider'
@@ -29193,6 +29215,7 @@ export class GameScene extends Phaser.Scene {
         );
 
         if (
+            broadcast &&
             this.isMultiplayerSession()
         ) {
             multiplayerClient
@@ -29218,6 +29241,7 @@ export class GameScene extends Phaser.Scene {
                 );
 
                 if (
+                    broadcast &&
                     this.isMultiplayerSession()
                 ) {
                     multiplayerClient
