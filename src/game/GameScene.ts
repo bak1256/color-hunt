@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010252_AUDIO_FART_HUD_FINAL_POLISH: audio resume guard + punchier fart bank + unified Hunt HUD. */
     /* V1010250_RECOVER_FART_SOUND_HUD_CHAT: recovered v249 sound/HUD/chat polish after partial patch. */
     /* V1010244_FART_RADIUS_REFERENCE_FIX: server owns fart detection radius; client no longer stores it. */
     /* V1010243_FART_UNUSED_RADIUS_FIX: removed unused client-only fartRadius; server owns detection radius. */
@@ -256,6 +257,12 @@ export class GameScene extends Phaser.Scene {
         localStorage.getItem('chameleon-hunt-bgm-enabled') !== 'false';
     private bgmToggleButton!: Phaser.GameObjects.Text;
     private lastPaintSoundAt = 0;
+
+    /* V1010252_AUDIO_FART_HUD_FINAL_POLISH: suppress queued/background SFX around tab visibility changes. */
+    private suppressEffectsUntil = 0;
+    private audioGuardRestoreTimer?: number;
+    private audioGuardPreviousMute = false;
+    private audioVisibilityHandler?: () => void;
 
     /*
      * Timer
@@ -4808,6 +4815,7 @@ export class GameScene extends Phaser.Scene {
 
 
     create(): void {
+        this.installVisibilityAudioGuard();
         window.addEventListener(
             'colorhunt:viewportchange',
             this.handleMobileViewportChange,
@@ -6039,22 +6047,26 @@ export class GameScene extends Phaser.Scene {
             this.gameHeight;
 
         const panelWidth =
-            Math.max(
-                coarsePointer
-                    ? 190
-                    : 220,
-                Math.min(
+            this.phase === 'hunt' &&
+            !coarsePointer
+                ? 230 *
+                    scaleX
+                : Math.max(
                     coarsePointer
-                        ? 270
-                        : 320,
-                    rect.width *
-                        (
-                            coarsePointer
-                                ? 0.30
-                                : 0.32
-                        ),
-                ),
-            );
+                        ? 190
+                        : 220,
+                    Math.min(
+                        coarsePointer
+                            ? 270
+                            : 320,
+                        rect.width *
+                            (
+                                coarsePointer
+                                    ? 0.30
+                                    : 0.32
+                            ),
+                    ),
+                );
 
         /*
          * v0.10.10.101:
@@ -6113,14 +6125,14 @@ export class GameScene extends Phaser.Scene {
          */
         const logicalTop =
             this.phase === 'hunt'
-                ? 154
+                ? 118
                 : this.phase === 'paint'
                     ? 10
                     : 8;
 
         /*
-         * V1010251_CHATROOT_HUNT_OFFSET_FIX: Hunt chat is DOM-based (chatRoot). 154 logical px clears
-         * weapon/HEAT + GAS instead of overlapping the new fart gauge.
+         * V1010252_AUDIO_FART_HUD_FINAL_POLISH: clean left stack:
+         * Ammo/HEAT (18) -> GAS (91) -> chat (118).
          */
 
         const maxChatHeight =
@@ -6154,7 +6166,12 @@ export class GameScene extends Phaser.Scene {
                 '--chat-canvas-left',
                 `${Math.round(
                     rect.left +
-                    8 * scaleX,
+                    (
+                        this.phase === 'hunt'
+                            ? 18
+                            : 8
+                    ) *
+                        scaleX,
                 )}px`,
             );
 
@@ -22732,6 +22749,7 @@ export class GameScene extends Phaser.Scene {
             this.statusText,
             this.ammoText,
             this.hunterWeaponHudContainer,
+            this.fartHudContainer,
             this.targetText,
             this.paintColorText,
             this.brushSizeText,
@@ -33465,13 +33483,17 @@ export class GameScene extends Phaser.Scene {
         const fartBg = this.add.rectangle(
             110,
             17,
-            220,
+            230,
             36,
             0xfff8e8,
             0.975,
         )
             .setOrigin(0.5)
-            .setStrokeStyle(2, 0xffffff, 1);
+            .setStrokeStyle(
+                2,
+                0xffffff,
+                1,
+            );
         this.fartHudContainer = this.add.container(18, 94, [
             fartBg, this.fartGaugeGraphics, this.fartGaugeLabel,
         ]).setDepth(25000).setScrollFactor(0).setVisible(false);
@@ -33598,9 +33620,13 @@ export class GameScene extends Phaser.Scene {
          * V1010245_FART_HUD_AUDIO_POLISH: GAS HUD follows directly under Ammo/HEAT even when the
          * weapon HUD is moved/rescaled by viewport layout code.
          */
+        /*
+         * V1010252_AUDIO_FART_HUD_FINAL_POLISH: same screen X as weapon HUD, directly underneath it.
+         * fixed-HUD transform code compensates camera zoom for BOTH panels.
+         */
         this.fartHudContainer.setPosition(
-            this.hunterWeaponHudContainer?.x ?? 18,
-            (this.hunterWeaponHudContainer?.y ?? 18) + 72,
+            18,
+            91,
         );
         this.fartHudContainer.setVisible(Boolean(visible));
 
@@ -33680,6 +33706,145 @@ export class GameScene extends Phaser.Scene {
         );
     }
 
+    /* V1010252_AUDIO_FART_HUD_FINAL_POLISH */
+    private installVisibilityAudioGuard(): void {
+        if (
+            typeof document === 'undefined' ||
+            this.audioVisibilityHandler
+        ) {
+            return;
+        }
+
+        this.audioVisibilityHandler =
+            (): void => {
+                if (document.hidden) {
+                    this.audioGuardPreviousMute =
+                        this.sound.mute;
+
+                    this.sound.mute =
+                        true;
+
+                    this.suppressEffectsUntil =
+                        Number.POSITIVE_INFINITY;
+
+                    if (
+                        this.audioGuardRestoreTimer !==
+                        undefined
+                    ) {
+                        window.clearTimeout(
+                            this.audioGuardRestoreTimer,
+                        );
+                        this.audioGuardRestoreTimer =
+                            undefined;
+                    }
+
+                    /*
+                     * Procedural fart/comedy audio bypasses Phaser.Sound,
+                     * so suspend that AudioContext as well.
+                     */
+                    if (
+                        this.comedyAudioContext &&
+                        this.comedyAudioContext.state ===
+                            'running'
+                    ) {
+                        void this.comedyAudioContext
+                            .suspend();
+                    }
+
+                    return;
+                }
+
+                /*
+                 * Let throttled Phaser timers flush SILENTLY first.
+                 * Most stale one-shot effects fire immediately after focus.
+                 */
+                this.suppressEffectsUntil =
+                    Date.now() +
+                    900;
+
+                this.sound.mute =
+                    true;
+
+                if (
+                    this.audioGuardRestoreTimer !==
+                    undefined
+                ) {
+                    window.clearTimeout(
+                        this.audioGuardRestoreTimer,
+                    );
+                }
+
+                this.audioGuardRestoreTimer =
+                    window.setTimeout(
+                        () => {
+                            this.audioGuardRestoreTimer =
+                                undefined;
+
+                            if (
+                                document.hidden
+                            ) {
+                                return;
+                            }
+
+                            this.sound.mute =
+                                this.audioGuardPreviousMute;
+
+                            this.suppressEffectsUntil =
+                                0;
+                        },
+                        900,
+                    );
+            };
+
+        document.addEventListener(
+            'visibilitychange',
+            this.audioVisibilityHandler,
+            {
+                passive:
+                    true,
+            },
+        );
+
+        this.events.once(
+            Phaser.Scenes.Events.SHUTDOWN,
+            () => {
+                if (
+                    this.audioVisibilityHandler
+                ) {
+                    document.removeEventListener(
+                        'visibilitychange',
+                        this.audioVisibilityHandler,
+                    );
+                    this.audioVisibilityHandler =
+                        undefined;
+                }
+
+                if (
+                    this.audioGuardRestoreTimer !==
+                    undefined
+                ) {
+                    window.clearTimeout(
+                        this.audioGuardRestoreTimer,
+                    );
+                    this.audioGuardRestoreTimer =
+                        undefined;
+                }
+            },
+        );
+    }
+
+    private shouldSuppressOneShotAudio(): boolean {
+        return (
+            (
+                typeof document !==
+                    'undefined' &&
+                document.hidden
+            ) ||
+            Date.now() <
+                this.suppressEffectsUntil
+        );
+    }
+
     private getComedyAudioContext(): AudioContext | undefined {
         try {
             if (!this.comedyAudioContext) this.comedyAudioContext = new AudioContext();
@@ -33689,6 +33854,12 @@ export class GameScene extends Phaser.Scene {
     }
 
     private playComedySound(kind: 'fart' | 'boing' | 'cough' | 'laugh' | 'cry', tier = 2): void {
+        if (
+            this.shouldSuppressOneShotAudio()
+        ) {
+            return;
+        }
+
         const ctx = this.getComedyAudioContext();
         if (!ctx) return;
 
@@ -33757,15 +33928,16 @@ export class GameScene extends Phaser.Scene {
 
         if (kind === 'fart') {
             /*
-             * V1010250_RECOVER_FART_SOUND_HUD_CHAT: 3 GAS tiers x 3 randomized fart patterns.
-             * Less static, more rounded comic "ppoong / ppuuung / ppureureuk".
+             * V1010252_AUDIO_FART_HUD_FINAL_POLISH: punchier 3x3 fart bank.
+             * Less sub-bass, stronger 110~260Hz body + short 500~900Hz
+             * "plop/crack" transient so laptop/phone speakers reproduce it.
              */
             const variant =
                 Math.floor(
                     Math.random() * 3,
                 );
 
-            const playToneBurst = (
+            const burst = (
                 startAt: number,
                 duration: number,
                 startFreq: number,
@@ -33773,7 +33945,7 @@ export class GameScene extends Phaser.Scene {
                 gainValue: number,
                 wave:
                     OscillatorType =
-                    'sine',
+                    'triangle',
                 flutterHz = 0,
             ): void => {
                 const osc =
@@ -33781,55 +33953,72 @@ export class GameScene extends Phaser.Scene {
                 const g =
                     ctx.createGain();
 
-                osc.type = wave;
-                osc.frequency.setValueAtTime(
-                    startFreq,
-                    startAt,
-                );
-                osc.frequency.exponentialRampToValueAtTime(
-                    Math.max(
-                        20,
-                        endFreq,
-                    ),
-                    startAt + duration,
-                );
+                osc.type =
+                    wave;
 
-                g.gain.setValueAtTime(
-                    0.0001,
-                    startAt,
-                );
-                g.gain.exponentialRampToValueAtTime(
-                    gainValue,
-                    startAt + 0.018,
-                );
-                g.gain.exponentialRampToValueAtTime(
-                    0.0001,
-                    startAt + duration,
-                );
+                osc.frequency
+                    .setValueAtTime(
+                        startFreq,
+                        startAt,
+                    );
 
-                if (flutterHz > 0) {
+                osc.frequency
+                    .exponentialRampToValueAtTime(
+                        Math.max(
+                            35,
+                            endFreq,
+                        ),
+                        startAt +
+                            duration,
+                    );
+
+                g.gain
+                    .setValueAtTime(
+                        0.0001,
+                        startAt,
+                    );
+
+                g.gain
+                    .exponentialRampToValueAtTime(
+                        gainValue,
+                        startAt +
+                            0.008,
+                    );
+
+                g.gain
+                    .exponentialRampToValueAtTime(
+                        0.0001,
+                        startAt +
+                            duration,
+                    );
+
+                if (
+                    flutterHz >
+                    0
+                ) {
                     const lfo =
                         ctx.createOscillator();
-                    const lfoGain =
+                    const lg =
                         ctx.createGain();
 
                     lfo.frequency.value =
                         flutterHz;
-                    lfoGain.gain.value =
-                        gainValue * 0.28;
+                    lg.gain.value =
+                        gainValue *
+                        0.25;
 
                     lfo.connect(
-                        lfoGain,
+                        lg,
                     );
-                    lfoGain.connect(
+                    lg.connect(
                         g.gain,
                     );
-
                     lfo.start(
                         startAt,
                     );
                     lfo.stop(
-                        startAt + duration,
+                        startAt +
+                            duration,
                     );
                 }
 
@@ -33839,143 +34028,122 @@ export class GameScene extends Phaser.Scene {
                 g.connect(
                     ctx.destination,
                 );
-
                 osc.start(
                     startAt,
                 );
                 osc.stop(
-                    startAt + duration,
+                    startAt +
+                        duration,
                 );
             };
 
-            const addBreath = (
+            const pop = (
                 startAt: number,
-                duration: number,
-                amount = 0.035,
+                freq = 620,
+                gainValue = 0.22,
             ): void => {
-                const length =
-                    Math.max(
-                        1,
-                        Math.floor(
-                            ctx.sampleRate *
-                                duration,
-                        ),
-                    );
-
-                const buffer =
-                    ctx.createBuffer(
-                        1,
-                        length,
-                        ctx.sampleRate,
-                    );
-
-                const data =
-                    buffer.getChannelData(
-                        0,
-                    );
-
-                for (
-                    let i = 0;
-                    i < length;
-                    i++
-                ) {
-                    const t =
-                        i / length;
-                    const env =
-                        Math.sin(
-                            Math.PI * t,
-                        );
-
-                    data[i] =
-                        (
-                            Math.random() *
-                                2 -
-                            1
-                        ) *
-                        env *
-                        0.08;
-                }
-
-                const src =
-                    ctx.createBufferSource();
-                src.buffer =
-                    buffer;
-
-                const filter =
-                    ctx.createBiquadFilter();
-                filter.type =
-                    'lowpass';
-                filter.frequency.value =
-                    240;
-
+                const osc =
+                    ctx.createOscillator();
                 const g =
                     ctx.createGain();
-                g.gain.setValueAtTime(
-                    amount,
-                    startAt,
-                );
-                g.gain.exponentialRampToValueAtTime(
-                    0.0001,
-                    startAt + duration,
-                );
 
-                src.connect(
-                    filter,
-                );
-                filter.connect(
+                osc.type =
+                    'square';
+
+                osc.frequency
+                    .setValueAtTime(
+                        freq,
+                        startAt,
+                    );
+
+                osc.frequency
+                    .exponentialRampToValueAtTime(
+                        Math.max(
+                            130,
+                            freq *
+                                0.35,
+                        ),
+                        startAt +
+                            0.055,
+                    );
+
+                g.gain
+                    .setValueAtTime(
+                        gainValue,
+                        startAt,
+                    );
+
+                g.gain
+                    .exponentialRampToValueAtTime(
+                        0.0001,
+                        startAt +
+                            0.06,
+                    );
+
+                osc.connect(
                     g,
                 );
                 g.connect(
                     ctx.destination,
                 );
-                src.start(
+                osc.start(
                     startAt,
+                );
+                osc.stop(
+                    startAt +
+                        0.065,
                 );
             };
 
             if (tier <= 1) {
                 if (variant === 0) {
                     /* 뽀옹~ */
-                    playToneBurst(
+                    pop(
                         now,
-                        0.48,
-                        112,
-                        68,
-                        0.33,
+                        560,
+                        0.16,
+                    );
+                    burst(
+                        now,
+                        0.38,
+                        165,
+                        88,
+                        0.34,
                         'sine',
                         8,
                     );
-                    addBreath(
-                        now,
-                        0.42,
-                        0.025,
-                    );
                 } else if (
-                    variant === 1
+                    variant ===
+                    1
                 ) {
                     /* 뿌웅~ */
-                    playToneBurst(
+                    pop(
                         now,
-                        0.42,
-                        96,
-                        56,
-                        0.35,
+                        490,
+                        0.17,
+                    );
+                    burst(
+                        now,
+                        0.34,
+                        145,
+                        76,
+                        0.36,
                         'triangle',
                         12,
                     );
-                    addBreath(
-                        now,
-                        0.36,
-                        0.027,
-                    );
                 } else {
-                    /* 뿌욱 */
-                    playToneBurst(
+                    /* 뿌욱! */
+                    pop(
                         now,
-                        0.24,
-                        90,
-                        50,
-                        0.38,
+                        700,
+                        0.21,
+                    );
+                    burst(
+                        now,
+                        0.19,
+                        178,
+                        92,
+                        0.40,
                         'triangle',
                         16,
                     );
@@ -33987,142 +34155,186 @@ export class GameScene extends Phaser.Scene {
             if (tier === 2) {
                 if (variant === 0) {
                     /* 뿌오오옹 */
-                    playToneBurst(
+                    pop(
                         now,
-                        0.80,
-                        106,
-                        50,
-                        0.40,
-                        'sine',
-                        10,
+                        620,
+                        0.20,
                     );
-                    playToneBurst(
-                        now + 0.24,
-                        0.50,
-                        84,
-                        46,
-                        0.14,
-                        'triangle',
-                        15,
-                    );
-                    addBreath(
+                    burst(
                         now,
-                        0.72,
-                        0.030,
-                    );
-                } else if (
-                    variant === 1
-                ) {
-                    /* 뿌우웅우 */
-                    playToneBurst(
-                        now,
-                        0.60,
-                        94,
-                        54,
-                        0.41,
+                        0.62,
+                        176,
+                        82,
+                        0.43,
                         'triangle',
                         13,
                     );
-                    playToneBurst(
-                        now + 0.46,
-                        0.28,
+                    burst(
+                        now +
+                            0.22,
+                        0.32,
+                        138,
                         72,
-                        50,
-                        0.21,
+                        0.18,
                         'sine',
-                        10,
-                    );
-                } else {
-                    /* 뿌우우욱 */
-                    playToneBurst(
-                        now,
-                        0.68,
-                        90,
-                        42,
-                        0.43,
-                        'triangle',
                         17,
                     );
-                    addBreath(
+                } else if (
+                    variant ===
+                    1
+                ) {
+                    /* 뿌우웅우 */
+                    pop(
                         now,
-                        0.58,
-                        0.032,
+                        580,
+                        0.21,
+                    );
+                    burst(
+                        now,
+                        0.48,
+                        164,
+                        80,
+                        0.44,
+                        'triangle',
+                        16,
+                    );
+                    burst(
+                        now +
+                            0.38,
+                        0.22,
+                        142,
+                        86,
+                        0.28,
+                        'sine',
+                        12,
+                    );
+                } else {
+                    /* 뿌우우욱! */
+                    pop(
+                        now,
+                        760,
+                        0.24,
+                    );
+                    burst(
+                        now,
+                        0.52,
+                        170,
+                        72,
+                        0.46,
+                        'triangle',
+                        20,
                     );
                 }
 
                 return;
             }
 
+            /*
+             * Tier 3 is intentionally much more percussive.
+             * Multiple short pops make "뿌드득 / 뿌르륵 / 뿌부부붇"
+             * audible even over Hunt BGM.
+             */
             if (variant === 0) {
-                /* 뿌드득 */
+                /* 뿌-드득!! */
                 [
                     0,
-                    0.11,
-                    0.22,
+                    0.085,
+                    0.17,
                 ].forEach(
                     (
                         offset,
                         index,
                     ) => {
-                        playToneBurst(
+                        pop(
                             now +
                                 offset,
-                            0.15,
-                            86 -
+                            820 -
                                 index *
-                                    5,
-                            46,
-                            0.34,
+                                    110,
+                            0.27,
+                        );
+
+                        burst(
+                            now +
+                                offset,
+                            0.13,
+                            210 -
+                                index *
+                                    12,
+                            96,
+                            0.44,
                             'sawtooth',
-                            22,
+                            27,
                         );
                     },
                 );
             } else if (
-                variant === 1
+                variant ===
+                1
             ) {
-                /* 뿌르륵 */
-                playToneBurst(
+                /* 뿌르르르륵!! */
+                pop(
                     now,
-                    0.64,
-                    82,
-                    40,
-                    0.42,
-                    'sawtooth',
-                    26,
+                    880,
+                    0.29,
                 );
-                addBreath(
+
+                burst(
                     now,
-                    0.56,
-                    0.035,
+                    0.52,
+                    220,
+                    86,
+                    0.52,
+                    'sawtooth',
+                    34,
+                );
+
+                pop(
+                    now +
+                        0.28,
+                    680,
+                    0.21,
                 );
             } else {
-                /* 뿌부부붇 */
+                /* 뿌-부부부붇!! */
                 [
                     0,
-                    0.09,
-                    0.18,
-                    0.27,
+                    0.075,
+                    0.15,
+                    0.225,
+                    0.30,
                 ].forEach(
                     (
                         offset,
                         index,
                     ) => {
-                        playToneBurst(
+                        pop(
                             now +
                                 offset,
-                            0.13,
-                            84 -
+                            900 -
                                 index *
-                                    4,
-                            44,
-                            0.33,
+                                    95,
+                            index ===
+                                4
+                                ? 0.30
+                                : 0.23,
+                        );
+
+                        burst(
+                            now +
+                                offset,
+                            0.105,
+                            224 -
+                                index *
+                                    10,
+                            100,
+                            0.40,
                             index %
                                 2 ===
                                 0
                                 ? 'triangle'
                                 : 'sawtooth',
-                            24,
+                            31,
                         );
                     },
                 );
@@ -34351,6 +34563,95 @@ export class GameScene extends Phaser.Scene {
         this.poopedHuntersUntil.set(event.hunterId, localUntil);
         if (event.hunterId === multiplayerClient.getSessionId()) {
             this.localPoopUntil = localUntil;
+
+            /*
+             * V1010252_AUDIO_FART_HUD_FINAL_POLISH: first-time-friendly explanation of the laugh counter-clue.
+             * Keep the tone deadpan; the situation itself is the joke.
+             */
+            const poopHint =
+                (
+                    {
+                        ko:
+                            '💩 사고 발생! 지금 누가 근처에서 비웃는다면… 축하합니다. 하이더가 바로 근처에 있습니다.',
+                        ja:
+                            '💩 事故発生！この状態で近くから笑い声がしたら…おめでとうございます。ハイダーがすぐ近くです。',
+                        en:
+                            '💩 ACCIDENT! If someone laughs nearby now... congratulations. A Hider is very close.',
+                        zh:
+                            '💩 事故发生！如果这时附近传来笑声……恭喜，Hider就在你旁边。',
+                    } as const
+                )[getLanguage()];
+
+            const hint =
+                this.add.text(
+                    this.gameWidth /
+                        2,
+                    112,
+                    poopHint,
+                    {
+                        fontFamily:
+                            'monospace',
+                        fontSize:
+                            this.mobileControlsEnabled
+                                ? '13px'
+                                : '16px',
+                        fontStyle:
+                            'bold',
+                        color:
+                            '#fff8df',
+                        backgroundColor:
+                            'rgba(69,45,30,0.94)',
+                        stroke:
+                            '#3b2418',
+                        strokeThickness:
+                            3,
+                        align:
+                            'center',
+                        padding: {
+                            x: 14,
+                            y: 9,
+                        },
+                        wordWrap: {
+                            width:
+                                Math.min(
+                                    650,
+                                    this.gameWidth -
+                                        44,
+                                ),
+                        },
+                    },
+                )
+                    .setOrigin(
+                        0.5,
+                        0,
+                    )
+                    .setScrollFactor(
+                        0,
+                    )
+                    .setDepth(
+                        27500,
+                    )
+                    .setAlpha(
+                        0,
+                    );
+
+            this.tweens.add({
+                targets:
+                    hint,
+                alpha:
+                    1,
+                y:
+                    122,
+                duration:
+                    180,
+                hold:
+                    3600,
+                yoyo:
+                    true,
+                onComplete:
+                    () =>
+                        hint.destroy(),
+            });
             this.networkPlayerManager?.setLocalHunterSpeedMultiplier(0.4);
         }
         this.playComedySound('cry');
