@@ -2177,6 +2177,274 @@ export class GameScene extends Phaser.Scene {
          */
         this.input.addPointer(4);
 
+        /*
+         * V101023833B_NATIVE_MOBILE_PINCH_GUARD
+         * Native pinch has absolute priority over brush / eyedropper.
+         */
+        const isInsideGameCanvas =
+            (clientX: number, clientY: number): boolean => {
+                const rect =
+                    this.game.canvas.getBoundingClientRect();
+
+                return (
+                    clientX >= rect.left &&
+                    clientX <= rect.right &&
+                    clientY >= rect.top &&
+                    clientY <= rect.bottom
+                );
+            };
+
+        const getNativePinchDistance =
+            (): number => {
+                const points =
+                    [...this.mobileNativePinchPointers.values()];
+
+                if (points.length < 2) {
+                    return 0;
+                }
+
+                return Phaser.Math.Distance.Between(
+                    points[0].x,
+                    points[0].y,
+                    points[1].x,
+                    points[1].y,
+                );
+            };
+
+        const beginNativePinch =
+            (): void => {
+                if (
+                    this.phase !== 'paint' ||
+                    this.mobileNativePinchPointers.size < 2
+                ) {
+                    return;
+                }
+
+                this.mobileNativePinchActive = true;
+                this.mobilePinchActive = true;
+                this.mobileNativePinchDistance =
+                    getNativePinchDistance();
+                this.mobilePinchDistance = 0;
+
+                this.stopMobileNativeEyedropperDrag();
+                this.releaseMobilePaintPointer();
+                this.cancelMobilePaintHoldTimers();
+
+                if (this.mobilePendingPaintPointerId >= 0) {
+                    this.clearMobilePendingPaint(false);
+                }
+
+                if (this.isPainting) {
+                    this.finishActivePaintStroke();
+                    this.isPainting = false;
+                }
+
+                this.eyedropperPointerId = -1;
+                this.clearStraightLinePreview();
+                this.hideMobilePaintPrecisionGuide();
+                this.paintPreview?.setVisible(false);
+                this.hideEyedropperMagnifier();
+
+                this.mobileNativePinchSuppressClickUntil =
+                    performance.now() + 500;
+            };
+
+        this.mobileNativePinchDownHandler =
+            (event: PointerEvent): void => {
+                if (
+                    !this.mobileControlsEnabled ||
+                    event.pointerType !== 'touch' ||
+                    this.phase !== 'paint' ||
+                    !isInsideGameCanvas(
+                        event.clientX,
+                        event.clientY,
+                    )
+                ) {
+                    return;
+                }
+
+                this.mobileNativePinchPointers.set(
+                    event.pointerId,
+                    new Phaser.Math.Vector2(
+                        event.clientX,
+                        event.clientY,
+                    ),
+                );
+
+                if (
+                    this.mobileNativePinchPointers.size >= 2
+                ) {
+                    if (event.cancelable) {
+                        event.preventDefault();
+                    }
+
+                    beginNativePinch();
+                }
+            };
+
+        this.mobileNativePinchMoveHandler =
+            (event: PointerEvent): void => {
+                if (
+                    event.pointerType !== 'touch' ||
+                    !this.mobileNativePinchPointers.has(
+                        event.pointerId,
+                    )
+                ) {
+                    return;
+                }
+
+                this.mobileNativePinchPointers.set(
+                    event.pointerId,
+                    new Phaser.Math.Vector2(
+                        event.clientX,
+                        event.clientY,
+                    ),
+                );
+
+                if (
+                    !this.mobileNativePinchActive ||
+                    this.mobileNativePinchPointers.size < 2
+                ) {
+                    return;
+                }
+
+                if (event.cancelable) {
+                    event.preventDefault();
+                }
+
+                const distance =
+                    getNativePinchDistance();
+
+                if (
+                    distance <= 0 ||
+                    this.mobileNativePinchDistance <= 0
+                ) {
+                    this.mobileNativePinchDistance =
+                        distance;
+                    return;
+                }
+
+                const delta =
+                    distance -
+                    this.mobileNativePinchDistance;
+
+                if (Math.abs(delta) < 7) {
+                    return;
+                }
+
+                const zoom =
+                    this.adjustPaintWorldZoom(
+                        delta > 0 ? -1 : 1,
+                    );
+
+                this.mobileNativePinchDistance =
+                    distance;
+                this.mobileNativePinchSuppressClickUntil =
+                    performance.now() + 500;
+
+                this.networkPlayerManager
+                    .showOnlyLocalPlayer();
+
+                this.paintZoomText.setText(
+                    [
+                        tr(`ZOOM ${zoom.toFixed(2)}x`),
+                        tr(`BRUSH ${this.brushSize}`),
+                        tr('두 손가락: 확대/축소'),
+                    ].join('\n'),
+                );
+
+                this.updatePaintPreviewImmediately();
+            };
+
+        this.mobileNativePinchEndHandler =
+            (event: PointerEvent): void => {
+                if (event.pointerType !== 'touch') {
+                    return;
+                }
+
+                const belonged =
+                    this.mobileNativePinchPointers.has(
+                        event.pointerId,
+                    );
+
+                this.mobileNativePinchPointers.delete(
+                    event.pointerId,
+                );
+
+                if (
+                    belonged &&
+                    this.mobileNativePinchActive &&
+                    event.cancelable
+                ) {
+                    event.preventDefault();
+                }
+
+                if (
+                    this.mobileNativePinchPointers.size < 2
+                ) {
+                    const wasPinching =
+                        this.mobileNativePinchActive;
+
+                    this.mobileNativePinchActive = false;
+                    this.mobileNativePinchDistance = 0;
+                    this.mobilePinchActive = false;
+                    this.mobilePinchDistance = 0;
+
+                    if (wasPinching) {
+                        this.mobileNativePinchSuppressClickUntil =
+                            performance.now() + 500;
+
+                        if (this.phase === 'paint') {
+                            if (this.eyedropperArmed) {
+                                this.showMobileIdleEyedropperGuide();
+                            } else {
+                                this.showMobileIdleBrushGuide();
+                            }
+                        }
+                    }
+                }
+            };
+
+        this.mobileNativePinchClickGuard =
+            (event: MouseEvent): void => {
+                if (
+                    performance.now() <=
+                        this.mobileNativePinchSuppressClickUntil
+                ) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    event.stopImmediatePropagation();
+                }
+            };
+
+        window.addEventListener(
+            'pointerdown',
+            this.mobileNativePinchDownHandler,
+            { capture: true, passive: false },
+        );
+        window.addEventListener(
+            'pointermove',
+            this.mobileNativePinchMoveHandler,
+            { capture: true, passive: false },
+        );
+        window.addEventListener(
+            'pointerup',
+            this.mobileNativePinchEndHandler,
+            { capture: true, passive: false },
+        );
+        window.addEventListener(
+            'pointercancel',
+            this.mobileNativePinchEndHandler,
+            { capture: true, passive: false },
+        );
+        document.addEventListener(
+            'click',
+            this.mobileNativePinchClickGuard,
+            true,
+        );
+
+        this.game.canvas.style.touchAction = 'none';
+
         this.input.on(
             Phaser.Input.Events.POINTER_DOWN,
             (
@@ -3705,6 +3973,22 @@ export class GameScene extends Phaser.Scene {
         new Map<number, Phaser.Math.Vector2>();
     private mobilePinchDistance = 0;
     private mobilePinchActive = false;
+
+    /*
+     * V101023833B_NATIVE_MOBILE_PINCH_GUARD
+     * Native two-finger pinch owns camera zoom independently from Phaser's
+     * paint/eyedropper pointer bookkeeping.
+     */
+    private mobileNativePinchPointers =
+        new Map<number, Phaser.Math.Vector2>();
+    private mobileNativePinchDistance = 0;
+    private mobileNativePinchActive = false;
+    private mobileNativePinchSuppressClickUntil = 0;
+    private mobileNativePinchDownHandler?: (event: PointerEvent) => void;
+    private mobileNativePinchMoveHandler?: (event: PointerEvent) => void;
+    private mobileNativePinchEndHandler?: (event: PointerEvent) => void;
+    private mobileNativePinchClickGuard?: (event: MouseEvent) => void;
+
     private mobilePendingPaintPointerId = -1;
 
     /*
@@ -4615,6 +4899,42 @@ export class GameScene extends Phaser.Scene {
                 );
 
                 this.stopMobileNativeEyedropperDrag();
+
+                if (this.mobileNativePinchDownHandler) {
+                    window.removeEventListener(
+                        'pointerdown',
+                        this.mobileNativePinchDownHandler,
+                        true,
+                    );
+                }
+                if (this.mobileNativePinchMoveHandler) {
+                    window.removeEventListener(
+                        'pointermove',
+                        this.mobileNativePinchMoveHandler,
+                        true,
+                    );
+                }
+                if (this.mobileNativePinchEndHandler) {
+                    window.removeEventListener(
+                        'pointerup',
+                        this.mobileNativePinchEndHandler,
+                        true,
+                    );
+                    window.removeEventListener(
+                        'pointercancel',
+                        this.mobileNativePinchEndHandler,
+                        true,
+                    );
+                }
+                if (this.mobileNativePinchClickGuard) {
+                    document.removeEventListener(
+                        'click',
+                        this.mobileNativePinchClickGuard,
+                        true,
+                    );
+                }
+
+                this.mobileNativePinchPointers.clear();
 
                 this.destroyChatUi();
                 this.destroyControlsHelpUi();
@@ -27244,6 +27564,13 @@ export class GameScene extends Phaser.Scene {
                 currentlyOver:
                     Phaser.GameObjects.GameObject[],
             ) => {
+                if (
+                    this.mobileControlsEnabled &&
+                    this.mobileNativePinchActive
+                ) {
+                    return;
+                }
+
                 /*
                  * UI presses are not gameplay/background presses.
                  * This is especially important for the eyedropper button:
@@ -27710,6 +28037,13 @@ export class GameScene extends Phaser.Scene {
                     this.paintPreview
                         ?.setVisible(false);
                     this.hideMobilePaintPrecisionGuide();
+                }
+
+                if (
+                    this.mobileControlsEnabled &&
+                    this.mobileNativePinchActive
+                ) {
+                    return;
                 }
 
                 if (
