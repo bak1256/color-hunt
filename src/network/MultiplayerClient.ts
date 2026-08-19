@@ -1204,7 +1204,37 @@ private async attemptFreshRejoin(
         // The old half-open transport may already be dead.
       }
 
-      this.clearConnectionIssue();
+      /* V101023840D_MOBILE_RECONNECT_CONVERGENCE: wait for authoritative replacement session */
+      let authorityAttempts = 0;
+      const finishWhenAuthoritative = (): void => {
+        if (this.room !== room) return;
+
+        const sid = room.sessionId;
+        const ready =
+          Boolean(room.state?.players?.get?.(sid)) ||
+          this.snapshotPlayers.has(sid);
+
+        if (ready) {
+          this.deliveredPhase = "";
+          this.requestLobbySnapshot();
+          this.requestPaintReadyState();
+          this.requestRoundPaintState();
+          this.clearConnectionIssue();
+          return;
+        }
+
+        authorityAttempts += 1;
+        if (authorityAttempts >= 12) return;
+
+        this.deliveredPhase = "";
+        this.requestLobbySnapshot();
+        this.requestPaintReadyState();
+        globalThis.setTimeout(
+          finishWhenAuthoritative,
+          Math.min(700,100+authorityAttempts*70),
+        );
+      };
+      globalThis.setTimeout(finishWhenAuthoritative,60);
     } catch {
       // Keep retrying through the watchdog while network is available.
     } finally {

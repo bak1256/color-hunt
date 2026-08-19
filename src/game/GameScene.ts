@@ -358,16 +358,25 @@ export class GameScene extends Phaser.Scene {
                     this.localPaintReady,
                 );
 
-            this.time.delayedCall(
-                80,
-                () => {
-                    if (
-                        this.phase ===
-                            'paint'
-                    ) {
-                        multiplayerClient
-                            .requestPaintReadyState();
-                    }
+            /* V101023840D_MOBILE_RECONNECT_CONVERGENCE: carry READY intent across a mobile session handoff */
+            [120, 360, 800, 1600].forEach(
+                (delay) => {
+                    this.time.delayedCall(
+                        delay,
+                        () => {
+                            if (
+                                this.phase !== 'paint' ||
+                                !multiplayerClient.isConnected()
+                            ) {
+                                return;
+                            }
+
+                            multiplayerClient.sendPaintReady(
+                                this.localPaintReady,
+                            );
+                            multiplayerClient.requestPaintReadyState();
+                        },
+                    );
                 },
             );
         } else if (
@@ -8795,6 +8804,42 @@ export class GameScene extends Phaser.Scene {
                                         this.localPaintHistory,
                                     );
                             }
+                        },
+                    );
+
+                    /*
+                     * V101023840D_MOBILE_RECONNECT_CONVERGENCE: mobile Schema/session/phase can settle on different
+                     * ticks. Reconcile cheap authoritative state repeatedly.
+                     */
+                    [0, 120, 360, 800, 1600, 3200].forEach(
+                        (delay) => {
+                            this.time.delayedCall(
+                                delay,
+                                () => {
+                                    if (!multiplayerClient.isConnected()) {
+                                        return;
+                                    }
+
+                                    this.networkPlayerManager
+                                        .syncPlayersFromCurrentRoom();
+                                    this.networkPlayerManager
+                                        .restoreAllPlayerVisibility();
+                                    this.networkPlayerManager
+                                        .normalizeLocalPlayerForGameplay();
+
+                                    multiplayerClient.requestLobbySnapshot();
+                                    multiplayerClient.requestPaintReadyState();
+                                    multiplayerClient.requestRoundPaintState();
+
+                                    if (
+                                        this.phase === 'paint' &&
+                                        this.localPaintReady &&
+                                        this.networkPlayerManager.isLocalHider()
+                                    ) {
+                                        multiplayerClient.sendPaintReady(true);
+                                    }
+                                },
+                            );
                         },
                     );
 
