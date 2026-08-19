@@ -16353,8 +16353,151 @@ export class GameScene extends Phaser.Scene {
                 () => {
                     finishStroke();
 
+                    /*
+                     * V101023839_AVATAR_RASTER_SAVE
+                     *
+                     * The editor can display up to 500 points in one stroke,
+                     * but legacy preset reload/server paths accept only 240
+                     * points per stroke. A long drag could therefore look fully
+                     * painted here and later reopen with white/beige holes.
+                     *
+                     * Save the FINAL visible avatar as a compact raster:
+                     * - resolve stroke layering into exact body pixels
+                     * - group pixels by final color
+                     * - split into <= 240-point chunks
+                     * - use size=1, so replay is deterministic pixel-for-pixel
+                     *
+                     * This stays compatible with the existing server limits and
+                     * usually produces far fewer than 120 strokes.
+                     */
+                    const finalPixelColors =
+                        new Map<number, number>();
+
+                    strokes.forEach(
+                        (stroke) => {
+                            const radius =
+                                stroke.size <= 1
+                                    ? 0
+                                    : stroke.size;
+
+                            stroke.points.forEach(
+                                (point) => {
+                                    for (
+                                        let oy = -radius;
+                                        oy <= radius;
+                                        oy += 1
+                                    ) {
+                                        for (
+                                            let ox = -radius;
+                                            ox <= radius;
+                                            ox += 1
+                                        ) {
+                                            if (
+                                                stroke.shape !==
+                                                    'square' &&
+                                                ox * ox +
+                                                    oy * oy >
+                                                    radius *
+                                                        radius
+                                            ) {
+                                                continue;
+                                            }
+
+                                            const x =
+                                                Math.round(
+                                                    point.x +
+                                                        ox,
+                                                );
+                                            const y =
+                                                Math.round(
+                                                    point.y +
+                                                        oy,
+                                                );
+
+                                            if (
+                                                !insideBody(
+                                                    x,
+                                                    y,
+                                                )
+                                            ) {
+                                                continue;
+                                            }
+
+                                            finalPixelColors.set(
+                                                y * 80 + x,
+                                                stroke.color,
+                                            );
+                                        }
+                                    }
+                                },
+                            );
+                        },
+                    );
+
+                    const pointsByColor =
+                        new Map<
+                            number,
+                            NetworkPaintPoint[]
+                        >();
+
+                    finalPixelColors.forEach(
+                        (
+                            color,
+                            key,
+                        ) => {
+                            const points =
+                                pointsByColor.get(
+                                    color,
+                                ) ?? [];
+
+                            points.push({
+                                x: key % 80,
+                                y: Math.floor(
+                                    key / 80,
+                                ),
+                            });
+
+                            pointsByColor.set(
+                                color,
+                                points,
+                            );
+                        },
+                    );
+
+                    const compactPreset:
+                        NetworkPaintStroke[] = [];
+
+                    pointsByColor.forEach(
+                        (
+                            points,
+                            color,
+                        ) => {
+                            for (
+                                let offset = 0;
+                                offset <
+                                points.length;
+                                offset += 240
+                            ) {
+                                compactPreset.push({
+                                    targetSessionId:
+                                        '',
+                                    color,
+                                    size: 1,
+                                    shape:
+                                        'circle',
+                                    points:
+                                        points.slice(
+                                            offset,
+                                            offset +
+                                                240,
+                                        ),
+                                });
+                            }
+                        },
+                    );
+
                     this.lobbyAvatarPreset =
-                        strokes.slice(
+                        compactPreset.slice(
                             0,
                             120,
                         );
