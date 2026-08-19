@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010253_SMALL_ALERT_RESTORE_GAS: compact poop alerts + stable GAS HUD visibility. */
     /* V1010252_AUDIO_FART_HUD_FINAL_POLISH: audio resume guard + punchier fart bank + unified Hunt HUD. */
     /* V1010250_RECOVER_FART_SOUND_HUD_CHAT: recovered v249 sound/HUD/chat polish after partial patch. */
     /* V1010244_FART_RADIUS_REFERENCE_FIX: server owns fart detection radius; client no longer stores it. */
@@ -6125,14 +6126,13 @@ export class GameScene extends Phaser.Scene {
          */
         const logicalTop =
             this.phase === 'hunt'
-                ? 118
+                ? 132
                 : this.phase === 'paint'
                     ? 10
                     : 8;
 
         /*
-         * V1010252_AUDIO_FART_HUD_FINAL_POLISH: clean left stack:
-         * Ammo/HEAT (18) -> GAS (91) -> chat (118).
+         * V1010253_SMALL_ALERT_RESTORE_GAS: weapon HUD -> GAS -> chat with compact 8px-ish spacing.
          */
 
         const maxChatHeight =
@@ -22749,7 +22749,6 @@ export class GameScene extends Phaser.Scene {
             this.statusText,
             this.ammoText,
             this.hunterWeaponHudContainer,
-            this.fartHudContainer,
             this.targetText,
             this.paintColorText,
             this.brushSizeText,
@@ -33609,11 +33608,19 @@ export class GameScene extends Phaser.Scene {
     /* V1010242_HUNTER_FART_SKILL */
     private updateFartHud(): void {
         if (!this.fartHudContainer || !this.fartGaugeGraphics || !this.fartGaugeLabel) return;
+        const localRole =
+            multiplayerClient
+                .getLocalPlayer()
+                ?.role;
+
         const visible =
             this.phase === 'hunt' &&
             (
-                this.networkPlayerManager?.isLocalHunter() ||
-                this.practiceMode === 'hunter'
+                this.networkPlayerManager
+                    ?.isLocalHunter() ||
+                localRole === 'hunter' ||
+                this.practiceMode ===
+                    'hunter'
             );
 
         /*
@@ -33624,10 +33631,17 @@ export class GameScene extends Phaser.Scene {
          * V1010252_AUDIO_FART_HUD_FINAL_POLISH: same screen X as weapon HUD, directly underneath it.
          * fixed-HUD transform code compensates camera zoom for BOTH panels.
          */
-        this.fartHudContainer.setPosition(
-            18,
-            91,
-        );
+        this.fartHudContainer
+            .setPosition(
+                18,
+                88,
+            )
+            .setScrollFactor(
+                0,
+            )
+            .setDepth(
+                25001,
+            );
         this.fartHudContainer.setVisible(Boolean(visible));
 
 
@@ -34584,39 +34598,38 @@ export class GameScene extends Phaser.Scene {
 
             const hint =
                 this.add.text(
-                    this.gameWidth /
-                        2,
-                    112,
+                    this.gameWidth / 2,
+                    78,
                     poopHint,
                     {
                         fontFamily:
                             'monospace',
                         fontSize:
                             this.mobileControlsEnabled
-                                ? '13px'
-                                : '16px',
+                                ? '10px'
+                                : '12px',
                         fontStyle:
                             'bold',
                         color:
                             '#fff8df',
                         backgroundColor:
-                            'rgba(69,45,30,0.94)',
+                            'rgba(69,45,30,0.88)',
                         stroke:
                             '#3b2418',
                         strokeThickness:
-                            3,
+                            2,
                         align:
                             'center',
                         padding: {
-                            x: 14,
-                            y: 9,
+                            x: 8,
+                            y: 5,
                         },
                         wordWrap: {
                             width:
                                 Math.min(
-                                    650,
+                                    430,
                                     this.gameWidth -
-                                        44,
+                                        80,
                                 ),
                         },
                     },
@@ -34641,11 +34654,11 @@ export class GameScene extends Phaser.Scene {
                 alpha:
                     1,
                 y:
-                    122,
+                    84,
                 duration:
-                    180,
+                    150,
                 hold:
-                    3600,
+                    2400,
                 yoyo:
                     true,
                 onComplete:
@@ -34690,37 +34703,37 @@ export class GameScene extends Phaser.Scene {
             const warning =
                 this.add.text(
                     this.gameWidth / 2,
-                    122,
+                    78,
                     notice,
                     {
                         fontFamily:
                             'monospace',
                         fontSize:
                             this.mobileControlsEnabled
-                                ? '14px'
-                                : '17px',
+                                ? '10px'
+                                : '12px',
                         fontStyle:
                             'bold',
                         color:
                             '#fff8dc',
                         backgroundColor:
-                            'rgba(67,45,30,0.92)',
+                            'rgba(67,45,30,0.88)',
                         stroke:
                             '#3b2418',
                         strokeThickness:
-                            3,
+                            2,
                         align:
                             'center',
                         padding: {
-                            x: 14,
-                            y: 9,
+                            x: 8,
+                            y: 5,
                         },
                         wordWrap: {
                             width:
                                 Math.min(
-                                    620,
+                                    430,
                                     this.gameWidth -
-                                        36,
+                                        80,
                                 ),
                         },
                     },
@@ -34745,11 +34758,11 @@ export class GameScene extends Phaser.Scene {
                 alpha:
                     1,
                 y:
-                    132,
+                    84,
                 duration:
-                    180,
+                    150,
                 hold:
-                    2500,
+                    2200,
                 yoyo:
                     true,
                 onComplete:
