@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010258_HUNTER_CONTROLS_HINT_EXACT: exact-source Hunter Practice/main-match bottom controls + movement fade. */
     /* V1010253_SMALL_ALERT_RESTORE_GAS: compact poop alerts + stable GAS HUD visibility. */
     /* V1010252_AUDIO_FART_HUD_FINAL_POLISH: audio resume guard + punchier fart bank + unified Hunt HUD. */
     /* V1010250_RECOVER_FART_SOUND_HUD_CHAT: recovered v249 sound/HUD/chat polish after partial patch. */
@@ -4123,6 +4124,11 @@ export class GameScene extends Phaser.Scene {
     private practiceBotPrecision = 65;
     private practiceExitButton?: HTMLButtonElement;
     private practiceDesktopHint?: HTMLDivElement;
+
+    /* V1010258_HUNTER_CONTROLS_HINT_EXACT: desktop Hunter controls hint shared by Practice / multiplayer Hunt. */
+    private hunterControlsBottomHint?: HTMLDivElement;
+    private hunterControlsHintMoveStartedAt = 0;
+
     private practiceRevealConfirmButton?: HTMLButtonElement;
     private practiceRevealMarkers: Phaser.GameObjects.GameObject[] = [];
     private practiceRevealTweens: Phaser.Tweens.Tween[] = [];
@@ -5005,6 +5011,8 @@ export class GameScene extends Phaser.Scene {
 
                 this.destroyChatUi();
                 this.destroyControlsHelpUi();
+                this.destroyHunterControlsBottomHint();
+                this.destroyPracticeDesktopHint();
                 this.destroyMobilePaintDock();
                 this.destroyPaintReadyDomButton();
                 window.removeEventListener(
@@ -5442,6 +5450,8 @@ export class GameScene extends Phaser.Scene {
         }
 
         if (this.phase === 'hunt') {
+            this.fadeHunterControlsHintIfMoving();
+
             if (!multiplayerClient.isConnected()) {
                 this.updateHunterMovement(delta);
 
@@ -6507,7 +6517,7 @@ export class GameScene extends Phaser.Scene {
                 lobby: '대기실 · 마우스로 선택 · Enter 채팅',
                 paint: '색칠 · 드래그 칠하기 · 우클릭 스포이드 · 휠 줌 · Ctrl+휠 붓 크기',
                 straight: '직선 · Shift를 누른 채 드래그하면 직선으로 칠해집니다',
-                hunt: '사냥 · WASD 이동 · 마우스 조준 · 좌클릭 발사 · Space 방구 탐지',
+                hunt: '사냥 · WASD 이동 · 마우스 조준 · 좌클릭 발사 · SPACE 방구 탐지',
                 mobileLobby: '대기실 · 버튼 터치 · 채팅칸 터치',
                 mobilePaint: '색칠 · 손가락으로 칠하기 · 핀치 확대/축소 · 아래 도구로 붓 변경',
                 mobileStraight: '직선 · 브러시를 길게 누르면 주황색 이펙트와 함께 직선 모드가 켜집니다',
@@ -6520,7 +6530,7 @@ export class GameScene extends Phaser.Scene {
                 lobby: 'ロビー · マウス選択 · Enterでチャット',
                 paint: 'ペイント · ドラッグ塗り · 右クリックでスポイト · ホイールズーム · Ctrl+ホイールでブラシ',
                 straight: '直線 · Shiftを押しながらドラッグすると直線で塗れます',
-                hunt: 'ハント · WASD移動 · マウス照準 · 左クリック射撃 · Spaceでおなら探知',
+                hunt: 'ハント · WASD移動 · マウス照準 · 左クリック射撃 · SPACEでおなら探知',
                 mobileLobby: 'ロビー · ボタン操作 · 入力欄タップでチャット',
                 mobilePaint: 'ペイント · 指で塗る · ピンチズーム · 下のツールでブラシ変更',
                 mobileStraight: '直線 · ブラシを長押しするとオレンジの合図で直線モードになります',
@@ -6533,7 +6543,7 @@ export class GameScene extends Phaser.Scene {
                 lobby: 'Lobby · Click UI · Enter to chat',
                 paint: 'Paint · Drag · Right-click eyedropper · Wheel zoom · Ctrl+wheel brush size',
                 straight: 'Straight line · Hold Shift while dragging to paint a straight line',
-                hunt: 'Hunt · WASD move · Mouse aim · Left click fire · Space fart detector',
+                hunt: 'Hunt · WASD move · Mouse aim · Left click fire · SPACE fart detector',
                 mobileLobby: 'Lobby · Tap buttons · Tap chat field to type',
                 mobilePaint: 'Paint · Paint with one finger · Pinch to zoom · Bottom tools change brush',
                 mobileStraight: 'Straight line · Long-press the brush until the orange cue appears, then drag',
@@ -12089,9 +12099,127 @@ export class GameScene extends Phaser.Scene {
         this.game.canvas.style.cursor = '';
     }
 
+    private getHunterControlsBottomHintHtml(): string {
+        return (
+            {
+                ko: '<b>WASD</b> 이동 <span>•</span> <b>좌클릭</b> 발사 <span>•</span> <b>SPACE</b> 방구 탐지',
+                ja: '<b>WASD</b> 移動 <span>•</span> <b>左クリック</b> 射撃 <span>•</span> <b>SPACE</b> おなら探知',
+                en: '<b>WASD</b> Move <span>•</span> <b>Left Click</b> Fire <span>•</span> <b>SPACE</b> Fart Detect',
+                zh: '<b>WASD</b> 移动 <span>•</span> <b>左键</b> 射击 <span>•</span> <b>SPACE</b> 放屁探测',
+            } as const
+        )[getLanguage()];
+    }
+
+    private resetHunterControlsHintFade(): void {
+        this.hunterControlsHintMoveStartedAt = 0;
+    }
+
+    private fadeHunterControlsHintIfMoving(): void {
+        if (
+            this.phase !== 'hunt' ||
+            this.mobileControlsEnabled
+        ) {
+            return;
+        }
+
+        const hint =
+            this.practiceMode === 'hunter'
+                ? this.practiceDesktopHint
+                : this.hunterControlsBottomHint;
+
+        if (!hint || hint.dataset.fading === '1') {
+            return;
+        }
+
+        const moving =
+            this.moveLeftKey?.isDown ||
+            this.moveRightKey?.isDown ||
+            this.moveUpKey?.isDown ||
+            this.moveDownKey?.isDown;
+
+        if (!moving) {
+            return;
+        }
+
+        if (this.hunterControlsHintMoveStartedAt <= 0) {
+            this.hunterControlsHintMoveStartedAt = Date.now();
+            return;
+        }
+
+        if (
+            Date.now() -
+                this.hunterControlsHintMoveStartedAt <
+            3200
+        ) {
+            return;
+        }
+
+        hint.dataset.fading = '1';
+        hint.style.transition = 'opacity 850ms ease';
+        hint.style.opacity = '0';
+
+        window.setTimeout(
+            () => {
+                hint.remove();
+
+                if (this.practiceDesktopHint === hint) {
+                    this.practiceDesktopHint = undefined;
+                }
+
+                if (this.hunterControlsBottomHint === hint) {
+                    this.hunterControlsBottomHint = undefined;
+                }
+            },
+            900,
+        );
+    }
+
+    private destroyHunterControlsBottomHint(): void {
+        this.hunterControlsBottomHint?.remove();
+        this.hunterControlsBottomHint = undefined;
+        this.resetHunterControlsHintFade();
+    }
+
+    private createHunterControlsBottomHint(): void {
+        this.destroyHunterControlsBottomHint();
+
+        if (
+            this.mobileControlsEnabled ||
+            !this.isMultiplayerSession() ||
+            multiplayerClient.getLocalPlayer()?.role !== 'hunter'
+        ) {
+            return;
+        }
+
+        const hint = document.createElement('div');
+        hint.className = 'colorhunt-practice-desktop-hint';
+        hint.innerHTML = this.getHunterControlsBottomHintHtml();
+
+        document.body.appendChild(hint);
+        this.hunterControlsBottomHint = hint;
+        this.resetHunterControlsHintFade();
+
+        const placeInsideGame = (): void => {
+            if (this.hunterControlsBottomHint !== hint) return;
+
+            const rect = this.game.canvas.getBoundingClientRect();
+            hint.style.left = `${Math.round(rect.left + rect.width / 2)}px`;
+            hint.style.top = `${Math.round(Math.max(rect.top + 8, rect.bottom - 58))}px`;
+        };
+
+        placeInsideGame();
+        requestAnimationFrame(placeInsideGame);
+        window.setTimeout(placeInsideGame, 120);
+        window.addEventListener('resize', placeInsideGame, {
+            passive: true,
+            once: true,
+        });
+    }
+
     private destroyPracticeDesktopHint(): void {
         this.practiceDesktopHint?.remove();
         this.practiceDesktopHint = undefined;
+        this.resetHunterControlsHintFade();
     }
 
     private createPracticeDesktopHint(): void {
@@ -12103,7 +12231,8 @@ export class GameScene extends Phaser.Scene {
 
         const hint = document.createElement('div');
         hint.className = 'colorhunt-practice-desktop-hint';
-        hint.innerHTML = `<b>WASD</b> ${tr('이동')} <span>•</span> <b>${tr('좌클릭')}</b> ${tr('발사')}`;
+        hint.innerHTML =
+            this.getHunterControlsBottomHintHtml();
         document.body.appendChild(hint);
         this.practiceDesktopHint = hint;
 
@@ -22581,6 +22710,8 @@ export class GameScene extends Phaser.Scene {
     }
 
     private enterLobbyPhase(): void {
+        this.destroyHunterControlsBottomHint();
+
         this.time.delayedCall(
             0,
             () => {
@@ -35514,6 +35645,15 @@ export class GameScene extends Phaser.Scene {
             multiplayerClient
                 .getLocalPlayer()
                 ?.role === 'hunter';
+
+        if (
+            this.isMultiplayerSession() &&
+            localIsHunter
+        ) {
+            this.createHunterControlsBottomHint();
+        } else {
+            this.destroyHunterControlsBottomHint();
+        }
 
         this.ammoText.setVisible(
             localIsHunter,
