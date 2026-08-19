@@ -79,6 +79,8 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010289_AVATAR_EDITOR_REPLAY_THIS_FIX: fix nested replay() this binding. */
+    /* V1010288_AVATAR_EDITOR_COLOR_PATCHWORK_BG: high-contrast real-palette patchwork behind avatar. */
     /* V1010287_AVATAR_EDITOR_HIDER_PALETTE: avatar editor reuses Hider palette UX + mobile floating tools. */
     /* V1010286_AVATAR_EDITOR_PRO_PAINT: Hider-grade lobby avatar painting + exact brush semantics. */
     /* V1010285_AVATAR_PRESET_FULL_POINTS: preserve full lobby-avatar strokes into waiting room. */
@@ -16156,7 +16158,7 @@ export class GameScene extends Phaser.Scene {
                 border:
                     '3px solid #6f8f65',
                 borderRadius: '10px',
-                background: '#dfeadd',
+                background: '#35443d',
                 boxSizing: 'border-box',
                 flex: '0 0 auto',
             },
@@ -17016,6 +17018,12 @@ export class GameScene extends Phaser.Scene {
                 context.stroke();
             };
 
+        /*
+         * V1010289_AVATAR_EDITOR_REPLAY_THIS_FIX: capture GameScene mobile state outside normal replay().
+         */
+        const avatarEditorIsMobile =
+            this.mobileControlsEnabled;
+
         function replay(): void {
             ctx.clearRect(
                 0,
@@ -17024,15 +17032,166 @@ export class GameScene extends Phaser.Scene {
                 canvas.height,
             );
 
-            ctx.fillStyle =
-                '#dfeadd';
+            /*
+             * V1010288_AVATAR_EDITOR_COLOR_PATCHWORK_BG
+             *
+             * The avatar starts almost white, so the old pale-green background
+             * had too little contrast. Use a large, calm patchwork made from
+             * REAL Hider palette colors instead.
+             *
+             * Benefits:
+             * - white/unpainted body is immediately visible;
+             * - the background itself doubles as a big mobile eyedropper target;
+             * - no tiny swatch precision is required on a phone.
+             *
+             * Deliberately avoid the near-white/yellow palette entries here.
+             */
+            const backgroundPaletteIndices = [
+                1,  // red
+                2,  // orange
+                4,  // lime/olive
+                5,  // green
+                6,  // teal
+                7,  // cyan
+                8,  // blue
+                9,  // violet
+                10, // pink
+                11, // brown
+                13, // gray
+                14, // dark slate
+            ];
 
-            ctx.fillRect(
-                0,
-                0,
-                canvas.width,
-                canvas.height,
+            const backgroundColors =
+                backgroundPaletteIndices
+                    .map(
+                        (index) =>
+                            palette[index],
+                    )
+                    .filter(
+                        (
+                            color,
+                        ): color is string =>
+                            Boolean(color),
+                    );
+
+            const columns =
+                avatarEditorIsMobile
+                    ? 3
+                    : 4;
+
+            const rows =
+                Math.ceil(
+                    backgroundColors.length /
+                    columns,
+                );
+
+            const tileWidth =
+                canvas.width /
+                columns;
+
+            const tileHeight =
+                canvas.height /
+                Math.max(
+                    1,
+                    rows,
+                );
+
+            backgroundColors.forEach(
+                (
+                    color,
+                    index,
+                ) => {
+                    const column =
+                        index %
+                        columns;
+
+                    const row =
+                        Math.floor(
+                            index /
+                            columns,
+                        );
+
+                    ctx.fillStyle =
+                        color;
+
+                    ctx.fillRect(
+                        Math.floor(
+                            column *
+                            tileWidth,
+                        ),
+                        Math.floor(
+                            row *
+                            tileHeight,
+                        ),
+                        Math.ceil(
+                            tileWidth +
+                            1,
+                        ),
+                        Math.ceil(
+                            tileHeight +
+                            1,
+                        ),
+                    );
+                },
             );
+
+            /*
+             * Thin dark separators make each color area obvious without
+             * changing the actual colors sampled inside each tile.
+             */
+            ctx.save();
+            ctx.strokeStyle =
+                'rgba(28,38,34,.34)';
+            ctx.lineWidth =
+                1;
+
+            for (
+                let column = 1;
+                column < columns;
+                column += 1
+            ) {
+                const x =
+                    Math.round(
+                        column *
+                        tileWidth,
+                    );
+
+                ctx.beginPath();
+                ctx.moveTo(
+                    x,
+                    0,
+                );
+                ctx.lineTo(
+                    x,
+                    canvas.height,
+                );
+                ctx.stroke();
+            }
+
+            for (
+                let row = 1;
+                row < rows;
+                row += 1
+            ) {
+                const y =
+                    Math.round(
+                        row *
+                        tileHeight,
+                    );
+
+                ctx.beginPath();
+                ctx.moveTo(
+                    0,
+                    y,
+                );
+                ctx.lineTo(
+                    canvas.width,
+                    y,
+                );
+                ctx.stroke();
+            }
+
+            ctx.restore();
 
             for (
                 let y = 0;
