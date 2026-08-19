@@ -79,6 +79,8 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010273_REMOVE_OBSOLETE_PRACTICE_GAS_COOL_CONSTANT: v272 drains Practice GAS directly from remaining debuff time. */
+    /* V1010272_PRACTICE_POOP_STATE_MACHINE: isolated deterministic Practice poop state machine. */
     /* V1010271_STABILIZE_PRACTICE_FART_AND_BGM: restore BGM and make Practice fart/poop state deterministic. */
     /* V1010270_PRACTICE_GAS_COOLDOWN_HARDFIX: replace Practice GAS update loop with unconditional cooling. */
     /* V1010269_PRACTICE_LOCAL_HUNTER_GAS_DISPLAY_FIX: Practice Hunter counts as local; poop HUD shows live GAS. */
@@ -4192,18 +4194,20 @@ export class GameScene extends Phaser.Scene {
     private readonly practiceFartCost = 36;
     private readonly practiceFartRecoverPerSecond = 0.75;
     private readonly practicePoopDurationMs = 14_000;
-    private readonly practicePoopGasCoolPerSecond =
-        100 /
-        (
-            this.practicePoopDurationMs /
-            1000
-        );
 
     /*
      * V1010271_STABILIZE_PRACTICE_FART_AND_BGM: Practice owns its own authoritative poop timer.
      * localPoopUntil remains a shared HUD mirror only.
      */
     private practicePoopUntil = 0;
+
+    /*
+     * V1010272_PRACTICE_POOP_STATE_MACHINE: ONLY authoritative Practice poop/debuff state.
+     * Never depend on wall-clock/map/network state to keep Practice penalty.
+     */
+    private practicePoopRemainingMs = 0;
+    private practiceLastPoopTrailAt = 0;
+    private practiceLastPoopTearAt = 0;
 
     /*
      * Hider Practice record-shot flow.
@@ -5508,11 +5512,9 @@ export class GameScene extends Phaser.Scene {
                     );
 
                     /*
-                     * V1010271_STABILIZE_PRACTICE_FART_AND_BGM: Practice previously never ran this updater, so
-                     * tears / footprints / poop expiry visuals did not animate.
+                     * V1010272_PRACTICE_POOP_STATE_MACHINE: Practice poop effects/state are fully local and
+                     * deterministic; multiplayer map updater must not compete.
                      */
-                    this.updatePoopComedyEffects();
-
                     this.syncHunterPracticeVisuals();
                     this.networkPlayerManager
                         .update(
@@ -11691,32 +11693,88 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
-        const now =
-            Date.now();
+        const frameMs =
+            Phaser.Math.Clamp(
+                delta,
+                0,
+                100,
+            );
 
         const pooped =
-            this.practicePoopUntil >
-            now;
+            this.practicePoopRemainingMs >
+            0;
+
+        if (pooped) {
+            /*
+             * The debuff countdown is delta-driven and cannot be accidentally
+             * reset by Date.now(), network maps or showPoopBurst().
+             */
+            this.practicePoopRemainingMs =
+                Math.max(
+                    0,
+                    this.practicePoopRemainingMs -
+                        frameMs,
+                );
+
+            /*
+             * During the 14-second punishment GAS visibly drains 100 -> 0.
+             */
+            this.fartGauge =
+                Phaser.Math.Clamp(
+                    (
+                        this.practicePoopRemainingMs /
+                        this.practicePoopDurationMs
+                    ) *
+                        100,
+                    0,
+                    100,
+                );
+
+            /*
+             * Keep legacy/shared values mirrored only for HUD/comedy helpers.
+             * They are NOT authoritative.
+             */
+            this.practicePoopUntil =
+                Date.now() +
+                this.practicePoopRemainingMs;
+
+            this.localPoopUntil =
+                this.practicePoopUntil;
+
+            this.poopedHuntersUntil.set(
+                this.practiceHunterSessionId,
+                this.practicePoopUntil,
+            );
+
+            this.updatePracticePoopVisualEffects();
+
+            this.updateFartHud();
+
+            if (
+                this.practicePoopRemainingMs <=
+                0
+            ) {
+                this.finishHunterPracticePoop();
+            }
+
+            /*
+             * HARD LOCK: absolutely no SPACE processing while pooped.
+             */
+            return;
+        }
 
         /*
-         * Normal play cools very slowly.
-         * Once MAX causes an accident, the 14-second punishment doubles as a
-         * full pressure-release period: 100 -> 0 by debuff end.
+         * Normal safe-state pressure recovery remains intentionally slow.
          */
-        const coolPerSecond =
-            pooped
-                ? this.practicePoopGasCoolPerSecond
-                : this.practiceFartRecoverPerSecond;
-
         const previousGauge =
             this.fartGauge;
 
         this.fartGauge =
             Phaser.Math.Clamp(
-                previousGauge -
-                    coolPerSecond *
+                this.fartGauge -
+                    this.practiceFartRecoverPerSecond *
                         (
-                            delta /
+                            frameMs /
                             1000
                         ),
                 0,
@@ -11733,58 +11791,25 @@ export class GameScene extends Phaser.Scene {
             this.updateFartHud();
         }
 
-        /*
-         * HARD INPUT LOCK during the accident.
-         * No fourth/fifth fart can fire while practicePoopUntil is active.
-         */
         if (
-            !pooped &&
             Phaser.Input.Keyboard.JustDown(
                 this.fartKey,
             )
         ) {
             this.useHunterPracticeFart();
         }
-
-        if (
-            !pooped &&
-            this.practicePoopUntil >
-                0
-        ) {
-            this.practicePoopUntil =
-                0;
-
-            this.localPoopUntil =
-                0;
-
-            this.poopedHuntersUntil.delete(
-                this.practiceHunterSessionId,
-            );
-
-            /*
-             * The punishment is also a full reset.
-             */
-            this.fartGauge =
-                0;
-
-            this.updateFartHud();
-        }
     }
 
     private useHunterPracticeFart(): void {
-        const now =
-            Date.now();
-
-        /*
-         * Defensive second lock. Even if this method is accidentally called
-         * from another input path, an active accident cannot fire again.
-         */
         if (
-            this.practicePoopUntil >
-            now
+            this.practicePoopRemainingMs >
+            0
         ) {
             return;
         }
+
+        const now =
+            Date.now();
 
         const nextGauge =
             this.fartGauge +
@@ -11808,9 +11833,6 @@ export class GameScene extends Phaser.Scene {
                     ? 2
                     : 1;
 
-        /*
-         * Third press remains a REAL detecting fart.
-         */
         this.showFartBurst({
             hunterId:
                 this.practiceHunterSessionId,
@@ -11873,10 +11895,6 @@ export class GameScene extends Phaser.Scene {
             },
         );
 
-        /*
-         * On the poop-combo press, showPoopBurst will replace the ordinary !
-         * with the combined special effect.
-         */
         if (
             detected &&
             !willPoop
@@ -11886,15 +11904,28 @@ export class GameScene extends Phaser.Scene {
             );
         }
 
-        if (
-            willPoop
-        ) {
+        if (willPoop) {
+            /*
+             * Start the REAL Practice state BEFORE any visual helper runs.
+             */
+            this.practicePoopRemainingMs =
+                this.practicePoopDurationMs;
+
             this.practicePoopUntil =
                 now +
                 this.practicePoopDurationMs;
 
             this.localPoopUntil =
                 this.practicePoopUntil;
+
+            this.fartGauge =
+                100;
+
+            this.practiceLastPoopTrailAt =
+                0;
+
+            this.practiceLastPoopTearAt =
+                0;
 
             this.poopedHuntersUntil.set(
                 this.practiceHunterSessionId,
@@ -11916,7 +11947,155 @@ export class GameScene extends Phaser.Scene {
                     now,
                 detected,
             });
+
+            this.updatePracticePoopVisualEffects();
         }
+
+        this.updateFartHud();
+    }
+
+    private updatePracticePoopVisualEffects(): void {
+        if (
+            this.practiceMode !== 'hunter' ||
+            this.practicePoopRemainingMs <=
+                0
+        ) {
+            return;
+        }
+
+        const now =
+            this.time.now;
+
+        /*
+         * Use this.player directly. Practice NetworkPlayerManager is only a
+         * visual mirror and must not decide whether poop effects exist.
+         */
+        const x =
+            this.player.x;
+
+        const y =
+            this.player.y;
+
+        if (
+            now -
+                this.practiceLastPoopTrailAt >=
+            230
+        ) {
+            this.practiceLastPoopTrailAt =
+                now;
+
+            const footprint =
+                this.trackTransientGameplayVfx(
+                    this.add.ellipse(
+                        x,
+                        y + 15,
+                        10,
+                        6,
+                        0x8b5a2b,
+                        0.55,
+                    ),
+                )
+                    .setDepth(
+                        120,
+                    );
+
+            this.tweens.add({
+                targets:
+                    footprint,
+                alpha:
+                    0,
+                scale:
+                    0.6,
+                duration:
+                    1600,
+                onComplete:
+                    () =>
+                        footprint.destroy(),
+            });
+        }
+
+        if (
+            now -
+                this.practiceLastPoopTearAt >=
+            340
+        ) {
+            this.practiceLastPoopTearAt =
+                now;
+
+            [-1, 1].forEach(
+                (
+                    side,
+                ) => {
+                    const tear =
+                        this.trackTransientGameplayVfx(
+                            this.add.circle(
+                                x +
+                                    side *
+                                        8,
+                                y -
+                                    18,
+                                3,
+                                0x6ec8ff,
+                                0.9,
+                            ),
+                        )
+                            .setDepth(
+                                22001,
+                            );
+
+                    this.tweens.add({
+                        targets:
+                            tear,
+                        x:
+                            tear.x +
+                            side *
+                                10,
+                        y:
+                            tear.y +
+                            24,
+                        alpha:
+                            0,
+                        duration:
+                            520,
+                        onComplete:
+                            () =>
+                                tear.destroy(),
+                    });
+                },
+            );
+        }
+    }
+
+    private finishHunterPracticePoop(): void {
+        this.practicePoopRemainingMs =
+            0;
+
+        this.practicePoopUntil =
+            0;
+
+        this.localPoopUntil =
+            0;
+
+        this.fartGauge =
+            0;
+
+        this.practiceLastPoopTrailAt =
+            0;
+
+        this.practiceLastPoopTearAt =
+            0;
+
+        this.poopedHuntersUntil.delete(
+            this.practiceHunterSessionId,
+        );
+
+        this.lastPoopTrailAt.delete(
+            this.practiceHunterSessionId,
+        );
+
+        this.lastPoopTearAt.delete(
+            this.practiceHunterSessionId,
+        );
 
         this.updateFartHud();
     }
@@ -12395,6 +12574,7 @@ export class GameScene extends Phaser.Scene {
             Date.now();
 
         this.fartGauge = 0;
+        this.practicePoopRemainingMs = 0;
         this.practicePoopUntil = 0;
         this.localPoopUntil = 0;
         this.poopedHuntersUntil.delete(
@@ -24119,8 +24299,8 @@ export class GameScene extends Phaser.Scene {
                     'hunter'
                     ? this.practiceHunterMoveSpeed *
                         (
-                            this.practicePoopUntil >
-                                Date.now()
+                            this.practicePoopRemainingMs >
+                                0
                                 ? 0.4
                                 : 1
                         )
@@ -24192,8 +24372,8 @@ export class GameScene extends Phaser.Scene {
         const distance =
             this.practiceHunterMoveSpeed *
             (
-                this.practicePoopUntil >
-                    Date.now()
+                this.practicePoopRemainingMs >
+                    0
                     ? 0.4
                     : 1
             ) *
@@ -33886,7 +34066,13 @@ export class GameScene extends Phaser.Scene {
         const pooped =
             (
                 this.practiceMode === 'hunter'
-                    ? this.practicePoopUntil
+                    ? (
+                        this.practicePoopRemainingMs >
+                            0
+                            ? Date.now() +
+                                this.practicePoopRemainingMs
+                            : 0
+                    )
                     : this.localPoopUntil
             ) >
             Date.now();
