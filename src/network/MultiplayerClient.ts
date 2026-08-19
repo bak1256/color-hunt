@@ -1248,6 +1248,7 @@ private async attemptFreshRejoin(
     if (
       this.room !== sourceRoom ||
       this.manualReconnectInFlight ||
+      this.freshRejoinInFlight ||
       sourceRoom.reconnection
         .isReconnecting
     ) {
@@ -1405,7 +1406,7 @@ this.room = room;
       Date.now();
     this.connectionIssueNotified =
       false;
-this.manualReconnectInFlight = false;
+    /* V1010241_SINGLE_RECOVERY_OWNER: do not clear an in-flight recovery owner inside attachRoom(). */
     this.lastManualReconnectAt = 0;
 
     const handleBrowserOffline =
