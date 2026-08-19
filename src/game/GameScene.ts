@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010268_PRACTICE_GAS_COMBO_FIX: Practice GAS cools during poop and passes detected combo flag. */
     /* V1010267_REMOVE_RECENT_DETECTION_TIME: v266 uses server detected flag; timestamp removed. */
     /* V1010266_AUTHORITATIVE_POOP_COMBO_FOLLOW: server-authoritative detect+poop combo and timer-based character following. */
     /* V1010265_REMOVE_POOP_LOCALROLE_EXACT: remove only v263's unused showPoopBurst localRole. */
@@ -11671,29 +11672,31 @@ export class GameScene extends Phaser.Scene {
         const pooped =
             this.localPoopUntil > now;
 
-        if (!pooped) {
-            const nextGauge =
-                Phaser.Math.Clamp(
-                    this.fartGauge -
-                        this.practiceFartRecoverPerSecond *
-                            (
-                                delta /
-                                1000
-                            ),
-                    0,
-                    100,
-                );
+        /*
+         * V1010268_PRACTICE_GAS_COMBO_FIX: GAS is pressure, so it keeps cooling even while the Hunter
+         * is suffering the poop movement debuff.
+         */
+        const nextGauge =
+            Phaser.Math.Clamp(
+                this.fartGauge -
+                    this.practiceFartRecoverPerSecond *
+                        (
+                            delta /
+                            1000
+                        ),
+                0,
+                100,
+            );
 
-            if (
-                Math.abs(
-                    nextGauge -
-                    this.fartGauge,
-                ) >= 0.02
-            ) {
-                this.fartGauge =
-                    nextGauge;
-                this.updateFartHud();
-            }
+        if (
+            Math.abs(
+                nextGauge -
+                this.fartGauge,
+            ) >= 0.02
+        ) {
+            this.fartGauge =
+                nextGauge;
+            this.updateFartHud();
         }
 
         if (
@@ -11721,6 +11724,11 @@ export class GameScene extends Phaser.Scene {
             this.poopedHuntersUntil.delete(
                 this.practiceHunterSessionId,
             );
+
+            /*
+             * GAS has already been cooling during the penalty, so expose the
+             * current reduced percentage immediately when the debuff ends.
+             */
             this.updateFartHud();
         }
     }
@@ -11837,6 +11845,10 @@ export class GameScene extends Phaser.Scene {
                     this.localPoopUntil,
                 serverNow:
                     now,
+                /*
+                 * V1010268_PRACTICE_GAS_COMBO_FIX: Practice mirrors server v266 authoritative combo flag.
+                 */
+                detected,
             });
         }
 
