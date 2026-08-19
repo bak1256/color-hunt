@@ -1940,7 +1940,7 @@ export class GameScene extends Phaser.Scene {
         if (localIsHunter) {
             this.hunterHitConfirmSound
                 ?.play({
-                    volume: 0.82,
+                    volume: 0.96,
                     rate: 0.92,
                 });
 
@@ -1966,7 +1966,7 @@ export class GameScene extends Phaser.Scene {
         ) {
             this.hitSound
                 ?.play({
-                    volume: 0.8,
+                    volume: 0.94,
                     rate: 0.88,
                 });
         }
@@ -4808,7 +4808,7 @@ export class GameScene extends Phaser.Scene {
             this.sound.add(
                 'shotgun-blast',
                 {
-                    volume: 0.88,
+                    volume: 1.0,
                 },
             );
 
@@ -4816,7 +4816,7 @@ export class GameScene extends Phaser.Scene {
             this.sound.add(
                 'heartbeat-double',
                 {
-                    volume: 0.34,
+                    volume: 0.56,
                 },
             );
 
@@ -4824,7 +4824,7 @@ export class GameScene extends Phaser.Scene {
             this.sound.add(
                 'cheerful-bgm',
                 {
-                    volume: 0.13,
+                    volume: 0.30,
                     loop: true,
                 },
             );
@@ -4833,7 +4833,7 @@ export class GameScene extends Phaser.Scene {
             this.sound.add(
                 'lobby-calm-bgm',
                 {
-                    volume: 0.18,
+                    volume: 0.36,
                     loop: true,
                 },
             );
@@ -4842,7 +4842,7 @@ export class GameScene extends Phaser.Scene {
             this.sound.add(
                 'hunt-tension-bgm',
                 {
-                    volume: 0.20,
+                    volume: 0.40,
                     loop: true,
                 },
             );
@@ -4851,33 +4851,33 @@ export class GameScene extends Phaser.Scene {
             this.sound.add(
                 'paint-dab',
                 {
-                    volume: 0.18,
+                    volume: 0.34,
                 },
             );
 
         this.paintMusic = this.sound.add(
             'paint-cheerful-bgm',
-            { volume: 0.17, loop: true },
+            { volume: 0.34, loop: true },
         );
         this.victorySound = this.sound.add(
             'victory-fanfare',
-            { volume: 0.55 },
+            { volume: 0.78 },
         );
         this.hitSound = this.sound.add(
             'hider-hit',
-            { volume: 0.48 },
+            { volume: 0.70 },
         );
         this.hunterHitConfirmSound = this.sound.add(
             'hunter-hit-confirm',
-            { volume: 0.52 },
+            { volume: 0.74 },
         );
         this.countdownBeepSound = this.sound.add(
             'countdown-beep',
-            { volume: 0.34 },
+            { volume: 0.54 },
         );
         this.countdownStartSound = this.sound.add(
             'countdown-start',
-            { volume: 0.44 },
+            { volume: 0.64 },
         );
 
         /*
@@ -31975,7 +31975,7 @@ export class GameScene extends Phaser.Scene {
             this.sound.play(
                 'shotgun-blast',
                 {
-                    volume: 0.88,
+                    volume: 1.0,
                 },
             );
         }
@@ -32159,7 +32159,7 @@ export class GameScene extends Phaser.Scene {
             this.sound.play(
                 'shotgun-blast',
                 {
-                    volume: 0.88,
+                    volume: 1.0,
                 },
             );
         }
@@ -33117,7 +33117,7 @@ export class GameScene extends Phaser.Scene {
         });
         const fartBg = this.add.rectangle(110, 18, 230, 42, 0xfff8e8, 0.985)
             .setOrigin(0.5).setStrokeStyle(3, 0xffffff, 1);
-        this.fartHudContainer = this.add.container(18, 88, [
+        this.fartHudContainer = this.add.container(18, 94, [
             fartBg, this.fartGaugeGraphics, this.fartGaugeLabel,
         ]).setDepth(25000).setScrollFactor(0).setVisible(false);
         this.updateFartHud();
@@ -33233,6 +33233,15 @@ export class GameScene extends Phaser.Scene {
     private updateFartHud(): void {
         if (!this.fartHudContainer || !this.fartGaugeGraphics || !this.fartGaugeLabel) return;
         const visible = this.phase === 'hunt' && this.networkPlayerManager?.isLocalHunter();
+
+        /*
+         * V1010245_FART_HUD_AUDIO_POLISH: GAS HUD follows directly under Ammo/HEAT even when the
+         * weapon HUD is moved/rescaled by viewport layout code.
+         */
+        this.fartHudContainer.setPosition(
+            this.hunterWeaponHudContainer?.x ?? 18,
+            (this.hunterWeaponHudContainer?.y ?? 18) + 78,
+        );
         this.fartHudContainer.setVisible(Boolean(visible));
         this.fartGaugeGraphics.clear();
         const pct = Phaser.Math.Clamp(this.fartGauge / 100, 0, 1);
@@ -33254,33 +33263,330 @@ export class GameScene extends Phaser.Scene {
     private playComedySound(kind: 'fart' | 'boing' | 'cough' | 'laugh' | 'cry', tier = 2): void {
         const ctx = this.getComedyAudioContext();
         if (!ctx) return;
+
         const now = ctx.currentTime;
-        const gain = ctx.createGain();
-        gain.gain.setValueAtTime(0.0001, now);
-        gain.gain.exponentialRampToValueAtTime(0.22, now + 0.01);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + (kind === 'laugh' ? 0.72 : 0.42));
-        gain.connect(ctx.destination);
-        if (kind === 'fart') {
-            const buffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.55), ctx.sampleRate);
+
+        const makeNoise = (
+            duration: number,
+            gainValue: number,
+            lowpass: number,
+            startAt = now,
+        ): void => {
+            const length = Math.max(
+                1,
+                Math.floor(ctx.sampleRate * duration),
+            );
+            const buffer = ctx.createBuffer(
+                1,
+                length,
+                ctx.sampleRate,
+            );
             const data = buffer.getChannelData(0);
-            for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.exp(-i / data.length * 4);
-            const src = ctx.createBufferSource(); src.buffer = buffer;
-            const filter = ctx.createBiquadFilter(); filter.type = 'lowpass';
-            filter.frequency.setValueAtTime(120 + tier * 35, now);
-            filter.frequency.exponentialRampToValueAtTime(55, now + 0.5);
-            src.connect(filter); filter.connect(gain); src.start(now);
-            const osc = ctx.createOscillator(); osc.type = 'sawtooth';
-            osc.frequency.setValueAtTime(70 + tier * 18, now); osc.frequency.exponentialRampToValueAtTime(38, now + 0.45);
-            osc.connect(gain); osc.start(now); osc.stop(now + 0.48); return;
+
+            let last = 0;
+            for (let i = 0; i < length; i++) {
+                /*
+                 * Brown-ish noise is much less "laser/beep" than raw white
+                 * noise and gives breath/fart/cough sounds a physical texture.
+                 */
+                const white = Math.random() * 2 - 1;
+                last = (last + 0.035 * white) / 1.035;
+                const envelope =
+                    Math.sin(Math.PI * (i / length));
+                data[i] =
+                    last * 3.2 * envelope;
+            }
+
+            const src = ctx.createBufferSource();
+            src.buffer = buffer;
+
+            const filter = ctx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(
+                lowpass,
+                startAt,
+            );
+
+            const g = ctx.createGain();
+            g.gain.setValueAtTime(
+                0.0001,
+                startAt,
+            );
+            g.gain.exponentialRampToValueAtTime(
+                Math.max(0.001, gainValue),
+                startAt + 0.015,
+            );
+            g.gain.exponentialRampToValueAtTime(
+                0.0001,
+                startAt + duration,
+            );
+
+            src.connect(filter);
+            filter.connect(g);
+            g.connect(ctx.destination);
+            src.start(startAt);
+        };
+
+        if (kind === 'fart') {
+            /*
+             * Realer "pffrrrt": low noisy airflow + fluttering low oscillator.
+             * Higher tier gets longer/rougher rather than simply higher-pitched.
+             */
+            const duration =
+                tier >= 3
+                    ? 0.78
+                    : tier === 2
+                        ? 0.58
+                        : 0.40;
+
+            makeNoise(
+                duration,
+                tier >= 3 ? 0.48 : 0.40,
+                210 + tier * 18,
+            );
+
+            const osc =
+                ctx.createOscillator();
+            const oscGain =
+                ctx.createGain();
+
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(
+                74 + tier * 5,
+                now,
+            );
+            osc.frequency.exponentialRampToValueAtTime(
+                42,
+                now + duration,
+            );
+
+            /*
+             * Fast gain wobble makes a "prrrt" texture instead of one clean
+             * synth note.
+             */
+            const lfo =
+                ctx.createOscillator();
+            const lfoGain =
+                ctx.createGain();
+            lfo.frequency.value =
+                tier >= 3 ? 23 : 18;
+            lfoGain.gain.value = 0.17;
+
+            oscGain.gain.setValueAtTime(
+                0.23,
+                now,
+            );
+            oscGain.gain.exponentialRampToValueAtTime(
+                0.0001,
+                now + duration,
+            );
+
+            lfo.connect(lfoGain);
+            lfoGain.connect(oscGain.gain);
+            osc.connect(oscGain);
+            oscGain.connect(ctx.destination);
+
+            osc.start(now);
+            lfo.start(now);
+            osc.stop(now + duration);
+            lfo.stop(now + duration);
+
+            if (tier >= 3) {
+                makeNoise(
+                    0.20,
+                    0.24,
+                    130,
+                    now + 0.46,
+                );
+            }
+            return;
         }
-        const notes = kind === 'boing' ? [220, 620] : kind === 'cough' ? [130, 90] : kind === 'laugh' ? [360, 520, 390, 560] : [420, 330, 250];
-        notes.forEach((freq, i) => {
-            const osc = ctx.createOscillator(); const g = ctx.createGain();
-            osc.type = kind === 'laugh' ? 'square' : 'triangle'; osc.frequency.value = freq;
-            const t = now + i * (kind === 'laugh' ? 0.14 : 0.09);
-            g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(kind === 'laugh' ? 0.09 : 0.12, t + 0.015); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.13);
-            osc.connect(g); g.connect(ctx.destination); osc.start(t); osc.stop(t + 0.14);
-        });
+
+        if (kind === 'cough') {
+            /*
+             * Two dry breath/noise bursts: "콜-록".
+             */
+            makeNoise(0.13, 0.34, 1100, now);
+            makeNoise(0.17, 0.39, 850, now + 0.16);
+
+            [118, 92].forEach((freq, i) => {
+                const osc =
+                    ctx.createOscillator();
+                const g =
+                    ctx.createGain();
+                const t =
+                    now + i * 0.16;
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(
+                    freq,
+                    t,
+                );
+                osc.frequency.exponentialRampToValueAtTime(
+                    freq * 0.72,
+                    t + 0.13,
+                );
+                g.gain.setValueAtTime(
+                    0.14,
+                    t,
+                );
+                g.gain.exponentialRampToValueAtTime(
+                    0.0001,
+                    t + 0.14,
+                );
+                osc.connect(g);
+                g.connect(ctx.destination);
+                osc.start(t);
+                osc.stop(t + 0.15);
+            });
+            return;
+        }
+
+        if (kind === 'laugh') {
+            /*
+             * "꺄-하하하!" — breathy vowel-like bursts instead of square-wave
+             * notes. A bandpass/formant pair gives a vaguely human voice body.
+             */
+            const bursts = [
+                { t: 0.00, f: 520, d: 0.16, a: 0.25 },
+                { t: 0.18, f: 390, d: 0.13, a: 0.29 },
+                { t: 0.34, f: 430, d: 0.13, a: 0.29 },
+                { t: 0.50, f: 405, d: 0.15, a: 0.27 },
+                { t: 0.68, f: 455, d: 0.16, a: 0.24 },
+            ];
+
+            bursts.forEach(({ t, f, d, a }, index) => {
+                const start =
+                    now + t;
+
+                const osc =
+                    ctx.createOscillator();
+                const formant =
+                    ctx.createBiquadFilter();
+                const g =
+                    ctx.createGain();
+
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(
+                    f,
+                    start,
+                );
+                osc.frequency.exponentialRampToValueAtTime(
+                    f * (index === 0 ? 0.82 : 0.9),
+                    start + d,
+                );
+
+                formant.type = 'bandpass';
+                formant.frequency.value =
+                    index === 0 ? 1450 : 980;
+                formant.Q.value = 3.2;
+
+                g.gain.setValueAtTime(
+                    0.0001,
+                    start,
+                );
+                g.gain.exponentialRampToValueAtTime(
+                    a,
+                    start + 0.018,
+                );
+                g.gain.exponentialRampToValueAtTime(
+                    0.0001,
+                    start + d,
+                );
+
+                osc.connect(formant);
+                formant.connect(g);
+                g.connect(ctx.destination);
+                osc.start(start);
+                osc.stop(start + d);
+
+                makeNoise(
+                    d,
+                    index === 0 ? 0.14 : 0.10,
+                    1800,
+                    start,
+                );
+            });
+            return;
+        }
+
+        if (kind === 'cry') {
+            /*
+             * Embarrassed comic whimper rather than arcade bleeps.
+             */
+            [0, 0.19, 0.39].forEach((offset, i) => {
+                const osc =
+                    ctx.createOscillator();
+                const g =
+                    ctx.createGain();
+                const t =
+                    now + offset;
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(
+                    330 - i * 38,
+                    t,
+                );
+                osc.frequency.linearRampToValueAtTime(
+                    245 - i * 28,
+                    t + 0.18,
+                );
+                g.gain.setValueAtTime(
+                    0.0001,
+                    t,
+                );
+                g.gain.exponentialRampToValueAtTime(
+                    0.20,
+                    t + 0.025,
+                );
+                g.gain.exponentialRampToValueAtTime(
+                    0.0001,
+                    t + 0.18,
+                );
+                osc.connect(g);
+                g.connect(ctx.destination);
+                osc.start(t);
+                osc.stop(t + 0.19);
+            });
+            makeNoise(0.58, 0.08, 1500, now);
+            return;
+        }
+
+        /*
+         * Cartoon detection "띠용!" stays intentionally comic, but with a
+         * short spring swoop rather than a toy-like series of beeps.
+         */
+        const osc =
+            ctx.createOscillator();
+        const g =
+            ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(
+            210,
+            now,
+        );
+        osc.frequency.exponentialRampToValueAtTime(
+            760,
+            now + 0.10,
+        );
+        osc.frequency.exponentialRampToValueAtTime(
+            390,
+            now + 0.30,
+        );
+        g.gain.setValueAtTime(
+            0.0001,
+            now,
+        );
+        g.gain.exponentialRampToValueAtTime(
+            0.30,
+            now + 0.015,
+        );
+        g.gain.exponentialRampToValueAtTime(
+            0.0001,
+            now + 0.34,
+        );
+        osc.connect(g);
+        g.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.35);
     }
 
     private showFartBurst(event: NetworkFartBurst): void {
