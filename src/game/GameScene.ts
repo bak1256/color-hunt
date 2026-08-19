@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010299_UI_LAYOUT_BGM_HOTFIX: restore lobby icons, stable status dot, rebuild mobile waiting room, anchor gameplay BGM inside canvas. */
     /* V1010298_UNIFIED_BGM_MOBILE_WAITING_LOBBY_POLISH: unified BGM, full mobile waiting room, visible room status, lock icons. */
     /* V1010297_CONTROLS_HELP_TOGGLE_FIX: controls help toggle listens to the pointerdown event forwarded by every UI. */
     /* V1010296_REMOVE_INVALID_COUNTDOWN_RECOVERY_CHECK: countdown is already excluded by TypeScript narrowing at zero-time recovery. */
@@ -7038,7 +7039,7 @@ export class GameScene extends Phaser.Scene {
             ko: {
                 button: '？ 조작방법',
                 title: '조작방법',
-                subtitle: '버튼을 누르고 있는 동안만 표시됩니다',
+                subtitle: '한 번 누르면 열리고, 다시 누르면 닫힙니다',
                 lobby: '대기실 · 마우스로 선택 · Enter 채팅',
                 paint: '색칠 · 드래그 칠하기 · 우클릭 스포이드 · 휠 줌 · Ctrl+휠 붓 크기',
                 straight: '직선 · Shift를 누른 채 드래그하면 직선으로 칠해집니다',
@@ -7051,7 +7052,7 @@ export class GameScene extends Phaser.Scene {
             ja: {
                 button: '？ 操作方法',
                 title: '操作方法',
-                subtitle: '押している間だけ表示されます',
+                subtitle: '一度押すと開き、もう一度押すと閉じます',
                 lobby: 'ロビー · マウス選択 · Enterでチャット',
                 paint: 'ペイント · ドラッグ塗り · 右クリックでスポイト · ホイールズーム · Ctrl+ホイールでブラシ',
                 straight: '直線 · Shiftを押しながらドラッグすると直線で塗れます',
@@ -7064,7 +7065,7 @@ export class GameScene extends Phaser.Scene {
             en: {
                 button: '？ Controls',
                 title: 'Controls',
-                subtitle: 'Shown only while you hold this button',
+                subtitle: 'Tap once to open, tap again to close',
                 lobby: 'Lobby · Click UI · Enter to chat',
                 paint: 'Paint · Drag · Right-click eyedropper · Wheel zoom · Ctrl+wheel brush size',
                 straight: 'Straight line · Hold Shift while dragging to paint a straight line',
@@ -7077,7 +7078,7 @@ export class GameScene extends Phaser.Scene {
             zh: {
                 button: '？ 操作说明',
                 title: '操作说明',
-                subtitle: '仅在按住按钮时显示',
+                subtitle: '点按一次打开，再次点按关闭',
                 lobby: '大厅：鼠标选择界面 · Enter 打开聊天',
                 paint: '涂色 · 拖动涂色 · 右键吸管 · 滚轮缩放 · Ctrl+滚轮调画笔',
                 straight: '直线 · 按住 Shift 拖动即可画直线',
@@ -7753,6 +7754,7 @@ export class GameScene extends Phaser.Scene {
         );
 
         this.updateControlsHelpPosition();
+        this.updateUnifiedBgmButtonPosition();
     }
 
     private updateControlsHelpPosition(): void {
@@ -19405,7 +19407,7 @@ export class GameScene extends Phaser.Scene {
                     </div>
 
                     <button type="button" class="ch-lobby-action ch-lobby-action--public">
-                        <span class="ch-lobby-action-icon" aria-hidden="true">🔓</span>
+                        <span class="ch-lobby-action-icon" aria-hidden="true">＋</span>
                         <span>
                             <strong>${tr('공개방 만들기')}</strong>
                             <small>${tr('누구나 참여할 수 있는 방을 만들어요')}</small>
@@ -19421,7 +19423,7 @@ export class GameScene extends Phaser.Scene {
                     </button>
 
                     <button type="button" class="ch-lobby-action ch-lobby-action--join">
-                        <span class="ch-lobby-action-icon" aria-hidden="true">🔒</span>
+                        <span class="ch-lobby-action-icon" aria-hidden="true">🔓</span>
                         <span>
                             <strong>${tr('비공개방 참가')}</strong>
                             <small>${tr('초대코드를 입력해 방에 참여해요')}</small>
@@ -19853,8 +19855,8 @@ export class GameScene extends Phaser.Scene {
              * Inner CSS is enlarged, while uniform scaling still protects
              * unusual foldables and aspect ratios.
              */
-            const designWidth = 400;
-            const designHeight = 540;
+            const designWidth = 360;
+            const designHeight = 500;
 
             const availableWidth =
                 Math.max(
@@ -19878,7 +19880,7 @@ export class GameScene extends Phaser.Scene {
                         rect.width *
                             (
                                 landscapeCanvas
-                                    ? 0.48
+                                    ? 0.43
                                     : 0.94
                             ),
                     ),
@@ -24501,12 +24503,10 @@ export class GameScene extends Phaser.Scene {
 
                     .ch-unified-bgm {
                         position: fixed;
-                        top: max(8px, env(safe-area-inset-top));
-                        right: max(10px, env(safe-area-inset-right));
                         z-index: 30050;
-                        min-height: 36px;
-                        padding: 7px 11px;
-                        font-size: 12px;
+                        min-height: 34px;
+                        padding: 6px 10px;
+                        font-size: 11px;
                         line-height: 1;
                     }
 
@@ -24688,6 +24688,198 @@ export class GameScene extends Phaser.Scene {
                         color: #ff8a66 !important;
                     }
 
+                    /*
+                     * V1010299: status marker is a real fixed circle, never a
+                     * font glyph. This prevents desktop flex compression from
+                     * turning the green dot into an oval.
+                     */
+                    .ch-lobby-room-status > i {
+                        width: 9px !important;
+                        min-width: 9px !important;
+                        height: 9px !important;
+                        min-height: 9px !important;
+                        border-radius: 50% !important;
+                        margin-right: 5px !important;
+                        font-size: 0 !important;
+                        line-height: 0 !important;
+                        background: currentColor !important;
+                        flex: 0 0 9px !important;
+                    }
+
+                    /*
+                     * Keep large emoji locks inside their action-icon frame.
+                     * The public "+" remains intentionally simpler/larger.
+                     */
+                    .ch-lobby-action--private .ch-lobby-action-icon,
+                    .ch-lobby-action--join .ch-lobby-action-icon {
+                        display: inline-flex !important;
+                        align-items: center !important;
+                        justify-content: center !important;
+                        width: 42px !important;
+                        min-width: 42px !important;
+                        height: 42px !important;
+                        overflow: hidden !important;
+                        font-size: 28px !important;
+                        line-height: 1 !important;
+                    }
+
+                    .ch-lobby-action--public .ch-lobby-action-icon {
+                        display: inline-flex !important;
+                        align-items: center !important;
+                        justify-content: center !important;
+                        width: 42px !important;
+                        min-width: 42px !important;
+                        font-size: 36px !important;
+                        line-height: 1 !important;
+                    }
+
+                    /*
+                     * Rebuild the mobile waiting panel as one compact grid.
+                     * No child gets a forced height large enough to overflow
+                     * the 360x500 authoring frame.
+                     */
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-shell {
+                        display: grid !important;
+                        grid-template-rows: auto auto auto auto minmax(0, 1fr) auto auto !important;
+                        align-content: stretch !important;
+                        box-sizing: border-box !important;
+                        height: 100% !important;
+                        padding: 8px 9px !important;
+                        gap: 5px !important;
+                        overflow: hidden !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-header {
+                        min-height: 42px !important;
+                        gap: 5px !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-header-copy strong {
+                        font-size: 19px !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-header-actions button {
+                        min-height: 32px !important;
+                        padding: 4px 7px !important;
+                        font-size: 11px !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-info {
+                        min-height: 0 !important;
+                        padding: 5px 7px !important;
+                        font-size: 12px !important;
+                        line-height: 1.12 !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-info strong {
+                        font-size: 14px !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-map {
+                        min-height: 46px !important;
+                        padding: 4px 6px !important;
+                        gap: 5px !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-map button {
+                        width: 38px !important;
+                        min-width: 38px !important;
+                        height: 36px !important;
+                        font-size: 18px !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-map-text {
+                        font-size: 15px !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-role-wrap {
+                        padding: 2px 0 !important;
+                        gap: 3px !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-role {
+                        gap: 4px !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-role button {
+                        min-height: 36px !important;
+                        padding: 5px 7px !important;
+                        font-size: 12px !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-role-status {
+                        min-height: 16px !important;
+                        font-size: 10px !important;
+                        line-height: 1.05 !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-timing {
+                        min-height: 0 !important;
+                        display: grid !important;
+                        grid-template-rows: 1fr 1fr !important;
+                        gap: 4px !important;
+                        overflow: hidden !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-timing section {
+                        min-height: 0 !important;
+                        padding: 5px 6px !important;
+                        overflow: hidden !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-timing-title {
+                        margin-bottom: 3px !important;
+                        font-size: 11px !important;
+                        line-height: 1.05 !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-time-options {
+                        gap: 4px !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-time-options button {
+                        min-height: 31px !important;
+                        padding: 3px !important;
+                        font-size: 12px !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-start {
+                        min-height: 42px !important;
+                        padding: 6px 8px !important;
+                        font-size: 15px !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-footer {
+                        gap: 4px !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-footer button {
+                        min-height: 34px !important;
+                        padding: 5px 6px !important;
+                        font-size: 10px !important;
+                    }
+
                     @media (pointer: coarse), (max-width: 760px) {
                         .ch-lobby-room-status {
                             display: inline-flex !important;
@@ -24703,9 +24895,16 @@ export class GameScene extends Phaser.Scene {
                             margin-right: 3px !important;
                         }
 
-                        .ch-lobby-action-icon {
-                            font-size: clamp(22px, 6vw, 30px) !important;
-                            line-height: 1 !important;
+                        .ch-lobby-action--public .ch-lobby-action-icon {
+                            font-size: clamp(28px, 7vw, 36px) !important;
+                        }
+
+                        .ch-lobby-action--private .ch-lobby-action-icon,
+                        .ch-lobby-action--join .ch-lobby-action-icon {
+                            width: clamp(32px, 9vw, 42px) !important;
+                            min-width: clamp(32px, 9vw, 42px) !important;
+                            height: clamp(32px, 9vw, 42px) !important;
+                            font-size: clamp(20px, 5.4vw, 28px) !important;
                         }
                     }
                 `;
@@ -24820,6 +25019,70 @@ export class GameScene extends Phaser.Scene {
         );
     }
 
+    private updateUnifiedBgmButtonPosition(): void {
+        const button =
+            this.unifiedBgmButton;
+
+        if (
+            !button ||
+            button.style.display === 'none'
+        ) {
+            return;
+        }
+
+        const rect =
+            this.game.canvas
+                .getBoundingClientRect();
+
+        if (
+            rect.width <= 0 ||
+            rect.height <= 0
+        ) {
+            return;
+        }
+
+        /*
+         * V1010299:
+         * The visible gameplay BGM button belongs INSIDE the game canvas.
+         * Controls uses canvas top + 52px, so BGM occupies the same right rail
+         * one row above it. No browser chrome / safe-area positioning.
+         */
+        const right =
+            Math.max(
+                6,
+                window.innerWidth -
+                    rect.right +
+                    10,
+            );
+
+        const top =
+            Math.max(
+                rect.top + 8,
+                6,
+            );
+
+        button.style.right =
+            `${Math.round(right)}px`;
+        button.style.top =
+            `${Math.round(top)}px`;
+
+        const compact =
+            this.mobileControlsEnabled;
+
+        button.style.minHeight =
+            compact
+                ? '30px'
+                : '34px';
+        button.style.padding =
+            compact
+                ? '5px 8px'
+                : '6px 10px';
+        button.style.fontSize =
+            compact
+                ? '10px'
+                : '11px';
+    }
+
     private setUnifiedBgmButtonVisible(
         visible: boolean,
     ): void {
@@ -24840,6 +25103,10 @@ export class GameScene extends Phaser.Scene {
             this.bgmEnabled
                 ? tr('♫ BGM ON')
                 : tr('♫ BGM OFF');
+
+        if (visible) {
+            this.updateUnifiedBgmButtonPosition();
+        }
 
         /*
          * Legacy Phaser chip can never return visually.
