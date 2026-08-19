@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010285_AVATAR_PRESET_FULL_POINTS: preserve full lobby-avatar strokes into waiting room. */
     /* V1010283_MOBILE_NO_TEXT_SELECTION: disable game UI text selection except chat/editable fields. */
     /* V1010282_FART_RADIUS_110: Practice fart detection radius = 110. */
     /* V1010281_FART_INPUT_COOLDOWN: 900ms deliberate fart cadence. */
@@ -15689,7 +15690,7 @@ export class GameScene extends Phaser.Scene {
             }
 
             return parsed
-                .slice(0, 80)
+                .slice(0, 120)
                 .filter(
                     (stroke) =>
                         stroke &&
@@ -15729,7 +15730,7 @@ export class GameScene extends Phaser.Scene {
                                 : 'circle',
                         points:
                             stroke.points
-                                .slice(0, 240)
+                                .slice(0, 600)
                                 .map(
                                     (point: {
                                         x?: number;
@@ -15800,13 +15801,24 @@ export class GameScene extends Phaser.Scene {
                         ...stroke,
                         targetSessionId:
                             sessionId,
+                        /*
+                         * V1010285_AVATAR_PRESET_FULL_POINTS: editor strokes may contain up to 500 points.
+                         * Preserve every legitimate point when entering a room.
+                         */
                         points:
-                            stroke.points.map(
-                                (point) => ({
-                                    x: point.x,
-                                    y: point.y,
-                                }),
-                            ),
+                            stroke.points
+                                .slice(
+                                    0,
+                                    600,
+                                )
+                                .map(
+                                    (point) => ({
+                                        x:
+                                            point.x,
+                                        y:
+                                            point.y,
+                                    }),
+                                ),
                     }),
                 );
 
