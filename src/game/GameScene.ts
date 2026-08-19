@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010292_MOBILE_AVATAR_JOIN_STABILITY: compact avatar payload + progressive mobile join rendering. */
     /* V1010291_REMOVE_UNUSED_AVATAR_MOBILE_FLAG: cleanup after replacing patchwork with solid navy. */
     /* V1010290_AVATAR_EDITOR_SOFT_NAVY_BG: muted navy avatar-editor background. */
     /* V1010289_AVATAR_EDITOR_REPLAY_THIS_FIX: fix nested replay() this binding. */
@@ -9079,6 +9080,10 @@ export class GameScene extends Phaser.Scene {
                                     ...stroke,
                                     targetSessionId:
                                         preset.sessionId,
+                                    points:
+                                        this.compactLobbyAvatarStrokePoints(
+                                            stroke.points,
+                                        ),
                                 }),
                             );
 
@@ -9105,11 +9110,22 @@ export class GameScene extends Phaser.Scene {
                                     return;
                                 }
 
-                                this.networkPlayerManager
-                                    .applyLobbyAvatarPreset(
-                                        preset.sessionId,
-                                        renderStrokes,
-                                    );
+                                if (
+                                    this.mobileControlsEnabled
+                                ) {
+                                    this.networkPlayerManager
+                                        .applyLobbyAvatarPresetProgressive(
+                                            preset.sessionId,
+                                            renderStrokes,
+                                            18,
+                                        );
+                                } else {
+                                    this.networkPlayerManager
+                                        .applyLobbyAvatarPreset(
+                                            preset.sessionId,
+                                            renderStrokes,
+                                        );
+                                }
                             };
 
                         applyPreset();
@@ -14974,6 +14990,18 @@ export class GameScene extends Phaser.Scene {
                 }
 
                 if (
+                    !multiplayerClient.getRoom()
+                ) {
+                    this.outfitLoadingPollEvent
+                        ?.remove(false);
+
+                    this.outfitLoadingPollEvent =
+                        undefined;
+
+                    return;
+                }
+
+                if (
                     !this.outfitLoadingBatchReceived ||
                     !this.outfitLoadingBatchDispatched ||
                     this.networkPlayerManager
@@ -15785,6 +15813,74 @@ export class GameScene extends Phaser.Scene {
         return strokes;
     }
 
+    private compactLobbyAvatarStrokePoints(
+        points: NetworkPaintPoint[],
+    ): NetworkPaintPoint[] {
+        if (points.length <= 2) {
+            return points.map((point) => ({
+                x: Math.round(point.x),
+                y: Math.round(point.y),
+            }));
+        }
+
+        const normalized = points.map((point) => ({
+            x: Math.round(point.x),
+            y: Math.round(point.y),
+        }));
+
+        const compact: NetworkPaintPoint[] = [normalized[0]];
+
+        let previousDirectionX =
+            Math.sign(normalized[1].x - normalized[0].x);
+        let previousDirectionY =
+            Math.sign(normalized[1].y - normalized[0].y);
+
+        for (
+            let index = 1;
+            index < normalized.length - 1;
+            index += 1
+        ) {
+            const current = normalized[index];
+            const next = normalized[index + 1];
+
+            const directionX =
+                Math.sign(next.x - current.x);
+            const directionY =
+                Math.sign(next.y - current.y);
+
+            if (
+                directionX !== previousDirectionX ||
+                directionY !== previousDirectionY
+            ) {
+                const last = compact[compact.length - 1];
+
+                if (
+                    last.x !== current.x ||
+                    last.y !== current.y
+                ) {
+                    compact.push(current);
+                }
+            }
+
+            previousDirectionX = directionX;
+            previousDirectionY = directionY;
+        }
+
+        const finalPoint =
+            normalized[normalized.length - 1];
+        const compactLast =
+            compact[compact.length - 1];
+
+        if (
+            compactLast.x !== finalPoint.x ||
+            compactLast.y !== finalPoint.y
+        ) {
+            compact.push(finalPoint);
+        }
+
+        return compact;
+    }
+
     private sendLobbyAvatarPreset(): void {
         if (
             !multiplayerClient.isConnected()
@@ -15812,19 +15908,12 @@ export class GameScene extends Phaser.Scene {
                          * Preserve every legitimate point when entering a room.
                          */
                         points:
-                            stroke.points
-                                .slice(
-                                    0,
-                                    600,
-                                )
-                                .map(
-                                    (point) => ({
-                                        x:
-                                            point.x,
-                                        y:
-                                            point.y,
-                                    }),
-                                ),
+                            this.compactLobbyAvatarStrokePoints(
+                                stroke.points,
+                            ).slice(
+                                0,
+                                600,
+                            ),
                     }),
                 );
 
@@ -18451,10 +18540,20 @@ export class GameScene extends Phaser.Scene {
                     finishStroke();
 
                     this.lobbyAvatarPreset =
-                        strokes.slice(
-                            0,
-                            120,
-                        );
+                        strokes
+                            .slice(
+                                0,
+                                120,
+                            )
+                            .map(
+                                (stroke) => ({
+                                    ...stroke,
+                                    points:
+                                        this.compactLobbyAvatarStrokePoints(
+                                            stroke.points,
+                                        ),
+                                }),
+                            );
 
                     localStorage.setItem(
                         this.lobbyAvatarPresetStorageKey,
