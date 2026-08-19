@@ -11824,6 +11824,22 @@ export class GameScene extends Phaser.Scene {
         this.finishActivePaintStroke();
         this.isPainting = false;
 
+        /*
+         * V101023841_PRACTICE_BRUSH_CLEANUP
+         * Hider Practice uses the real production Paint preview. Finishing the
+         * stroke stops painting, but the last stationary brush preview can stay
+         * visible. Explicitly scrub every transient paint-tool visual before
+         * returning to Practice selection / entering Hunter Practice.
+         */
+        this.paintPreview?.setVisible(false);
+        this.clearStraightLinePreview();
+        this.hideMobilePaintPrecisionGuide();
+        this.hideEyedropperMagnifier();
+        this.eyedropperArmed = false;
+        this.eyedropperPointerId = -1;
+        this.clearMobilePendingPaint();
+        this.input.setDefaultCursor('default');
+
         this.rebuildPracticeHiders(
             3,
         );
