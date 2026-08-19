@@ -79,6 +79,8 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010265_REMOVE_POOP_LOCALROLE_EXACT: remove only v263's unused showPoopBurst localRole. */
+    /* V1010263_FOLLOW_POOP_COMBO_EFFECT: poop labels follow Hunter; Hider slowdown text removed; detect+poop combo effect. */
     /* V1010262_POOP_LABEL_BRIGHT_FART_VFX_FLUSH: character-relative poop labels, bright fart audio, destructive background VFX flush. */
     /* V1010261_GAS_THIRD_FART_FOCUS_FIX: stable GAS fixed HUD; 3rd fart detects; poop text below Hunter; stronger focus flush. */
     /* V1010260_REMOVE_LAUGH_LEFTOVERS: remove obsolete laugh-counter leftovers after v259. */
@@ -276,6 +278,10 @@ export class GameScene extends Phaser.Scene {
      */
     private transientGameplayVfx =
         new Set<Phaser.GameObjects.GameObject>();
+
+    /* V1010263_FOLLOW_POOP_COMBO_EFFECT: merge "detected!" + poop into one readable special effect. */
+    private recentHunterDetectionAt = 0;
+    private recentHunterDetectionText?: Phaser.GameObjects.Text;
 
     /*
      * Timer
@@ -33839,6 +33845,12 @@ export class GameScene extends Phaser.Scene {
         );
 
         this.transientGameplayVfx.clear();
+
+        this.recentHunterDetectionText =
+            undefined;
+
+        this.recentHunterDetectionAt =
+            0;
     }
 
     private installVisibilityAudioGuard(): void {
@@ -34636,14 +34648,18 @@ export class GameScene extends Phaser.Scene {
         }
     }
 
-    private showHunterDetectionAlert(_reaction: 'cough'): void {
+    private showHunterDetectionAlert(
+        _reaction: 'cough',
+    ): void {
         if (
             this.shouldSuppressOneShotAudio()
         ) {
             return;
         }
 
-        this.playComedySound('boing');
+        this.playComedySound(
+            'boing',
+        );
 
         const p =
             this.networkPlayerManager
@@ -34653,31 +34669,84 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
+        this.recentHunterDetectionText
+            ?.destroy();
+
         const text =
-            this.add.text(
-                p.x,
-                p.y - 58,
-                '❗',
-                {
-                    fontSize: '38px',
-                    fontStyle: 'bold',
-                    stroke: '#ffffff',
-                    strokeThickness: 7,
-                },
+            this.trackTransientGameplayVfx(
+                this.add.text(
+                    p.x,
+                    p.y - 58,
+                    '❗',
+                    {
+                        fontSize:
+                            '38px',
+                        fontStyle:
+                            'bold',
+                        stroke:
+                            '#ffffff',
+                        strokeThickness:
+                            7,
+                    },
+                ),
             )
-                .setOrigin(0.5)
-                .setDepth(22000)
-                .setScale(0.2);
+                .setOrigin(
+                    0.5,
+                )
+                .setDepth(
+                    22000,
+                )
+                .setScale(
+                    0.2,
+                );
+
+        this.recentHunterDetectionText =
+            text;
+
+        this.recentHunterDetectionAt =
+            Date.now();
 
         this.tweens.add({
-            targets: text,
-            scale: 1.35,
-            y: p.y - 82,
-            duration: 180,
-            yoyo: true,
-            hold: 220,
-            ease: 'Back.Out',
-            onComplete: () => text.destroy(),
+            targets:
+                text,
+            scale:
+                1.35,
+            duration:
+                180,
+            yoyo:
+                true,
+            hold:
+                220,
+            ease:
+                'Back.Out',
+            onUpdate:
+                () => {
+                    const current =
+                        this.networkPlayerManager
+                            ?.getLocalPlayerPosition();
+
+                    if (
+                        current &&
+                        text.active
+                    ) {
+                        text.setPosition(
+                            current.x,
+                            current.y - 72,
+                        );
+                    }
+                },
+            onComplete:
+                () => {
+                    if (
+                        this.recentHunterDetectionText ===
+                        text
+                    ) {
+                        this.recentHunterDetectionText =
+                            undefined;
+                    }
+
+                    text.destroy();
+                },
         });
     }
 
@@ -34730,7 +34799,9 @@ export class GameScene extends Phaser.Scene {
         });
     }
 
-    private showPoopBurst(event: NetworkPoopBurst): void {
+    private showPoopBurst(
+        event: NetworkPoopBurst,
+    ): void {
         const localUntil =
             Date.now() +
             Math.max(
@@ -34747,11 +34818,6 @@ export class GameScene extends Phaser.Scene {
         const localSessionId =
             multiplayerClient.getSessionId();
 
-        const localRole =
-            multiplayerClient
-                .getLocalPlayer()
-                ?.role;
-
         const isLocalHunter =
             event.hunterId ===
             localSessionId;
@@ -34766,29 +34832,182 @@ export class GameScene extends Phaser.Scene {
                 );
         }
 
-        /*
-         * Actual world position is authoritative packet position.
-         * No screen-fixed notification means the role/hourglass row is never
-         * covered regardless of camera zoom.
-         */
         if (
-            !this.shouldSuppressOneShotAudio()
+            this.shouldSuppressOneShotAudio()
         ) {
-            const poopLabels = {
-                ko: '💩 똥 지렸다!!',
-                ja: '💩 も…漏らした!!',
-                en: '💩 I POOPED MYSELF!!',
-                zh: '💩 拉裤子了!!',
+            this.updateFartHud();
+            return;
+        }
+
+        const getHunterPosition =
+            (): {
+                x: number;
+                y: number;
+            } => {
+                return (
+                    this.networkPlayerManager
+                        ?.getPlayerPosition(
+                            event.hunterId,
+                        ) ?? {
+                        x:
+                            event.x,
+                        y:
+                            event.y,
+                    }
+                );
+            };
+
+        const followText = (
+            text:
+                Phaser.GameObjects.Text,
+            offsetY:
+                number,
+        ): void => {
+            const p =
+                getHunterPosition();
+
+            if (
+                text.active
+            ) {
+                text.setPosition(
+                    p.x,
+                    p.y +
+                        offsetY,
+                );
+            }
+        };
+
+        /*
+         * A cough-detection message was delivered immediately before the
+         * third-fart poop event. Merge the two effects instead of stacking
+         * ❗ + "POOPED!!" on top of each other.
+         */
+        const detectedWhilePooping =
+            isLocalHunter &&
+            Date.now() -
+                this.recentHunterDetectionAt <
+                550;
+
+        if (
+            detectedWhilePooping
+        ) {
+            this.recentHunterDetectionText
+                ?.destroy();
+
+            this.recentHunterDetectionText =
+                undefined;
+
+            this.recentHunterDetectionAt =
+                0;
+
+            const comboLabels = {
+                ko:
+                    '💩❗ 지렸지만… 찾았다!!',
+                ja:
+                    '💩❗ 漏らしたけど…見つけた!!',
+                en:
+                    '💩❗ POOPED… BUT FOUND ONE!!',
+                zh:
+                    '💩❗ 拉裤子了…但找到了!!',
             } as const;
 
+            const combo =
+                this.trackTransientGameplayVfx(
+                    this.add.text(
+                        event.x,
+                        event.y - 62,
+                        comboLabels[
+                            getLanguage()
+                        ],
+                        {
+                            fontFamily:
+                                'monospace',
+                            fontSize:
+                                this.mobileControlsEnabled
+                                    ? '16px'
+                                    : '22px',
+                            fontStyle:
+                                'bold',
+                            color:
+                                '#fff5c8',
+                            backgroundColor:
+                                'rgba(92,54,25,0.58)',
+                            stroke:
+                                '#5a3421',
+                            strokeThickness:
+                                5,
+                            padding: {
+                                x:
+                                    9,
+                                y:
+                                    5,
+                            },
+                            align:
+                                'center',
+                        },
+                    ),
+                )
+                    .setOrigin(
+                        0.5,
+                    )
+                    .setDepth(
+                        23500,
+                    )
+                    .setScale(
+                        0.45,
+                    );
+
+            this.tweens.add({
+                targets:
+                    combo,
+                scale:
+                    1.08,
+                alpha:
+                    {
+                        from:
+                            0.2,
+                        to:
+                            1,
+                    },
+                duration:
+                    260,
+                ease:
+                    'Back.Out',
+                hold:
+                    2200,
+                yoyo:
+                    true,
+                onUpdate:
+                    () =>
+                        followText(
+                            combo,
+                            -64,
+                        ),
+                onComplete:
+                    () =>
+                        combo.destroy(),
+            });
+        } else {
             /*
-             * "POOPED!" always sits ABOVE the Hunter.
+             * Normal poop: "POOPED!!" follows the affected Hunter above head.
+             * Both Hunter and Hiders can see this simple status signal.
              */
+            const poopLabels = {
+                ko:
+                    '💩 똥 지렸다!!',
+                ja:
+                    '💩 も…漏らした!!',
+                en:
+                    '💩 I POOPED MYSELF!!',
+                zh:
+                    '💩 拉裤子了!!',
+            } as const;
+
             const poopText =
                 this.trackTransientGameplayVfx(
                     this.add.text(
                         event.x,
-                        event.y - 52,
+                        event.y - 58,
                         poopLabels[
                             getLanguage()
                         ],
@@ -34823,141 +35042,128 @@ export class GameScene extends Phaser.Scene {
                     poopText,
                 scale:
                     1.05,
-                y:
-                    event.y - 66,
+                alpha:
+                    {
+                        from:
+                            0.35,
+                        to:
+                            1,
+                    },
                 duration:
                     260,
                 ease:
                     'Back.Out',
                 hold:
-                    1250,
+                    2300,
                 yoyo:
                     true,
+                onUpdate:
+                    () =>
+                        followText(
+                            poopText,
+                            -58,
+                        ),
                 onComplete:
                     () =>
                         poopText.destroy(),
             });
-
-            /*
-             * Slowdown explanation:
-             * - Hunter sees it BELOW self.
-             * - Hider sees it ABOVE the affected Hunter, below "POOPED!".
-             *
-             * 4.2 sec readability + semi-transparent background.
-             */
-            if (
-                isLocalHunter ||
-                localRole ===
-                    'hider'
-            ) {
-                const slowMessage =
-                    isLocalHunter
-                        ? (
-                            {
-                                ko:
-                                    '똥을 지려서 느려졌습니다 · 이동속도 -60%',
-                                ja:
-                                    '漏らして遅くなりました · 移動速度 -60%',
-                                en:
-                                    'Pooped yourself · Move speed -60%',
-                                zh:
-                                    '拉裤子了 · 移速 -60%',
-                            } as const
-                        )[getLanguage()]
-                        : (
-                            {
-                                ko:
-                                    `${event.hunterName || '헌터'}가 똥을 지려 느려졌습니다!`,
-                                ja:
-                                    `${event.hunterName || 'ハンター'}がお漏らしして遅くなりました！`,
-                                en:
-                                    `${event.hunterName || 'Hunter'} pooped themselves and slowed down!`,
-                                zh:
-                                    `${event.hunterName || '猎人'}拉裤子后变慢了！`,
-                            } as const
-                        )[getLanguage()];
-
-                const slowY =
-                    isLocalHunter
-                        ? event.y + 34
-                        : event.y - 31;
-
-                const slowEndY =
-                    isLocalHunter
-                        ? event.y + 40
-                        : event.y - 36;
-
-                const slowText =
-                    this.trackTransientGameplayVfx(
-                        this.add.text(
-                            event.x,
-                            slowY,
-                            slowMessage,
-                            {
-                                fontFamily:
-                                    'monospace',
-                                fontSize:
-                                    this.mobileControlsEnabled
-                                        ? '10px'
-                                        : '12px',
-                                fontStyle:
-                                    'bold',
-                                color:
-                                    '#fff8df',
-                                backgroundColor:
-                                    'rgba(69,45,30,0.68)',
-                                stroke:
-                                    '#3b2418',
-                                strokeThickness:
-                                    2,
-                                align:
-                                    'center',
-                                padding: {
-                                    x:
-                                        8,
-                                    y:
-                                        5,
-                                },
-                                wordWrap: {
-                                    width:
-                                        310,
-                                },
-                            },
-                        ),
-                    )
-                        .setOrigin(
-                            0.5,
-                        )
-                        .setDepth(
-                            22999,
-                        )
-                        .setAlpha(
-                            0,
-                        );
-
-                this.tweens.add({
-                    targets:
-                        slowText,
-                    alpha:
-                        0.88,
-                    y:
-                        slowEndY,
-                    duration:
-                        180,
-                    hold:
-                        4200,
-                    yoyo:
-                        true,
-                    onComplete:
-                        () =>
-                            slowText.destroy(),
-                });
-            }
-
-            this.playComedySound(
-                'cry',
-            );
         }
+
+        /*
+         * Slowdown explanation is useful ONLY to the affected Hunter.
+         * Hiders already understand enough from "POOPED!!".
+         */
+        if (
+            isLocalHunter
+        ) {
+            const slowLabels = {
+                ko:
+                    '똥을 지려서 느려졌습니다 · 이동속도 -60%',
+                ja:
+                    '漏らして遅くなりました · 移動速度 -60%',
+                en:
+                    'Pooped yourself · Move speed -60%',
+                zh:
+                    '拉裤子了 · 移速 -60%',
+            } as const;
+
+            const slowText =
+                this.trackTransientGameplayVfx(
+                    this.add.text(
+                        event.x,
+                        event.y + 35,
+                        slowLabels[
+                            getLanguage()
+                        ],
+                        {
+                            fontFamily:
+                                'monospace',
+                            fontSize:
+                                this.mobileControlsEnabled
+                                    ? '10px'
+                                    : '12px',
+                            fontStyle:
+                                'bold',
+                            color:
+                                '#fff8df',
+                            backgroundColor:
+                                'rgba(69,45,30,0.58)',
+                            stroke:
+                                '#3b2418',
+                            strokeThickness:
+                                2,
+                            align:
+                                'center',
+                            padding: {
+                                x:
+                                    8,
+                                y:
+                                    5,
+                            },
+                        },
+                    ),
+                )
+                    .setOrigin(
+                        0.5,
+                    )
+                    .setDepth(
+                        22999,
+                    )
+                    .setAlpha(
+                        0,
+                    );
+
+            this.tweens.add({
+                targets:
+                    slowText,
+                alpha:
+                    {
+                        from:
+                            0,
+                        to:
+                            0.88,
+                    },
+                duration:
+                    180,
+                hold:
+                    4300,
+                yoyo:
+                    true,
+                onUpdate:
+                    () =>
+                        followText(
+                            slowText,
+                            37,
+                        ),
+                onComplete:
+                    () =>
+                        slowText.destroy(),
+            });
+        }
+
+        this.playComedySound(
+            'cry',
+        );
 
         this.updateFartHud();
     }
