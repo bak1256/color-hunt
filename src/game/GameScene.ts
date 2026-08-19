@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010283_MOBILE_NO_TEXT_SELECTION: disable game UI text selection except chat/editable fields. */
     /* V1010282_FART_RADIUS_110: Practice fart detection radius = 110. */
     /* V1010281_FART_INPUT_COOLDOWN: 900ms deliberate fart cadence. */
     /* V1010280_SMOOTH_GAS_8S_RECOVER2: main-match GAS smooth per-frame drain, 8s accident. */
@@ -284,6 +285,11 @@ export class GameScene extends Phaser.Scene {
     private audioGuardRestoreTimer?: number;
     private audioGuardPreviousMute = false;
     private audioVisibilityHandler?: () => void;
+
+    /* V1010283_MOBILE_NO_TEXT_SELECTION: mobile browser text-selection / long-press guard. */
+    private gameNoSelectStyle?: HTMLStyleElement;
+    private gameSelectStartHandler?: (event: Event) => void;
+    private gameContextMenuHandler?: (event: Event) => void;
     private audioGuardHidden = false;
 
     /*
@@ -4872,7 +4878,179 @@ export class GameScene extends Phaser.Scene {
     }
 
 
+    private installGameNoTextSelectionGuard(): void {
+        if (
+            typeof document === 'undefined' ||
+            this.gameNoSelectStyle
+        ) {
+            return;
+        }
+
+        const style =
+            document.createElement(
+                'style',
+            );
+
+        style.dataset.colorhuntNoSelect =
+            'true';
+
+        style.textContent = `
+            html,
+            body,
+            #root,
+            #root *,
+            canvas {
+                -webkit-user-select: none !important;
+                user-select: none !important;
+                -webkit-touch-callout: none !important;
+            }
+
+            button,
+            [role="button"],
+            [data-action],
+            [class*="button"],
+            [class*="btn"] {
+                -webkit-user-select: none !important;
+                user-select: none !important;
+                -webkit-touch-callout: none !important;
+                touch-action: manipulation;
+            }
+
+            .colorhunt-chat,
+            .colorhunt-chat *,
+            input,
+            textarea,
+            [contenteditable="true"] {
+                -webkit-user-select: text !important;
+                user-select: text !important;
+                -webkit-touch-callout: default !important;
+            }
+
+            .colorhunt-chat__send {
+                -webkit-user-select: none !important;
+                user-select: none !important;
+                -webkit-touch-callout: none !important;
+                touch-action: manipulation;
+            }
+        `;
+
+        document.head.appendChild(
+            style,
+        );
+
+        this.gameNoSelectStyle =
+            style;
+
+        const isSelectionAllowed =
+            (
+                target:
+                    EventTarget | null,
+            ): boolean => {
+                if (
+                    !(target instanceof Element)
+                ) {
+                    return false;
+                }
+
+                return Boolean(
+                    target.closest(
+                        [
+                            '.colorhunt-chat__log',
+                            '.colorhunt-chat__input',
+                            'input',
+                            'textarea',
+                            '[contenteditable="true"]',
+                        ].join(
+                            ',',
+                        ),
+                    ),
+                );
+            };
+
+        this.gameSelectStartHandler =
+            (
+                event:
+                    Event,
+            ): void => {
+                if (
+                    isSelectionAllowed(
+                        event.target,
+                    )
+                ) {
+                    return;
+                }
+
+                event.preventDefault();
+            };
+
+        this.gameContextMenuHandler =
+            (
+                event:
+                    Event,
+            ): void => {
+                if (
+                    isSelectionAllowed(
+                        event.target,
+                    )
+                ) {
+                    return;
+                }
+
+                event.preventDefault();
+            };
+
+        document.addEventListener(
+            'selectstart',
+            this.gameSelectStartHandler,
+            true,
+        );
+
+        document.addEventListener(
+            'contextmenu',
+            this.gameContextMenuHandler,
+            true,
+        );
+
+        window.getSelection()
+            ?.removeAllRanges();
+    }
+
+    private removeGameNoTextSelectionGuard(): void {
+        if (
+            this.gameSelectStartHandler
+        ) {
+            document.removeEventListener(
+                'selectstart',
+                this.gameSelectStartHandler,
+                true,
+            );
+
+            this.gameSelectStartHandler =
+                undefined;
+        }
+
+        if (
+            this.gameContextMenuHandler
+        ) {
+            document.removeEventListener(
+                'contextmenu',
+                this.gameContextMenuHandler,
+                true,
+            );
+
+            this.gameContextMenuHandler =
+                undefined;
+        }
+
+        this.gameNoSelectStyle
+            ?.remove();
+
+        this.gameNoSelectStyle =
+            undefined;
+    }
+
     create(): void {
+        this.installGameNoTextSelectionGuard();
         this.installVisibilityAudioGuard();
         window.addEventListener(
             'colorhunt:viewportchange',
@@ -5021,6 +5199,8 @@ export class GameScene extends Phaser.Scene {
                     'colorhunt:viewportchange',
                     this.handleMobileViewportChange,
                 );
+
+                this.removeGameNoTextSelectionGuard();
 
                 this.stopMobileNativeEyedropperDrag();
 
