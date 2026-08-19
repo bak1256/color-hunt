@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010262_POOP_LABEL_BRIGHT_FART_VFX_FLUSH: character-relative poop labels, bright fart audio, destructive background VFX flush. */
     /* V1010261_GAS_THIRD_FART_FOCUS_FIX: stable GAS fixed HUD; 3rd fart detects; poop text below Hunter; stronger focus flush. */
     /* V1010260_REMOVE_LAUGH_LEFTOVERS: remove obsolete laugh-counter leftovers after v259. */
     /* V1010259_SIMPLIFY_POOP_HUD_FOCUS: pause laugh counterplay; clear poop notices; fixed GAS/chat stack; focus SFX/VFX guard. */
@@ -268,6 +269,13 @@ export class GameScene extends Phaser.Scene {
     private audioGuardRestoreTimer?: number;
     private audioGuardPreviousMute = false;
     private audioVisibilityHandler?: () => void;
+
+    /*
+     * V1010262_POOP_LABEL_BRIGHT_FART_VFX_FLUSH: one-shot visual effects that must NEVER resume after a long
+     * background-tab pause (shot trails, muzzle flashes, fart clouds, etc).
+     */
+    private transientGameplayVfx =
+        new Set<Phaser.GameObjects.GameObject>();
 
     /*
      * Timer
@@ -32548,6 +32556,13 @@ export class GameScene extends Phaser.Scene {
     private applyNetworkShot(
         shot: NetworkShotFired,
     ): void {
+        /*
+         * Preserve authoritative reserve bookkeeping below, but queued visual
+         * events from a hidden tab must not explode after focus returns.
+         */
+        const suppressShotFeedback =
+            this.shouldSuppressOneShotAudio();
+
         if (
             shot.shooterId ===
                 multiplayerClient.getSessionId() &&
@@ -32559,6 +32574,12 @@ export class GameScene extends Phaser.Scene {
              */
             this.hunterReserve =
                 shot.reserve;
+        }
+
+        if (
+            suppressShotFeedback
+        ) {
+            return;
         }
 
         if (
@@ -32779,7 +32800,10 @@ export class GameScene extends Phaser.Scene {
     private createPelletTrail(
         line: Phaser.Geom.Line,
     ): void {
-        const trail = this.add.graphics();
+        const trail =
+            this.trackTransientGameplayVfx(
+                this.add.graphics(),
+            );
 
         trail.setDepth(50);
         trail.lineStyle(2, 0xfff4c2, 0.85);
@@ -32805,13 +32829,16 @@ export class GameScene extends Phaser.Scene {
         x: number,
         y: number,
     ): void {
-        const flash = this.add.circle(
-            x,
-            y,
-            12,
-            0xffd54f,
-            0.9,
-        );
+        const flash =
+            this.trackTransientGameplayVfx(
+                this.add.circle(
+                    x,
+                    y,
+                    12,
+                    0xffd54f,
+                    0.9,
+                ),
+            );
 
         flash.setDepth(60);
 
@@ -33774,6 +33801,46 @@ export class GameScene extends Phaser.Scene {
     }
 
     /* V1010252_AUDIO_FART_HUD_FINAL_POLISH */
+    /* V1010262_POOP_LABEL_BRIGHT_FART_VFX_FLUSH */
+    private trackTransientGameplayVfx<T extends Phaser.GameObjects.GameObject>(
+        object: T,
+    ): T {
+        this.transientGameplayVfx.add(
+            object,
+        );
+
+        object.once(
+            Phaser.GameObjects.Events.DESTROY,
+            () => {
+                this.transientGameplayVfx.delete(
+                    object,
+                );
+            },
+        );
+
+        return object;
+    }
+
+    private clearTransientGameplayVfx(): void {
+        this.transientGameplayVfx.forEach(
+            (
+                object,
+            ) => {
+                this.tweens.killTweensOf(
+                    object,
+                );
+
+                if (
+                    object.active
+                ) {
+                    object.destroy();
+                }
+            },
+        );
+
+        this.transientGameplayVfx.clear();
+    }
+
     private installVisibilityAudioGuard(): void {
         if (
             typeof document === 'undefined' ||
@@ -33822,7 +33889,12 @@ export class GameScene extends Phaser.Scene {
                      * Procedural fart/comedy audio bypasses Phaser.Sound,
                      * so suspend that AudioContext as well.
                      */
-                    this.tweens.pauseAll();
+                    /*
+                     * Do not pause one-shot VFX and later resume them.
+                     * Destroy them now so a long background stay cannot dump
+                     * old shotgun/fart visuals on focus.
+                     */
+                    this.clearTransientGameplayVfx();
 
                     if (
                         this.comedyAudioContext &&
@@ -33870,8 +33942,6 @@ export class GameScene extends Phaser.Scene {
 
                             this.sound.mute =
                                 this.audioGuardPreviousMute;
-
-                            this.tweens.resumeAll();
 
                             this.suppressEffectsUntil =
                                 0;
@@ -34012,301 +34082,150 @@ export class GameScene extends Phaser.Scene {
 
         if (kind === 'fart') {
             /*
-             * V1010252_AUDIO_FART_HUD_FINAL_POLISH: punchier 3x3 fart bank.
-             * Less sub-bass, stronger 110~260Hz body + short 500~900Hz
-             * "plop/crack" transient so laptop/phone speakers reproduce it.
+             * V1010262_POOP_LABEL_BRIGHT_FART_VFX_FLUSH: brighter comedy fart bank.
+             * Laptop/phone speakers reproduce 150~420Hz much better than the
+             * old sub-bass-heavy 40~100Hz sounds.
              */
             const variant =
                 Math.floor(
-                    Math.random() * 3,
+                    Math.random() *
+                        3,
                 );
 
-            const burst = (
+            const tone = (
                 startAt: number,
                 duration: number,
-                startFreq: number,
-                endFreq: number,
+                startHz: number,
+                endHz: number,
                 gainValue: number,
-                wave:
+                type:
                     OscillatorType =
                     'triangle',
-                flutterHz = 0,
             ): void => {
                 const osc =
                     ctx.createOscillator();
-                const g =
+
+                const gain =
                     ctx.createGain();
 
                 osc.type =
-                    wave;
+                    type;
 
-                osc.frequency
-                    .setValueAtTime(
-                        startFreq,
-                        startAt,
-                    );
+                osc.frequency.setValueAtTime(
+                    startHz,
+                    startAt,
+                );
 
-                osc.frequency
-                    .exponentialRampToValueAtTime(
-                        Math.max(
-                            35,
-                            endFreq,
-                        ),
-                        startAt +
-                            duration,
-                    );
+                osc.frequency.exponentialRampToValueAtTime(
+                    Math.max(
+                        60,
+                        endHz,
+                    ),
+                    startAt +
+                        duration,
+                );
 
-                g.gain
-                    .setValueAtTime(
-                        0.0001,
-                        startAt,
-                    );
+                gain.gain.setValueAtTime(
+                    0.0001,
+                    startAt,
+                );
 
-                g.gain
-                    .exponentialRampToValueAtTime(
-                        gainValue,
-                        startAt +
-                            0.008,
-                    );
+                gain.gain.exponentialRampToValueAtTime(
+                    gainValue,
+                    startAt +
+                        0.006,
+                );
 
-                g.gain
-                    .exponentialRampToValueAtTime(
-                        0.0001,
-                        startAt +
-                            duration,
-                    );
-
-                if (
-                    flutterHz >
-                    0
-                ) {
-                    const lfo =
-                        ctx.createOscillator();
-                    const lg =
-                        ctx.createGain();
-
-                    lfo.frequency.value =
-                        flutterHz;
-                    lg.gain.value =
-                        gainValue *
-                        0.25;
-
-                    lfo.connect(
-                        lg,
-                    );
-                    lg.connect(
-                        g.gain,
-                    );
-                    lfo.start(
-                        startAt,
-                    );
-                    lfo.stop(
-                        startAt +
-                            duration,
-                    );
-                }
+                gain.gain.exponentialRampToValueAtTime(
+                    0.0001,
+                    startAt +
+                        duration,
+                );
 
                 osc.connect(
-                    g,
+                    gain,
                 );
-                g.connect(
+
+                gain.connect(
                     ctx.destination,
                 );
+
                 osc.start(
                     startAt,
                 );
+
                 osc.stop(
                     startAt +
                         duration,
                 );
             };
 
-            const pop = (
+            const comicPop = (
                 startAt: number,
-                freq = 620,
-                gainValue = 0.22,
+                pitch: number,
+                gainValue = 0.24,
             ): void => {
-                const osc =
-                    ctx.createOscillator();
-                const g =
-                    ctx.createGain();
-
-                osc.type =
-                    'square';
-
-                osc.frequency
-                    .setValueAtTime(
-                        freq,
-                        startAt,
-                    );
-
-                osc.frequency
-                    .exponentialRampToValueAtTime(
-                        Math.max(
-                            130,
-                            freq *
-                                0.35,
-                        ),
-                        startAt +
-                            0.055,
-                    );
-
-                g.gain
-                    .setValueAtTime(
-                        gainValue,
-                        startAt,
-                    );
-
-                g.gain
-                    .exponentialRampToValueAtTime(
-                        0.0001,
-                        startAt +
-                            0.06,
-                    );
-
-                osc.connect(
-                    g,
-                );
-                g.connect(
-                    ctx.destination,
-                );
-                osc.start(
+                tone(
                     startAt,
-                );
-                osc.stop(
-                    startAt +
-                        0.065,
+                    0.07,
+                    pitch,
+                    pitch * 0.42,
+                    gainValue,
+                    'square',
                 );
             };
 
+            /*
+             * Tier 1 — short/light:
+             * 뽀옹 / 뿌웅 / 뿌욱
+             */
             if (tier <= 1) {
                 if (variant === 0) {
-                    /* 뽀옹~ */
-                    pop(
+                    comicPop(
                         now,
-                        560,
-                        0.16,
+                        880,
+                        0.18,
                     );
-                    burst(
+
+                    tone(
                         now,
-                        0.38,
-                        165,
-                        88,
-                        0.34,
+                        0.42,
+                        280,
+                        155,
+                        0.33,
                         'sine',
-                        8,
                     );
                 } else if (
-                    variant ===
-                    1
+                    variant === 1
                 ) {
-                    /* 뿌웅~ */
-                    pop(
+                    comicPop(
                         now,
-                        490,
-                        0.17,
-                    );
-                    burst(
-                        now,
-                        0.34,
-                        145,
-                        76,
-                        0.36,
-                        'triangle',
-                        12,
-                    );
-                } else {
-                    /* 뿌욱! */
-                    pop(
-                        now,
-                        700,
-                        0.21,
-                    );
-                    burst(
-                        now,
-                        0.19,
-                        178,
-                        92,
-                        0.40,
-                        'triangle',
-                        16,
-                    );
-                }
-
-                return;
-            }
-
-            if (tier === 2) {
-                if (variant === 0) {
-                    /* 뿌오오옹 */
-                    pop(
-                        now,
-                        620,
+                        720,
                         0.20,
                     );
-                    burst(
+
+                    tone(
                         now,
-                        0.62,
-                        176,
-                        82,
-                        0.43,
+                        0.34,
+                        235,
+                        130,
+                        0.36,
                         'triangle',
-                        13,
-                    );
-                    burst(
-                        now +
-                            0.22,
-                        0.32,
-                        138,
-                        72,
-                        0.18,
-                        'sine',
-                        17,
-                    );
-                } else if (
-                    variant ===
-                    1
-                ) {
-                    /* 뿌우웅우 */
-                    pop(
-                        now,
-                        580,
-                        0.21,
-                    );
-                    burst(
-                        now,
-                        0.48,
-                        164,
-                        80,
-                        0.44,
-                        'triangle',
-                        16,
-                    );
-                    burst(
-                        now +
-                            0.38,
-                        0.22,
-                        142,
-                        86,
-                        0.28,
-                        'sine',
-                        12,
                     );
                 } else {
-                    /* 뿌우우욱! */
-                    pop(
+                    comicPop(
                         now,
-                        760,
+                        1020,
                         0.24,
                     );
-                    burst(
+
+                    tone(
                         now,
-                        0.52,
-                        170,
-                        72,
-                        0.46,
+                        0.20,
+                        330,
+                        175,
+                        0.38,
                         'triangle',
-                        20,
                     );
                 }
 
@@ -34314,73 +34233,123 @@ export class GameScene extends Phaser.Scene {
             }
 
             /*
-             * Tier 3 is intentionally much more percussive.
-             * Multiple short pops make "뿌드득 / 뿌르륵 / 뿌부부붇"
-             * audible even over Hunt BGM.
+             * Tier 2 — longer and sillier.
+             */
+            if (tier === 2) {
+                if (variant === 0) {
+                    comicPop(
+                        now,
+                        940,
+                        0.22,
+                    );
+
+                    tone(
+                        now,
+                        0.68,
+                        300,
+                        135,
+                        0.40,
+                        'triangle',
+                    );
+
+                    tone(
+                        now + 0.21,
+                        0.38,
+                        360,
+                        180,
+                        0.18,
+                        'sine',
+                    );
+                } else if (
+                    variant === 1
+                ) {
+                    comicPop(
+                        now,
+                        820,
+                        0.23,
+                    );
+
+                    tone(
+                        now,
+                        0.50,
+                        260,
+                        145,
+                        0.42,
+                        'triangle',
+                    );
+
+                    comicPop(
+                        now + 0.34,
+                        640,
+                        0.14,
+                    );
+                } else {
+                    comicPop(
+                        now,
+                        1100,
+                        0.27,
+                    );
+
+                    tone(
+                        now,
+                        0.58,
+                        320,
+                        125,
+                        0.44,
+                        'triangle',
+                    );
+                }
+
+                return;
+            }
+
+            /*
+             * Tier 3 — unmistakably different and funniest.
+             * Bright crack/pop train prevents it from getting buried in BGM.
              */
             if (variant === 0) {
-                /* 뿌-드득!! */
+                /* 뿌드득!! */
                 [
                     0,
-                    0.085,
-                    0.17,
+                    0.09,
+                    0.18,
                 ].forEach(
                     (
                         offset,
                         index,
                     ) => {
-                        pop(
+                        comicPop(
                             now +
                                 offset,
-                            820 -
+                            1250 -
                                 index *
-                                    110,
-                            0.27,
+                                    140,
+                            0.30,
                         );
 
-                        burst(
+                        tone(
                             now +
                                 offset,
-                            0.13,
-                            210 -
+                            0.14,
+                            390 -
                                 index *
-                                    12,
-                            96,
-                            0.44,
+                                    22,
+                            170,
+                            0.37,
                             'sawtooth',
-                            27,
                         );
                     },
                 );
             } else if (
-                variant ===
-                1
+                variant === 1
             ) {
                 /* 뿌르르르륵!! */
-                pop(
+                comicPop(
                     now,
-                    880,
-                    0.29,
+                    1180,
+                    0.30,
                 );
 
-                burst(
-                    now,
-                    0.52,
-                    220,
-                    86,
-                    0.52,
-                    'sawtooth',
-                    34,
-                );
-
-                pop(
-                    now +
-                        0.28,
-                    680,
-                    0.21,
-                );
-            } else {
-                /* 뿌-부부부붇!! */
                 [
                     0,
                     0.075,
@@ -34392,35 +34361,58 @@ export class GameScene extends Phaser.Scene {
                         offset,
                         index,
                     ) => {
-                        pop(
-                            now +
-                                offset,
-                            900 -
-                                index *
-                                    95,
-                            index ===
-                                4
-                                ? 0.30
-                                : 0.23,
-                        );
-
-                        burst(
+                        tone(
                             now +
                                 offset,
                             0.105,
-                            224 -
+                            410 -
                                 index *
-                                    10,
-                            100,
-                            0.40,
+                                    18,
+                            185,
+                            0.31,
                             index %
                                 2 ===
                                 0
                                 ? 'triangle'
-                                : 'sawtooth',
-                            31,
+                                : 'square',
                         );
                     },
+                );
+            } else {
+                /* 뿌부부부붇!! */
+                [
+                    0,
+                    0.065,
+                    0.13,
+                    0.195,
+                    0.26,
+                    0.325,
+                ].forEach(
+                    (
+                        offset,
+                        index,
+                    ) => {
+                        comicPop(
+                            now +
+                                offset,
+                            1320 -
+                                index *
+                                    115,
+                            index ===
+                                5
+                                ? 0.33
+                                : 0.25,
+                        );
+                    },
+                );
+
+                tone(
+                    now,
+                    0.43,
+                    350,
+                    150,
+                    0.34,
+                    'triangle',
                 );
             }
 
@@ -34620,14 +34612,26 @@ export class GameScene extends Phaser.Scene {
         }
 
         this.playComedySound('fart', event.soundTier);
-        const g = this.add.graphics().setDepth(18000);
+        const g =
+            this.trackTransientGameplayVfx(
+                this.add.graphics(),
+            ).setDepth(18000);
         g.lineStyle(5, 0x9bc56b, 0.8).strokeCircle(0, 0, event.radius);
         g.fillStyle(0xb7d87e, 0.12).fillCircle(0, 0, event.radius);
         g.setPosition(event.x, event.y).setScale(0.15).setAlpha(0.9);
         this.tweens.add({ targets: g, scaleX: 1, scaleY: 1, alpha: 0, duration: 850, ease: 'Cubic.Out', onComplete: () => g.destroy() });
         for (let i = 0; i < 12; i++) {
             const a = Math.PI * 2 * i / 12 + Math.random() * 0.3;
-            const puff = this.add.circle(event.x, event.y, 5 + Math.random() * 5, 0xa9cf73, 0.5).setDepth(17999);
+            const puff =
+                this.trackTransientGameplayVfx(
+                    this.add.circle(
+                        event.x,
+                        event.y,
+                        5 + Math.random() * 5,
+                        0xa9cf73,
+                        0.5,
+                    ),
+                ).setDepth(17999);
             this.tweens.add({ targets: puff, x: event.x + Math.cos(a) * event.radius, y: event.y + Math.sin(a) * event.radius, alpha: 0, scale: 1.8, duration: 700 + Math.random() * 250, onComplete: () => puff.destroy() });
         }
     }
@@ -34727,13 +34731,6 @@ export class GameScene extends Phaser.Scene {
     }
 
     private showPoopBurst(event: NetworkPoopBurst): void {
-        if (this.shouldSuppressOneShotAudio()) {
-            /*
-             * Still apply authoritative state below, but suppress the stale
-             * burst/audio/text that may arrive while returning from another tab.
-             */
-        }
-
         const localUntil =
             Date.now() +
             Math.max(
@@ -34755,10 +34752,11 @@ export class GameScene extends Phaser.Scene {
                 .getLocalPlayer()
                 ?.role;
 
-        if (
+        const isLocalHunter =
             event.hunterId ===
-            localSessionId
-        ) {
+            localSessionId;
+
+        if (isLocalHunter) {
             this.localPoopUntil =
                 localUntil;
 
@@ -34769,166 +34767,196 @@ export class GameScene extends Phaser.Scene {
         }
 
         /*
-         * V1010259_SIMPLIFY_POOP_HUD_FOCUS: concise, immediately understandable rule.
-         * Place BELOW the Hider/hourglass/Hunter icon row, not above it.
+         * Actual world position is authoritative packet position.
+         * No screen-fixed notification means the role/hourglass row is never
+         * covered regardless of camera zoom.
          */
-        if (
-            !this.shouldSuppressOneShotAudio() &&
-            (
-                event.hunterId ===
-                    localSessionId ||
-                localRole ===
-                    'hider'
-            )
-        ) {
-            const message =
-                event.hunterId ===
-                    localSessionId
-                    ? (
-                        {
-                            ko: '💩 똥을 지려서 느려졌습니다!  이동속도 -60%',
-                            ja: '💩 漏らして遅くなった！  移動速度 -60%',
-                            en: '💩 You pooped yourself and slowed down!  Move speed -60%',
-                            zh: '💩 拉裤子了，移动变慢！  移速 -60%',
-                        } as const
-                    )[getLanguage()]
-                    : (
-                        {
-                            ko: `💩 ${event.hunterName || '헌터'}가 똥을 지려 느려졌습니다!`,
-                            ja: `💩 ${event.hunterName || 'ハンター'}がお漏らしして遅くなりました！`,
-                            en: `💩 ${event.hunterName || 'Hunter'} pooped themselves and slowed down!`,
-                            zh: `💩 ${event.hunterName || '猎人'}拉裤子了，移动变慢！`,
-                        } as const
-                    )[getLanguage()];
-
-            const notice =
-                this.add.text(
-                    this.gameWidth / 2,
-                    112,
-                    message,
-                    {
-                        fontFamily:
-                            'monospace',
-                        fontSize:
-                            this.mobileControlsEnabled
-                                ? '11px'
-                                : '13px',
-                        fontStyle:
-                            'bold',
-                        color:
-                            '#fff8df',
-                        backgroundColor:
-                            'rgba(69,45,30,0.92)',
-                        stroke:
-                            '#3b2418',
-                        strokeThickness:
-                            2,
-                        align:
-                            'center',
-                        padding: {
-                            x: 10,
-                            y: 6,
-                        },
-                        wordWrap: {
-                            width:
-                                Math.min(
-                                    520,
-                                    this.gameWidth -
-                                        80,
-                                ),
-                        },
-                    },
-                )
-                    .setOrigin(
-                        0.5,
-                        0,
-                    )
-                    .setScrollFactor(
-                        0,
-                    )
-                    .setDepth(
-                        27500,
-                    )
-                    .setAlpha(
-                        0,
-                    );
-
-            this.tweens.add({
-                targets:
-                    notice,
-                alpha:
-                    1,
-                y:
-                    118,
-                duration:
-                    160,
-                hold:
-                    1900,
-                yoyo:
-                    true,
-                onComplete:
-                    () =>
-                        notice.destroy(),
-            });
-        }
-
         if (
             !this.shouldSuppressOneShotAudio()
         ) {
-            this.playComedySound(
-                'cry',
-            );
-
-            const labels = {
+            const poopLabels = {
                 ko: '💩 똥 지렸다!!',
                 ja: '💩 も…漏らした!!',
                 en: '💩 I POOPED MYSELF!!',
                 zh: '💩 拉裤子了!!',
             } as const;
 
-            const t =
-                this.add.text(
-                    event.x,
-                    event.y + 30,
-                    labels[getLanguage()],
-                    {
-                        fontFamily:
-                            'monospace',
-                        fontSize:
-                            '22px',
-                        fontStyle:
-                            'bold',
-                        color:
-                            '#fff6cf',
-                        stroke:
-                            '#5a3421',
-                        strokeThickness:
-                            6,
-                    },
+            /*
+             * "POOPED!" always sits ABOVE the Hunter.
+             */
+            const poopText =
+                this.trackTransientGameplayVfx(
+                    this.add.text(
+                        event.x,
+                        event.y - 52,
+                        poopLabels[
+                            getLanguage()
+                        ],
+                        {
+                            fontFamily:
+                                'monospace',
+                            fontSize:
+                                '20px',
+                            fontStyle:
+                                'bold',
+                            color:
+                                '#fff2c6',
+                            stroke:
+                                '#5a3421',
+                            strokeThickness:
+                                5,
+                        },
+                    ),
                 )
-                    .setOrigin(0.5)
-                    .setDepth(23000)
-                    .setScale(0.25);
+                    .setOrigin(
+                        0.5,
+                    )
+                    .setDepth(
+                        23000,
+                    )
+                    .setScale(
+                        0.45,
+                    );
 
             this.tweens.add({
                 targets:
-                    t,
+                    poopText,
                 scale:
-                    1.15,
+                    1.05,
                 y:
-                    event.y + 54,
+                    event.y - 66,
                 duration:
                     260,
                 ease:
                     'Back.Out',
+                hold:
+                    1250,
                 yoyo:
                     true,
-                hold:
-                    900,
                 onComplete:
                     () =>
-                        t.destroy(),
+                        poopText.destroy(),
             });
+
+            /*
+             * Slowdown explanation:
+             * - Hunter sees it BELOW self.
+             * - Hider sees it ABOVE the affected Hunter, below "POOPED!".
+             *
+             * 4.2 sec readability + semi-transparent background.
+             */
+            if (
+                isLocalHunter ||
+                localRole ===
+                    'hider'
+            ) {
+                const slowMessage =
+                    isLocalHunter
+                        ? (
+                            {
+                                ko:
+                                    '똥을 지려서 느려졌습니다 · 이동속도 -60%',
+                                ja:
+                                    '漏らして遅くなりました · 移動速度 -60%',
+                                en:
+                                    'Pooped yourself · Move speed -60%',
+                                zh:
+                                    '拉裤子了 · 移速 -60%',
+                            } as const
+                        )[getLanguage()]
+                        : (
+                            {
+                                ko:
+                                    `${event.hunterName || '헌터'}가 똥을 지려 느려졌습니다!`,
+                                ja:
+                                    `${event.hunterName || 'ハンター'}がお漏らしして遅くなりました！`,
+                                en:
+                                    `${event.hunterName || 'Hunter'} pooped themselves and slowed down!`,
+                                zh:
+                                    `${event.hunterName || '猎人'}拉裤子后变慢了！`,
+                            } as const
+                        )[getLanguage()];
+
+                const slowY =
+                    isLocalHunter
+                        ? event.y + 34
+                        : event.y - 31;
+
+                const slowEndY =
+                    isLocalHunter
+                        ? event.y + 40
+                        : event.y - 36;
+
+                const slowText =
+                    this.trackTransientGameplayVfx(
+                        this.add.text(
+                            event.x,
+                            slowY,
+                            slowMessage,
+                            {
+                                fontFamily:
+                                    'monospace',
+                                fontSize:
+                                    this.mobileControlsEnabled
+                                        ? '10px'
+                                        : '12px',
+                                fontStyle:
+                                    'bold',
+                                color:
+                                    '#fff8df',
+                                backgroundColor:
+                                    'rgba(69,45,30,0.68)',
+                                stroke:
+                                    '#3b2418',
+                                strokeThickness:
+                                    2,
+                                align:
+                                    'center',
+                                padding: {
+                                    x:
+                                        8,
+                                    y:
+                                        5,
+                                },
+                                wordWrap: {
+                                    width:
+                                        310,
+                                },
+                            },
+                        ),
+                    )
+                        .setOrigin(
+                            0.5,
+                        )
+                        .setDepth(
+                            22999,
+                        )
+                        .setAlpha(
+                            0,
+                        );
+
+                this.tweens.add({
+                    targets:
+                        slowText,
+                    alpha:
+                        0.88,
+                    y:
+                        slowEndY,
+                    duration:
+                        180,
+                    hold:
+                        4200,
+                    yoyo:
+                        true,
+                    onComplete:
+                        () =>
+                            slowText.destroy(),
+                });
+            }
+
+            this.playComedySound(
+                'cry',
+            );
         }
 
         this.updateFartHud();
