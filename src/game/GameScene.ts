@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010269_PRACTICE_LOCAL_HUNTER_GAS_DISPLAY_FIX: Practice Hunter counts as local; poop HUD shows live GAS. */
     /* V1010268_PRACTICE_GAS_COMBO_FIX: Practice GAS cools during poop and passes detected combo flag. */
     /* V1010267_REMOVE_RECENT_DETECTION_TIME: v266 uses server detected flag; timestamp removed. */
     /* V1010266_AUTHORITATIVE_POOP_COMBO_FOLLOW: server-authoritative detect+poop combo and timer-based character following. */
@@ -33816,7 +33817,11 @@ export class GameScene extends Phaser.Scene {
 
         this.fartGaugeLabel.setText(
             pooped
-                ? '💩 GAS MAX · SPEED -60%'
+                ? '💩 GAS ' +
+                    Math.round(
+                        this.fartGauge,
+                    ) +
+                    '% · SPEED -60%'
                 : '💨 GAS ' +
                     Math.round(
                         this.fartGauge,
@@ -34832,9 +34837,15 @@ export class GameScene extends Phaser.Scene {
         const localSessionId =
             multiplayerClient.getSessionId();
 
+        const isPracticeHunter =
+            this.practiceMode === 'hunter' &&
+            event.hunterId ===
+                this.practiceHunterSessionId;
+
         const isLocalHunter =
             event.hunterId ===
-            localSessionId;
+                localSessionId ||
+            isPracticeHunter;
 
         if (isLocalHunter) {
             this.localPoopUntil =
