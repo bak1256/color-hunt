@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010293_MOBILE_HUNTER_FART_VISION_CONTROLS: mobile GAS button, stable FIRE aim, readable fart FX, body-safe vision. */
     /* V1010292_MOBILE_AVATAR_JOIN_STABILITY: compact avatar payload + progressive mobile join rendering. */
     /* V1010291_REMOVE_UNUSED_AVATAR_MOBILE_FLAG: cleanup after replacing patchwork with solid navy. */
     /* V1010290_AVATAR_EDITOR_SOFT_NAVY_BG: muted navy avatar-editor background. */
@@ -2133,7 +2134,15 @@ export class GameScene extends Phaser.Scene {
          * and independently touchable during Paint.
          */
         const moveX = 82;
-        const moveY = 275;
+
+        const getMoveY =
+            (): number =>
+                this.phase === 'hunt'
+                    ? 350
+                    : 275;
+
+        const moveY =
+            getMoveY();
         const aimX =
             this.gameWidth - 170;
         /*
@@ -2146,6 +2155,15 @@ export class GameScene extends Phaser.Scene {
             this.gameWidth - 64;
         const fireY =
             aimY;
+
+        /*
+         * Green/teal GAS button sits above the red FIRE button so the two
+         * actions are immediately distinguishable.
+         */
+        const fartX =
+            fireX;
+        const fartY =
+            fireY - 112;
 
         const createBase =
             (
@@ -2274,6 +2292,60 @@ export class GameScene extends Phaser.Scene {
                     fontStyle: 'bold',
                     color: '#ffffff',
                     stroke: '#5b1111',
+                    strokeThickness: 3,
+                    align: 'center',
+                },
+            )
+                .setOrigin(0.5)
+                .setScrollFactor(0)
+                .setDepth(6001)
+                .setVisible(false);
+
+        this.mobileFartButton =
+            this.add.circle(
+                fartX,
+                fartY,
+                43,
+                0x2f8f72,
+                0.78,
+            )
+                .setStrokeStyle(
+                    4,
+                    0xd9fff1,
+                    0.92,
+                )
+                .setScrollFactor(0)
+                .setDepth(6000)
+                .setVisible(false)
+                .setInteractive({
+                    useHandCursor: true,
+                });
+
+        const mobileFartLabelCopy =
+            (): string => {
+                switch (getLanguage()) {
+                    case 'ja':
+                        return '💨\n探知';
+                    case 'en':
+                        return '💨\nDETECT';
+                    case 'zh':
+                        return '💨\n探测';
+                    default:
+                        return '💨\n탐지';
+                }
+            };
+
+        this.mobileFartLabel =
+            this.add.text(
+                fartX,
+                fartY,
+                mobileFartLabelCopy(),
+                {
+                    fontFamily: 'monospace',
+                    fontSize: '13px',
+                    fontStyle: 'bold',
+                    color: '#ffffff',
+                    stroke: '#124737',
                     strokeThickness: 3,
                     align: 'center',
                 },
@@ -2649,6 +2721,8 @@ export class GameScene extends Phaser.Scene {
                 ) {
                     this.mobileFirePointerId =
                         -1;
+                    this.mobileFartPointerId =
+                        -1;
                 }
 
                 /*
@@ -2661,6 +2735,25 @@ export class GameScene extends Phaser.Scene {
                  * Shooting itself still happens only in the fire button's
                  * own pointerdown handler below.
                  */
+                const fartDistance =
+                    Phaser.Math.Distance.Between(
+                        pointer.x,
+                        pointer.y,
+                        fartX,
+                        fartY,
+                    );
+
+                if (
+                    this.mobileFartButton?.visible &&
+                    fartDistance <= 52
+                ) {
+                    this.mobileFartPointerId =
+                        pointer.id;
+
+                    this.mobilePinchDistance = 0;
+                    return;
+                }
+
                 const fireDistance =
                     Phaser.Math.Distance.Between(
                         pointer.x,
@@ -2814,6 +2907,13 @@ export class GameScene extends Phaser.Scene {
 
                 if (
                     pointer.id ===
+                    this.mobileFartPointerId
+                ) {
+                    return;
+                }
+
+                if (
+                    pointer.id ===
                     this.mobileMovePointerId
                 ) {
                     this.updateMobileJoystick(
@@ -2862,6 +2962,13 @@ export class GameScene extends Phaser.Scene {
                     this.mobileFirePointerId
                 ) {
                     this.mobileFirePointerId = -1;
+                }
+
+                if (
+                    pointer.id ===
+                    this.mobileFartPointerId
+                ) {
+                    this.mobileFartPointerId = -1;
                 }
 
                 if (
@@ -2989,10 +3096,88 @@ export class GameScene extends Phaser.Scene {
                     return;
                 }
 
+                /*
+                 * V1010293_MOBILE_HUNTER_FART_VISION_CONTROLS: pressing FIRE must never become an aim input.
+                 * If the aim stick has never moved, preserve the Hunter's
+                 * current facing instead of using the FIRE touch position.
+                 */
+                const fireAngle =
+                    this.mobileAimHasDirection
+                        ? this.mobileAimAngle
+                        : this.hunterFocusAngle;
+
                 this.fireShotgun(
-                    this.mobileAimAngle,
+                    fireAngle,
                     true,
                 );
+            },
+        );
+
+        this.mobileFartButton.on(
+            'pointerdown',
+            (
+                pointer:
+                    Phaser.Input.Pointer,
+            ) => {
+                pointer.event
+                    ?.preventDefault?.();
+                pointer.event
+                    ?.stopPropagation?.();
+
+                this.mobileFartPointerId =
+                    pointer.id;
+
+                if (
+                    this.isNativeTouchPointer(
+                        pointer,
+                    )
+                ) {
+                    this.mobileTouchPoints.set(
+                        pointer.id,
+                        new Phaser.Math.Vector2(
+                            pointer.x,
+                            pointer.y,
+                        ),
+                    );
+                }
+
+                if (
+                    this.phase !== 'hunt' ||
+                    (
+                        this.practiceMode !== 'hunter' &&
+                        multiplayerClient
+                            .getLocalPlayer()
+                            ?.role !== 'hunter'
+                    )
+                ) {
+                    return;
+                }
+
+                const now =
+                    Date.now();
+
+                if (
+                    now - this.lastFartUseAt <
+                        this.fartUseCooldownMs ||
+                    (
+                        this.practiceMode !== 'hunter' &&
+                        this.localPoopUntil > now
+                    )
+                ) {
+                    return;
+                }
+
+                this.lastFartUseAt =
+                    now;
+
+                if (
+                    this.practiceMode === 'hunter'
+                ) {
+                    this.useHunterPracticeFart();
+                    return;
+                }
+
+                multiplayerClient.sendFart();
             },
         );
 
@@ -3055,6 +3240,8 @@ export class GameScene extends Phaser.Scene {
                     -1;
                 this.mobileFirePointerId =
                     -1;
+                this.mobileFartPointerId =
+                    -1;
             };
 
         this.mobileVisibilitySafetyHandler =
@@ -3066,6 +3253,8 @@ export class GameScene extends Phaser.Scene {
                     this.mobileAimPointerId =
                         -1;
                     this.mobileFirePointerId =
+                        -1;
+                    this.mobileFartPointerId =
                         -1;
                     this.mobileTouchPoints
                         .clear();
@@ -3146,7 +3335,9 @@ export class GameScene extends Phaser.Scene {
                 screenX,
                 screenY,
                 82,
-                275,
+                this.phase === 'hunt'
+                    ? 350
+                    : 275,
             );
 
         if (
@@ -3183,9 +3374,23 @@ export class GameScene extends Phaser.Scene {
                 this.gameHeight - 190,
             );
 
+        const fartDistance =
+            Phaser.Math.Distance.Between(
+                screenX,
+                screenY,
+                this.gameWidth - 64,
+                this.gameHeight - 302,
+            );
+
         return Boolean(
-            this.mobileFireButton?.visible &&
-            fireDistance <= 56
+            (
+                this.mobileFireButton?.visible &&
+                fireDistance <= 56
+            ) ||
+            (
+                this.mobileFartButton?.visible &&
+                fartDistance <= 52
+            )
         );
     }
 
@@ -3526,7 +3731,9 @@ export class GameScene extends Phaser.Scene {
                     82,
                 ),
                 this.getFixedHudCompensatedY(
-                    275,
+                    this.phase === 'hunt'
+                                    ? 350
+                                    : 275,
                 ),
             );
     }
@@ -3542,7 +3749,11 @@ export class GameScene extends Phaser.Scene {
                 : this.gameWidth - 170;
         const baseY =
             kind === 'move'
-                ? 275
+                ? (
+                    this.phase === 'hunt'
+                        ? 350
+                        : 275
+                )
                 : this.gameHeight - 190;
 
         const deltaX =
@@ -3798,6 +4009,21 @@ export class GameScene extends Phaser.Scene {
         this.mobileFireLabel
             ?.setVisible(showHunterCombat);
 
+        this.mobileFartButton
+            ?.setVisible(showHunterCombat);
+
+        this.mobileFartLabel
+            ?.setText(
+                getLanguage() === 'ja'
+                    ? '💨\n探知'
+                    : getLanguage() === 'en'
+                        ? '💨\nDETECT'
+                        : getLanguage() === 'zh'
+                            ? '💨\n探测'
+                            : '💨\n탐지',
+            )
+            .setVisible(showHunterCombat);
+
         if (
             canMove &&
             this.mobileMoveLabel
@@ -3805,7 +4031,9 @@ export class GameScene extends Phaser.Scene {
             this.setFixedHudScreenPosition(
                 this.mobileMoveLabel,
                 82,
-                193,
+                this.phase === 'hunt'
+                    ? 268
+                    : 193,
             );
         }
 
@@ -4071,6 +4299,12 @@ export class GameScene extends Phaser.Scene {
     private mobileAimLabel?: Phaser.GameObjects.Text;
     private mobileFireButton?: Phaser.GameObjects.Arc;
     private mobileFireLabel?: Phaser.GameObjects.Text;
+
+    /* V1010293_MOBILE_HUNTER_FART_VISION_CONTROLS: dedicated mobile Hunter fart-detection button. */
+    private mobileFartButton?: Phaser.GameObjects.Arc;
+    private mobileFartLabel?: Phaser.GameObjects.Text;
+    private mobileFartPointerId = -1;
+
     private mobileMovePointerId = -1;
     private mobileMoveSafetyReleaseHandler?: (event?: Event) => void;
     private mobileVisibilitySafetyHandler?: () => void;
@@ -23276,6 +23510,15 @@ export class GameScene extends Phaser.Scene {
             this.hunterVisionRangeScreen /
             zoom;
 
+        /*
+         * V1010293_MOBILE_HUNTER_FART_VISION_CONTROLS: the Hunter should always see their own immediate body area.
+         * This circular pocket is roughly one character-body diameter and is
+         * unioned with the forward flashlight sector.
+         */
+        const bodySafeRadius =
+            42 /
+            zoom;
+
         const halfAngle =
             Phaser.Math.DegToRad(
                 36,
@@ -23432,27 +23675,100 @@ export class GameScene extends Phaser.Scene {
                     a - b,
             );
 
+            const bodyDy =
+                y -
+                center.y;
+
+            const insideBodyCircle =
+                Math.abs(
+                    bodyDy,
+                ) <=
+                bodySafeRadius;
+
+            const bodyHalfWidth =
+                insideBodyCircle
+                    ? Math.sqrt(
+                        Math.max(
+                            0,
+                            bodySafeRadius *
+                                bodySafeRadius -
+                            bodyDy *
+                                bodyDy,
+                        ),
+                    )
+                    : 0;
+
+            const bodyLeft =
+                center.x -
+                bodyHalfWidth;
+
+            const bodyRight =
+                center.x +
+                bodyHalfWidth;
+
             if (
                 intersections.length < 2
             ) {
+                if (!insideBodyCircle) {
+                    graphics.fillRect(
+                        minWorldX,
+                        y,
+                        maxWorldX -
+                            minWorldX,
+                        step + 1,
+                    );
+                    continue;
+                }
+
                 graphics.fillRect(
                     minWorldX,
                     y,
-                    maxWorldX -
-                        minWorldX,
+                    Math.max(
+                        0,
+                        bodyLeft -
+                            minWorldX,
+                    ),
                     step + 1,
                 );
+
+                graphics.fillRect(
+                    bodyRight,
+                    y,
+                    Math.max(
+                        0,
+                        maxWorldX -
+                            bodyRight,
+                    ),
+                    step + 1,
+                );
+
                 continue;
             }
 
-            const visibleLeft =
+            const sectorLeft =
                 intersections[0];
 
-            const visibleRight =
+            const sectorRight =
                 intersections[
                     intersections.length -
                     1
                 ];
+
+            const visibleLeft =
+                insideBodyCircle
+                    ? Math.min(
+                        sectorLeft,
+                        bodyLeft,
+                    )
+                    : sectorLeft;
+
+            const visibleRight =
+                insideBodyCircle
+                    ? Math.max(
+                        sectorRight,
+                        bodyRight,
+                    )
+                    : sectorRight;
 
             graphics.fillRect(
                 minWorldX,
@@ -24594,6 +24910,8 @@ export class GameScene extends Phaser.Scene {
             this.mobileAimLabel,
             this.mobileFireButton,
             this.mobileFireLabel,
+            this.mobileFartButton,
+            this.mobileFartLabel,
         ].filter(
             (object): object is Phaser.GameObjects.GameObject =>
                 Boolean(object),
@@ -33822,9 +34140,21 @@ export class GameScene extends Phaser.Scene {
             ) &&
             this.mobileAimHasDirection;
 
+        const mobileHunterControl =
+            this.mobileControlsEnabled &&
+            (
+                this.practiceMode === 'hunter' ||
+                this.networkPlayerManager
+                    .canLocalControlHunter()
+            );
+
         const angle =
-            usingMobileAim
-                ? this.mobileAimAngle
+            mobileHunterControl
+                ? (
+                    usingMobileAim
+                        ? this.mobileAimAngle
+                        : this.hunterFocusAngle
+                )
                 : Phaser.Math.Angle.Between(
                     origin.x,
                     origin.y,
@@ -36412,6 +36742,104 @@ export class GameScene extends Phaser.Scene {
         }
 
         this.playComedySound('fart', event.soundTier);
+
+        const fartWords = {
+            ko: [
+                '뿡!',
+                '뿌웅~',
+                '뿌지직!!',
+            ],
+            ja: [
+                'プッ!',
+                'プゥ〜ン',
+                'ブリッ!!',
+            ],
+            en: [
+                'PFFT!',
+                'PRAAAP~',
+                'PRRRT!!',
+            ],
+            zh: [
+                '噗!',
+                '噗——!',
+                '噗噗噗!!',
+            ],
+        } as const;
+
+        const language =
+            getLanguage();
+
+        const fartTier =
+            Phaser.Math.Clamp(
+                Math.round(
+                    event.soundTier,
+                ),
+                1,
+                3,
+            );
+
+        const fartWord =
+            fartWords[language][
+                fartTier - 1
+            ];
+
+        const fartText =
+            this.trackTransientGameplayVfx(
+                this.add.text(
+                    event.x,
+                    event.y - 10,
+                    fartWord,
+                    {
+                        fontFamily:
+                            'monospace',
+                        fontSize:
+                            fartTier === 3
+                                ? '24px'
+                                : '20px',
+                        fontStyle:
+                            'bold',
+                        color:
+                            '#f9ffd8',
+                        stroke:
+                            '#40552b',
+                        strokeThickness:
+                            5,
+                    },
+                ),
+            )
+                .setOrigin(0.5)
+                .setDepth(18010)
+                .setScale(0.35);
+
+        this.tweens.add({
+            targets:
+                fartText,
+            y:
+                event.y - 46,
+            scale:
+                fartTier === 3
+                    ? 1.32
+                    : 1.1,
+            angle:
+                fartTier === 3
+                    ? {
+                        from: -7,
+                        to: 7,
+                    }
+                    : 0,
+            alpha:
+                0,
+            duration:
+                fartTier === 3
+                    ? 1050
+                    : 800,
+            ease:
+                'Back.Out',
+            onComplete:
+                () =>
+                    fartText.destroy(),
+        });
+
         const g =
             this.trackTransientGameplayVfx(
                 this.add.graphics(),
@@ -36465,10 +36893,18 @@ export class GameScene extends Phaser.Scene {
                 this.add.text(
                     p.x,
                     p.y - 58,
-                    '❗',
+                    (
+                        getLanguage() === 'ja'
+                            ? '❗ いたぞ!'
+                            : getLanguage() === 'en'
+                                ? '❗ FOUND ONE!'
+                                : getLanguage() === 'zh'
+                                    ? '❗ 有人!'
+                                    : '❗ 찾았다!'
+                    ),
                     {
                         fontSize:
-                            '38px',
+                            '22px',
                         fontStyle:
                             'bold',
                         stroke:
