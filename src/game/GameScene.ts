@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010297_CONTROLS_HELP_TOGGLE_FIX: controls help toggle listens to the pointerdown event forwarded by every UI. */
     /* V1010296_REMOVE_INVALID_COUNTDOWN_RECOVERY_CHECK: countdown is already excluded by TypeScript narrowing at zero-time recovery. */
     /* V1010295_CLIENT_UI_PHASE_RECOVERY: cough text removed, help toggle, all-phase zero timer recovery. */
     /* V1010294_MOBILE_HUNTER_FART_UI_POLISH: zero-GAS visibility, joystick center sync, readable detection, longer fart words. */
@@ -7714,8 +7715,13 @@ export class GameScene extends Phaser.Scene {
          * One tap opens it, the next tap closes it.
          * Do not bind pointerup/pointerleave to close anymore.
          */
+        /*
+         * V1010297_CONTROLS_HELP_TOGGLE_FIX: all existing inline help buttons forward pointerdown to this
+         * shared button. Toggle on pointerdown so main lobby / waiting room /
+         * Practice / desktop / mobile all use one compatible event path.
+         */
         button.addEventListener(
-            'click',
+            'pointerdown',
             toggle,
         );
 
