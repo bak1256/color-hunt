@@ -79,6 +79,8 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010267_REMOVE_RECENT_DETECTION_TIME: v266 uses server detected flag; timestamp removed. */
+    /* V1010266_AUTHORITATIVE_POOP_COMBO_FOLLOW: server-authoritative detect+poop combo and timer-based character following. */
     /* V1010265_REMOVE_POOP_LOCALROLE_EXACT: remove only v263's unused showPoopBurst localRole. */
     /* V1010263_FOLLOW_POOP_COMBO_EFFECT: poop labels follow Hunter; Hider slowdown text removed; detect+poop combo effect. */
     /* V1010262_POOP_LABEL_BRIGHT_FART_VFX_FLUSH: character-relative poop labels, bright fart audio, destructive background VFX flush. */
@@ -280,7 +282,6 @@ export class GameScene extends Phaser.Scene {
         new Set<Phaser.GameObjects.GameObject>();
 
     /* V1010263_FOLLOW_POOP_COMBO_EFFECT: merge "detected!" + poop into one readable special effect. */
-    private recentHunterDetectionAt = 0;
     private recentHunterDetectionText?: Phaser.GameObjects.Text;
 
     /*
@@ -8406,8 +8407,14 @@ export class GameScene extends Phaser.Scene {
         );
         this.networkUnsubscribers.push(
             multiplayerClient.onFartDetected((reaction) => {
-                if (reaction === 'cough') {
-                    this.showHunterDetectionAlert('cough');
+                if (
+                    reaction === 'cough' &&
+                    this.localPoopUntil <=
+                        Date.now()
+                ) {
+                    this.showHunterDetectionAlert(
+                        'cough',
+                    );
                 }
             }),
         );
@@ -33849,8 +33856,6 @@ export class GameScene extends Phaser.Scene {
         this.recentHunterDetectionText =
             undefined;
 
-        this.recentHunterDetectionAt =
-            0;
     }
 
     private installVisibilityAudioGuard(): void {
@@ -34703,9 +34708,6 @@ export class GameScene extends Phaser.Scene {
         this.recentHunterDetectionText =
             text;
 
-        this.recentHunterDetectionAt =
-            Date.now();
-
         this.tweens.add({
             targets:
                 text,
@@ -34857,48 +34859,79 @@ export class GameScene extends Phaser.Scene {
                 );
             };
 
-        const followText = (
+        /*
+         * Keep a text object attached to the Hunter for its ENTIRE lifetime.
+         * Tween onUpdate does not reliably run through long hold sections,
+         * so use a 50ms scene timer instead.
+         */
+        const followForLifetime = (
             text:
                 Phaser.GameObjects.Text,
             offsetY:
                 number,
+            lifetimeMs:
+                number,
         ): void => {
-            const p =
-                getHunterPosition();
+            const place =
+                (): void => {
+                    if (
+                        !text.active
+                    ) {
+                        return;
+                    }
 
-            if (
-                text.active
-            ) {
-                text.setPosition(
-                    p.x,
-                    p.y +
-                        offsetY,
-                );
-            }
+                    const p =
+                        getHunterPosition();
+
+                    text.setPosition(
+                        p.x,
+                        p.y +
+                            offsetY,
+                    );
+                };
+
+            place();
+
+            const eventTimer =
+                this.time.addEvent({
+                    delay:
+                        50,
+                    loop:
+                        true,
+                    callback:
+                        place,
+                });
+
+            window.setTimeout(
+                () => {
+                    eventTimer.remove(
+                        false,
+                    );
+                },
+                lifetimeMs,
+            );
         };
 
         /*
-         * A cough-detection message was delivered immediately before the
-         * third-fart poop event. Merge the two effects instead of stacking
-         * ❗ + "POOPED!!" on top of each other.
+         * Server is authoritative: if the third fart detected at least one
+         * Hider, poop_burst carries detected=true.
          */
         const detectedWhilePooping =
             isLocalHunter &&
-            Date.now() -
-                this.recentHunterDetectionAt <
-                550;
+            event.detected ===
+                true;
 
         if (
             detectedWhilePooping
         ) {
+            /*
+             * Remove any ordinary ! that may have arrived first.
+             */
             this.recentHunterDetectionText
                 ?.destroy();
 
             this.recentHunterDetectionText =
                 undefined;
-
-            this.recentHunterDetectionAt =
-                0;
 
             const comboLabels = {
                 ko:
@@ -34911,11 +34944,14 @@ export class GameScene extends Phaser.Scene {
                     '💩❗ 拉裤子了…但找到了!!',
             } as const;
 
+            const p =
+                getHunterPosition();
+
             const combo =
                 this.trackTransientGameplayVfx(
                     this.add.text(
-                        event.x,
-                        event.y - 62,
+                        p.x,
+                        p.y - 66,
                         comboLabels[
                             getLanguage()
                         ],
@@ -34955,7 +34991,16 @@ export class GameScene extends Phaser.Scene {
                     )
                     .setScale(
                         0.45,
+                    )
+                    .setAlpha(
+                        0.2,
                     );
+
+            followForLifetime(
+                combo,
+                -66,
+                3100,
+            );
 
             this.tweens.add({
                 targets:
@@ -34963,12 +35008,7 @@ export class GameScene extends Phaser.Scene {
                 scale:
                     1.08,
                 alpha:
-                    {
-                        from:
-                            0.2,
-                        to:
-                            1,
-                    },
+                    1,
                 duration:
                     260,
                 ease:
@@ -34977,21 +35017,11 @@ export class GameScene extends Phaser.Scene {
                     2200,
                 yoyo:
                     true,
-                onUpdate:
-                    () =>
-                        followText(
-                            combo,
-                            -64,
-                        ),
                 onComplete:
                     () =>
                         combo.destroy(),
             });
         } else {
-            /*
-             * Normal poop: "POOPED!!" follows the affected Hunter above head.
-             * Both Hunter and Hiders can see this simple status signal.
-             */
             const poopLabels = {
                 ko:
                     '💩 똥 지렸다!!',
@@ -35003,11 +35033,14 @@ export class GameScene extends Phaser.Scene {
                     '💩 拉裤子了!!',
             } as const;
 
+            const p =
+                getHunterPosition();
+
             const poopText =
                 this.trackTransientGameplayVfx(
                     this.add.text(
-                        event.x,
-                        event.y - 58,
+                        p.x,
+                        p.y - 58,
                         poopLabels[
                             getLanguage()
                         ],
@@ -35035,7 +35068,16 @@ export class GameScene extends Phaser.Scene {
                     )
                     .setScale(
                         0.45,
+                    )
+                    .setAlpha(
+                        0.35,
                     );
+
+            followForLifetime(
+                poopText,
+                -58,
+                3200,
+            );
 
             this.tweens.add({
                 targets:
@@ -35043,12 +35085,7 @@ export class GameScene extends Phaser.Scene {
                 scale:
                     1.05,
                 alpha:
-                    {
-                        from:
-                            0.35,
-                        to:
-                            1,
-                    },
+                    1,
                 duration:
                     260,
                 ease:
@@ -35057,12 +35094,6 @@ export class GameScene extends Phaser.Scene {
                     2300,
                 yoyo:
                     true,
-                onUpdate:
-                    () =>
-                        followText(
-                            poopText,
-                            -58,
-                        ),
                 onComplete:
                     () =>
                         poopText.destroy(),
@@ -35070,8 +35101,8 @@ export class GameScene extends Phaser.Scene {
         }
 
         /*
-         * Slowdown explanation is useful ONLY to the affected Hunter.
-         * Hiders already understand enough from "POOPED!!".
+         * Slowdown explanation only for the affected Hunter.
+         * Follow continuously below the character for the whole display time.
          */
         if (
             isLocalHunter
@@ -35087,11 +35118,14 @@ export class GameScene extends Phaser.Scene {
                     '拉裤子了 · 移速 -60%',
             } as const;
 
+            const p =
+                getHunterPosition();
+
             const slowText =
                 this.trackTransientGameplayVfx(
                     this.add.text(
-                        event.x,
-                        event.y + 35,
+                        p.x,
+                        p.y + 37,
                         slowLabels[
                             getLanguage()
                         ],
@@ -35133,28 +35167,23 @@ export class GameScene extends Phaser.Scene {
                         0,
                     );
 
+            followForLifetime(
+                slowText,
+                37,
+                5000,
+            );
+
             this.tweens.add({
                 targets:
                     slowText,
                 alpha:
-                    {
-                        from:
-                            0,
-                        to:
-                            0.88,
-                    },
+                    0.88,
                 duration:
                     180,
                 hold:
                     4300,
                 yoyo:
                     true,
-                onUpdate:
-                    () =>
-                        followText(
-                            slowText,
-                            37,
-                        ),
                 onComplete:
                     () =>
                         slowText.destroy(),

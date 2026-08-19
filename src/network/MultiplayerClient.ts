@@ -107,6 +107,8 @@ export type NetworkPoopBurst = {
   y: number;
   poopUntil: number;
   serverNow: number;
+  detected?: boolean;
+  /* V1010266_AUTHORITATIVE_POOP_COMBO_FOLLOW */
   /* V1010247_FART_ULTIMATE_BALANCE */
 };
 export type NetworkHiderReaction = {
