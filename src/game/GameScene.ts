@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010358_AVATAR_EDITOR_PERSISTENT_TOOLS: editor tool remains at last tip; eyedropper stays selected after sampling. */
     /* V1010357_AVATAR_EDITOR_TOOL_STATE_PREVIEW: size preview stays at current tip; tool mode preserved; live pipette preview. */
     /* V1010356E_AVATAR_EDITOR_PRECISION_TOOLS_EXACT: exact-source avatar editor tool tip/scale/preview polish. */
     /* V1010354_AVATAR_EDITOR_CAMO_SAMPLER_BACKGROUND: larger avatar sampler canvas with real eyedropper-readable camo background. */
@@ -17190,26 +17191,29 @@ export class GameScene extends Phaser.Scene {
                 <circle cx="8" cy="33" r="5.5"
                     fill="currentColor" stroke="#ffffff" stroke-width="1.6"/>
 
-                <!-- glass shoulder/barrel -->
-                <path d="M21 21 L67 73"
-                    fill="none" stroke="#304b54" stroke-width="17"
+                <!-- V1010358_AVATAR_EDITOR_PERSISTENT_TOOLS: unmistakable transparent glass pipette barrel -->
+                <path d="M19 19 L65 71"
+                    fill="none" stroke="#253a44" stroke-width="19"
                     stroke-linecap="round"/>
-                <path d="M21 21 L67 73"
-                    fill="none" stroke="#d9edf4" stroke-width="11"
+                <path d="M19 19 L65 71"
+                    fill="none" stroke="#dff5fb" stroke-width="13"
                     stroke-linecap="round"/>
-                <path d="M25 25 L63 69"
-                    fill="none" stroke="currentColor" stroke-width="4.5"
+                <path d="M24 24 L60 66"
+                    fill="none" stroke="currentColor" stroke-width="5"
                     stroke-linecap="round"/>
-                <path d="M24 20 L65 67"
-                    fill="none" stroke="#ffffff" stroke-opacity="0.85"
-                    stroke-width="2.4" stroke-linecap="round"/>
+                <path d="M23 20 L61 64"
+                    fill="none" stroke="#ffffff" stroke-opacity="0.92"
+                    stroke-width="2.5" stroke-linecap="round"/>
 
-                <!-- recognizable rubber bulb / handle -->
-                <path d="M62 69 L80 90"
-                    fill="none" stroke="#26363d" stroke-width="23"
+                <!-- large rubber squeeze bulb: visually unlike brush handle -->
+                <path d="M60 68 L80 91"
+                    fill="none" stroke="#213139" stroke-width="27"
                     stroke-linecap="round"/>
-                <path d="M62 69 L80 90"
-                    fill="none" stroke="#8fa6b0" stroke-width="15"
+                <path d="M60 68 L80 91"
+                    fill="none" stroke="#7f99a5" stroke-width="19"
+                    stroke-linecap="round"/>
+                <path d="M63 70 L77 87"
+                    fill="none" stroke="#b9cbd2" stroke-width="5"
                     stroke-linecap="round"/>
 
                 <!-- flat bulb end cap, finger grip -->
@@ -18548,18 +18552,17 @@ export class GameScene extends Phaser.Scene {
                 );
 
                 /*
-                 * V1010357_AVATAR_EDITOR_TOOL_STATE_PREVIEW / SIZE_PREVIEW_IN_PLACE
+                 * V1010358_AVATAR_EDITOR_PERSISTENT_TOOLS / SIZE_ONLY
                  *
-                 * Never teleport the brush while the user adjusts size.
-                 * Keep:
-                 *   - circle as circle
-                 *   - square as square
-                 *   - straight-line mode armed
-                 *   - eyedropper armed
-                 *   - current visible tool position
+                 * This slider modifies selectedSize ONLY.
+                 * No selectedShape / eyedropperArmed / straightLineArmed /
+                 * hoverPoint / floatingTool left/top mutation is allowed here.
                  *
-                 * replay() redraws the semi-transparent footprint at the
-                 * existing hoverPoint, i.e. the CURRENT real brush-tip point.
+                 * Therefore:
+                 *   Circle -> Circle footprint at last tip
+                 *   Square -> Square footprint at last tip
+                 *   Line   -> same selected brush footprint at last tip
+                 *   Pipette stays Pipette (size has no sampling effect)
                  */
                 refreshToolStates();
                 replay();
@@ -18909,8 +18912,18 @@ export class GameScene extends Phaser.Scene {
                             (g << 8) |
                             b;
 
+                        /*
+                         * V1010358_AVATAR_EDITOR_PERSISTENT_TOOLS / PERSISTENT_EYEDROPPER
+                         *
+                         * Sampling changes COLOR only. It must NOT change the
+                         * selected tool. Stay in eyedropper mode until the user
+                         * explicitly chooses Circle / Square / Line.
+                         */
                         eyedropperArmed =
-                            false;
+                            true;
+
+                        floatingTool.innerHTML =
+                            dropperCursorSvg;
 
                         refreshToolStates();
 
@@ -18941,6 +18954,15 @@ export class GameScene extends Phaser.Scene {
                             );
 
                         replay();
+
+                        if (
+                            this.mobileControlsEnabled
+                        ) {
+                            updateFloatingTool(
+                                event.clientX,
+                                event.clientY,
+                            );
+                        }
                     };
 
                 if (
@@ -19177,35 +19199,25 @@ export class GameScene extends Phaser.Scene {
                 }
 
                 /*
-                 * V1010350_AVATAR_EDITOR_FULL_PAINT_PARITY / RELEASE_CENTER_TOOL
-                 * After drawing/sampling, put the active tool at canvas center.
+                 * V1010358_AVATAR_EDITOR_PERSISTENT_TOOLS / KEEP_LAST_TOOL_POSITION
+                 *
+                 * Do nothing on release:
+                 * - hoverPoint already contains the final actual tool-tip point.
+                 * - floatingTool already sits at the final grip position.
+                 * - finishStroke() has already committed/replayed the stroke.
+                 *
+                 * This makes the tool remain exactly where the user stopped.
                  */
                 if (
                     this.mobileControlsEnabled &&
                     activePointers.size ===
                         0
                 ) {
-                    hoverPoint = {
-                        x: 40,
-                        y: 60,
-                    };
-
                     floatingTool.innerHTML =
                         eyedropperArmed
                             ? dropperCursorSvg
                             : brushCursorSvg;
 
-                    floatingTool.style.left =
-                        '50%';
-                    floatingTool.style.top =
-                        '50%';
-                    floatingTool.style.color =
-                        `#${selectedColor
-                            .toString(16)
-                            .padStart(
-                                6,
-                                '0',
-                            )}`;
                     floatingTool.style.display =
                         'flex';
 
@@ -19226,7 +19238,15 @@ export class GameScene extends Phaser.Scene {
         canvas.addEventListener(
             'pointerleave',
             () => {
-                if (!drawing) {
+                /*
+                 * V1010358_AVATAR_EDITOR_PERSISTENT_TOOLS / MOBILE_LAST_POSITION
+                 * On mobile the persistent tool is intentional. Do not erase
+                 * its last position just because the pointer left after release.
+                 */
+                if (
+                    !drawing &&
+                    !this.mobileControlsEnabled
+                ) {
                     hideFloatingTool();
 
                     hoverPoint =
