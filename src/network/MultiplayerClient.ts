@@ -320,6 +320,7 @@ export type PaintReadyStateHandler = (
 ) => void;
 
 export class MultiplayerClient {
+  /* V1010372_SEAT_EXPIRED_FRESH_REJOIN: terminal 524 reconnect seats immediately fall back to bounded fresh clientKey rejoin. */
   /* V1010367_CLIENT_RECONNECT_SNAPSHOT_CONVERGENCE: throttle heavy paint snapshots and converge reconnect state before gameplay rebuild. */
   /* V1010364_P0_MULTIPLAYER_STABILITY: reduce high-frequency aim transport; preserve large-turn bypass. */
   /* V1010345_CONNECTION_STABILITY_HARDENING: same-session recovery wins; fresh handoff is final fallback. */
@@ -525,6 +526,86 @@ this.phaseChangedHandlers.forEach(
   private lastJoinOptions?: JoinRoomOptions;
 
   private freshRejoinInFlight = false;
+
+  /*
+   * V1010372_SEAT_EXPIRED_FRESH_REJOIN
+   * A 524 "seat reservation expired" is terminal for the OLD reconnection
+   * token. Do not spend the SDK's remaining reconnect attempts on that seat;
+   * hand off identity through the existing fresh joinById/clientKey path.
+   */
+  private seatExpiryRecoveryRoom?: object;
+
+  private seatExpiryRecoveryGeneration = 0;
+
+  private isSeatReservationExpired(
+    code: number,
+    message?: string,
+  ): boolean {
+    return (
+      code === 524 ||
+      /seats+reservations+expired/i.test(
+        String(message ?? ""),
+      )
+    );
+  }
+
+  private recoverExpiredSeat(
+    sourceRoom: Room<NetworkGameState>,
+  ): void {
+    if (
+      this.room !== sourceRoom ||
+      this.seatExpiryRecoveryRoom ===
+        sourceRoom
+    ) {
+      return;
+    }
+
+    this.seatExpiryRecoveryRoom =
+      sourceRoom;
+
+    const generation =
+      ++this.seatExpiryRecoveryGeneration;
+
+    /*
+     * This is authoritative terminal evidence for the old reconnect token.
+     * Mark the connection unhealthy, but keep the UI/session context alive
+     * while the fresh clientKey handoff is attempted.
+     */
+    this.lastConfirmedTransportDropAt =
+      Date.now();
+
+    this.notifyConnectionIssue(
+      "seat_reservation_expired",
+    );
+
+    /*
+     * A fresh join can occasionally race the server's old-seat cleanup.
+     * Retry only a few bounded times with a completely fresh Client. Once one
+     * succeeds, attachRoom() changes this.room and all later callbacks no-op.
+     */
+    [0, 700, 1800, 4000].forEach(
+      (delay) => {
+        globalThis.setTimeout(
+          () => {
+            if (
+              generation !==
+                this.seatExpiryRecoveryGeneration ||
+              this.room !==
+                sourceRoom
+            ) {
+              return;
+            }
+
+            void this.attemptFreshRejoin(
+              sourceRoom,
+              true,
+            );
+          },
+          delay,
+        );
+      },
+    );
+  }
 
   /* v0.10.10.239: recovery escalation only follows REAL transport evidence. */
   private lastConfirmedTransportDropAt = 0;
@@ -1497,13 +1578,36 @@ private async attemptFreshRejoin(
       );
 
       this.clearConnectionIssue();
-    } catch {
+    } catch (error) {
+      const reconnectError =
+        error as {
+          code?: number;
+          message?: string;
+        };
+
+      if (
+        this.isSeatReservationExpired(
+          Number(
+            reconnectError?.code ??
+              0,
+          ),
+          reconnectError?.message,
+        )
+      ) {
+        /*
+         * V1010372_SEAT_EXPIRED_FRESH_REJOIN: 524 means the server explicitly says the old seat no
+         * longer exists, so the old SINGLE RECOVERY OWNER constraint is no
+         * longer applicable. Fresh clientKey handoff is now the sole owner.
+         */
+        this.recoverExpiredSeat(
+          sourceRoom,
+        );
+      }
+
       /*
        * v0.10.10.230 SINGLE RECOVERY OWNER:
-       * Never start a fresh join from inside a token reconnect attempt.
-       * Colyseus/server still own the old session reservation here. Starting
-       * both paths at once is what produced duplicate players/paint ownership.
-       * A fresh clientKey handoff is allowed only after final room.onLeave().
+       * For ordinary reconnect failures, never race token reconnect and fresh
+       * join. Only terminal expired-seat evidence bypasses this rule above.
        */
     } finally {
       this.manualReconnectInFlight =
@@ -1550,6 +1654,15 @@ this.lastRoomPingAt = Date.now();
     this.snapshotHuntDurationMs = 80_000;
     this.deliveredPhase = "";
     this.lastRoundPaintStateRequestAt = 0;
+
+    /*
+     * V1010372_SEAT_EXPIRED_FRESH_REJOIN / NEW_ROOM_OWNS_RECOVERY
+     */
+    this.seatExpiryRecoveryGeneration +=
+      1;
+    this.seatExpiryRecoveryRoom =
+      undefined;
+
 this.room = room;
 
     /*
@@ -3017,6 +3130,24 @@ this.manualReconnectInFlight = false;
             message,
           },
         );
+
+        if (
+          this.isSeatReservationExpired(
+            code,
+            message,
+          )
+        ) {
+          /*
+           * V1010372_SEAT_EXPIRED_FRESH_REJOIN / TERMINAL_524
+           *
+           * The old token cannot recover anymore. Move immediately to the
+           * stable clientKey fresh-join handoff instead of waiting for dozens
+           * of doomed reconnect attempts.
+           */
+          this.recoverExpiredSeat(
+            room,
+          );
+        }
       },
     );
   }
