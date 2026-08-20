@@ -91,11 +91,20 @@ export type WeaponStateHandler = (
 ) => void;
 
 /* V1010242_HUNTER_FART_SKILL */
+/* V1010307_CLIENT_FOLD_WAITING_AUTHORITATIVE_GAS */
 export type NetworkFartState = {
   gauge: number;
   poopUntil: number;
   serverNow: number;
   radius: number;
+
+  /*
+   * V1010307_CLIENT_FOLD_WAITING_AUTHORITATIVE_GAS: exact destination of the current accident animation.
+   * 36 -> first accident, 72 -> second, 100 -> third/locked.
+   */
+  targetGauge?: number;
+  accidentCount?: number;
+  locked?: boolean;
 };
 export type NetworkFartBurst = {
   hunterId: string; x: number; y: number; radius: number; soundTier: number;
@@ -110,6 +119,10 @@ export type NetworkPoopBurst = {
   detected?: boolean;
   /* V1010266_AUTHORITATIVE_POOP_COMBO_FOLLOW */
   /* V1010247_FART_ULTIMATE_BALANCE */
+
+  targetGauge?: number;
+  accidentCount?: number;
+  locked?: boolean;
 };
 export type NetworkHiderReaction = {
   hunterId: string; hiderId: string; x: number; y: number;
