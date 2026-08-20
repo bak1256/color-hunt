@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010322_FOLD_GUIDE_FIT_REAL_SPACE: Practice Fold detection uses real width; guide fits real remaining panel space. */
     /* V1010321_FOLD_REFOLD_LOBBY_SETTLE: settle Fold unfold/refold viewport and restore guide natural height. */
     /* V1010320_MOBILE_WAITING_TIMING_BALANCED_PADDING: equal 3px top/bottom breathing room inside mobile timing cards. */
     /* V1010319_MOBILE_WAITING_REAL_MOBILE_DETECTION: waiting mobile layout keys off ch-uniform-mobile-scale, not mobileControlsEnabled. */
@@ -19866,13 +19867,24 @@ export class GameScene extends Phaser.Scene {
                 window.visualViewport?.height ??
                 window.innerHeight;
 
+            const practiceWidth =
+                practiceButton
+                    .getBoundingClientRect()
+                    .width;
+
             const compact =
-                viewportWidth /
-                    Math.max(
-                        1,
-                        viewportHeight,
-                    ) >=
-                1.75;
+                (
+                    viewportWidth /
+                        Math.max(
+                            1,
+                            viewportHeight,
+                        ) >=
+                    1.75
+                ) ||
+                (
+                    practiceWidth > 0 &&
+                    practiceWidth < 245
+                );
 
             const iconCell =
                 compact
@@ -20158,6 +20170,210 @@ export class GameScene extends Phaser.Scene {
                     subtitle.style.setProperty(
                         'text-overflow',
                         'ellipsis',
+                        'important',
+                    );
+                }
+            }
+        }
+
+        /*
+         * V1010322_FOLD_GUIDE_FIT_REAL_SPACE
+         *
+         * The guide is the LAST row in .ch-lobby-actions.
+         * After Fold unfold -> refold, browser/CSS intrinsic sizing can leave
+         * the upper rows a few pixels taller than on a cold folded launch.
+         *
+         * Do not guess a fixed guide height. Measure the REAL remaining space
+         * inside .ch-lobby-actions and fit the guide into that exact space.
+         */
+        const actionPanel =
+            root.querySelector<HTMLElement>(
+                '.ch-lobby-actions',
+            );
+
+        const liveGuide =
+            root.querySelector<HTMLElement>(
+                '.ch-lobby-guide',
+            );
+
+        if (
+            actionPanel &&
+            liveGuide
+        ) {
+            const panelRect =
+                actionPanel
+                    .getBoundingClientRect();
+
+            const guideRect =
+                liveGuide
+                    .getBoundingClientRect();
+
+            const remainingHeight =
+                Math.floor(
+                    panelRect.bottom -
+                    guideRect.top -
+                    2,
+                );
+
+            /*
+             * Keep enough height for title + subtitle, but never extend beyond
+             * the action panel. On normal/unfolded layouts this simply uses the
+             * available space; on refold it prevents bottom clipping.
+             */
+            const fittedHeight =
+                Math.max(
+                    38,
+                    remainingHeight,
+                );
+
+            liveGuide.style.setProperty(
+                'height',
+                String(fittedHeight) +
+                    'px',
+                'important',
+            );
+            liveGuide.style.setProperty(
+                'min-height',
+                String(fittedHeight) +
+                    'px',
+                'important',
+            );
+            liveGuide.style.setProperty(
+                'max-height',
+                String(fittedHeight) +
+                    'px',
+                'important',
+            );
+            liveGuide.style.setProperty(
+                'box-sizing',
+                'border-box',
+                'important',
+            );
+            liveGuide.style.setProperty(
+                'overflow',
+                'hidden',
+                'important',
+            );
+            liveGuide.style.setProperty(
+                'align-items',
+                'center',
+                'important',
+            );
+
+            const guideCopy =
+                liveGuide.lastElementChild as
+                    HTMLElement |
+                    null;
+
+            if (guideCopy) {
+                guideCopy.style.setProperty(
+                    'display',
+                    'grid',
+                    'important',
+                );
+                guideCopy.style.setProperty(
+                    'grid-template-rows',
+                    'auto auto',
+                    'important',
+                );
+                guideCopy.style.setProperty(
+                    'align-content',
+                    'center',
+                    'important',
+                );
+                guideCopy.style.setProperty(
+                    'row-gap',
+                    '1px',
+                    'important',
+                );
+                guideCopy.style.setProperty(
+                    'height',
+                    '100%',
+                    'important',
+                );
+                guideCopy.style.setProperty(
+                    'min-height',
+                    '0',
+                    'important',
+                );
+                guideCopy.style.setProperty(
+                    'overflow',
+                    'hidden',
+                    'important',
+                );
+
+                const guideTitle =
+                    guideCopy.querySelector<HTMLElement>(
+                        'strong',
+                    );
+
+                if (guideTitle) {
+                    guideTitle.style.setProperty(
+                        'line-height',
+                        '1.05',
+                        'important',
+                    );
+                    guideTitle.style.setProperty(
+                        'margin',
+                        '0',
+                        'important',
+                    );
+                    guideTitle.style.setProperty(
+                        'white-space',
+                        'nowrap',
+                        'important',
+                    );
+                }
+
+                const guideSubtitle =
+                    guideCopy.querySelector<HTMLElement>(
+                        'span',
+                    );
+
+                if (guideSubtitle) {
+                    guideSubtitle.style.setProperty(
+                        'display',
+                        'block',
+                        'important',
+                    );
+                    guideSubtitle.style.setProperty(
+                        'height',
+                        'auto',
+                        'important',
+                    );
+                    guideSubtitle.style.setProperty(
+                        'min-height',
+                        '0',
+                        'important',
+                    );
+                    guideSubtitle.style.setProperty(
+                        'max-height',
+                        'none',
+                        'important',
+                    );
+                    guideSubtitle.style.setProperty(
+                        'line-height',
+                        '1.05',
+                        'important',
+                    );
+                    guideSubtitle.style.setProperty(
+                        'margin',
+                        '0',
+                        'important',
+                    );
+                    guideSubtitle.style.setProperty(
+                        'white-space',
+                        'normal',
+                        'important',
+                    );
+                    guideSubtitle.style.setProperty(
+                        'overflow',
+                        'visible',
+                        'important',
+                    );
+                    guideSubtitle.style.setProperty(
+                        'text-overflow',
+                        'clip',
                         'important',
                     );
                 }
