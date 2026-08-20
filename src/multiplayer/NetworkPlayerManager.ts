@@ -47,6 +47,7 @@ type NetworkPlayerView = {
 };
 
 export class NetworkPlayerManager {
+  /* V1010346_MOVEMENT_JITTER_MAX_HARDENING: local prediction, remote damping, delta and network cadence hardening. */
   /* V1010343_URGENT_HUNTER_INPUT_JITTER_EYEDROPPER: protect active local Hunter prediction from delayed echo jitter. */
   /* V1010341_CLIENT_GAMEPLAY_STABILITY_SAFE: movement + paint rendering stability. */
   /* V1010339C_CRITICAL_ROUND_STABILITY_CLIENT: preserve exact thin-brush remote density. */
@@ -116,7 +117,11 @@ export class NetworkPlayerManager {
   private lastLocalMoveInputAt = 0;
   private localWasMoving = false;
   private lastAuthoritativeSyncAt = 0;
-  private readonly authoritativeSyncIntervalMs = 16;
+  /*
+   * V1010346_MOVEMENT_JITTER_MAX_HARDENING / AUTHORITY_SYNC_RATE
+   * Avoid redundant remote target reconciliation at render-frame frequency.
+   */
+  private readonly authoritativeSyncIntervalMs = 33;
   /*
    * V1010343_URGENT_HUNTER_INPUT_JITTER_EYEDROPPER / LOCAL_PREDICTION_GRACE
    * During active input, delayed server echoes must not fight the locally
