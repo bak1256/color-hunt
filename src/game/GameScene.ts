@@ -79,6 +79,11 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010368_MOBILE_RENDER_BUDGET: throttle expensive mobile-only HUD/lobby redraws without changing movement, input, paint, network, or reconnect cadence. */
+    private lastMobileSurvivalHudRenderAt = -Infinity;
+    private lastMobileLobbyUiRenderAt = -Infinity;
+    private lastMobileMapSelectorRenderAt = -Infinity;
+
     /* V1010367_CLIENT_RECONNECT_SNAPSHOT_CONVERGENCE: reconnect recovery waits for authoritative paint convergence and avoids snapshot storms. */
     /* V1010365_MOBILE_PRECISION_CUSTOMIZATION_PAINT: mobile Lobby/Hunter customization uses drag-to-position then stationary hold-to-paint; Hider camouflage unchanged. */
     /* V1010363_POOP_SLOW_TEXT_SPACING: move poop slowdown explanation slightly below the under-Hunter countdown gauge. */
@@ -6094,7 +6099,27 @@ export class GameScene extends Phaser.Scene {
          */
         this.repairConnectedRoomUiIfNeeded();
         this.syncMapBackground();
-        this.updateMapSelectorUi();
+
+        /*
+         * V1010368_MOBILE_RENDER_BUDGET
+         *
+         * These are UI reconciliation/redraw paths, not gameplay simulation.
+         * On mobile they do not need to run at 60/120 Hz. Keep input, movement,
+         * paint, networking, camera and reconnect logic at full frame cadence.
+         */
+        const mobileRenderNow =
+            this.time.now;
+
+        if (
+            !this.mobileControlsEnabled ||
+            mobileRenderNow -
+                this.lastMobileMapSelectorRenderAt >=
+                120
+        ) {
+            this.lastMobileMapSelectorRenderAt =
+                mobileRenderNow;
+            this.updateMapSelectorUi();
+        }
 
         if (
             this.phase === 'lobby' &&
@@ -6103,9 +6128,21 @@ export class GameScene extends Phaser.Scene {
             /*
              * Paint time / host / volunteer changes can arrive through
              * lobby_snapshot rather than a Schema onChange callback.
-             * Keep the lightweight lobby panel in sync every frame.
+             *
+             * Desktop keeps the existing every-frame behavior. Mobile refreshes
+             * the DOM-heavy lobby panel at ~10 Hz, while actor positions remain
+             * authoritative every frame.
              */
-            this.updateLobbyUi();
+            if (
+                !this.mobileControlsEnabled ||
+                mobileRenderNow -
+                    this.lastMobileLobbyUiRenderAt >=
+                    100
+            ) {
+                this.lastMobileLobbyUiRenderAt =
+                    mobileRenderNow;
+                this.updateLobbyUi();
+            }
 
             this.networkPlayerManager
                 ?.forceLobbyPositionsFromState();
@@ -6173,7 +6210,22 @@ export class GameScene extends Phaser.Scene {
             this.phase === 'paint' ||
             this.phase === 'hunt'
         ) {
-            this.updateSurvivalHud();
+            /*
+             * Survival HUD rebuilds a fairly large Graphics command list
+             * (players + hourglass + sand) from scratch. ~20 Hz is visually
+             * smooth for the timer/hourglass on mobile and avoids needless GPU/
+             * CPU churn. Desktop behavior is unchanged.
+             */
+            if (
+                !this.mobileControlsEnabled ||
+                mobileRenderNow -
+                    this.lastMobileSurvivalHudRenderAt >=
+                    50
+            ) {
+                this.lastMobileSurvivalHudRenderAt =
+                    mobileRenderNow;
+                this.updateSurvivalHud();
+            }
         }
 
         this.updateCountdownUi();
