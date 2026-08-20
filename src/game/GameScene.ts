@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010320_MOBILE_WAITING_TIMING_BALANCED_PADDING: equal 3px top/bottom breathing room inside mobile timing cards. */
     /* V1010319_MOBILE_WAITING_REAL_MOBILE_DETECTION: waiting mobile layout keys off ch-uniform-mobile-scale, not mobileControlsEnabled. */
     /* V1010318_MOBILE_WAITING_FORCE_FULL_WIDTH: stretch full timing ancestry so headers/options use entire card width. */
     /* V1010317_MOBILE_WAITING_TIMING_FILL_ALIGN: mobile timing headers left-aligned and 3 buttons fill width evenly. */
@@ -21753,7 +21754,7 @@ export class GameScene extends Phaser.Scene {
                         );
                         section.style.setProperty(
                             'grid-template-rows',
-                            '14px 26px',
+                            '14px 24px',
                             'important',
                         );
                         section.style.setProperty(
@@ -21808,7 +21809,7 @@ export class GameScene extends Phaser.Scene {
                         );
                         section.style.setProperty(
                             'padding',
-                            '2px 6px',
+                            '3px 6px',
                             'important',
                         );
                         section.style.setProperty(
@@ -22046,17 +22047,17 @@ export class GameScene extends Phaser.Scene {
                         );
                         options.style.setProperty(
                             'height',
-                            '26px',
+                            '24px',
                             'important',
                         );
                         options.style.setProperty(
                             'min-height',
-                            '26px',
+                            '24px',
                             'important',
                         );
                         options.style.setProperty(
                             'max-height',
-                            '26px',
+                            '24px',
                             'important',
                         );
                         options.style.setProperty(
@@ -22129,17 +22130,17 @@ export class GameScene extends Phaser.Scene {
                         );
                         button.style.setProperty(
                             'height',
-                            '26px',
+                            '24px',
                             'important',
                         );
                         button.style.setProperty(
                             'min-height',
-                            '26px',
+                            '24px',
                             'important',
                         );
                         button.style.setProperty(
                             'max-height',
-                            '26px',
+                            '24px',
                             'important',
                         );
                         button.style.setProperty(
