@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010336_DESKTOP_HEADER_RESTORE_CONTROLS: restore desktop BGM/help sizing; compact only translated title; add profile bottom room. */
     /* V1010335_DESKTOP_HEADER_TRANSLATION_SAFE: desktop header uses translation-safe 3-column grid and profile bottom gap. */
     /* V1010334B_DESKTOP_LOBBY_TOP_SPACING_RUNTIME: resilient desktop-only top/profile spacing override. */
     /* V1010333B_REMOVE_UNUSED_COARSE_POINTER: remove v333 leftover unused coarsePointer declaration only. */
@@ -20635,6 +20636,258 @@ export class GameScene extends Phaser.Scene {
                 practice,
                 'max-height',
                 '46px',
+            );
+        }
+
+        /*
+         * V1010336_DESKTOP_HEADER_RESTORE_CONTROLS
+         *
+         * DESKTOP ONLY.
+         *
+         * Undo the bad v335 sizing of BGM / Help controls.
+         * Let their original component CSS own their size again.
+         * Only the translated GAME START label is compacted.
+         */
+        if (
+            !window.matchMedia(
+                '(pointer: coarse)',
+            ).matches
+        ) {
+            const desktopSet =
+                (
+                    element:
+                        HTMLElement |
+                        null,
+                    property:
+                        string,
+                    value:
+                        string,
+                ): void => {
+                    element?.style.setProperty(
+                        property,
+                        value,
+                        'important',
+                    );
+                };
+
+            const titleRow =
+                root.querySelector<HTMLElement>(
+                    '.ch-lobby-actions-title-row',
+                );
+
+            if (titleRow) {
+                /*
+                 * Return to a simple flex header:
+                 * title uses remaining room,
+                 * BGM / Help retain their original component dimensions.
+                 */
+                desktopSet(
+                    titleRow,
+                    'display',
+                    'flex',
+                );
+                desktopSet(
+                    titleRow,
+                    'align-items',
+                    'center',
+                );
+                desktopSet(
+                    titleRow,
+                    'justify-content',
+                    'space-between',
+                );
+                desktopSet(
+                    titleRow,
+                    'gap',
+                    '8px',
+                );
+                desktopSet(
+                    titleRow,
+                    'height',
+                    '54px',
+                );
+                desktopSet(
+                    titleRow,
+                    'min-height',
+                    '54px',
+                );
+                desktopSet(
+                    titleRow,
+                    'max-height',
+                    '54px',
+                );
+                desktopSet(
+                    titleRow,
+                    'padding',
+                    '3px 4px',
+                );
+                desktopSet(
+                    titleRow,
+                    'box-sizing',
+                    'border-box',
+                );
+                desktopSet(
+                    titleRow,
+                    'overflow',
+                    'visible',
+                );
+
+                const title =
+                    titleRow.querySelector<HTMLElement>(
+                        'h2',
+                    );
+
+                desktopSet(
+                    title,
+                    'flex',
+                    '1 1 auto',
+                );
+                desktopSet(
+                    title,
+                    'min-width',
+                    '0',
+                );
+                desktopSet(
+                    title,
+                    'font-size',
+                    '18px',
+                );
+                desktopSet(
+                    title,
+                    'line-height',
+                    '1',
+                );
+                desktopSet(
+                    title,
+                    'white-space',
+                    'nowrap',
+                );
+                desktopSet(
+                    title,
+                    'overflow',
+                    'hidden',
+                );
+                desktopSet(
+                    title,
+                    'text-overflow',
+                    'clip',
+                );
+                desktopSet(
+                    title,
+                    'margin',
+                    '0',
+                );
+                desktopSet(
+                    title,
+                    'padding',
+                    '0',
+                );
+
+                /*
+                 * v335 forced every non-title child to tiny fixed dimensions.
+                 * Remove exactly those inline overrides so BGM / Help return to
+                 * the original styling that was working before.
+                 */
+                Array.from(
+                    titleRow.children,
+                ).forEach(
+                    (
+                        child,
+                        index,
+                    ) => {
+                        if (
+                            !(child instanceof HTMLElement) ||
+                            index === 0
+                        ) {
+                            return;
+                        }
+
+                        [
+                            'position',
+                            'transform',
+                            'margin',
+                            'flex',
+                            'min-width',
+                            'max-width',
+                            'height',
+                            'min-height',
+                            'max-height',
+                            'padding',
+                            'box-sizing',
+                            'white-space',
+                        ].forEach(
+                            (property) => {
+                                child.style.removeProperty(
+                                    property,
+                                );
+                            },
+                        );
+                    },
+                );
+            }
+
+            /*
+             * Real breathing room INSIDE My Character card + visible gap below.
+             */
+            const profile =
+                root.querySelector<HTMLElement>(
+                    '.ch-lobby-profile-card',
+                );
+
+            desktopSet(
+                profile,
+                'height',
+                '92px',
+            );
+            desktopSet(
+                profile,
+                'min-height',
+                '92px',
+            );
+            desktopSet(
+                profile,
+                'max-height',
+                '92px',
+            );
+            desktopSet(
+                profile,
+                'padding-bottom',
+                '10px',
+            );
+            desktopSet(
+                profile,
+                'margin-bottom',
+                '4px',
+            );
+            desktopSet(
+                profile,
+                'box-sizing',
+                'border-box',
+            );
+            desktopSet(
+                profile,
+                'overflow',
+                'hidden',
+            );
+
+            /*
+             * Keep total column height safe by using compact-but-readable
+             * action rows. Mobile/Fold is completely untouched.
+             */
+            const actions =
+                root.querySelector<HTMLElement>(
+                    '.ch-lobby-actions',
+                );
+
+            desktopSet(
+                actions,
+                'grid-template-rows',
+                '54px 92px 48px 48px 48px 46px minmax(52px, 1fr)',
+            );
+            desktopSet(
+                actions,
+                'gap',
+                '8px',
             );
         }
 
