@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010365_MOBILE_PRECISION_CUSTOMIZATION_PAINT: mobile Lobby/Hunter customization uses drag-to-position then stationary hold-to-paint; Hider camouflage unchanged. */
     /* V1010363_POOP_SLOW_TEXT_SPACING: move poop slowdown explanation slightly below the under-Hunter countdown gauge. */
     /* V1010362_POOP_DEBUFF_5S_GAUGE: poop slowdown lasts 5s; Hunter-underfoot countdown gauge mirrors authoritative deadline. */
     /* V1010361_HIDER_FART_REACTION_LINES_I18N: fart detection text is voiced as the Hider's smell reaction in KO/JA/EN/ZH; mechanics unchanged. */
@@ -17007,7 +17008,7 @@ export class GameScene extends Phaser.Scene {
                             ? '1 finger: paint · 2 fingers: zoom · ●/■ brush · 💧 eyedropper · ╱ line'
                             : getLanguage() === 'zh'
                                 ? '单指涂色 · 双指缩放 · ●/■画笔 · 💧吸管 · ╱直线'
-                                : '한 손가락: 배경부터 드래그해 색칠 · 두 손가락: 확대 · ●/■ 브러시 · 💧 스포이드 · ╱ 직선'
+                                : '드래그: 위치 맞추기 · 잠깐 멈추면 색칠 시작 · 두 손가락: 확대 · ●/■ 브러시 · 💧 스포이드 · ╱ 직선'
                 )
                 : (
                     getLanguage() === 'ja'
@@ -17607,6 +17608,108 @@ export class GameScene extends Phaser.Scene {
         let pendingStartScreen:
             { x: number; y: number } |
             undefined;
+
+        /*
+         * V1010365_MOBILE_PRECISION_CUSTOMIZATION_PAINT / AVATAR_HOLD_TO_PAINT
+         * Mobile customization is precision-first:
+         * drag positions the brush; a short stationary hold starts paint.
+         */
+        const avatarMobilePaintHoldMs =
+            180;
+
+        let avatarMobilePaintHoldTimer:
+            number |
+            undefined;
+
+        const cancelAvatarMobilePaintHold =
+            (): void => {
+                if (
+                    avatarMobilePaintHoldTimer !==
+                    undefined
+                ) {
+                    window.clearTimeout(
+                        avatarMobilePaintHoldTimer,
+                    );
+
+                    avatarMobilePaintHoldTimer =
+                        undefined;
+                }
+            };
+
+        const scheduleAvatarMobilePaintHold =
+            (
+                pointerId: number,
+            ): void => {
+                cancelAvatarMobilePaintHold();
+
+                if (
+                    !this.mobileControlsEnabled ||
+                    !drawing ||
+                    pendingPointerId !==
+                        pointerId ||
+                    eyedropperArmed
+                ) {
+                    return;
+                }
+
+                avatarMobilePaintHoldTimer =
+                    window.setTimeout(
+                        () => {
+                            avatarMobilePaintHoldTimer =
+                                undefined;
+
+                            if (
+                                !drawing ||
+                                pendingPointerId !==
+                                    pointerId ||
+                                !activePointers.has(
+                                    pointerId,
+                                ) ||
+                                activePointers.size !==
+                                    1 ||
+                                eyedropperArmed
+                            ) {
+                                return;
+                            }
+
+                            const latest =
+                                activePointers.get(
+                                    pointerId,
+                                );
+
+                            if (!latest) {
+                                return;
+                            }
+
+                            const startPoint =
+                                avatarToolTipToLogical(
+                                    latest.x,
+                                    latest.y,
+                                );
+
+                            hoverPoint =
+                                startPoint;
+
+                            paintStarted =
+                                true;
+
+                            straightLineStart =
+                                startPoint;
+
+                            currentPoints = [
+                                startPoint,
+                            ];
+
+                            /*
+                             * This is intentionally the FIRST raster commit.
+                             * Until this timer fires the finger can move around
+                             * the canvas without drawing anything.
+                             */
+                            replay();
+                        },
+                        avatarMobilePaintHoldMs,
+                    );
+            };
 
         let currentPoints:
             NetworkPaintPoint[] = [];
@@ -18624,6 +18727,8 @@ export class GameScene extends Phaser.Scene {
 
         const finishStroke =
             (): void => {
+                cancelAvatarMobilePaintHold();
+
                 if (
                     paintStarted &&
                     currentPoints.length > 0
@@ -18726,6 +18831,9 @@ export class GameScene extends Phaser.Scene {
 
                 if (!pinchActive) {
                     pinchActive = true;
+
+                    cancelAvatarMobilePaintHold();
+
                     /*
                      * V1010348_AVATAR_EDITOR_PAINT_PARITY / PINCH_OWNS_VIEW
                      * Finish the current paint gesture when two fingers take
@@ -18859,12 +18967,6 @@ export class GameScene extends Phaser.Scene {
                     return;
                 }
 
-                /*
-                 * V1010348_AVATAR_EDITOR_PAINT_PARITY / BACKGROUND_STARTS_PAINT
-                 * Do NOT reject a pointer that starts outside the avatar.
-                 * The stroke may enter the body later. Raster writes remain
-                 * clipped by insideBody(), exactly like Hider paint.
-                 */
                 drawing = true;
                 paintStarted = false;
                 pendingPointerId =
@@ -18878,13 +18980,28 @@ export class GameScene extends Phaser.Scene {
                 hoverPoint =
                     downLogical;
 
-                /*
-                 * V1010350_AVATAR_EDITOR_FULL_PAINT_PARITY: seed the stroke immediately, even on empty
-                 * background. drawBodyPixel() clips it to the avatar later.
-                 */
-                currentPoints = [
-                    downLogical,
-                ];
+                if (
+                    this.mobileControlsEnabled
+                ) {
+                    /*
+                     * V1010365_MOBILE_PRECISION_CUSTOMIZATION_PAINT:
+                     * Mobile pointer-down paints NOTHING.
+                     * The user may freely drag the tool to an eye/hair pixel.
+                     */
+                    currentPoints = [];
+
+                    scheduleAvatarMobilePaintHold(
+                        event.pointerId,
+                    );
+                } else {
+                    /*
+                     * Desktop keeps the existing immediate drag workflow.
+                     */
+                    currentPoints = [
+                        downLogical,
+                    ];
+                }
+
                 replay();
             },
         );
@@ -18960,9 +19077,35 @@ export class GameScene extends Phaser.Scene {
                                 pendingStartScreen.y,
                         );
 
+                    if (
+                        this.mobileControlsEnabled
+                    ) {
+                        /*
+                         * V1010365_MOBILE_PRECISION_CUSTOMIZATION_PAINT / AVATAR_DRAG_IS_AIM
+                         * A meaningful move restarts the stationary-hold timer
+                         * from THIS latest position. No raster write occurs.
+                         */
+                        if (moved >= 3) {
+                            pendingStartScreen = {
+                                x:
+                                    event.clientX,
+                                y:
+                                    event.clientY,
+                            };
+
+                            currentPoints = [];
+
+                            scheduleAvatarMobilePaintHold(
+                                event.pointerId,
+                            );
+                        }
+
+                        replay();
+                        return;
+                    }
+
                     /*
-                     * Same safety philosophy as in-game mobile paint:
-                     * touch first = preview, actual paint after movement.
+                     * Desktop existing behavior: movement starts freehand.
                      */
                     if (moved < 1) {
                         replay();
@@ -18980,24 +19123,13 @@ export class GameScene extends Phaser.Scene {
                     straightLineStart =
                         startPoint;
 
-                    /*
-                     * Desktop mirrors Hider paint: hold Shift while dragging.
-                     * Mobile uses the dedicated LINE tool button below.
-                     */
                     if (
-                        !this.mobileControlsEnabled &&
                         event.shiftKey
                     ) {
                         straightLineArmed =
                             true;
                     }
 
-                    /*
-                     * V1010350_AVATAR_EDITOR_FULL_PAINT_PARITY / KEEP_BACKGROUND_ORIGIN
-                     * Keep the pointerdown seed when it began outside the body.
-                     * This lets expandSegmentPoints() bridge cleanly across the
-                     * body edge instead of starting only after entry.
-                     */
                     if (
                         currentPoints.length ===
                             0
@@ -34987,6 +35119,60 @@ export class GameScene extends Phaser.Scene {
         return true;
     }
 
+    /*
+     * V1010365_MOBILE_PRECISION_CUSTOMIZATION_PAINT / HUNTER_HOLD_TO_PAINT
+     * Hunter customization needs pixel precision, unlike Hider camouflage.
+     */
+    private isMobileHunterCustomizationPaint():
+        boolean {
+        return (
+            this.mobileControlsEnabled &&
+            this.phase === 'paint' &&
+            this.isMultiplayerSession() &&
+            this.networkPlayerManager
+                .canLocalControlHunter()
+        );
+    }
+
+    private scheduleMobileHunterPrecisionHold(
+        pointer: Phaser.Input.Pointer,
+    ): void {
+        this.cancelMobilePaintHoldTimers();
+        this.mobilePaintDotCommitted =
+            false;
+
+        this.mobilePaintHoldDotEvent =
+            this.time.delayedCall(
+                180,
+                () => {
+                    if (
+                        !this.isMobileHunterCustomizationPaint() ||
+                        pointer.id !==
+                            this.mobilePendingPaintPointerId ||
+                        !pointer.isDown
+                    ) {
+                        return;
+                    }
+
+                    if (
+                        this.commitMobilePendingDot()
+                    ) {
+                        this.showMobilePendingPaintPreview(
+                            pointer,
+                        );
+
+                        try {
+                            navigator.vibrate?.(
+                                12,
+                            );
+                        } catch {
+                            // Best-effort feedback only.
+                        }
+                    }
+                },
+            );
+    }
+
     private scheduleMobilePaintHoldModes(
         pointer: Phaser.Input.Pointer,
     ): void {
@@ -35084,6 +35270,47 @@ export class GameScene extends Phaser.Scene {
                 pointer.x,
                 pointer.y,
             );
+
+        /*
+         * V1010365_MOBILE_PRECISION_CUSTOMIZATION_PAINT / HUNTER_DRAG_IS_AIM
+         * Before the 180ms stationary hold has committed the first dot,
+         * Hunter finger movement only relocates the brush.
+         *
+         * Hider intentionally skips this branch and keeps the proven fast
+         * camouflage behavior below.
+         */
+        if (
+            this.isMobileHunterCustomizationPaint() &&
+            !this.mobilePaintDotCommitted
+        ) {
+            if (movedScreenPixels >= 3) {
+                this.mobilePendingPaintStartScreen
+                    .set(
+                        pointer.x,
+                        pointer.y,
+                    );
+
+                const latestTarget =
+                    this.getPaintInputWorldPoint(
+                        pointer,
+                    );
+
+                this.mobilePendingPaintStartWorld
+                    .copy(
+                        latestTarget,
+                    );
+
+                this.scheduleMobileHunterPrecisionHold(
+                    pointer,
+                );
+            }
+
+            this.showMobilePendingPaintPreview(
+                pointer,
+            );
+
+            return true;
+        }
 
         /* Ignore normal finger tremor. A still/near-still hold becomes a dot. */
         if (movedScreenPixels < 6) {
@@ -35734,9 +35961,21 @@ export class GameScene extends Phaser.Scene {
                             pointer,
                         );
 
-                        this.scheduleMobilePaintHoldModes(
-                            pointer,
-                        );
+                        if (
+                            this.isMobileHunterCustomizationPaint()
+                        ) {
+                            this.scheduleMobileHunterPrecisionHold(
+                                pointer,
+                            );
+                        } else {
+                            /*
+                             * Hider/Practice Hider stay fast:
+                             * existing drag + dot + long-hold line behavior.
+                             */
+                            this.scheduleMobilePaintHoldModes(
+                                pointer,
+                            );
+                        }
 
                         return;
                     }
