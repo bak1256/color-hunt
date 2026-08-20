@@ -320,6 +320,13 @@ export type PaintReadyStateHandler = (
 ) => void;
 
 export class MultiplayerClient {
+  /* V1010340C_MULTIPLAYER_TRANSPORT_HARDENING_FINAL: aim traffic and hidden-tab movement hardening. */
+  /*
+   * V1010340C_MULTIPLAYER_TRANSPORT_HARDENING_FINAL / AIM_TRANSPORT
+   */
+  private lastHunterAimSentAt = 0;
+  private lastHunterAimSentAngle =
+    Number.NaN;
   /*
    * V1010237_BACKGROUND_RESUME_POLICY
    * Hidden/minimized is NOT a leave signal.
@@ -2019,6 +2026,13 @@ this.manualReconnectInFlight = false;
         }
 
         /*
+         * V1010340C_MULTIPLAYER_TRANSPORT_HARDENING_FINAL / RECONNECT_AIM_RESET
+         */
+        this.lastHunterAimSentAt = 0;
+        this.lastHunterAimSentAngle =
+          Number.NaN;
+
+        /*
          * Force the authoritative server phase to be applied even when
          * reconnecting during the same phase.
          */
@@ -2981,6 +2995,18 @@ this.manualReconnectInFlight = false;
       return;
     }
 
+    /*
+     * V1010340C_MULTIPLAYER_TRANSPORT_HARDENING_FINAL / HIDDEN_MOVE_GUARD
+     * Never flush stale movement callbacks while the page is hidden/frozen.
+     */
+    if (
+      typeof document !==
+        "undefined" &&
+      document.hidden
+    ) {
+      return;
+    }
+
     this.room.send(
       "move",
       {
@@ -3004,7 +3030,60 @@ this.manualReconnectInFlight = false;
   sendHunterAim(
     angle: number,
   ): void {
-    this.room?.send(
+    /*
+     * V1010340C_MULTIPLAYER_TRANSPORT_HARDENING_FINAL / AIM_THROTTLE
+     *
+     * Gaming mice can produce hundreds of pointer events each second.
+     * Ordinary aim updates are limited to ~30Hz, while large turns bypass.
+     */
+    if (
+      !this.room ||
+      !Number.isFinite(angle)
+    ) {
+      return;
+    }
+
+    const now =
+      typeof performance !==
+        "undefined"
+        ? performance.now()
+        : Date.now();
+
+    const previous =
+      this.lastHunterAimSentAngle;
+
+    const angularJump =
+      Number.isFinite(previous)
+        ? Math.abs(
+            Math.atan2(
+              Math.sin(
+                angle -
+                  previous
+              ),
+              Math.cos(
+                angle -
+                  previous
+              ),
+            ),
+          )
+        : Number.POSITIVE_INFINITY;
+
+    if (
+      now -
+        this.lastHunterAimSentAt <
+        33 &&
+      angularJump < 0.14
+    ) {
+      return;
+    }
+
+    this.lastHunterAimSentAt =
+      now;
+
+    this.lastHunterAimSentAngle =
+      angle;
+
+    this.room.send(
       "hunter_aim",
       {
         angle,
