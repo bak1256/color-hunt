@@ -79,10 +79,18 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010369_MOBILE_NETWORK_VISUAL_GUARD_BUDGET: mobile per-player visibility/name self-heal loops run at 4Hz; gameplay simulation remains full-rate. */
     /* V1010368_MOBILE_RENDER_BUDGET: throttle expensive mobile-only HUD/lobby redraws without changing movement, input, paint, network, or reconnect cadence. */
     private lastMobileSurvivalHudRenderAt = -Infinity;
     private lastMobileLobbyUiRenderAt = -Infinity;
     private lastMobileMapSelectorRenderAt = -Infinity;
+
+    /*
+     * V1010369_MOBILE_NETWORK_VISUAL_GUARD_BUDGET
+     * Visibility/name/legacy-hide operations iterate every network actor.
+     * They are state guards, not movement simulation.
+     */
+    private lastMobileNetworkVisualGuardAt = -Infinity;
 
     /* V1010367_CLIENT_RECONNECT_SNAPSHOT_CONVERGENCE: reconnect recovery waits for authoritative paint convergence and avoids snapshot storms. */
     /* V1010365_MOBILE_PRECISION_CUSTOMIZATION_PAINT: mobile Lobby/Hunter customization uses drag-to-position then stationary hold-to-paint; Hider camouflage unchanged. */
@@ -16289,42 +16297,57 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
-        if (
-            this.isMultiplayerSession() &&
-            this.phase === 'hunt'
-        ) {
-            /*
-             * Hunt 중에는 Hunter/Hider 모두 닉네임·ID 라벨을
-             * 매 프레임 숨겨 상태 변경 콜백이 다시 표시하지 못하게 합니다.
-             */
-            this.networkPlayerManager
-                .setNamesVisible(false);
-        }
-
-        if (
-            this.isMultiplayerSession() &&
-            this.phase === 'paint'
-        ) {
-            this.networkPlayerManager
-                .showOnlyLocalPlayer();
-
-            this.hideLegacySinglePlayerActors();
-        }
-
         if (this.isMultiplayerSession()) {
-            this.hideLegacySinglePlayerActors();
+            /*
+             * V1010369_MOBILE_NETWORK_VISUAL_GUARD_BUDGET
+             *
+             * On mobile, the old code walked every network player every frame
+             * to repeat visibility/name state that normally does not change.
+             * Keep a 250ms self-heal guard for callbacks/reconnects instead.
+             *
+             * IMPORTANT: this does NOT throttle:
+             * - authoritative position sync
+             * - local movement/input
+             * - NetworkPlayerManager.update(delta)
+             * - aim/fire/paint/network transport
+             */
+            const visualGuardNow =
+                this.time.now;
 
-            this.player
-                .setVisible(false)
-                .setActive(false);
+            const shouldRefreshVisualGuards =
+                !this.mobileControlsEnabled ||
+                visualGuardNow -
+                    this.lastMobileNetworkVisualGuardAt >=
+                    250;
 
-            this.gun
-                .setVisible(false)
-                .setActive(false);
+            if (shouldRefreshVisualGuards) {
+                this.lastMobileNetworkVisualGuardAt =
+                    visualGuardNow;
 
-            this.hunterLabel
-                .setVisible(false)
-                .setActive(false);
+                if (this.phase === 'hunt') {
+                    this.networkPlayerManager
+                        .setNamesVisible(false);
+                }
+
+                if (this.phase === 'paint') {
+                    this.networkPlayerManager
+                        .showOnlyLocalPlayer();
+                }
+
+                this.hideLegacySinglePlayerActors();
+
+                this.player
+                    .setVisible(false)
+                    .setActive(false);
+
+                this.gun
+                    .setVisible(false)
+                    .setActive(false);
+
+                this.hunterLabel
+                    .setVisible(false)
+                    .setActive(false);
+            }
         }
 
         if (
