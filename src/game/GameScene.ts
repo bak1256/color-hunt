@@ -79,7 +79,6 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
-    /* V1010374_PAINT_FLOOD_FRAME_BUDGET: dense multiplayer paint uses larger transport chunks and frame-budgeted remote raster replay. */
     /* V1010373_RECONNECT_SINGLE_AUTHORITY_GAMEPLAY_LOCK: reconnect freezes local gameplay until one authoritative Room/player/paint state owns the Scene again. */
     /* V1010371_ROOM_CREATE_RECOVERY: coalesce lobby polling and guarantee room-create failure recovery instead of infinite busy UI. */
     /* V1010370_LARGE_ROOM_TRANSPORT_BUDGET: common PC/mobile large-room transport budget; paint keeps every point but sends fewer messages. */
@@ -37353,15 +37352,7 @@ export class GameScene extends Phaser.Scene {
 
         if (
             multiplayerClient.isConnected() &&
-            /*
-             * V1010374_PAINT_FLOOD_FRAME_BUDGET / PAINT_CHUNK_96
-             *
-             * Every interpolated raster point is still preserved. We simply
-             * package twice as many points per WebSocket message so 4-5
-             * simultaneous painters generate far fewer message callbacks.
-             * Server accepts up to 300 points/message.
-             */
-            this.activeStrokePoints.length >= 96
+            this.activeStrokePoints.length >= 48
         ) {
             this.flushActivePaintStrokeChunk(
                 true,

@@ -320,7 +320,6 @@ export type PaintReadyStateHandler = (
 ) => void;
 
 export class MultiplayerClient {
-  /* V1010374_PAINT_FLOOD_FRAME_BUDGET: dense paint is not queued into an unstable/reconnecting transport. */
   /* V1010373_RECONNECT_SINGLE_AUTHORITY_GAMEPLAY_LOCK: reconnect has one transport owner; gameplay sends pause until the authoritative Room is stable. */
   /* V1010372_SEAT_EXPIRED_FRESH_REJOIN: terminal 524 reconnect seats immediately fall back to bounded fresh clientKey rejoin. */
   /* V1010367_CLIENT_RECONNECT_SNAPSHOT_CONVERGENCE: throttle heavy paint snapshots and converge reconnect state before gameplay rebuild. */
@@ -3666,18 +3665,10 @@ this.manualReconnectInFlight = false;
   ): void {
     if (
       !this.room ||
-      !this.isGameplayTransportStable() ||
       stroke.points.length === 0
     ) {
       return;
     }
-
-    /*
-     * V1010374_PAINT_FLOOD_FRAME_BUDGET / RECONNECT_PAINT_GATE
-     * Never stuff dense paint into Colyseus' reconnect message queue. Local
-     * paint history remains authoritative and v367/v372 restore it after the
-     * recovered Room has converged.
-     */
 
     this.room.send(
       "paint_stroke",

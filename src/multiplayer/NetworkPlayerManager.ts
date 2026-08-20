@@ -47,7 +47,6 @@ type NetworkPlayerView = {
 };
 
 export class NetworkPlayerManager {
-  /* V1010374_PAINT_FLOOD_FRAME_BUDGET: network paint callbacks enqueue only; exact serialized points drain under a per-frame raster budget. */
   /* V1010373_RECONNECT_SINGLE_AUTHORITY_GAMEPLAY_LOCK: stale reconnect echoes cannot move the local actor; prediction is rebased once after recovery. */
   /* V1010370_LARGE_ROOM_TRANSPORT_BUDGET: movement snapshots/fallback authority ~=15Hz for 3-10 player rooms; local prediction unchanged. */
   /* V1010364_P0_MULTIPLAYER_STABILITY: cap movement transport to 20Hz while keeping local rendering frame-rate smooth. */
@@ -129,23 +128,6 @@ export class NetworkPlayerManager {
   }
 
 
-  /*
-   * V1010374_PAINT_FLOOD_FRAME_BUDGET / REMOTE_PAINT_QUEUE
-   *
-   * Network callbacks may deliver several dense strokes in the same JS turn.
-   * Applying all of them synchronously can block browser networking long
-   * enough to trigger a false reconnect spiral. Drain a bounded amount from
-   * update() instead.
-   */
-  private readonly pendingRemotePaintStrokes:
-    Array<{
-      stroke: NetworkPaintStroke;
-      textureKey: string;
-    }> = [];
-
-  private readonly remotePaintPointBudgetPerFrame =
-    320;
-
   private localX = 480;
   private localY = 270;
 
@@ -212,9 +194,6 @@ export class NetworkPlayerManager {
   }
 
   clearAllPlayers(): void {
-    this.pendingRemotePaintStrokes.length =
-      0;
-
     this.players.forEach((view) => {
       view.container.destroy(true);
       view.aimGraphics?.destroy();
@@ -1582,11 +1561,6 @@ export class NetworkPlayerManager {
   }
 
   update(delta = 16): void {
-    /*
-     * V1010374_PAINT_FLOOD_FRAME_BUDGET / FRAME_DRAIN
-     */
-    this.drainRemotePaintQueue();
-
     const localSessionId =
       this.getEffectiveLocalSessionId();
 
@@ -3087,169 +3061,133 @@ export class NetworkPlayerManager {
 
   applyPaintStroke(
     stroke: NetworkPaintStroke,
-    textureKey: string,
+    _textureKey: string,
   ): void {
+    const view =
+      this.players.get(
+        stroke.targetSessionId,
+      );
+
     if (
-      stroke.points.length === 0
+      !view ||
+      !view.paintLayer
     ) {
       return;
     }
 
     /*
-     * V1010374_PAINT_FLOOD_FRAME_BUDGET / ENQUEUE_ONLY
-     * Never rasterize a network packet directly from a WebSocket callback.
+     * v0.10.10.230 PAINT OWNERSHIP GUARD:
+     * Never paint a render view that is no longer the authoritative Schema
+     * player for this sessionId. This protects every client from delayed
+     * packets belonging to a superseded reconnect session.
      */
-    this.pendingRemotePaintStrokes.push({
-      stroke,
-      textureKey,
-    });
-  }
+    const room =
+      multiplayerClient.getRoom();
+    const authoritativePlayer =
+      room?.state?.players?.get?.(
+        stroke.targetSessionId,
+      );
 
-  private drainRemotePaintQueue(): void {
     if (
-      this.pendingRemotePaintStrokes.length ===
-      0
+      room &&
+      !authoritativePlayer
     ) {
       return;
     }
 
-    let remainingBudget =
-      this.remotePaintPointBudgetPerFrame;
+    /*
+     * V1010338_CRITICAL_GAMEPLAY_TRIPLE_FIX / REMOTE_PAINT_RASTER_CONTINUITY
+     *
+     * Replay the path, not just isolated serialized points.
+     * This closes 1px diagonal/rounding holes while the exact character mask
+     * still prevents paint outside the body.
+     */
+    let previousPoint:
+      NetworkPaintPoint |
+      undefined;
 
-    const touchedViews =
-      new Map<
-        string,
-        NonNullable<
-          ReturnType<
-            typeof this.players.get
-          >
-        >
-      >();
+    stroke.points.forEach((point) => {
+      const pixelX =
+        Math.round(point.x);
+      const pixelY =
+        Math.round(point.y);
 
-    while (
-      remainingBudget > 0 &&
-      this.pendingRemotePaintStrokes.length >
-        0
-    ) {
-      const queued =
-        this.pendingRemotePaintStrokes[0];
+      if (previousPoint) {
+        const fromX =
+          Math.round(previousPoint.x);
+        const fromY =
+          Math.round(previousPoint.y);
 
-      const stroke =
-        queued.stroke;
+        const distance =
+          Phaser.Math.Distance.Between(
+            fromX,
+            fromY,
+            pixelX,
+            pixelY,
+          );
 
-      const view =
-        this.players.get(
-          stroke.targetSessionId,
-        );
+        const steps =
+          Math.max(
+            1,
+            Math.ceil(
+              distance /
+                (
+                  stroke.size <= 1
+                    ? 1
+                    : 0.65
+                ),
+            ),
+          );
 
-      /*
-       * Preserve the old ownership guard.
-       */
-      const room =
-        multiplayerClient.getRoom();
+        for (
+          let step = 1;
+          step <= steps;
+          step += 1
+        ) {
+          const t =
+            step / steps;
 
-      const authoritativePlayer =
-        room?.state?.players?.get?.(
-          stroke.targetSessionId,
-        );
-
-      if (
-        !view ||
-        !view.paintLayer ||
-        (
-          room &&
-          !authoritativePlayer
-        )
-      ) {
-        this.pendingRemotePaintStrokes.shift();
-        continue;
-      }
-
-      /*
-       * Process a slice so a single large restore/snapshot stroke cannot own
-       * the whole frame. Keep the unprocessed remainder at queue head.
-       */
-      const take =
-        Math.min(
-          remainingBudget,
-          stroke.points.length,
-        );
-
-      const points =
-        stroke.points.slice(
-          0,
-          take,
-        );
-
-      /*
-       * IMPORTANT:
-       * GameScene.interpolateActivePaintStroke() ALREADY serializes points at
-       * ~0.75-1.5px spacing before send. The former receiver re-interpolated
-       * every adjacent pair again (often doubling stamps). Direct replay here
-       * is visually equivalent to the sender path while dramatically cheaper.
-       */
-      points.forEach(
-        (point) => {
           this.stampMaskedPaintBrush(
             view,
-            Math.round(
-              point.x,
+            Phaser.Math.Linear(
+              fromX,
+              pixelX,
+              t,
             ),
-            Math.round(
-              point.y,
+            Phaser.Math.Linear(
+              fromY,
+              pixelY,
+              t,
             ),
             stroke.color,
             stroke.size,
             stroke.shape,
             false,
           );
-        },
-      );
-
-      touchedViews.set(
-        stroke.targetSessionId,
-        view,
-      );
-
-      remainingBudget -=
-        take;
-
-      if (
-        take >=
-        stroke.points.length
-      ) {
-        this.pendingRemotePaintStrokes.shift();
-      } else {
-        queued.stroke = {
-          ...stroke,
-          points:
-            stroke.points.slice(
-              take,
-            ),
-        };
-      }
-    }
-
-    /*
-     * RenderTexture upload/render is one of the expensive parts. No matter how
-     * many paint messages arrived this frame, render each touched player once.
-     */
-    touchedViews.forEach(
-      (view) => {
-        if (!view.paintLayer) {
-          return;
         }
-
-        this.renderPaintTexture(
-          view.paintLayer.texture,
-        );
-
-        this.syncPaintLayerPosition(
+      } else {
+        this.stampMaskedPaintBrush(
           view,
-          multiplayerClient.getRoom()
-            ?.state.phase === "hunt",
+          pixelX,
+          pixelY,
+          stroke.color,
+          stroke.size,
+          stroke.shape,
+          false,
         );
-      },
+      }
+
+      previousPoint = point;
+    });
+
+    this.renderPaintTexture(
+      view.paintLayer.texture,
+    );
+
+    this.syncPaintLayerPosition(
+      view,
+      multiplayerClient.getRoom()
+        ?.state.phase === "hunt",
     );
   }
 
