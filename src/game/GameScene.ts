@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010319_MOBILE_WAITING_REAL_MOBILE_DETECTION: waiting mobile layout keys off ch-uniform-mobile-scale, not mobileControlsEnabled. */
     /* V1010318_MOBILE_WAITING_FORCE_FULL_WIDTH: stretch full timing ancestry so headers/options use entire card width. */
     /* V1010317_MOBILE_WAITING_TIMING_FILL_ALIGN: mobile timing headers left-aligned and 3 buttons fill width evenly. */
     /* V1010316_MOBILE_WAITING_TIMING_PC_LIKE: compact PC-like Paint/Hunt timing cards on mobile. */
@@ -21657,6 +21658,13 @@ export class GameScene extends Phaser.Scene {
          *
          * timing -> section -> title/options -> buttons
          */
+        const isMobileWaiting =
+            this.waitingRoomRoot
+                ?.classList.contains(
+                    'ch-uniform-mobile-scale',
+                ) ??
+            false;
+
         const waitingTiming =
             this.waitingRoomRoot
                 ?.querySelector<HTMLElement>(
@@ -21665,7 +21673,7 @@ export class GameScene extends Phaser.Scene {
 
         if (
             waitingTiming &&
-            this.mobileControlsEnabled
+            isMobileWaiting
         ) {
             waitingTiming.style.setProperty(
                 'display',
@@ -21736,7 +21744,7 @@ export class GameScene extends Phaser.Scene {
             .forEach(
                 (section) => {
                     if (
-                        this.mobileControlsEnabled
+                        isMobileWaiting
                     ) {
                         section.style.setProperty(
                             'display',
@@ -21785,6 +21793,11 @@ export class GameScene extends Phaser.Scene {
                         );
                         section.style.setProperty(
                             'justify-items',
+                            'stretch',
+                            'important',
+                        );
+                        section.style.setProperty(
+                            'justify-content',
                             'stretch',
                             'important',
                         );
@@ -21850,7 +21863,7 @@ export class GameScene extends Phaser.Scene {
                     );
 
                     if (
-                        this.mobileControlsEnabled
+                        isMobileWaiting
                     ) {
                         title.style.setProperty(
                             'width',
@@ -21984,7 +21997,7 @@ export class GameScene extends Phaser.Scene {
             .forEach(
                 (options) => {
                     if (
-                        this.mobileControlsEnabled
+                        isMobileWaiting
                     ) {
                         options.style.setProperty(
                             'display',
@@ -22004,6 +22017,11 @@ export class GameScene extends Phaser.Scene {
                         options.style.setProperty(
                             'width',
                             '100%',
+                            'important',
+                        );
+                        options.style.setProperty(
+                            'justify-content',
+                            'stretch',
                             'important',
                         );
                         options.style.setProperty(
@@ -22072,7 +22090,7 @@ export class GameScene extends Phaser.Scene {
             .forEach(
                 (button) => {
                     if (
-                        this.mobileControlsEnabled
+                        isMobileWaiting
                     ) {
                         button.style.setProperty(
                             'display',
