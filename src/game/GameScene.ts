@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010323_FOLD_GUIDE_COMPACT_HARDFIX: Fold-closed guide is a fixed 42px compact card based on actual button width. */
     /* V1010322_FOLD_GUIDE_FIT_REAL_SPACE: Practice Fold detection uses real width; guide fits real remaining panel space. */
     /* V1010321_FOLD_REFOLD_LOBBY_SETTLE: settle Fold unfold/refold viewport and restore guide natural height. */
     /* V1010320_MOBILE_WAITING_TIMING_BALANCED_PADDING: equal 3px top/bottom breathing room inside mobile timing cards. */
@@ -20377,6 +20378,346 @@ export class GameScene extends Phaser.Scene {
                         'important',
                     );
                 }
+            }
+        }
+
+        /*
+         * V1010323_FOLD_GUIDE_COMPACT_HARDFIX
+         *
+         * The Fold refold bug is NOT the guide's intrinsic height.
+         * The parent action column can retain a shorter row allocation after
+         * unfold -> refold. Make the guide itself require less vertical space
+         * whenever the actual room-action button proves we are in Fold-closed
+         * compact layout.
+         */
+        const compactReference =
+            root.querySelector<HTMLButtonElement>(
+                '.ch-lobby-action--public',
+            );
+
+        const compactGuide =
+            root.querySelector<HTMLElement>(
+                '.ch-lobby-guide',
+            );
+
+        if (
+            compactReference &&
+            compactGuide
+        ) {
+            const referenceWidth =
+                compactReference
+                    .getBoundingClientRect()
+                    .width;
+
+            const foldCompact =
+                referenceWidth > 0 &&
+                referenceWidth < 245;
+
+            const guideMascot =
+                compactGuide.querySelector<HTMLElement>(
+                    '.ch-lobby-guide-mascot',
+                );
+
+            const guideCopy =
+                compactGuide.lastElementChild as
+                    HTMLElement |
+                    null;
+
+            const guideTitle =
+                guideCopy
+                    ?.querySelector<HTMLElement>(
+                        'strong',
+                    );
+
+            const guideSubtitle =
+                guideCopy
+                    ?.querySelector<HTMLElement>(
+                        'span',
+                    );
+
+            if (foldCompact) {
+                compactGuide.style.setProperty(
+                    'display',
+                    'grid',
+                    'important',
+                );
+                compactGuide.style.setProperty(
+                    'grid-template-columns',
+                    '26px minmax(0, 1fr)',
+                    'important',
+                );
+                compactGuide.style.setProperty(
+                    'column-gap',
+                    '7px',
+                    'important',
+                );
+                compactGuide.style.setProperty(
+                    'align-items',
+                    'center',
+                    'important',
+                );
+                compactGuide.style.setProperty(
+                    'height',
+                    '42px',
+                    'important',
+                );
+                compactGuide.style.setProperty(
+                    'min-height',
+                    '42px',
+                    'important',
+                );
+                compactGuide.style.setProperty(
+                    'max-height',
+                    '42px',
+                    'important',
+                );
+                compactGuide.style.setProperty(
+                    'padding',
+                    '4px 8px',
+                    'important',
+                );
+                compactGuide.style.setProperty(
+                    'margin',
+                    '0',
+                    'important',
+                );
+                compactGuide.style.setProperty(
+                    'box-sizing',
+                    'border-box',
+                    'important',
+                );
+                compactGuide.style.setProperty(
+                    'overflow',
+                    'hidden',
+                    'important',
+                );
+
+                if (guideMascot) {
+                    guideMascot.style.setProperty(
+                        'font-size',
+                        '21px',
+                        'important',
+                    );
+                    guideMascot.style.setProperty(
+                        'line-height',
+                        '1',
+                        'important',
+                    );
+                    guideMascot.style.setProperty(
+                        'margin',
+                        '0',
+                        'important',
+                    );
+                }
+
+                if (guideCopy) {
+                    guideCopy.style.setProperty(
+                        'display',
+                        'grid',
+                        'important',
+                    );
+                    guideCopy.style.setProperty(
+                        'grid-template-rows',
+                        '14px 12px',
+                        'important',
+                    );
+                    guideCopy.style.setProperty(
+                        'row-gap',
+                        '1px',
+                        'important',
+                    );
+                    guideCopy.style.setProperty(
+                        'align-content',
+                        'center',
+                        'important',
+                    );
+                    guideCopy.style.setProperty(
+                        'height',
+                        '27px',
+                        'important',
+                    );
+                    guideCopy.style.setProperty(
+                        'min-height',
+                        '27px',
+                        'important',
+                    );
+                    guideCopy.style.setProperty(
+                        'overflow',
+                        'hidden',
+                        'important',
+                    );
+                }
+
+                if (guideTitle) {
+                    guideTitle.style.setProperty(
+                        'font-size',
+                        '12px',
+                        'important',
+                    );
+                    guideTitle.style.setProperty(
+                        'line-height',
+                        '14px',
+                        'important',
+                    );
+                    guideTitle.style.setProperty(
+                        'height',
+                        '14px',
+                        'important',
+                    );
+                    guideTitle.style.setProperty(
+                        'margin',
+                        '0',
+                        'important',
+                    );
+                    guideTitle.style.setProperty(
+                        'white-space',
+                        'nowrap',
+                        'important',
+                    );
+                    guideTitle.style.setProperty(
+                        'overflow',
+                        'hidden',
+                        'important',
+                    );
+                }
+
+                if (guideSubtitle) {
+                    guideSubtitle.style.setProperty(
+                        'display',
+                        'block',
+                        'important',
+                    );
+                    guideSubtitle.style.setProperty(
+                        'font-size',
+                        '8.5px',
+                        'important',
+                    );
+                    guideSubtitle.style.setProperty(
+                        'line-height',
+                        '12px',
+                        'important',
+                    );
+                    guideSubtitle.style.setProperty(
+                        'height',
+                        '12px',
+                        'important',
+                    );
+                    guideSubtitle.style.setProperty(
+                        'min-height',
+                        '12px',
+                        'important',
+                    );
+                    guideSubtitle.style.setProperty(
+                        'max-height',
+                        '12px',
+                        'important',
+                    );
+                    guideSubtitle.style.setProperty(
+                        'margin',
+                        '0',
+                        'important',
+                    );
+                    guideSubtitle.style.setProperty(
+                        'white-space',
+                        'nowrap',
+                        'important',
+                    );
+                    guideSubtitle.style.setProperty(
+                        'overflow',
+                        'hidden',
+                        'important',
+                    );
+                    guideSubtitle.style.setProperty(
+                        'text-overflow',
+                        'clip',
+                        'important',
+                    );
+                }
+            } else {
+                /*
+                 * Restore CSS ownership on unfolded/desktop layouts.
+                 */
+                [
+                    'display',
+                    'grid-template-columns',
+                    'column-gap',
+                    'align-items',
+                    'height',
+                    'min-height',
+                    'max-height',
+                    'padding',
+                    'margin',
+                    'box-sizing',
+                    'overflow',
+                ].forEach(
+                    (property) => {
+                        compactGuide.style.removeProperty(
+                            property,
+                        );
+                    },
+                );
+
+                if (guideMascot) {
+                    [
+                        'font-size',
+                        'line-height',
+                        'margin',
+                    ].forEach(
+                        (property) => {
+                            guideMascot.style.removeProperty(
+                                property,
+                            );
+                        },
+                    );
+                }
+
+                if (guideCopy) {
+                    [
+                        'display',
+                        'grid-template-rows',
+                        'row-gap',
+                        'align-content',
+                        'height',
+                        'min-height',
+                        'overflow',
+                    ].forEach(
+                        (property) => {
+                            guideCopy.style.removeProperty(
+                                property,
+                            );
+                        },
+                    );
+                }
+
+                [guideTitle, guideSubtitle]
+                    .filter(
+                        (
+                            element,
+                        ): element is HTMLElement =>
+                            Boolean(element),
+                    )
+                    .forEach(
+                        (element) => {
+                            [
+                                'display',
+                                'font-size',
+                                'line-height',
+                                'height',
+                                'min-height',
+                                'max-height',
+                                'margin',
+                                'white-space',
+                                'overflow',
+                                'text-overflow',
+                            ].forEach(
+                                (property) => {
+                                    element.style.removeProperty(
+                                        property,
+                                    );
+                                },
+                            );
+                        },
+                    );
             }
         }
 
