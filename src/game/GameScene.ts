@@ -79,6 +79,8 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010303B_REMOVE_UNUSED_WAITING_SIZE_RECOVER: tolerant cleanup of obsolete v302 waiting-size declarations. */
+    /* V1010302_CLIENT_UI_FART_PROGRESSION: final lobby geometry + full-height waiting dock + escalating Practice fart lock. */
     /* V1010301_LOBBY_WAITING_JOYSTICK_POLISH: deterministic lobby SVG icons, flush full-height waiting dock, reliable captured mobile MOVE joystick. */
     /* V1010300_CLIENT_MOBILE_UI_GHOST_GAS_FIX: mobile UI proportions, single status dot, GAS reset, zero-player room filter. */
     /* V1010299_UI_LAYOUT_BGM_HOTFIX: restore lobby icons, stable status dot, rebuild mobile waiting room, anchor gameplay BGM inside canvas. */
@@ -4624,6 +4626,16 @@ export class GameScene extends Phaser.Scene {
      * Never depend on wall-clock/map/network state to keep Practice penalty.
      */
     private practicePoopRemainingMs = 0;
+
+    /*
+     * V1010302_CLIENT_UI_FART_PROGRESSION: escalating panic-skill penalty per Practice round.
+     * Accident #1 -> permanent floor 36 (two farts to next accident)
+     * Accident #2 -> permanent floor 72 (one fart to next accident)
+     * Accident #3 -> FART locked for the rest of the round.
+     */
+    private practiceFartAccidentCount = 0;
+    private practiceFartLocked = false;
+
     private practiceLastPoopTrailAt = 0;
     private practiceLastPoopTearAt = 0;
 
@@ -12361,6 +12373,29 @@ export class GameScene extends Phaser.Scene {
             );
     }
 
+    private getPracticeFartFloor(): number {
+        if (
+            this.practiceFartLocked ||
+            this.practiceFartAccidentCount >= 3
+        ) {
+            return 0;
+        }
+
+        if (
+            this.practiceFartAccidentCount === 2
+        ) {
+            return 72;
+        }
+
+        if (
+            this.practiceFartAccidentCount === 1
+        ) {
+            return 36;
+        }
+
+        return 0;
+    }
+
     /* V1010246_SPACE_PRACTICE_FART */
     private updateHunterPracticeFart(
         delta: number,
@@ -12398,13 +12433,29 @@ export class GameScene extends Phaser.Scene {
             /*
              * During the 14-second punishment GAS visibly drains 100 -> 0.
              */
+            const postPoopFloor =
+                this.getPracticeFartFloor();
+
+            const poopProgress =
+                Phaser.Math.Clamp(
+                    this.practicePoopRemainingMs /
+                        this.practicePoopDurationMs,
+                    0,
+                    1,
+                );
+
+            /*
+             * V1010302_CLIENT_UI_FART_PROGRESSION: accident animation still starts at MAX, but now drains to:
+             * #1 -> 36, #2 -> 72, #3 -> 0 + permanent lock.
+             */
             this.fartGauge =
                 Phaser.Math.Clamp(
-                    (
-                        this.practicePoopRemainingMs /
-                        this.practicePoopDurationMs
-                    ) *
-                        100,
+                    postPoopFloor +
+                        (
+                            100 -
+                            postPoopFloor
+                        ) *
+                            poopProgress,
                     0,
                     100,
                 );
@@ -12448,14 +12499,20 @@ export class GameScene extends Phaser.Scene {
         const previousGauge =
             this.fartGauge;
 
+        const practiceFartFloor =
+            this.getPracticeFartFloor();
+
         this.fartGauge =
             Phaser.Math.Clamp(
-                this.fartGauge -
-                    this.practiceFartRecoverPerSecond *
-                        (
-                            frameMs /
-                            1000
-                        ),
+                Math.max(
+                    practiceFartFloor,
+                    this.fartGauge -
+                        this.practiceFartRecoverPerSecond *
+                            (
+                                frameMs /
+                                1000
+                            ),
+                ),
                 0,
                 100,
             );
@@ -12468,6 +12525,12 @@ export class GameScene extends Phaser.Scene {
             0.0001
         ) {
             this.updateFartHud();
+        }
+
+        if (
+            this.practiceFartLocked
+        ) {
+            return;
         }
 
         if (
@@ -12493,8 +12556,9 @@ export class GameScene extends Phaser.Scene {
 
     private useHunterPracticeFart(): void {
         if (
+            this.practiceFartLocked ||
             this.practicePoopRemainingMs >
-            0
+                0
         ) {
             return;
         }
@@ -12613,6 +12677,21 @@ export class GameScene extends Phaser.Scene {
         }
 
         if (willPoop) {
+            this.practiceFartAccidentCount =
+                Math.min(
+                    3,
+                    this.practiceFartAccidentCount +
+                        1,
+                );
+
+            if (
+                this.practiceFartAccidentCount >=
+                3
+            ) {
+                this.practiceFartLocked =
+                    true;
+            }
+
             /*
              * Start the REAL Practice state BEFORE any visual helper runs.
              */
@@ -12785,7 +12864,7 @@ export class GameScene extends Phaser.Scene {
             0;
 
         this.fartGauge =
-            0;
+            this.getPracticeFartFloor();
 
         this.practiceLastPoopTrailAt =
             0;
@@ -13290,6 +13369,8 @@ export class GameScene extends Phaser.Scene {
 
         this.fartGauge = 0;
         this.lastFartUseAt = 0;
+        this.practiceFartAccidentCount = 0;
+        this.practiceFartLocked = false;
         this.practicePoopRemainingMs = 0;
         this.practicePoopUntil = 0;
         this.localPoopUntil = 0;
@@ -19984,59 +20065,51 @@ export class GameScene extends Phaser.Scene {
              * Inner CSS is enlarged, while uniform scaling still protects
              * unusual foldables and aspect ratios.
              */
-            const designWidth = 360;
+            /*
+             * V1010302_CLIENT_UI_FART_PROGRESSION: narrower authoring width lets a landscape phone use its
+             * full vertical height without producing an oversized side dock.
+             */
+            const designWidth = 320;
             const designHeight = 500;
 
-            const availableWidth =
-                Math.max(
-                    1,
-                    rect.width -
-                        horizontalInset * 2,
-                );
 
-            const availableHeight =
-                Math.max(
-                    1,
-                    rect.height -
-                        verticalInset * 2,
-                );
 
-            const targetWidth =
-                Math.min(
-                    availableWidth,
-                    Math.max(
-                        170,
-                        rect.width *
-                            (
-                                landscapeCanvas
-                                    ? 0.43
-                                    : 0.94
-                            ),
-                    ),
-                );
-
+            /*
+             * V1010302_CLIENT_UI_FART_PROGRESSION: the requested visual contract is:
+             *  - right edge = canvas right edge
+             *  - top/bottom = essentially canvas top/bottom
+             *
+             * Height is therefore authoritative. Width only acts as a safety
+             * cap on exceptionally narrow/portrait devices.
+             */
             const targetHeight =
-                Math.min(
-                    availableHeight,
-                    rect.height *
-                        (
-                            landscapeCanvas
-                                ? 0.995
-                                : 0.995
-                        ),
+                Math.max(
+                    1,
+                    rect.height - 2,
+                );
+
+            const heightScale =
+                targetHeight /
+                designHeight;
+
+            const maxWidth =
+                landscapeCanvas
+                    ? rect.width * 0.48
+                    : rect.width * 0.96;
+
+            const widthScale =
+                Math.max(
+                    0.45,
+                    maxWidth /
+                        designWidth,
                 );
 
             const scale =
                 Math.max(
                     0.45,
                     Math.min(
-                        landscapeCanvas
-                            ? 1.58
-                            : 1.18,
-                        targetWidth /
-                            designWidth,
-                        targetHeight /
-                            designHeight,
+                        heightScale,
+                        widthScale,
                     ),
                 );
 
@@ -20055,10 +20128,14 @@ export class GameScene extends Phaser.Scene {
 
             const top =
                 rect.top +
-                (
-                    rect.height -
-                    renderedHeight
-                ) / 2;
+                Math.max(
+                    0,
+                    (
+                        rect.height -
+                        renderedHeight
+                    ) /
+                        2,
+                );
 
             this.waitingRoomRoot.classList.add(
                 'ch-uniform-mobile-scale',
@@ -20121,6 +20198,20 @@ export class GameScene extends Phaser.Scene {
                         '0',
                 },
             );
+
+            /*
+             * Fractional transforms can leave a 1~2px seam. Recompute the
+             * visual right edge from the actual rendered width and snap it.
+             */
+            const snappedLeft =
+                rect.right -
+                renderedWidth;
+
+            this.waitingRoomRoot.style
+                .left =
+                `${snappedLeft.toFixed(
+                    2,
+                )}px`;
 
             return;
         }
@@ -25306,6 +25397,179 @@ export class GameScene extends Phaser.Scene {
                             font-size: clamp(20px, 5.4vw, 28px) !important;
                         }
                     }
+
+                    /*
+                     * V1010302_CLIENT_UI_FART_PROGRESSION: FINAL lobby-action geometry.
+                     *
+                     * Previous patches accumulated icon width/font rules.
+                     * From here on the button itself is a two-column grid:
+                     *   32px icon square | all remaining text width.
+                     * No icon is allowed to overlap the copy.
+                     */
+                    .ch-lobby-action--public,
+                    .ch-lobby-action--private,
+                    .ch-lobby-action--join {
+                        display: grid !important;
+                        grid-template-columns: 32px minmax(0, 1fr) !important;
+                        grid-template-rows: auto !important;
+                        align-items: center !important;
+                        column-gap: 10px !important;
+                        min-height: 56px !important;
+                        padding: 7px 12px !important;
+                        box-sizing: border-box !important;
+                        overflow: hidden !important;
+                        text-align: left !important;
+                    }
+
+                    .ch-lobby-action--public > span:last-child,
+                    .ch-lobby-action--private > span:last-child,
+                    .ch-lobby-action--join > span:last-child {
+                        display: block !important;
+                        min-width: 0 !important;
+                        width: 100% !important;
+                        overflow: visible !important;
+                        text-align: left !important;
+                    }
+
+                    .ch-lobby-action--public .ch-lobby-action-icon,
+                    .ch-lobby-action--private .ch-lobby-action-icon,
+                    .ch-lobby-action--join .ch-lobby-action-icon {
+                        display: flex !important;
+                        align-items: center !important;
+                        justify-content: center !important;
+                        justify-self: center !important;
+                        align-self: center !important;
+                        width: 32px !important;
+                        min-width: 32px !important;
+                        max-width: 32px !important;
+                        height: 32px !important;
+                        min-height: 32px !important;
+                        max-height: 32px !important;
+                        aspect-ratio: 1 / 1 !important;
+                        flex: none !important;
+                        padding: 4px !important;
+                        margin: 0 !important;
+                        box-sizing: border-box !important;
+                        border-radius: 8px !important;
+                        overflow: hidden !important;
+                        font-size: 0 !important;
+                        line-height: 0 !important;
+                    }
+
+                    .ch-lobby-action--public .ch-lobby-action-svg,
+                    .ch-lobby-action--private .ch-lobby-action-svg,
+                    .ch-lobby-action--join .ch-lobby-action-svg {
+                        display: block !important;
+                        width: 22px !important;
+                        min-width: 22px !important;
+                        max-width: 22px !important;
+                        height: 22px !important;
+                        min-height: 22px !important;
+                        max-height: 22px !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        overflow: visible !important;
+                        transform: none !important;
+                        vector-effect: non-scaling-stroke !important;
+                    }
+
+                    .ch-lobby-action--public strong,
+                    .ch-lobby-action--private strong,
+                    .ch-lobby-action--join strong {
+                        display: block !important;
+                        min-width: 0 !important;
+                        max-width: 100% !important;
+                        margin: 0 !important;
+                        line-height: 1.12 !important;
+                        white-space: normal !important;
+                        overflow: visible !important;
+                        text-overflow: clip !important;
+                    }
+
+                    .ch-lobby-action--public small,
+                    .ch-lobby-action--private small,
+                    .ch-lobby-action--join small {
+                        display: block !important;
+                        min-width: 0 !important;
+                        max-width: 100% !important;
+                        margin-top: 2px !important;
+                        line-height: 1.12 !important;
+                        white-space: normal !important;
+                        overflow: visible !important;
+                        text-overflow: clip !important;
+                    }
+
+                    /*
+                     * v301's global font-size:0 also swallowed the Practice 🎯.
+                     * Give Practice its own clean square without touching its
+                     * existing text/badge layout.
+                     */
+                    .ch-lobby-action--practice {
+                        overflow: hidden !important;
+                    }
+
+                    .ch-lobby-action--practice .ch-lobby-action-icon {
+                        display: inline-flex !important;
+                        align-items: center !important;
+                        justify-content: center !important;
+                        width: 32px !important;
+                        min-width: 32px !important;
+                        max-width: 32px !important;
+                        height: 32px !important;
+                        min-height: 32px !important;
+                        max-height: 32px !important;
+                        aspect-ratio: 1 / 1 !important;
+                        padding: 0 !important;
+                        margin: 0 !important;
+                        font-size: 22px !important;
+                        line-height: 1 !important;
+                        overflow: hidden !important;
+                    }
+
+                    @media (pointer: coarse), (max-width: 760px) {
+                        .ch-lobby-action--public,
+                        .ch-lobby-action--private,
+                        .ch-lobby-action--join {
+                            grid-template-columns: 28px minmax(0, 1fr) !important;
+                            column-gap: 7px !important;
+                            min-height: 50px !important;
+                            padding: 6px 9px !important;
+                        }
+
+                        .ch-lobby-action--public .ch-lobby-action-icon,
+                        .ch-lobby-action--private .ch-lobby-action-icon,
+                        .ch-lobby-action--join .ch-lobby-action-icon {
+                            width: 28px !important;
+                            min-width: 28px !important;
+                            max-width: 28px !important;
+                            height: 28px !important;
+                            min-height: 28px !important;
+                            max-height: 28px !important;
+                            padding: 4px !important;
+                        }
+
+                        .ch-lobby-action--public .ch-lobby-action-svg,
+                        .ch-lobby-action--private .ch-lobby-action-svg,
+                        .ch-lobby-action--join .ch-lobby-action-svg {
+                            width: 19px !important;
+                            min-width: 19px !important;
+                            max-width: 19px !important;
+                            height: 19px !important;
+                            min-height: 19px !important;
+                            max-height: 19px !important;
+                        }
+
+                        .ch-lobby-action--practice .ch-lobby-action-icon {
+                            width: 28px !important;
+                            min-width: 28px !important;
+                            max-width: 28px !important;
+                            height: 28px !important;
+                            min-height: 28px !important;
+                            max-height: 28px !important;
+                            font-size: 20px !important;
+                        }
+                    }
+
                 `;
 
                 document.head.appendChild(
