@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010313_PRACTICE_HEIGHT_TIMING_FRAME_SAFE: Practice same-height rhythm + frame-safe waiting timing text. */
     /* V1010312_FOLD_PRACTICE_WAITING_TIMING_POLISH: Fold Practice spacing + unclipped waiting timing layout. */
     /* V1010311_UI_CANVAS_GAS_RISE_FIX: restore fart rise, Fold compact icons, canvas-bound waiting panel, readable volunteer frame. */
     /* V1010310C_CURRENT_SOURCE_HARDFIX_RECOVER: runtime Fold sizing, visualViewport waiting dock, real GAS floor fix. */
@@ -19723,9 +19724,8 @@ export class GameScene extends Phaser.Scene {
         );
 
         /*
-         * V1010312_FOLD_PRACTICE_WAITING_TIMING_POLISH: Practice row is structurally different from the 3 room actions.
-         * Give it its own Fold-safe compact geometry so the target icon,
-         * beginner badge, title and subtitle never clip.
+         * V1010313_PRACTICE_HEIGHT_TIMING_FRAME_SAFE: Practice must follow the EXACT vertical rhythm of the room
+         * action buttons above it. Never make it taller on Fold.
          */
         const practiceButton =
             root.querySelector<HTMLButtonElement>(
@@ -19733,6 +19733,22 @@ export class GameScene extends Phaser.Scene {
             );
 
         if (practiceButton) {
+            const referenceAction =
+                root.querySelector<HTMLButtonElement>(
+                    '.ch-lobby-action--public',
+                );
+
+            const referenceHeight =
+                Math.max(
+                    1,
+                    Math.round(
+                        referenceAction
+                            ?.getBoundingClientRect()
+                            .height ??
+                        52,
+                    ),
+                );
+
             const viewportWidth =
                 window.visualViewport?.width ??
                 window.innerWidth;
@@ -19741,35 +19757,18 @@ export class GameScene extends Phaser.Scene {
                 window.visualViewport?.height ??
                 window.innerHeight;
 
-            const viewportAspect =
-                viewportWidth /
-                Math.max(
-                    1,
-                    viewportHeight,
-                );
-
-            const buttonWidth =
-                practiceButton
-                    .getBoundingClientRect()
-                    .width;
-
             const compact =
-                viewportAspect >=
-                    1.75 ||
-                (
-                    buttonWidth > 0 &&
-                    buttonWidth < 245
-                );
+                viewportWidth /
+                    Math.max(
+                        1,
+                        viewportHeight,
+                    ) >=
+                1.75;
 
             const iconCell =
                 compact
                     ? 24
-                    : 32;
-
-            const emojiSize =
-                compact
-                    ? 15
-                    : 20;
+                    : 30;
 
             practiceButton.style.setProperty(
                 'display',
@@ -19785,8 +19784,8 @@ export class GameScene extends Phaser.Scene {
             practiceButton.style.setProperty(
                 'column-gap',
                 compact
-                    ? '7px'
-                    : '9px',
+                    ? '6px'
+                    : '8px',
                 'important',
             );
             practiceButton.style.setProperty(
@@ -19796,38 +19795,37 @@ export class GameScene extends Phaser.Scene {
             );
             practiceButton.style.setProperty(
                 'height',
-                compact
-                    ? '58px'
-                    : '62px',
+                String(referenceHeight) +
+                    'px',
                 'important',
             );
             practiceButton.style.setProperty(
                 'min-height',
-                compact
-                    ? '58px'
-                    : '62px',
+                String(referenceHeight) +
+                    'px',
                 'important',
             );
             practiceButton.style.setProperty(
                 'max-height',
-                'none',
+                String(referenceHeight) +
+                    'px',
                 'important',
             );
             practiceButton.style.setProperty(
                 'padding',
                 compact
-                    ? '6px 8px'
-                    : '7px 10px',
-                'important',
-            );
-            practiceButton.style.setProperty(
-                'overflow',
-                'hidden',
+                    ? '4px 8px'
+                    : '5px 10px',
                 'important',
             );
             practiceButton.style.setProperty(
                 'box-sizing',
                 'border-box',
+                'important',
+            );
+            practiceButton.style.setProperty(
+                'overflow',
+                'hidden',
                 'important',
             );
 
@@ -19878,8 +19876,9 @@ export class GameScene extends Phaser.Scene {
                 );
                 practiceIcon.style.setProperty(
                     'font-size',
-                    String(emojiSize) +
-                        'px',
+                    compact
+                        ? '15px'
+                        : '18px',
                     'important',
                 );
                 practiceIcon.style.setProperty(
@@ -19894,63 +19893,58 @@ export class GameScene extends Phaser.Scene {
                 );
             }
 
-            const practiceCopy =
+            const copy =
                 practiceButton
                     .querySelector<HTMLElement>(
                         '.ch-lobby-practice-copy',
                     );
 
-            if (practiceCopy) {
-                practiceCopy.style.setProperty(
+            if (copy) {
+                copy.style.setProperty(
                     'display',
-                    'flex',
+                    'grid',
                     'important',
                 );
-                practiceCopy.style.setProperty(
-                    'flex-wrap',
-                    'wrap',
+                copy.style.setProperty(
+                    'grid-template-columns',
+                    'auto minmax(0, 1fr)',
                     'important',
                 );
-                practiceCopy.style.setProperty(
-                    'align-items',
-                    'center',
+                copy.style.setProperty(
+                    'grid-template-rows',
+                    'auto auto',
                     'important',
                 );
-                practiceCopy.style.setProperty(
-                    'align-content',
-                    'center',
-                    'important',
-                );
-                practiceCopy.style.setProperty(
+                copy.style.setProperty(
                     'column-gap',
                     compact
                         ? '5px'
-                        : '7px',
+                        : '6px',
                     'important',
                 );
-                practiceCopy.style.setProperty(
+                copy.style.setProperty(
                     'row-gap',
                     '1px',
                     'important',
                 );
-                practiceCopy.style.setProperty(
+                copy.style.setProperty(
+                    'align-items',
+                    'center',
+                    'important',
+                );
+                copy.style.setProperty(
                     'min-width',
                     '0',
                     'important',
                 );
-                practiceCopy.style.setProperty(
-                    'height',
-                    'auto',
-                    'important',
-                );
-                practiceCopy.style.setProperty(
+                copy.style.setProperty(
                     'overflow',
-                    'visible',
+                    'hidden',
                     'important',
                 );
 
                 const badge =
-                    practiceCopy.querySelector<HTMLElement>(
+                    copy.querySelector<HTMLElement>(
                         '.ch-lobby-practice-badge',
                     );
 
@@ -19958,8 +19952,8 @@ export class GameScene extends Phaser.Scene {
                     badge.style.setProperty(
                         'font-size',
                         compact
-                            ? '9px'
-                            : '10px',
+                            ? '8px'
+                            : '9px',
                         'important',
                     );
                     badge.style.setProperty(
@@ -19969,9 +19963,7 @@ export class GameScene extends Phaser.Scene {
                     );
                     badge.style.setProperty(
                         'padding',
-                        compact
-                            ? '3px 5px'
-                            : '3px 6px',
+                        '2px 4px',
                         'important',
                     );
                     badge.style.setProperty(
@@ -19987,22 +19979,21 @@ export class GameScene extends Phaser.Scene {
                 }
 
                 const title =
-                    practiceCopy
-                        .querySelector<HTMLElement>(
-                            'strong',
-                        );
+                    copy.querySelector<HTMLElement>(
+                        'strong',
+                    );
 
                 if (title) {
                     title.style.setProperty(
                         'font-size',
                         compact
-                            ? '14px'
-                            : '16px',
+                            ? '13px'
+                            : '15px',
                         'important',
                     );
                     title.style.setProperty(
                         'line-height',
-                        '1.05',
+                        '1',
                         'important',
                     );
                     title.style.setProperty(
@@ -20018,42 +20009,46 @@ export class GameScene extends Phaser.Scene {
                 }
 
                 const subtitle =
-                    practiceCopy
-                        .querySelector<HTMLElement>(
-                            'small',
-                        );
+                    copy.querySelector<HTMLElement>(
+                        'small',
+                    );
 
                 if (subtitle) {
                     subtitle.style.setProperty(
-                        'flex-basis',
-                        '100%',
+                        'grid-column',
+                        '1 / -1',
                         'important',
                     );
                     subtitle.style.setProperty(
                         'font-size',
                         compact
-                            ? '9px'
-                            : '10px',
+                            ? '8px'
+                            : '9px',
                         'important',
                     );
                     subtitle.style.setProperty(
                         'line-height',
-                        '1.08',
+                        '1.05',
                         'important',
                     );
                     subtitle.style.setProperty(
                         'margin',
-                        '1px 0 0',
+                        '0',
                         'important',
                     );
                     subtitle.style.setProperty(
                         'white-space',
-                        'normal',
+                        'nowrap',
                         'important',
                     );
                     subtitle.style.setProperty(
                         'overflow',
-                        'visible',
+                        'hidden',
+                        'important',
+                    );
+                    subtitle.style.setProperty(
+                        'text-overflow',
+                        'ellipsis',
                         'important',
                     );
                 }
@@ -21007,22 +21002,6 @@ export class GameScene extends Phaser.Scene {
         document.body.appendChild(root);
         this.waitingRoomRoot = root;
 
-        /*
-         * V1010312_FOLD_PRACTICE_WAITING_TIMING_POLISH: the shell may have inherited overflow:hidden from old compact
-         * patches. Allow internal translated headers/footer text to stay visible.
-         */
-        const waitingShell =
-            root.querySelector<HTMLElement>(
-                '.ch-waiting-shell',
-            );
-
-        if (waitingShell) {
-            waitingShell.style.setProperty(
-                'overflow',
-                'visible',
-                'important',
-            );
-        }
 
         const waitingFooter =
             root.querySelector<HTMLElement>(
@@ -21662,91 +21641,11 @@ export class GameScene extends Phaser.Scene {
         }
 
         /*
-         * V1010312_FOLD_PRACTICE_WAITING_TIMING_POLISH: make timing sections self-contained.
-         * Header gets its own row; time buttons get a separate row.
-         * This prevents mobile "색칠 시간" from being clipped by the buttons.
+         * V1010313_PRACTICE_HEIGHT_TIMING_FRAME_SAFE: SAFE timing polish.
+         * Never change timing frame geometry here.
+         * Existing CSS owns section height/padding/grid so Paint/Hunt cannot
+         * overlap. We only adjust text size inside the existing frames.
          */
-        const waitingTiming =
-            this.waitingRoomRoot
-                ?.querySelector<HTMLElement>(
-                    '.ch-waiting-timing',
-                );
-
-        if (waitingTiming) {
-            waitingTiming.style.setProperty(
-                'display',
-                'grid',
-                'important',
-            );
-            waitingTiming.style.setProperty(
-                'grid-template-rows',
-                'minmax(0, 1fr) minmax(0, 1fr)',
-                'important',
-            );
-            waitingTiming.style.setProperty(
-                'gap',
-                this.mobileControlsEnabled
-                    ? '5px'
-                    : '6px',
-                'important',
-            );
-            waitingTiming.style.setProperty(
-                'overflow',
-                'visible',
-                'important',
-            );
-        }
-
-        this.waitingRoomRoot
-            ?.querySelectorAll<HTMLElement>(
-                '.ch-waiting-timing section',
-            )
-            .forEach(
-                (section) => {
-                    section.style.setProperty(
-                        'display',
-                        'grid',
-                        'important',
-                    );
-                    section.style.setProperty(
-                        'grid-template-rows',
-                        this.mobileControlsEnabled
-                            ? '20px minmax(34px, 1fr)'
-                            : '22px minmax(38px, 1fr)',
-                        'important',
-                    );
-                    section.style.setProperty(
-                        'row-gap',
-                        '4px',
-                        'important',
-                    );
-                    section.style.setProperty(
-                        'padding',
-                        this.mobileControlsEnabled
-                            ? '5px 6px'
-                            : '6px 7px',
-                        'important',
-                    );
-                    section.style.setProperty(
-                        'min-height',
-                        this.mobileControlsEnabled
-                            ? '64px'
-                            : '72px',
-                        'important',
-                    );
-                    section.style.setProperty(
-                        'overflow',
-                        'visible',
-                        'important',
-                    );
-                    section.style.setProperty(
-                        'box-sizing',
-                        'border-box',
-                        'important',
-                    );
-                },
-            );
-
         this.waitingRoomRoot
             ?.querySelectorAll<HTMLElement>(
                 '.ch-waiting-timing-title',
@@ -21754,44 +21653,10 @@ export class GameScene extends Phaser.Scene {
             .forEach(
                 (title) => {
                     title.style.setProperty(
-                        'display',
-                        'flex',
-                        'important',
-                    );
-                    title.style.setProperty(
-                        'align-items',
-                        'center',
-                        'important',
-                    );
-                    title.style.setProperty(
-                        'justify-content',
-                        'space-between',
-                        'important',
-                    );
-                    title.style.setProperty(
-                        'min-height',
-                        this.mobileControlsEnabled
-                            ? '20px'
-                            : '22px',
-                        'important',
-                    );
-                    title.style.setProperty(
-                        'height',
-                        this.mobileControlsEnabled
-                            ? '20px'
-                            : '22px',
-                        'important',
-                    );
-                    title.style.setProperty(
-                        'margin',
-                        '0',
-                        'important',
-                    );
-                    title.style.setProperty(
                         'font-size',
                         this.mobileControlsEnabled
-                            ? '12px'
-                            : '14px',
+                            ? '11px'
+                            : '13px',
                         'important',
                     );
                     title.style.setProperty(
@@ -21801,12 +21666,7 @@ export class GameScene extends Phaser.Scene {
                     );
                     title.style.setProperty(
                         'line-height',
-                        '1',
-                        'important',
-                    );
-                    title.style.setProperty(
-                        'overflow',
-                        'visible',
+                        '1.05',
                         'important',
                     );
                     title.style.setProperty(
@@ -21823,33 +21683,15 @@ export class GameScene extends Phaser.Scene {
             )
             .forEach(
                 (button) => {
-                    button.style.setProperty(
-                        'display',
-                        'flex',
-                        'important',
-                    );
-                    button.style.setProperty(
-                        'align-items',
-                        'center',
-                        'important',
-                    );
-                    button.style.setProperty(
-                        'justify-content',
-                        'center',
-                        'important',
-                    );
-                    button.style.setProperty(
-                        'min-height',
-                        this.mobileControlsEnabled
-                            ? '34px'
-                            : '40px',
-                        'important',
-                    );
+                    /*
+                     * PC gets a small readability bump only.
+                     * Mobile stays at the known-safe 12px size.
+                     */
                     button.style.setProperty(
                         'font-size',
                         this.mobileControlsEnabled
-                            ? '13px'
-                            : '16px',
+                            ? '12px'
+                            : '14px',
                         'important',
                     );
                     button.style.setProperty(
@@ -21860,23 +21702,6 @@ export class GameScene extends Phaser.Scene {
                     button.style.setProperty(
                         'line-height',
                         '1',
-                        'important',
-                    );
-                    button.style.setProperty(
-                        'padding',
-                        this.mobileControlsEnabled
-                            ? '4px'
-                            : '5px',
-                        'important',
-                    );
-                    button.style.setProperty(
-                        'overflow',
-                        'visible',
-                        'important',
-                    );
-                    button.style.setProperty(
-                        'box-sizing',
-                        'border-box',
                         'important',
                     );
                 },
