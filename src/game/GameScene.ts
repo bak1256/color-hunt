@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010326_MOBILE_LOBBY_SAFE_HEIGHT_PROFILE: mobile lobby safe height follows tolerant width profiles, never viewport orientation. */
     /* V1010325B_REMOVE_UNUSED_SAFEHEIGHT_DEBUG: remove write-only safe-height debug fields; stable cache remains intact. */
     /* V1010325_MOBILE_LOBBY_STABLE_SAFE_HEIGHT: mobile lobby never grows beyond the smallest safe viewport height for its width band. */
     /* V1010324_FOLD_REFOLD_GUIDE_ASPECT_FIX: refold compact detection trusts final viewport aspect even when button width is stale. */
@@ -4303,8 +4304,11 @@ export class GameScene extends Phaser.Scene {
      * width bucket. Growing browser chrome space becomes harmless empty space
      * instead of stretching the lobby and clipping its bottom content.
      */
-    private readonly mainLobbySafeHeightByViewportBand =
-        new Map<string, number>();
+    private readonly mainLobbySafeHeightProfiles:
+        Array<{
+            width: number;
+            safeHeight: number;
+        }> = [];
     private waitingRoomRoot?: HTMLDivElement;
     private waitingRoomInfo?: HTMLDivElement;
     private waitingRoomMapText?: HTMLSpanElement;
@@ -19377,55 +19381,108 @@ export class GameScene extends Phaser.Scene {
                 window.innerHeight;
 
             /*
-             * V1010325_MOBILE_LOBBY_STABLE_SAFE_HEIGHT
+             * V1010326_MOBILE_LOBBY_SAFE_HEIGHT_PROFILE
              *
-             * Use WIDTH as the state identity because Fold closed/open changes
-             * width dramatically, while Android navigation/browser chrome
-             * usually changes HEIGHT only.
+             * IMPORTANT:
+             * Do NOT use viewport orientation as part of the identity.
+             * On Fold/Android, hiding the system navigation/browser UI can
+             * increase only HEIGHT enough to flip width>=height even though
+             * the physical device is still in the exact same folded state.
              *
-             * 64px buckets tolerate a few CSS-pixel fluctuations without
-             * accidentally merging Fold-open and Fold-closed layouts.
+             * Match states by WIDTH proximity instead:
+             * - system UI / browser chrome jitter => same profile
+             * - Fold closed <-> open or portrait <-> landscape => new profile
              */
-            const viewportOrientation =
-                viewportWidth >=
-                    viewportHeight
-                    ? 'landscape'
-                    : 'portrait';
+            let safeProfile:
+                {
+                    width: number;
+                    safeHeight: number;
+                } |
+                undefined;
 
-            const viewportWidthBand =
-                Math.round(
-                    viewportWidth /
-                    64,
-                ) *
-                64;
+            let bestWidthDistance =
+                Number.POSITIVE_INFINITY;
 
-            const safeViewportBand =
-                viewportOrientation +
-                ':' +
-                String(
-                    viewportWidthBand,
+            this.mainLobbySafeHeightProfiles
+                .forEach(
+                    (profile) => {
+                        const widthDistance =
+                            Math.abs(
+                                profile.width -
+                                    viewportWidth,
+                            );
+
+                        const widthTolerance =
+                            Math.max(
+                                96,
+                                Math.min(
+                                    profile.width,
+                                    viewportWidth,
+                                ) *
+                                    0.16,
+                            );
+
+                        if (
+                            widthDistance <=
+                                widthTolerance &&
+                            widthDistance <
+                                bestWidthDistance
+                        ) {
+                            safeProfile =
+                                profile;
+                            bestWidthDistance =
+                                widthDistance;
+                        }
+                    },
                 );
 
-            const previousSafeHeight =
-                this.mainLobbySafeHeightByViewportBand
-                    .get(
-                        safeViewportBand,
+            if (!safeProfile) {
+                safeProfile = {
+                    width:
+                        viewportWidth,
+                    safeHeight:
+                        viewportHeight,
+                };
+
+                this.mainLobbySafeHeightProfiles
+                    .push(
+                        safeProfile,
                     );
 
-            const safeViewportHeight =
-                previousSafeHeight ===
-                    undefined
-                    ? viewportHeight
-                    : Math.min(
-                        previousSafeHeight,
+                /*
+                 * A lobby session never needs many profiles. Keep only the
+                 * newest few to prevent unbounded growth on exotic browsers.
+                 */
+                if (
+                    this.mainLobbySafeHeightProfiles
+                        .length > 6
+                ) {
+                    this.mainLobbySafeHeightProfiles
+                        .shift();
+                }
+            } else {
+                /*
+                 * GROWTH is browser/system chrome disappearing: ignore it.
+                 * SHRINK is genuinely less safe space: adopt it.
+                 */
+                safeProfile.safeHeight =
+                    Math.min(
+                        safeProfile.safeHeight,
                         viewportHeight,
                     );
 
-            this.mainLobbySafeHeightByViewportBand
-                .set(
-                    safeViewportBand,
-                    safeViewportHeight,
-                );
+                /*
+                 * Smooth tiny width drift without replacing the state identity.
+                 */
+                safeProfile.width =
+                    safeProfile.width *
+                        0.8 +
+                    viewportWidth *
+                        0.2;
+            }
+
+            const safeViewportHeight =
+                safeProfile.safeHeight;
 
             const sideInset =
                 Math.max(
@@ -19506,8 +19563,12 @@ export class GameScene extends Phaser.Scene {
              * device needs diagnosis later.
              */
             this.mainLobbyRoot.dataset
-                .safeViewportBand =
-                safeViewportBand;
+                .safeViewportProfileWidth =
+                String(
+                    Math.round(
+                        safeProfile.width,
+                    ),
+                );
 
             this.mainLobbyRoot.dataset
                 .safeViewportHeight =
