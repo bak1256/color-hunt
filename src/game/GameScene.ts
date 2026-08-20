@@ -79,7 +79,6 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
-    /* V1010379_TRANSITION_CLEANUP: READY->GO hides Paint controls and Hunt explicitly releases input. */
     /* V1010378_READY_SNAPSHOT_HOTFIX: settling hides READY permanently and final PNG convergence retries safely. */
     /* V1010377_FINAL_CAMOUFLAGE_SNAPSHOT: READY captures one final camouflage PNG; Hunt never replays historical paint. */
     /* V1010376_REMOTE_PAINT_DEFER_LOBBY_SAFETY: remote Paint is deferred until READY->GO and round paint is isolated from Lobby avatars. */
@@ -16682,9 +16681,6 @@ export class GameScene extends Phaser.Scene {
             gameplayDocumentFocused &&
             !this.gameplayDocumentWasFocused
         ) {
-            /*
-             * V1010379_TRANSITION_CLEANUP / HUNT_INPUT_RELEASE
-             */
             this.input.enabled = true;
 
             if (this.input.keyboard) {
@@ -30931,10 +30927,6 @@ export class GameScene extends Phaser.Scene {
         this.paintReadyButton
             ?.setVisible(false);
 
-        /*
-         * V1010379_TRANSITION_CLEANUP: READY->GO is a clean transition screen, not Paint UI with
-         * giant text layered over it.
-         */
         this.paintPreview
             .setVisible(false);
 
@@ -30945,15 +30937,6 @@ export class GameScene extends Phaser.Scene {
         this.setHunterCamoPaletteVisible(
             false,
         );
-
-        this.paintColorText
-            .setVisible(false);
-        this.brushSizeText
-            .setVisible(false);
-        this.paintZoomText
-            .setVisible(false);
-        this.paintControlHelpText
-            .setVisible(false);
 
         this.networkPlayerManager
             .discardRemotePaintBacklog();
