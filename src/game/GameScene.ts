@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010314_MOBILE_WAITING_HEADER_UNCLIP: reserve mobile Paint/Hunt header height without enlarging outer frames. */
     /* V1010313_PRACTICE_HEIGHT_TIMING_FRAME_SAFE: Practice same-height rhythm + frame-safe waiting timing text. */
     /* V1010312_FOLD_PRACTICE_WAITING_TIMING_POLISH: Fold Practice spacing + unclipped waiting timing layout. */
     /* V1010311_UI_CANVAS_GAS_RISE_FIX: restore fart rise, Fold compact icons, canvas-bound waiting panel, readable volunteer frame. */
@@ -21641,17 +21642,61 @@ export class GameScene extends Phaser.Scene {
         }
 
         /*
-         * V1010313_PRACTICE_HEIGHT_TIMING_FRAME_SAFE: SAFE timing polish.
-         * Never change timing frame geometry here.
-         * Existing CSS owns section height/padding/grid so Paint/Hunt cannot
-         * overlap. We only adjust text size inside the existing frames.
+         * V1010314_MOBILE_WAITING_HEADER_UNCLIP: mobile timing-header final fix.
+         *
+         * Keep the outer Paint/Hunt frame geometry intact.
+         * Reclaim 3px from the option buttons and reserve that space for
+         * the header so "색칠 시간 / 사냥 시간" cannot be clipped.
          */
+        this.waitingRoomRoot
+            ?.querySelectorAll<HTMLElement>(
+                '.ch-waiting-timing section',
+            )
+            .forEach(
+                (section) => {
+                    if (
+                        this.mobileControlsEnabled
+                    ) {
+                        section.style.setProperty(
+                            'overflow',
+                            'visible',
+                            'important',
+                        );
+                        section.style.setProperty(
+                            'padding-top',
+                            '5px',
+                            'important',
+                        );
+                        section.style.setProperty(
+                            'padding-bottom',
+                            '4px',
+                            'important',
+                        );
+                    }
+                },
+            );
+
         this.waitingRoomRoot
             ?.querySelectorAll<HTMLElement>(
                 '.ch-waiting-timing-title',
             )
             .forEach(
                 (title) => {
+                    title.style.setProperty(
+                        'display',
+                        'flex',
+                        'important',
+                    );
+                    title.style.setProperty(
+                        'align-items',
+                        'center',
+                        'important',
+                    );
+                    title.style.setProperty(
+                        'justify-content',
+                        'space-between',
+                        'important',
+                    );
                     title.style.setProperty(
                         'font-size',
                         this.mobileControlsEnabled
@@ -21666,7 +21711,9 @@ export class GameScene extends Phaser.Scene {
                     );
                     title.style.setProperty(
                         'line-height',
-                        '1.05',
+                        this.mobileControlsEnabled
+                            ? '17px'
+                            : '1.05',
                         'important',
                     );
                     title.style.setProperty(
@@ -21674,6 +21721,59 @@ export class GameScene extends Phaser.Scene {
                         'nowrap',
                         'important',
                     );
+                    title.style.setProperty(
+                        'overflow',
+                        'visible',
+                        'important',
+                    );
+
+                    if (
+                        this.mobileControlsEnabled
+                    ) {
+                        title.style.setProperty(
+                            'height',
+                            '17px',
+                            'important',
+                        );
+                        title.style.setProperty(
+                            'min-height',
+                            '17px',
+                            'important',
+                        );
+                        title.style.setProperty(
+                            'margin',
+                            '0 0 2px',
+                            'important',
+                        );
+                        title.style.setProperty(
+                            'padding',
+                            '0',
+                            'important',
+                        );
+                    }
+                },
+            );
+
+        this.waitingRoomRoot
+            ?.querySelectorAll<HTMLElement>(
+                '.ch-waiting-time-options',
+            )
+            .forEach(
+                (options) => {
+                    if (
+                        this.mobileControlsEnabled
+                    ) {
+                        options.style.setProperty(
+                            'align-items',
+                            'stretch',
+                            'important',
+                        );
+                        options.style.setProperty(
+                            'min-height',
+                            '28px',
+                            'important',
+                        );
+                    }
                 },
             );
 
@@ -21683,10 +21783,6 @@ export class GameScene extends Phaser.Scene {
             )
             .forEach(
                 (button) => {
-                    /*
-                     * PC gets a small readability bump only.
-                     * Mobile stays at the known-safe 12px size.
-                     */
                     button.style.setProperty(
                         'font-size',
                         this.mobileControlsEnabled
@@ -21704,6 +21800,31 @@ export class GameScene extends Phaser.Scene {
                         '1',
                         'important',
                     );
+
+                    if (
+                        this.mobileControlsEnabled
+                    ) {
+                        /*
+                         * Old mobile CSS reserves 31px. 28px still has ample
+                         * touch/readability at the uniformly scaled panel and
+                         * gives the header three extra pixels.
+                         */
+                        button.style.setProperty(
+                            'height',
+                            '28px',
+                            'important',
+                        );
+                        button.style.setProperty(
+                            'min-height',
+                            '28px',
+                            'important',
+                        );
+                        button.style.setProperty(
+                            'padding',
+                            '2px 3px',
+                            'important',
+                        );
+                    }
                 },
             );
 
