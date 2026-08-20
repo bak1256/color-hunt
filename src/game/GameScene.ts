@@ -79,6 +79,10 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010310C_CURRENT_SOURCE_HARDFIX_RECOVER: runtime Fold sizing, visualViewport waiting dock, real GAS floor fix. */
+    /* V1010309_CLEAN_UNUSED_WAITING_LAYOUT_VARS: remove only truly-unused legacy waiting-layout locals. */
+    /* V1010308B_REMOVE_UNUSED_HEIGHT_SCALE_RECOVER: tolerant cleanup of obsolete v307 heightScale. */
+    /* V1010307_CLIENT_FOLD_WAITING_AUTHORITATIVE_GAS: fold-safe lobby icons, readable volunteer count, exact waiting dock, server-target GAS animation. */
     /* V1010306_CLIENT_UI_WAITING_GAS_FINAL: uniform lobby icon rhythm, unclipped waiting footer, true full-height mobile dock, final GAS progression. */
     /* V1010305_REMOVE_UNUSED_RENDERED_HEIGHT: cleanup after v304 fixed mobile waiting-room top positioning. */
     /* V1010304_CLIENT_FINAL_UI_GAS_DRAIN: equal lobby icon inset, dense waiting panels, direct escalating GAS drain. */
@@ -366,6 +370,11 @@ export class GameScene extends Phaser.Scene {
     private fartGaugeLabel!: Phaser.GameObjects.Text;
     /* V1010247_FART_ULTIMATE_BALANCE: GAS now means danger/pressure; 0 safe -> 100 accident. */
     private fartGauge = 0;
+
+    /*
+     * V1010307_CLIENT_FOLD_WAITING_AUTHORITATIVE_GAS: server tells us exactly where the 8s accident animation ends.
+     */
+    private multiplayerPoopGasTarget = 0;
 
     /*
      * V1010281_FART_INPUT_COOLDOWN: one deliberate fart at a time.
@@ -9009,9 +9018,6 @@ export class GameScene extends Phaser.Scene {
 
         this.networkUnsubscribers.push(
             multiplayerClient.onFartState((state: NetworkFartState) => {
-                /*
-                 * V1010280_SMOOTH_GAS_8S_RECOVER2: Practice remains fully local.
-                 */
                 if (
                     this.practiceMode !==
                     null
@@ -9032,25 +9038,55 @@ export class GameScene extends Phaser.Scene {
                             )
                         : 0;
 
-                this.localPoopUntil =
-                    nextLocalPoopUntil;
-
                 const pooped =
                     nextLocalPoopUntil >
                     localNow;
 
-                /*
-                 * While pooped, don't snap rendered GAS to the server's
-                 * ~250ms samples. The local render loop uses the authoritative
-                 * deadline to animate smoothly every frame.
-                 */
-                if (!pooped) {
-                    this.fartGauge =
+                this.localPoopUntil =
+                    nextLocalPoopUntil;
+
+                if (
+                    Number.isFinite(
+                        state.targetGauge,
+                    )
+                ) {
+                    this.multiplayerPoopGasTarget =
                         Phaser.Math.Clamp(
-                            state.gauge,
+                            Number(
+                                state.targetGauge,
+                            ),
                             0,
                             100,
                         );
+                }
+
+                /*
+                 * During poop the render loop owns the smooth bar.
+                 * Outside poop the server sample is authoritative.
+                 */
+                if (!pooped) {
+                    const authoritativeTarget =
+                        Number.isFinite(
+                            state.targetGauge,
+                        )
+                            ? Phaser.Math.Clamp(
+                                Number(
+                                    state.targetGauge,
+                                ),
+                                0,
+                                100,
+                            )
+                            : Phaser.Math.Clamp(
+                                state.gauge,
+                                0,
+                                100,
+                            );
+
+                    this.multiplayerPoopGasTarget =
+                        authoritativeTarget;
+
+                    this.fartGauge =
+                        authoritativeTarget;
                 }
 
                 this.networkPlayerManager
@@ -19395,6 +19431,7 @@ export class GameScene extends Phaser.Scene {
                     )}px`,
                 );
 
+            this.applyMainLobbyActionRuntimeLayout();
             this.updateControlsHelpPosition();
             return;
         }
@@ -19436,6 +19473,237 @@ export class GameScene extends Phaser.Scene {
                         0.895,
                 )}px`,
             );
+
+        this.applyMainLobbyActionRuntimeLayout();
+    }
+
+    /*
+     * V1010310C_CURRENT_SOURCE_HARDFIX_RECOVER
+     * Final lobby action geometry is applied at runtime.
+     *
+     * Fold browsers can keep a wide CSS viewport after unfold -> fold,
+     * so media queries are not reliable enough here. We measure the ACTUAL
+     * rendered room-action button width instead.
+     */
+    private applyMainLobbyActionRuntimeLayout(): void {
+        const root =
+            this.mainLobbyRoot;
+
+        if (!root) {
+            return;
+        }
+
+        const actions =
+            Array.from(
+                root.querySelectorAll<HTMLButtonElement>(
+                    '.ch-lobby-action--public, ' +
+                    '.ch-lobby-action--private, ' +
+                    '.ch-lobby-action--join',
+                ),
+            );
+
+        actions.forEach(
+            (button) => {
+                const buttonWidth =
+                    button.getBoundingClientRect()
+                        .width;
+
+                const compact =
+                    buttonWidth > 0 &&
+                    buttonWidth < 245;
+
+                const iconCell =
+                    compact
+                        ? 28
+                        : 36;
+
+                const glyphSize =
+                    compact
+                        ? 18
+                        : 24;
+
+                const gap =
+                    compact
+                        ? 7
+                        : 9;
+
+                const padX =
+                    compact
+                        ? 8
+                        : 11;
+
+                button.style.setProperty(
+                    'display',
+                    'grid',
+                    'important',
+                );
+                button.style.setProperty(
+                    'grid-template-columns',
+                    String(iconCell) +
+                        'px minmax(0, 1fr)',
+                    'important',
+                );
+                button.style.setProperty(
+                    'column-gap',
+                    String(gap) + 'px',
+                    'important',
+                );
+                button.style.setProperty(
+                    'align-items',
+                    'center',
+                    'important',
+                );
+                button.style.setProperty(
+                    'padding',
+                    '7px ' +
+                        String(padX) +
+                        'px',
+                    'important',
+                );
+                button.style.setProperty(
+                    'box-sizing',
+                    'border-box',
+                    'important',
+                );
+                button.style.setProperty(
+                    'overflow',
+                    'hidden',
+                    'important',
+                );
+
+                const icon =
+                    button.querySelector<HTMLElement>(
+                        '.ch-lobby-action-icon',
+                    );
+
+                if (icon) {
+                    [
+                        'width',
+                        'min-width',
+                        'max-width',
+                        'height',
+                        'min-height',
+                        'max-height',
+                    ].forEach(
+                        (property) => {
+                            icon.style.setProperty(
+                                property,
+                                String(iconCell) +
+                                    'px',
+                                'important',
+                            );
+                        },
+                    );
+
+                    icon.style.setProperty(
+                        'display',
+                        'grid',
+                        'important',
+                    );
+                    icon.style.setProperty(
+                        'place-items',
+                        'center',
+                        'important',
+                    );
+                    icon.style.setProperty(
+                        'padding',
+                        compact
+                            ? '5px'
+                            : '6px',
+                        'important',
+                    );
+                    icon.style.setProperty(
+                        'margin',
+                        '0',
+                        'important',
+                    );
+                    icon.style.setProperty(
+                        'aspect-ratio',
+                        '1 / 1',
+                        'important',
+                    );
+                    icon.style.setProperty(
+                        'box-sizing',
+                        'border-box',
+                        'important',
+                    );
+                    icon.style.setProperty(
+                        'overflow',
+                        'hidden',
+                        'important',
+                    );
+                    icon.style.setProperty(
+                        'font-size',
+                        '0',
+                        'important',
+                    );
+                    icon.style.setProperty(
+                        'line-height',
+                        '0',
+                        'important',
+                    );
+                }
+
+                const svg =
+                    button.querySelector<SVGElement>(
+                        '.ch-lobby-action-svg',
+                    );
+
+                if (svg) {
+                    [
+                        'width',
+                        'min-width',
+                        'max-width',
+                        'height',
+                        'min-height',
+                        'max-height',
+                    ].forEach(
+                        (property) => {
+                            svg.style.setProperty(
+                                property,
+                                String(glyphSize) +
+                                    'px',
+                                'important',
+                            );
+                        },
+                    );
+
+                    svg.style.setProperty(
+                        'transform',
+                        'none',
+                        'important',
+                    );
+                    svg.style.setProperty(
+                        'margin',
+                        '0',
+                        'important',
+                    );
+                    svg.style.setProperty(
+                        'padding',
+                        '0',
+                        'important',
+                    );
+                }
+
+                const copy =
+                    button.lastElementChild as
+                        HTMLElement |
+                        null;
+
+                if (copy) {
+                    copy.style.setProperty(
+                        'min-width',
+                        '0',
+                        'important',
+                    );
+                    copy.style.setProperty(
+                        'overflow',
+                        'hidden',
+                        'important',
+                    );
+                }
+            },
+        );
     }
 
     private createMainLobbyDom(): void {
@@ -20042,11 +20310,6 @@ export class GameScene extends Phaser.Scene {
 
         const touch =
             this.mobileControlsEnabled;
-        const aspect =
-            rect.width / Math.max(1, rect.height);
-        const landscapeCanvas =
-            aspect >= 1.45;
-
         const horizontalInset =
             Math.max(
                 6,
@@ -20080,151 +20343,153 @@ export class GameScene extends Phaser.Scene {
          */
         if (touch) {
             /*
-             * V1010298_UNIFIED_BGM_MOBILE_WAITING_LOBBY_POLISH: taller/wider mobile authoring canvas.
-             * Inner CSS is enlarged, while uniform scaling still protects
-             * unusual foldables and aspect ratios.
-             */
-            /*
-             * V1010302_CLIENT_UI_FART_PROGRESSION: narrower authoring width lets a landscape phone use its
-             * full vertical height without producing an oversized side dock.
-             */
-            const designWidth = 320;
-            const designHeight = 500;
-
-
-
-            /*
-             * V1010302_CLIENT_UI_FART_PROGRESSION: the requested visual contract is:
-             *  - right edge = canvas right edge
-             *  - top/bottom = essentially canvas top/bottom
+             * V1010310C_CURRENT_SOURCE_HARDFIX_RECOVER
+             * Waiting-room information is browser UI, not world HUD.
+             * Use visualViewport so Fold/browser letterboxing cannot leave
+             * large top/right/bottom gaps.
              *
-             * Height is therefore authoritative. Width only acts as a safety
-             * cap on exceptionally narrow/portrait devices.
+             * Visual target: 1px top, 1px right, 1px bottom.
              */
-            const targetHeight =
-                Math.max(
-                    1,
-                    rect.height - 2,
-                );
+            const viewport =
+                window.visualViewport;
 
-            const heightScale =
-                targetHeight /
-                designHeight;
+            const viewportLeft =
+                viewport?.offsetLeft ??
+                0;
 
-            const maxWidth =
-                landscapeCanvas
-                    ? rect.width * 0.48
-                    : rect.width * 0.96;
+            const viewportTop =
+                viewport?.offsetTop ??
+                0;
 
-            const widthScale =
-                Math.max(
-                    0.45,
-                    maxWidth /
-                        designWidth,
-                );
+            const viewportWidth =
+                viewport?.width ??
+                window.innerWidth;
+
+            const viewportHeight =
+                viewport?.height ??
+                window.innerHeight;
+
+            const designWidth =
+                320;
+
+            const designHeight =
+                500;
 
             const scale =
                 Math.max(
                     0.45,
-                    landscapeCanvas
-                        ? heightScale
-                        : Math.min(
-                            heightScale,
-                            widthScale,
-                        ),
+                    (
+                        viewportHeight -
+                        2
+                    ) /
+                        designHeight,
                 );
 
             const renderedWidth =
-                designWidth * scale;
-
-            const mobileRightInset =
-                0;
+                designWidth *
+                scale;
 
             const left =
-                rect.right -
-                mobileRightInset -
-                renderedWidth;
+                viewportLeft +
+                viewportWidth -
+                renderedWidth -
+                1;
 
             const top =
-                rect.top +
+                viewportTop +
                 1;
 
             this.waitingRoomRoot.classList.add(
                 'ch-uniform-mobile-scale',
             );
 
-            this.waitingRoomRoot.style.setProperty(
-                '--waiting-left',
-                `${left.toFixed(2)}px`,
+            const style =
+                this.waitingRoomRoot.style;
+
+            style.setProperty(
+                'position',
+                'fixed',
+                'important',
             );
-            this.waitingRoomRoot.style.setProperty(
-                '--waiting-top',
-                `${top.toFixed(2)}px`,
+            style.setProperty(
+                'left',
+                left.toFixed(2) +
+                    'px',
+                'important',
             );
-            this.waitingRoomRoot.style.setProperty(
-                '--waiting-width',
-                `${designWidth}px`,
+            style.setProperty(
+                'top',
+                top.toFixed(2) +
+                    'px',
+                'important',
             );
-            this.waitingRoomRoot.style.setProperty(
-                '--waiting-height',
-                `${designHeight}px`,
+            style.setProperty(
+                'right',
+                'auto',
+                'important',
             );
-            this.waitingRoomRoot.style.setProperty(
-                '--waiting-uniform-scale',
-                scale.toFixed(5),
+            style.setProperty(
+                'bottom',
+                'auto',
+                'important',
+            );
+            style.setProperty(
+                'width',
+                String(designWidth) +
+                    'px',
+                'important',
+            );
+            style.setProperty(
+                'height',
+                String(designHeight) +
+                    'px',
+                'important',
+            );
+            style.setProperty(
+                'transform',
+                'scale(' +
+                    scale.toFixed(6) +
+                    ')',
+                'important',
+            );
+            style.setProperty(
+                'transform-origin',
+                'top left',
+                'important',
+            );
+            style.setProperty(
+                'margin',
+                '0',
+                'important',
             );
 
-            /*
-             * V1010301_LOBBY_WAITING_JOYSTICK_POLISH: direct inline geometry is authoritative.
-             * This bypasses old external CSS offsets that left a visible gap
-             * on the right and prevented full-height mobile use.
-             */
-            Object.assign(
-                this.waitingRoomRoot.style,
-                {
-                    position:
-                        'fixed',
-                    left:
-                        `${left.toFixed(
-                            2,
-                        )}px`,
-                    top:
-                        `${top.toFixed(
-                            2,
-                        )}px`,
-                    right:
-                        'auto',
-                    bottom:
-                        'auto',
-                    width:
-                        `${designWidth}px`,
-                    height:
-                        `${designHeight}px`,
-                    transform:
-                        `scale(${scale.toFixed(
-                            5,
-                        )})`,
-                    transformOrigin:
-                        'top left',
-                    margin:
-                        '0',
-                },
-            );
+            const shell =
+                this.waitingRoomRoot.querySelector<HTMLElement>(
+                    '.ch-waiting-shell',
+                );
 
-            /*
-             * Fractional transforms can leave a 1~2px seam. Recompute the
-             * visual right edge from the actual rendered width and snap it.
-             */
-            const snappedLeft =
-                rect.right -
-                renderedWidth -
-                1;
-
-            this.waitingRoomRoot.style
-                .left =
-                `${snappedLeft.toFixed(
-                    2,
-                )}px`;
+            if (shell) {
+                shell.style.setProperty(
+                    'width',
+                    '100%',
+                    'important',
+                );
+                shell.style.setProperty(
+                    'height',
+                    '100%',
+                    'important',
+                );
+                shell.style.setProperty(
+                    'margin',
+                    '0',
+                    'important',
+                );
+                shell.style.setProperty(
+                    'box-sizing',
+                    'border-box',
+                    'important',
+                );
+            }
 
             return;
         }
@@ -20401,6 +20666,59 @@ export class GameScene extends Phaser.Scene {
 
         document.body.appendChild(root);
         this.waitingRoomRoot = root;
+
+        const waitingFooter =
+            root.querySelector<HTMLElement>(
+                '.ch-waiting-footer',
+            );
+
+        if (waitingFooter) {
+            waitingFooter.style.setProperty(
+                'min-height',
+                '46px',
+                'important',
+            );
+            waitingFooter.style.setProperty(
+                'height',
+                '46px',
+                'important',
+            );
+            waitingFooter.style.setProperty(
+                'overflow',
+                'visible',
+                'important',
+            );
+
+            waitingFooter
+                .querySelectorAll<HTMLButtonElement>(
+                    'button',
+                )
+                .forEach(
+                    (button) => {
+                        button.style.setProperty(
+                            'height',
+                            '42px',
+                            'important',
+                        );
+                        button.style.setProperty(
+                            'min-height',
+                            '42px',
+                            'important',
+                        );
+                        button.style.setProperty(
+                            'box-sizing',
+                            'border-box',
+                            'important',
+                        );
+                        button.style.setProperty(
+                            'overflow',
+                            'visible',
+                            'important',
+                        );
+                    },
+                );
+        }
+
         this.waitingRoomInfo =
             root.querySelector('.ch-waiting-info') ?? undefined;
         this.waitingRoomMapText =
@@ -20833,6 +21151,42 @@ export class GameScene extends Phaser.Scene {
         if (
             hunterVolunteerStatus
         ) {
+            /*
+             * V1010310C_CURRENT_SOURCE_HARDFIX_RECOVER: old CSS had multiple 10/12/13px overrides.
+             * Force a readable final size at runtime.
+             */
+            hunterVolunteerStatus.style.setProperty(
+                'min-height',
+                this.mobileControlsEnabled
+                    ? '26px'
+                    : '28px',
+                'important',
+            );
+            hunterVolunteerStatus.style.setProperty(
+                'height',
+                this.mobileControlsEnabled
+                    ? '26px'
+                    : '28px',
+                'important',
+            );
+            hunterVolunteerStatus.style.setProperty(
+                'font-size',
+                this.mobileControlsEnabled
+                    ? '14px'
+                    : '15px',
+                'important',
+            );
+            hunterVolunteerStatus.style.setProperty(
+                'font-weight',
+                '900',
+                'important',
+            );
+            hunterVolunteerStatus.style.setProperty(
+                'line-height',
+                '1',
+                'important',
+            );
+
             const template =
                 tr('헌터 지원 {count}명');
 
@@ -25943,6 +26297,131 @@ export class GameScene extends Phaser.Scene {
                         }
                     }
 
+
+                    /*
+                     * V1010307_CLIENT_FOLD_WAITING_AUTHORITATIVE_GAS: folded phones need a separate compact tier.
+                     * Unfolded/tablet proportions stay untouched.
+                     */
+                    @media (max-width: 540px) {
+                        .ch-lobby-action--public,
+                        .ch-lobby-action--private,
+                        .ch-lobby-action--join {
+                            grid-template-columns: 28px minmax(0, 1fr) !important;
+                            column-gap: 7px !important;
+                            height: 52px !important;
+                            min-height: 52px !important;
+                            max-height: 52px !important;
+                            padding: 7px 9px !important;
+                        }
+
+                        .ch-lobby-action--public .ch-lobby-action-icon,
+                        .ch-lobby-action--private .ch-lobby-action-icon,
+                        .ch-lobby-action--join .ch-lobby-action-icon {
+                            width: 28px !important;
+                            min-width: 28px !important;
+                            max-width: 28px !important;
+                            height: 28px !important;
+                            min-height: 28px !important;
+                            max-height: 28px !important;
+                            padding: 5px !important;
+                            border-radius: 7px !important;
+                        }
+
+                        .ch-lobby-action--public .ch-lobby-action-svg,
+                        .ch-lobby-action--private .ch-lobby-action-svg,
+                        .ch-lobby-action--join .ch-lobby-action-svg {
+                            width: 18px !important;
+                            min-width: 18px !important;
+                            max-width: 18px !important;
+                            height: 18px !important;
+                            min-height: 18px !important;
+                            max-height: 18px !important;
+                        }
+
+                        .ch-lobby-action--public strong,
+                        .ch-lobby-action--private strong,
+                        .ch-lobby-action--join strong {
+                            font-size: clamp(14px, 4.2vw, 18px) !important;
+                        }
+
+                        .ch-lobby-action--public small,
+                        .ch-lobby-action--private small,
+                        .ch-lobby-action--join small {
+                            font-size: clamp(9px, 2.6vw, 12px) !important;
+                            margin-top: 2px !important;
+                        }
+                    }
+
+                    /*
+                     * Hunter volunteer count must be readable on BOTH PC/mobile.
+                     */
+                    .ch-waiting-role-status {
+                        display: flex !important;
+                        align-items: center !important;
+                        justify-content: center !important;
+                        min-height: 24px !important;
+                        height: 24px !important;
+                        font-size: 14px !important;
+                        font-weight: 900 !important;
+                        line-height: 1 !important;
+                        padding: 2px 6px !important;
+                        box-sizing: border-box !important;
+                        white-space: nowrap !important;
+                        overflow: visible !important;
+                    }
+
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-role-status {
+                        min-height: 22px !important;
+                        height: 22px !important;
+                        font-size: 13px !important;
+                    }
+
+                    /*
+                     * Desktop waiting layout reserves footer height explicitly.
+                     */
+                    .colorhunt-waiting-room:not(.ch-uniform-mobile-scale)
+                    .ch-waiting-shell {
+                        display: grid !important;
+                        grid-template-rows:
+                            auto
+                            auto
+                            auto
+                            auto
+                            minmax(0, 1fr)
+                            auto
+                            42px !important;
+                        height: 100% !important;
+                        overflow: hidden !important;
+                    }
+
+                    .colorhunt-waiting-room:not(.ch-uniform-mobile-scale)
+                    .ch-waiting-footer {
+                        min-height: 42px !important;
+                        height: 42px !important;
+                        align-self: end !important;
+                        overflow: visible !important;
+                    }
+
+                    .colorhunt-waiting-room:not(.ch-uniform-mobile-scale)
+                    .ch-waiting-footer button {
+                        height: 40px !important;
+                        min-height: 40px !important;
+                        overflow: visible !important;
+                    }
+
+                    /*
+                     * Mobile shell itself occupies the full authored panel;
+                     * outer root positioning provides the 1px canvas margin.
+                     */
+                    .colorhunt-waiting-room.ch-uniform-mobile-scale
+                    .ch-waiting-shell {
+                        width: 100% !important;
+                        height: 100% !important;
+                        margin: 0 !important;
+                        box-sizing: border-box !important;
+                    }
+
                 `;
 
                 document.head.appendChild(
@@ -27213,6 +27692,7 @@ export class GameScene extends Phaser.Scene {
              * Never carry the previous Hunter's pressure into Lobby/next round.
              */
             this.fartGauge = 0;
+            this.multiplayerPoopGasTarget = 0;
             this.lastFartUseAt = 0;
             this.localPoopUntil = 0;
             this.poopedHuntersUntil.clear();
@@ -27520,6 +28000,7 @@ export class GameScene extends Phaser.Scene {
              * including mobile where the fixed HUD could otherwise linger.
              */
             this.fartGauge = 0;
+            this.multiplayerPoopGasTarget = 0;
             this.lastFartUseAt = 0;
             this.localPoopUntil = 0;
             this.poopedHuntersUntil.clear();
@@ -38757,6 +39238,21 @@ export class GameScene extends Phaser.Scene {
                 localUntil;
 
             if (
+                Number.isFinite(
+                    event.targetGauge,
+                )
+            ) {
+                this.multiplayerPoopGasTarget =
+                    Phaser.Math.Clamp(
+                        Number(
+                            event.targetGauge,
+                        ),
+                        0,
+                        100,
+                    );
+            }
+
+            if (
                 this.practiceMode !== 'hunter'
             ) {
                 this.fartGauge = 100;
@@ -39142,35 +39638,54 @@ export class GameScene extends Phaser.Scene {
             this.practiceMode !== 'hunter' &&
             this.localPoopUntil > 0
         ) {
+            const now =
+                Date.now();
+
             const localPoopRemainingMs =
                 Math.max(
                     0,
                     this.localPoopUntil -
-                        Date.now(),
+                        now,
+                );
+
+            const target =
+                Phaser.Math.Clamp(
+                    this.multiplayerPoopGasTarget,
+                    0,
+                    100,
                 );
 
             if (
-                localPoopRemainingMs > 0
+                localPoopRemainingMs >
+                0
             ) {
-                this.fartGauge =
+                const progress =
                     Phaser.Math.Clamp(
-                        (
-                            localPoopRemainingMs / 8_000
-                        ) *
-                            100,
+                        localPoopRemainingMs /
+                            8_000,
                         0,
-                        100,
+                        1,
                     );
 
-                this.updateFartHud();
-            } else if (
-                this.fartGauge > 0
-            ) {
                 /*
-                 * Never leave the HUD at ~90% when the debuff expires.
-                 * The next server fart_state remains authoritative afterward.
+                 * V1010307_CLIENT_FOLD_WAITING_AUTHORITATIVE_GAS:
+                 * first accident  100 -> 36
+                 * second accident 100 -> 72
+                 * third accident  100 -> 100
                  */
-                this.fartGauge = 0;
+                this.fartGauge =
+                    target +
+                    (
+                        100 -
+                        target
+                    ) *
+                        progress;
+
+                this.updateFartHud();
+            } else {
+                this.fartGauge =
+                    target;
+
                 this.updateFartHud();
             }
         }
@@ -39192,7 +39707,14 @@ export class GameScene extends Phaser.Scene {
                         this.practiceMode === 'hunter'
                     ) {
                         this.practicePoopUntil = 0;
-                        this.fartGauge = 0;
+
+                        /*
+                         * V1010310C_CURRENT_SOURCE_HARDFIX_RECOVER: preserve the progression floor after the
+                         * 8-second debuff instead of resetting to zero.
+                         * #1 => 36, #2 => 72, #3 => 100.
+                         */
+                        this.fartGauge =
+                            this.practicePoopGasTarget;
                     }
 
                     this.localPoopUntil = 0;
