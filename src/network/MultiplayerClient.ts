@@ -320,6 +320,7 @@ export type PaintReadyStateHandler = (
 ) => void;
 
 export class MultiplayerClient {
+  /* V1010345_CONNECTION_STABILITY_HARDENING: same-session recovery wins; fresh handoff is final fallback. */
   /* V1010341_CLIENT_GAMEPLAY_STABILITY_SAFE: reconnect/background/tab stability. */
   /* V1010340C_MULTIPLAYER_TRANSPORT_HARDENING_FINAL: aim traffic and hidden-tab movement hardening. */
   /*
@@ -1343,7 +1344,7 @@ private async attemptFreshRejoin(
 
   private scheduleConfirmedFreshRecovery(
     sourceRoom: Room<NetworkGameState>,
-    delayMs = 6500,
+    delayMs = 15_000,
   ): void {
     const generation =
       ++this.recoveryEscalationGeneration;
@@ -1356,6 +1357,13 @@ private async attemptFreshRejoin(
           this.room !== sourceRoom ||
           !this.connectionIssueNotified ||
           this.freshRejoinInFlight ||
+          /*
+           * V1010345_CONNECTION_STABILITY_HARDENING / SDK_RECONNECT_OWNS_RECOVERY
+           * Never replace the Room while Colyseus is still recovering the
+           * SAME session. Fresh handoff is the final fallback only.
+           */
+          sourceRoom.reconnection
+            .isReconnecting ||
           (
             typeof navigator !== "undefined" &&
             !navigator.onLine
@@ -1604,7 +1612,7 @@ this.manualReconnectInFlight = false;
         );
         this.scheduleConfirmedFreshRecovery(
           room,
-          6500,
+          15_000,
         );
       };
 
@@ -1934,7 +1942,7 @@ this.manualReconnectInFlight = false;
             );
             this.scheduleConfirmedFreshRecovery(
               room,
-              6500,
+              15_000,
             );
           }
         },
@@ -2007,14 +2015,15 @@ this.manualReconnectInFlight = false;
         );
 
         /*
-         * Let SDK auto-reconnect own the first few seconds. If it cannot
-         * recover this confirmed drop, fresh clientKey handoff becomes the
-         * single bounded escape hatch instead of waiting up to five minutes.
+         * V1010345_CONNECTION_STABILITY_HARDENING / ONDROP_SAME_SESSION_FIRST
+         *
+         * onDrop is already a real transport event, but replacing the Room
+         * immediately is still too aggressive. Colyseus + server keep the SAME
+         * session reconnectable. Let that path own recovery first.
+         *
+         * The watchdog can escalate later if the transport stays dead, and
+         * final room.onLeave() still owns fresh-rejoin retries.
          */
-        this.scheduleConfirmedFreshRecovery(
-          room,
-          6500,
-        );
 
         /*
          * v0.10.10.230:
