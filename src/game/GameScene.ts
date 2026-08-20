@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010311_UI_CANVAS_GAS_RISE_FIX: restore fart rise, Fold compact icons, canvas-bound waiting panel, readable volunteer frame. */
     /* V1010310C_CURRENT_SOURCE_HARDFIX_RECOVER: runtime Fold sizing, visualViewport waiting dock, real GAS floor fix. */
     /* V1010309_CLEAN_UNUSED_WAITING_LAYOUT_VARS: remove only truly-unused legacy waiting-layout locals. */
     /* V1010308B_REMOVE_UNUSED_HEIGHT_SCALE_RECOVER: tolerant cleanup of obsolete v307 heightScale. */
@@ -9065,28 +9066,17 @@ export class GameScene extends Phaser.Scene {
                  * Outside poop the server sample is authoritative.
                  */
                 if (!pooped) {
-                    const authoritativeTarget =
-                        Number.isFinite(
-                            state.targetGauge,
-                        )
-                            ? Phaser.Math.Clamp(
-                                Number(
-                                    state.targetGauge,
-                                ),
-                                0,
-                                100,
-                            )
-                            : Phaser.Math.Clamp(
-                                state.gauge,
-                                0,
-                                100,
-                            );
-
-                    this.multiplayerPoopGasTarget =
-                        authoritativeTarget;
-
+                    /*
+                     * V1010311_UI_CANVAS_GAS_RISE_FIX: OUTSIDE poop, the live server gauge is the truth.
+                     * This restores the visible normal-fart rise:
+                     * 0 -> 36 -> 72 -> 100.
+                     */
                     this.fartGauge =
-                        authoritativeTarget;
+                        Phaser.Math.Clamp(
+                            state.gauge,
+                            0,
+                            100,
+                        );
                 }
 
                 this.networkPlayerManager
@@ -19508,18 +19498,43 @@ export class GameScene extends Phaser.Scene {
                     button.getBoundingClientRect()
                         .width;
 
+                const viewportWidth =
+                    window.visualViewport?.width ??
+                    window.innerWidth;
+
+                const viewportHeight =
+                    window.visualViewport?.height ??
+                    window.innerHeight;
+
+                const viewportAspect =
+                    viewportWidth /
+                    Math.max(
+                        1,
+                        viewportHeight,
+                    );
+
+                /*
+                 * V1010311_UI_CANVAS_GAS_RISE_FIX: Fold closed landscape is a very wide/short viewport.
+                 * Do not rely only on buttonWidth after unfold -> fold.
+                 */
                 const compact =
-                    buttonWidth > 0 &&
-                    buttonWidth < 245;
+                    (
+                        viewportAspect >=
+                        1.75
+                    ) ||
+                    (
+                        buttonWidth > 0 &&
+                        buttonWidth < 245
+                    );
 
                 const iconCell =
                     compact
-                        ? 28
+                        ? 24
                         : 36;
 
                 const glyphSize =
                     compact
-                        ? 18
+                        ? 14
                         : 24;
 
                 const gap =
@@ -20343,44 +20358,28 @@ export class GameScene extends Phaser.Scene {
          */
         if (touch) {
             /*
-             * V1010310C_CURRENT_SOURCE_HARDFIX_RECOVER
-             * Waiting-room information is browser UI, not world HUD.
-             * Use visualViewport so Fold/browser letterboxing cannot leave
-             * large top/right/bottom gaps.
+             * V1010311_UI_CANVAS_GAS_RISE_FIX: waiting-room panel belongs INSIDE the Phaser game canvas.
+             * Never anchor it to the browser visualViewport.
              *
-             * Visual target: 1px top, 1px right, 1px bottom.
+             * Target inside canvas:
+             * top    2px
+             * right  2px
+             * bottom 2px
              */
-            const viewport =
-                window.visualViewport;
-
-            const viewportLeft =
-                viewport?.offsetLeft ??
-                0;
-
-            const viewportTop =
-                viewport?.offsetTop ??
-                0;
-
-            const viewportWidth =
-                viewport?.width ??
-                window.innerWidth;
-
-            const viewportHeight =
-                viewport?.height ??
-                window.innerHeight;
-
             const designWidth =
                 320;
-
             const designHeight =
                 500;
+
+            const edge =
+                2;
 
             const scale =
                 Math.max(
                     0.45,
                     (
-                        viewportHeight -
-                        2
+                        rect.height -
+                        edge * 2
                     ) /
                         designHeight,
                 );
@@ -20389,15 +20388,18 @@ export class GameScene extends Phaser.Scene {
                 designWidth *
                 scale;
 
+            const renderedHeight =
+                designHeight *
+                scale;
+
             const left =
-                viewportLeft +
-                viewportWidth -
-                renderedWidth -
-                1;
+                rect.right -
+                edge -
+                renderedWidth;
 
             const top =
-                viewportTop +
-                1;
+                rect.top +
+                edge;
 
             this.waitingRoomRoot.classList.add(
                 'ch-uniform-mobile-scale',
@@ -20463,30 +20465,27 @@ export class GameScene extends Phaser.Scene {
                 'important',
             );
 
-            const shell =
-                this.waitingRoomRoot.querySelector<HTMLElement>(
-                    '.ch-waiting-shell',
-                );
+            /*
+             * Guard against floating point overshoot outside the canvas.
+             */
+            const actualBottom =
+                top +
+                renderedHeight;
 
-            if (shell) {
-                shell.style.setProperty(
-                    'width',
-                    '100%',
-                    'important',
-                );
-                shell.style.setProperty(
-                    'height',
-                    '100%',
-                    'important',
-                );
-                shell.style.setProperty(
-                    'margin',
-                    '0',
-                    'important',
-                );
-                shell.style.setProperty(
-                    'box-sizing',
-                    'border-box',
+            if (
+                actualBottom >
+                rect.bottom -
+                    edge +
+                    0.5
+            ) {
+                style.setProperty(
+                    'top',
+                    (
+                        rect.bottom -
+                        edge -
+                        renderedHeight
+                    ).toFixed(2) +
+                        'px',
                     'important',
                 );
             }
@@ -21184,6 +21183,95 @@ export class GameScene extends Phaser.Scene {
             hunterVolunteerStatus.style.setProperty(
                 'line-height',
                 '1',
+                'important',
+            );
+
+            const roleWrap =
+                hunterVolunteerStatus.closest<HTMLElement>(
+                    '.ch-waiting-role-wrap',
+                );
+
+            if (roleWrap) {
+                roleWrap.style.setProperty(
+                    'grid-template-rows',
+                    this.mobileControlsEnabled
+                        ? 'auto 28px'
+                        : 'auto 32px',
+                    'important',
+                );
+                roleWrap.style.setProperty(
+                    'min-height',
+                    this.mobileControlsEnabled
+                        ? '68px'
+                        : '74px',
+                    'important',
+                );
+                roleWrap.style.setProperty(
+                    'overflow',
+                    'visible',
+                    'important',
+                );
+            }
+
+            hunterVolunteerStatus.style.setProperty(
+                'display',
+                'flex',
+                'important',
+            );
+            hunterVolunteerStatus.style.setProperty(
+                'align-items',
+                'center',
+                'important',
+            );
+            hunterVolunteerStatus.style.setProperty(
+                'justify-content',
+                'center',
+                'important',
+            );
+            hunterVolunteerStatus.style.setProperty(
+                'min-height',
+                this.mobileControlsEnabled
+                    ? '28px'
+                    : '32px',
+                'important',
+            );
+            hunterVolunteerStatus.style.setProperty(
+                'height',
+                this.mobileControlsEnabled
+                    ? '28px'
+                    : '32px',
+                'important',
+            );
+            hunterVolunteerStatus.style.setProperty(
+                'font-size',
+                this.mobileControlsEnabled
+                    ? '14px'
+                    : '16px',
+                'important',
+            );
+            hunterVolunteerStatus.style.setProperty(
+                'font-weight',
+                '900',
+                'important',
+            );
+            hunterVolunteerStatus.style.setProperty(
+                'line-height',
+                '1.1',
+                'important',
+            );
+            hunterVolunteerStatus.style.setProperty(
+                'padding',
+                '2px 8px',
+                'important',
+            );
+            hunterVolunteerStatus.style.setProperty(
+                'overflow',
+                'visible',
+                'important',
+            );
+            hunterVolunteerStatus.style.setProperty(
+                'text-overflow',
+                'clip',
                 'important',
             );
 
