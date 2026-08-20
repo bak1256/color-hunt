@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010321_FOLD_REFOLD_LOBBY_SETTLE: settle Fold unfold/refold viewport and restore guide natural height. */
     /* V1010320_MOBILE_WAITING_TIMING_BALANCED_PADDING: equal 3px top/bottom breathing room inside mobile timing cards. */
     /* V1010319_MOBILE_WAITING_REAL_MOBILE_DETECTION: waiting mobile layout keys off ch-uniform-mobile-scale, not mobileControlsEnabled. */
     /* V1010318_MOBILE_WAITING_FORCE_FULL_WIDTH: stretch full timing ancestry so headers/options use entire card width. */
@@ -19485,6 +19486,107 @@ export class GameScene extends Phaser.Scene {
      * rendered room-action button width instead.
      */
     private applyMainLobbyActionRuntimeLayout(): void {
+        /*
+         * V1010321_FOLD_REFOLD_LOBBY_SETTLE: after unfold -> refold, stale intrinsic heights can survive
+         * until the next responsive layout pass. The guide must always return
+         * to natural content height instead of retaining a clipped intermediate
+         * Fold height.
+         */
+        const guide =
+            this.mainLobbyRoot
+                ?.querySelector<HTMLElement>(
+                    '.ch-lobby-guide',
+                );
+
+        if (guide) {
+            guide.style.setProperty(
+                'height',
+                'auto',
+                'important',
+            );
+            guide.style.setProperty(
+                'min-height',
+                '0',
+                'important',
+            );
+            guide.style.setProperty(
+                'max-height',
+                'none',
+                'important',
+            );
+            guide.style.setProperty(
+                'overflow',
+                'visible',
+                'important',
+            );
+
+            const guideCopy =
+                guide.lastElementChild as
+                    HTMLElement |
+                    null;
+
+            if (guideCopy) {
+                guideCopy.style.setProperty(
+                    'min-width',
+                    '0',
+                    'important',
+                );
+                guideCopy.style.setProperty(
+                    'height',
+                    'auto',
+                    'important',
+                );
+                guideCopy.style.setProperty(
+                    'overflow',
+                    'visible',
+                    'important',
+                );
+            }
+
+            const guideSubtitle =
+                guide.querySelector<HTMLElement>(
+                    'span',
+                );
+
+            if (guideSubtitle) {
+                guideSubtitle.style.setProperty(
+                    'display',
+                    'block',
+                    'important',
+                );
+                guideSubtitle.style.setProperty(
+                    'height',
+                    'auto',
+                    'important',
+                );
+                guideSubtitle.style.setProperty(
+                    'max-height',
+                    'none',
+                    'important',
+                );
+                guideSubtitle.style.setProperty(
+                    'line-height',
+                    '1.15',
+                    'important',
+                );
+                guideSubtitle.style.setProperty(
+                    'white-space',
+                    'normal',
+                    'important',
+                );
+                guideSubtitle.style.setProperty(
+                    'overflow',
+                    'visible',
+                    'important',
+                );
+                guideSubtitle.style.setProperty(
+                    'text-overflow',
+                    'clip',
+                    'important',
+                );
+            }
+        }
+
         /* V1010312B_REPAIR_PRACTICE_RUNTIME_PLACEMENT: v312 Practice layout moved outside actions.forEach(). */
         const root =
             this.mainLobbyRoot;
@@ -20569,6 +20671,22 @@ export class GameScene extends Phaser.Scene {
         this.updateMainLobbyDomPosition();
         this.updateControlsHelpPosition();
 
+        /*
+         * V1010321_FOLD_REFOLD_LOBBY_SETTLE: also settle after first DOM mount. This keeps first-load and
+         * refold behavior identical.
+         */
+        requestAnimationFrame(
+            () => {
+                this.updateMainLobbyDomPosition();
+            },
+        );
+        window.setTimeout(
+            () => {
+                this.updateMainLobbyDomPosition();
+            },
+            120,
+        );
+
         window.addEventListener(
             'resize',
             this.updateMainLobbyDomPositionBound,
@@ -20611,7 +20729,37 @@ export class GameScene extends Phaser.Scene {
 
     private readonly updateMainLobbyDomPositionBound =
         (): void => {
+            /*
+             * V1010321_FOLD_REFOLD_LOBBY_SETTLE
+             *
+             * Galaxy Fold unfold -> refold does not settle visualViewport and
+             * responsive CSS in a single synchronous resize callback.
+             *
+             * Re-run against the FINAL viewport several times. Each call is
+             * idempotent and safely returns if the lobby has already closed.
+             */
             this.updateMainLobbyDomPosition();
+
+            requestAnimationFrame(
+                () => {
+                    this.updateMainLobbyDomPosition();
+                },
+            );
+
+            [
+                80,
+                220,
+                420,
+            ].forEach(
+                (delay) => {
+                    window.setTimeout(
+                        () => {
+                            this.updateMainLobbyDomPosition();
+                        },
+                        delay,
+                    );
+                },
+            );
         };
 
     private destroyWaitingRoomDom(): void {
