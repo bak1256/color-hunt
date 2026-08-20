@@ -79,7 +79,6 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
-    /* V1010376_REMOTE_PAINT_DEFER_LOBBY_SAFETY: remote Paint is deferred until READY->GO and round paint is isolated from Lobby avatars. */
     /* V1010375_READY_GO_SETTLING: full-screen localized READY -> GO uses the server quiet window to flush final paint before Hunt. */
     /* V1010374_PAINT_FLOOD_FRAME_BUDGET: dense multiplayer paint uses larger transport chunks and frame-budgeted remote raster replay. */
     /* V1010373_RECONNECT_SINGLE_AUTHORITY_GAMEPLAY_LOCK: reconnect freezes local gameplay until one authoritative Room/player/paint state owns the Scene again. */
@@ -30864,13 +30863,6 @@ export class GameScene extends Phaser.Scene {
          */
         this.finishActivePaintStroke();
 
-        /*
-         * V1010376_REMOTE_PAINT_DEFER_LOBBY_SAFETY: spend the READY->GO quiet window building ONLY the final
-         * remote camouflage textures. Normal Paint no longer rasterizes them.
-         */
-        this.networkPlayerManager
-            .beginRemotePaintSettling();
-
         this.huntSettlingActive =
             true;
         this.input.enabled =
@@ -31042,18 +31034,6 @@ export class GameScene extends Phaser.Scene {
 
         if (phase === 'lobby') {
             this.clearHuntSettlingOverlay();
-
-            /*
-             * V1010376_REMOTE_PAINT_DEFER_LOBBY_SAFETY / LOBBY_PAINT_ISOLATION
-             * No in-game stroke from the finished round may survive into
-             * lobby avatar textures.
-             */
-            this.networkPlayerManager
-                .discardRemotePaintBacklog();
-
-            this.networkPlayerManager
-                .clearAllPaint();
-
             this.input.enabled = true;
 
             /*
