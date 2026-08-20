@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010324_FOLD_REFOLD_GUIDE_ASPECT_FIX: refold compact detection trusts final viewport aspect even when button width is stale. */
     /* V1010323_FOLD_GUIDE_COMPACT_HARDFIX: Fold-closed guide is a fixed 42px compact card based on actual button width. */
     /* V1010322_FOLD_GUIDE_FIT_REAL_SPACE: Practice Fold detection uses real width; guide fits real remaining panel space. */
     /* V1010321_FOLD_REFOLD_LOBBY_SETTLE: settle Fold unfold/refold viewport and restore guide natural height. */
@@ -20409,9 +20410,31 @@ export class GameScene extends Phaser.Scene {
                     .getBoundingClientRect()
                     .width;
 
+            /*
+             * V1010324_FOLD_REFOLD_GUIDE_ASPECT_FIX
+             *
+             * Galaxy Fold can keep the button's old unfolded width for one or
+             * more layout passes after refolding.  The viewport itself already
+             * has the correct wide/short shape, so use BOTH signals.
+             */
+            const viewportWidth =
+                window.visualViewport?.width ??
+                window.innerWidth;
+
+            const viewportHeight =
+                window.visualViewport?.height ??
+                window.innerHeight;
+
+            const viewportAspect =
+                viewportWidth /
+                Math.max(1, viewportHeight);
+
             const foldCompact =
-                referenceWidth > 0 &&
-                referenceWidth < 245;
+                viewportAspect >= 1.75 ||
+                (
+                    referenceWidth > 0 &&
+                    referenceWidth < 245
+                );
 
             const guideMascot =
                 compactGuide.querySelector<HTMLElement>(
@@ -21307,6 +21330,8 @@ export class GameScene extends Phaser.Scene {
                 80,
                 220,
                 420,
+                800,
+                1400,
             ].forEach(
                 (delay) => {
                     window.setTimeout(
