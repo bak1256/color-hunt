@@ -47,7 +47,6 @@ type NetworkPlayerView = {
 };
 
 export class NetworkPlayerManager {
-  /* V1010377_FINAL_CAMOUFLAGE_SNAPSHOT: Hunt paint is immutable final 80x120 PNG; historical stroke replay is disabled. */
   /* V1010376_REMOTE_PAINT_DEFER_LOBBY_SAFETY: remote Paint is deferred, time-budgeted during settling/Hunt, and hard-cleared before Lobby. */
   /* V1010374_PAINT_FLOOD_FRAME_BUDGET: network paint callbacks enqueue only; exact serialized points drain under a per-frame raster budget. */
   /* V1010373_RECONNECT_SINGLE_AUTHORITY_GAMEPLAY_LOCK: stale reconnect echoes cannot move the local actor; prediction is rebased once after recovery. */
@@ -156,207 +155,40 @@ export class NetworkPlayerManager {
       pointIndex: number;
     }> = [];
 
-  /* V1010377B_REMOVE_REMOTE_PAINT_SETTLING_DEAD_STATE: removed obsolete v376 settling state; v377 uses immutable final snapshots. */
+  private remotePaintSettlingActive =
+    false;
 
-  /*
-   * V1010377_FINAL_CAMOUFLAGE_SNAPSHOT: snapshot texture keys are temporary Phaser textures. Track them
-   * so Lobby/round reset can release GPU memory deterministically.
-   */
-  private readonly finalSnapshotTextureKeys =
-    new Set<string>();
+  private getRemotePaintFrameBudgetMs(): number {
+    const coarse =
+      typeof window !== "undefined" &&
+      (
+        window.matchMedia?.(
+          "(pointer: coarse)",
+        ).matches ||
+        navigator.maxTouchPoints > 0
+      );
 
-  private finalSnapshotSerial =
-    0;
+    if (this.remotePaintSettlingActive) {
+      return coarse
+        ? 4.0
+        : 6.0;
+    }
 
-  /* V1010377_UNUSED_BUILD_CLEANUP: v377 removed historical paint draining, so the old frame-budget helper is no longer needed. */
+    return coarse
+      ? 1.25
+      : 2.0;
+  }
 
   beginRemotePaintSettling(): void {
-    /*
-     * v377 supersedes v376's historical-stroke settling replay.
-     * Keep this method for compatibility, but discard the backlog instead.
-     */
-    this.discardRemotePaintBacklog();
-  }
-
-  captureLocalFinalPaintSnapshot():
-    Promise<string | undefined> {
-    const localSessionId =
-      this.getEffectiveLocalSessionId();
-
-    const view =
-      localSessionId
-        ? this.players.get(
-            localSessionId,
-          )
-        : undefined;
-
-    if (!view?.paintLayer) {
-      return Promise.resolve(
-        undefined,
-      );
-    }
-
-    this.renderPaintTexture(
-      view.paintLayer.texture,
-    );
-
-    return new Promise(
-      (resolve) => {
-        const renderTexture =
-          view.paintLayer
-            ?.texture as any;
-
-        if (
-          !renderTexture ||
-          typeof renderTexture.snapshot !==
-            "function"
-        ) {
-          resolve(undefined);
-          return;
-        }
-
-        renderTexture.snapshot(
-          (image: any) => {
-            const dataUrl =
-              typeof image?.src ===
-                "string"
-                ? image.src
-                : undefined;
-
-            resolve(
-              dataUrl &&
-                dataUrl.startsWith(
-                  "data:image/png",
-                )
-                ? dataUrl
-                : undefined,
-            );
-          },
-          "image/png",
-          0.8,
-        );
-      },
-    );
-  }
-
-  applyFinalCamouflageSnapshot(
-    sessionId: string,
-    dataUrl: string,
-  ): void {
-    const view =
-      this.players.get(
-        sessionId,
-      );
-
-    if (
-      !view?.paintLayer ||
-      !dataUrl.startsWith(
-        "data:image/png",
-      )
-    ) {
-      return;
-    }
-
-    /*
-     * Local player's texture is already the source of truth. Do not redraw it
-     * from its own network echo.
-     */
-    if (
-      sessionId ===
-      this.getEffectiveLocalSessionId()
-    ) {
-      return;
-    }
-
-    const image =
-      new Image();
-
-    const textureKey =
-      'final-camo-' +
-      sessionId +
-      '-' +
-      (++this.finalSnapshotSerial);
-
-    image.onload =
-      () => {
-        const currentView =
-          this.players.get(
-            sessionId,
-          );
-
-        if (!currentView?.paintLayer) {
-          return;
-        }
-
-        if (
-          this.scene.textures.exists(
-            textureKey,
-          )
-        ) {
-          this.scene.textures.remove(
-            textureKey,
-          );
-        }
-
-        (
-          this.scene.textures as any
-        ).addImage(
-          textureKey,
-          image,
-        );
-
-        this.finalSnapshotTextureKeys
-          .add(
-            textureKey,
-          );
-
-        currentView.paintLayer
-          .texture.clear();
-
-        currentView.paintLayer
-          .texture.draw(
-            textureKey,
-            0,
-            0,
-          );
-
-        this.renderPaintTexture(
-          currentView.paintLayer
-            .texture,
-        );
-
-        this.syncPaintLayerPosition(
-          currentView,
-          true,
-        );
-      };
-
-    image.src =
-      dataUrl;
-  }
-
-  clearFinalCamouflageSnapshots(): void {
-    this.finalSnapshotTextureKeys
-      .forEach(
-        (textureKey) => {
-          if (
-            this.scene.textures.exists(
-              textureKey,
-            )
-          ) {
-            this.scene.textures.remove(
-              textureKey,
-            );
-          }
-        },
-      );
-
-    this.finalSnapshotTextureKeys.clear();
+    this.remotePaintSettlingActive =
+      true;
   }
 
   discardRemotePaintBacklog(): void {
     this.pendingRemotePaintStrokes.length =
       0;
+    this.remotePaintSettlingActive =
+      false;
   }
 
   private localX = 480;
@@ -426,7 +258,6 @@ export class NetworkPlayerManager {
 
   clearAllPlayers(): void {
     this.discardRemotePaintBacklog();
-    this.clearFinalCamouflageSnapshots();
 
     this.players.forEach((view) => {
       view.container.destroy(true);
@@ -3299,28 +3130,227 @@ export class NetworkPlayerManager {
   }
 
   applyPaintStroke(
-    _stroke: NetworkPaintStroke,
-    _textureKey: string,
+    stroke: NetworkPaintStroke,
+    textureKey: string,
   ): void {
+    if (
+      stroke.points.length === 0
+    ) {
+      return;
+    }
+
+    const localSessionId =
+      this.getEffectiveLocalSessionId();
+
     /*
-     * V1010377_FINAL_CAMOUFLAGE_SNAPSHOT / NO_HISTORICAL_REPLAY
-     *
-     * Local painting is already rendered synchronously by GameScene.
-     * Remote historical strokes are intentionally NOT rasterized anymore.
-     * Hunt appearance comes exclusively from final_camouflage_snapshot.
+     * V1010376_REMOTE_PAINT_DEFER_LOBBY_SAFETY / LOCAL_ECHO_DROP
+     * The local painter already stamped these pixels synchronously. Replaying
+     * the server echo wastes CPU and can make the current character flash.
      */
-    return;
+    if (
+      localSessionId &&
+      stroke.targetSessionId ===
+        localSessionId
+    ) {
+      return;
+    }
+
+    this.pendingRemotePaintStrokes.push({
+      stroke,
+      textureKey,
+      pointIndex: 0,
+    });
   }
 
   private drainRemotePaintQueue(): void {
+    if (
+      this.pendingRemotePaintStrokes.length ===
+      0
+    ) {
+      this.remotePaintSettlingActive =
+        false;
+      return;
+    }
+
+    const room =
+      multiplayerClient.getRoom();
+
+    const phase =
+      room?.state?.phase;
+
     /*
-     * V1010377_FINAL_CAMOUFLAGE_SNAPSHOT: no chronological paint playback survives into Hunt.
+     * V1010376_REMOTE_PAINT_DEFER_LOBBY_SAFETY / LOBBY_HARD_STOP
+     * Round paint must NEVER leak into lobby avatar textures.
      */
     if (
+      !room ||
+      phase === "lobby" ||
+      phase === "countdown" ||
+      phase === "finished"
+    ) {
+      this.discardRemotePaintBacklog();
+      return;
+    }
+
+    /*
+     * During normal Paint, remote actors are hidden anyway. Keep their strokes
+     * as lightweight data and spend ZERO raster/GPU time on them.
+     */
+    if (
+      phase === "paint" &&
+      !this.remotePaintSettlingActive
+    ) {
+      return;
+    }
+
+    const start =
+      typeof performance !== "undefined"
+        ? performance.now()
+        : Date.now();
+
+    const budgetMs =
+      this.getRemotePaintFrameBudgetMs();
+
+    const touchedViews =
+      new Map<
+        string,
+        NonNullable<
+          ReturnType<
+            typeof this.players.get
+          >
+        >
+      >();
+
+    let processedSinceClockCheck =
+      0;
+
+    while (
       this.pendingRemotePaintStrokes.length >
       0
     ) {
-      this.discardRemotePaintBacklog();
+      const queued =
+        this.pendingRemotePaintStrokes[0];
+
+      const stroke =
+        queued.stroke;
+
+      const view =
+        this.players.get(
+          stroke.targetSessionId,
+        );
+
+      const authoritativePlayer =
+        room.state?.players?.get?.(
+          stroke.targetSessionId,
+        );
+
+      if (
+        !view ||
+        !view.paintLayer ||
+        !authoritativePlayer
+      ) {
+        this.pendingRemotePaintStrokes.shift();
+        continue;
+      }
+
+      while (
+        queued.pointIndex <
+        stroke.points.length
+      ) {
+        const point =
+          stroke.points[
+            queued.pointIndex
+          ];
+
+        queued.pointIndex += 1;
+
+        this.stampMaskedPaintBrush(
+          view,
+          Math.round(point.x),
+          Math.round(point.y),
+          stroke.color,
+          stroke.size,
+          stroke.shape,
+          false,
+        );
+
+        touchedViews.set(
+          stroke.targetSessionId,
+          view,
+        );
+
+        processedSinceClockCheck +=
+          1;
+
+        /*
+         * Avoid performance.now() on every stamp.
+         */
+        if (
+          processedSinceClockCheck >= 12
+        ) {
+          processedSinceClockCheck =
+            0;
+
+          const now =
+            typeof performance !== "undefined"
+              ? performance.now()
+              : Date.now();
+
+          if (
+            now - start >=
+            budgetMs
+          ) {
+            break;
+          }
+        }
+      }
+
+      if (
+        queued.pointIndex >=
+        stroke.points.length
+      ) {
+        this.pendingRemotePaintStrokes.shift();
+      }
+
+      const now =
+        typeof performance !== "undefined"
+          ? performance.now()
+          : Date.now();
+
+      if (
+        now - start >=
+        budgetMs
+      ) {
+        break;
+      }
+    }
+
+    /*
+     * At most one RenderTexture render per touched player per frame.
+     */
+    touchedViews.forEach(
+      (view) => {
+        if (!view.paintLayer) {
+          return;
+        }
+
+        this.renderPaintTexture(
+          view.paintLayer.texture,
+        );
+
+        this.syncPaintLayerPosition(
+          view,
+          phase === "hunt",
+        );
+      },
+    );
+
+    if (
+      this.pendingRemotePaintStrokes.length ===
+      0
+    ) {
+      this.remotePaintSettlingActive =
+        false;
     }
   }
 

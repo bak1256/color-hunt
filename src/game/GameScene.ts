@@ -79,7 +79,6 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
-    /* V1010377_FINAL_CAMOUFLAGE_SNAPSHOT: READY captures one final camouflage PNG; Hunt never replays historical paint. */
     /* V1010376_REMOTE_PAINT_DEFER_LOBBY_SAFETY: remote Paint is deferred until READY->GO and round paint is isolated from Lobby avatars. */
     /* V1010375_READY_GO_SETTLING: full-screen localized READY -> GO uses the server quiet window to flush final paint before Hunt. */
     /* V1010374_PAINT_FLOOD_FRAME_BUDGET: dense multiplayer paint uses larger transport chunks and frame-budgeted remote raster replay. */
@@ -576,8 +575,6 @@ export class GameScene extends Phaser.Scene {
 
     private huntSettlingGoEvent?:
         Phaser.Time.TimerEvent;
-
-    /* V1010377_UNUSED_BUILD_CLEANUP: removed unused final snapshot sent flag. */
 
     private knownAliveState =
         new Map<string, boolean>();
@@ -9682,27 +9679,6 @@ export class GameScene extends Phaser.Scene {
         );
 
         this.networkUnsubscribers.push(
-            multiplayerClient.onFinalCamouflageSnapshot(
-                (
-                    snapshot,
-                ) => {
-                    if (
-                        this.phase !== 'paint' &&
-                        this.phase !== 'hunt'
-                    ) {
-                        return;
-                    }
-
-                    this.networkPlayerManager
-                        .applyFinalCamouflageSnapshot(
-                            snapshot.sessionId,
-                            snapshot.dataUrl,
-                        );
-                },
-            ),
-        );
-
-        this.networkUnsubscribers.push(
             multiplayerClient.onHuntSettling(
                 (
                     remainingMs,
@@ -10141,30 +10117,6 @@ export class GameScene extends Phaser.Scene {
                      * role + phase.
                      */
                     this.resyncGameplayAfterConnectionRecovery();
-
-                    if (
-                        this.phase === 'hunt' ||
-                        multiplayerClient.getPhase() === 'hunt'
-                    ) {
-                        multiplayerClient
-                            .requestFinalCamouflageSnapshots();
-
-                        void this.networkPlayerManager
-                            .captureLocalFinalPaintSnapshot()
-                            .then(
-                                (dataUrl) => {
-                                    if (
-                                        dataUrl &&
-                                        multiplayerClient.isConnected()
-                                    ) {
-                                        multiplayerClient
-                                            .sendFinalCamouflageSnapshot(
-                                                dataUrl,
-                                            );
-                                    }
-                                },
-                            );
-                    }
 
                     /*
                      * Preserve the local camouflage source and republish it only
@@ -30913,69 +30865,11 @@ export class GameScene extends Phaser.Scene {
         this.finishActivePaintStroke();
 
         /*
-         * V1010377_FINAL_CAMOUFLAGE_SNAPSHOT / PAINT_UI_CUT
-         * READY begins a hard visual/input boundary. No READY button, brush,
-         * palette or historical Paint replay remains visible.
+         * V1010376_REMOTE_PAINT_DEFER_LOBBY_SAFETY: spend the READY->GO quiet window building ONLY the final
+         * remote camouflage textures. Normal Paint no longer rasterizes them.
          */
-        if (this.paintReadyDomButton) {
-            this.paintReadyDomButton.hidden =
-                true;
-        }
-
-        this.paintReadyButton
-            ?.setVisible(false);
-
-        this.paintPreview
-            .setVisible(false);
-
-        this.setPaintPaletteVisible(
-            false,
-        );
-
-        this.setHunterCamoPaletteVisible(
-            false,
-        );
-
         this.networkPlayerManager
-            .discardRemotePaintBacklog();
-
-        void this.networkPlayerManager
-            .captureLocalFinalPaintSnapshot()
-            .then(
-                (dataUrl) => {
-                    if (
-                        !dataUrl ||
-                        this.phase !== 'paint' ||
-                        !this.huntSettlingActive
-                    ) {
-                        return;
-                    }
-
-                    multiplayerClient
-                        .sendFinalCamouflageSnapshot(
-                            dataUrl,
-                        );
-
-                    /*
-                     * V1010377_UNUSED_BUILD_CLEANUP: send completion needs no persistent flag.
-                     */
-                },
-            );
-
-        /*
-         * Pull the final set once peers have had time to upload.
-         */
-        this.time.delayedCall(
-            850,
-            () => {
-                if (
-                    this.huntSettlingActive
-                ) {
-                    multiplayerClient
-                        .requestFinalCamouflageSnapshots();
-                }
-            },
-        );
+            .beginRemotePaintSettling();
 
         this.huntSettlingActive =
             true;
@@ -31011,7 +30905,7 @@ export class GameScene extends Phaser.Scene {
                 this.gameWidth,
                 this.gameHeight,
                 0x10251b,
-                0.28,
+                0.46,
             )
                 .setScrollFactor(0)
                 .setDepth(50000);
@@ -31026,8 +30920,8 @@ export class GameScene extends Phaser.Scene {
                         'Arial, sans-serif',
                     fontSize:
                         this.mobileControlsEnabled
-                            ? '36px'
-                            : '48px',
+                            ? '58px'
+                            : '76px',
                     fontStyle:
                         'bold',
                     color:
@@ -31156,9 +31050,6 @@ export class GameScene extends Phaser.Scene {
              */
             this.networkPlayerManager
                 .discardRemotePaintBacklog();
-
-            this.networkPlayerManager
-                .clearFinalCamouflageSnapshots();
 
             this.networkPlayerManager
                 .clearAllPaint();
@@ -31401,15 +31292,6 @@ export class GameScene extends Phaser.Scene {
         }
 
         if (phase === 'hunt') {
-            /*
-             * V1010377_FINAL_CAMOUFLAGE_SNAPSHOT / HUNT_FINAL_ONLY
-             */
-            this.networkPlayerManager
-                .discardRemotePaintBacklog();
-
-            multiplayerClient
-                .requestFinalCamouflageSnapshots();
-
             /*
              * V1010375_READY_GO_SETTLING / HUNT_RELEASE
              * Hunt's authoritative phase packet ends the quiet window.
