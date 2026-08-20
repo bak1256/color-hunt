@@ -79,6 +79,8 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010333B_REMOVE_UNUSED_COARSE_POINTER: remove v333 leftover unused coarsePointer declaration only. */
+    /* V1010333_DESKTOP_LOBBY_NO_OVERLAP: desktop keeps large lobby frame but reuses stable v330 internal row heights. */
     /* V1010332_DESKTOP_LOBBY_RESTORE_MOBILE_KEEP: keep uniform Fold/mobile lobby, restore native-size desktop lobby. */
     /* V1010331_MAIN_LOBBY_GUIDE_WRAP: allow main-lobby guide subtitle to wrap to two lines without changing the stable frame. */
     /* V1010330_MAIN_LOBBY_UNIFORM_AUTHORING_FRAME: one fixed 960x510 lobby layout uniformly scales inside Phaser canvas. */
@@ -19669,11 +19671,6 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
-        const coarsePointer =
-            window.matchMedia(
-                '(pointer: coarse)',
-            ).matches;
-
         const set =
             (
                 element:
@@ -19736,9 +19733,7 @@ export class GameScene extends Phaser.Scene {
         set(
             actions,
             'grid-template-rows',
-            coarsePointer
-                ? '44px 78px 56px 56px 56px 54px minmax(52px, 1fr)'
-                : '54px 94px 64px 64px 64px 62px minmax(66px, 1fr)',
+            '44px 78px 56px 56px 56px 54px minmax(52px, 1fr)',
         );
         set(actions, 'gap', '5px');
         set(actions, 'align-content', 'stretch');
@@ -19755,7 +19750,9 @@ export class GameScene extends Phaser.Scene {
         set(titleRow, 'height', '44px');
         set(titleRow, 'min-height', '44px');
         set(titleRow, 'max-height', '44px');
-        set(titleRow, 'overflow', 'visible');
+        set(titleRow, 'align-items', 'center');
+        set(titleRow, 'box-sizing', 'border-box');
+        set(titleRow, 'overflow', 'hidden');
 
         const title =
             titleRow
@@ -19767,9 +19764,7 @@ export class GameScene extends Phaser.Scene {
         set(
             title,
             'font-size',
-            coarsePointer
-                ? '24px'
-                : '28px',
+            '24px',
         );
         set(title, 'line-height', '1');
         set(title, 'white-space', 'nowrap');
@@ -19782,6 +19777,8 @@ export class GameScene extends Phaser.Scene {
         set(profile, 'height', '78px');
         set(profile, 'min-height', '78px');
         set(profile, 'max-height', '78px');
+        set(profile, 'margin', '0');
+        set(profile, 'box-sizing', 'border-box');
         set(profile, 'overflow', 'hidden');
 
         const normalActions =
@@ -19803,27 +19800,9 @@ export class GameScene extends Phaser.Scene {
                 );
                 set(button, 'align-items', 'center');
                 set(button, 'column-gap', '9px');
-                set(
-                    button,
-                    'height',
-                    coarsePointer
-                        ? '56px'
-                        : '64px',
-                );
-                set(
-                    button,
-                    'min-height',
-                    coarsePointer
-                        ? '56px'
-                        : '64px',
-                );
-                set(
-                    button,
-                    'max-height',
-                    coarsePointer
-                        ? '56px'
-                        : '64px',
-                );
+                set(button, 'height', '56px');
+                set(button, 'min-height', '56px');
+                set(button, 'max-height', '56px');
                 set(button, 'padding', '7px 10px');
                 set(button, 'margin', '0');
                 set(button, 'overflow', 'hidden');
@@ -19877,13 +19856,7 @@ export class GameScene extends Phaser.Scene {
                         'strong',
                     );
 
-                set(
-                    strong,
-                    'font-size',
-                    coarsePointer
-                        ? '18px'
-                        : '20px',
-                );
+                set(strong, 'font-size', '18px');
                 set(strong, 'line-height', '1.05');
                 set(strong, 'white-space', 'nowrap');
                 set(strong, 'overflow', 'hidden');
@@ -19893,13 +19866,7 @@ export class GameScene extends Phaser.Scene {
                         'small',
                     );
 
-                set(
-                    small,
-                    'font-size',
-                    coarsePointer
-                        ? '11px'
-                        : '12px',
-                );
+                set(small, 'font-size', '11px');
                 set(small, 'line-height', '1.08');
                 set(small, 'white-space', 'nowrap');
                 set(small, 'overflow', 'hidden');
@@ -19919,27 +19886,9 @@ export class GameScene extends Phaser.Scene {
         );
         set(practice, 'align-items', 'center');
         set(practice, 'column-gap', '9px');
-        set(
-            practice,
-            'height',
-            coarsePointer
-                ? '54px'
-                : '62px',
-        );
-        set(
-            practice,
-            'min-height',
-            coarsePointer
-                ? '54px'
-                : '62px',
-        );
-        set(
-            practice,
-            'max-height',
-            coarsePointer
-                ? '54px'
-                : '62px',
-        );
+        set(practice, 'height', '54px');
+        set(practice, 'min-height', '54px');
+        set(practice, 'max-height', '54px');
         set(practice, 'padding', '6px 10px');
         set(practice, 'margin', '0');
         set(practice, 'overflow', 'hidden');
@@ -20039,9 +19988,7 @@ export class GameScene extends Phaser.Scene {
         set(
             guide,
             'min-height',
-            coarsePointer
-                ? '52px'
-                : '66px',
+            '52px',
         );
         set(guide, 'max-height', 'none');
         set(guide, 'padding', '5px 10px');
