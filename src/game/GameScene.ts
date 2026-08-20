@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010354_AVATAR_EDITOR_CAMO_SAMPLER_BACKGROUND: larger avatar sampler canvas with real eyedropper-readable camo background. */
     /* V1010353_AVATAR_EDITOR_MOBILE_TOOL_HALF_SIZE: mobile avatar-editor tool visual scale = 50%. */
     /* V1010352_AVATAR_EDITOR_EYEDROPPER_MASK: avatar-editor pipette respects the actual avatar body mask. */
     /* V1010350_AVATAR_EDITOR_FULL_PAINT_PARITY: avatar editor shares game/practice tool geometry and paint semantics. */
@@ -16952,7 +16953,7 @@ export class GameScene extends Phaser.Scene {
             card.style,
             {
                 width:
-                    'min(620px, calc(100vw - 20px))',
+                    'min(720px, calc(100vw - 20px))',
                 boxSizing: 'border-box',
                 padding: '9px 11px',
                 border:
@@ -17027,8 +17028,12 @@ export class GameScene extends Phaser.Scene {
             canvasFrame.style,
             {
                 position: 'relative',
-                width: '190px',
-                height: '285px',
+                /*
+                 * V1010354_AVATAR_EDITOR_CAMO_SAMPLER_BACKGROUND / LARGER_PREVIEW
+                 * Fill more of the left editor area while preserving 2:3.
+                 */
+                width: '250px',
+                height: '375px',
                 overflow: 'hidden',
                 display: 'grid',
                 placeItems: 'center',
@@ -17342,6 +17347,39 @@ export class GameScene extends Phaser.Scene {
          * inside functions such as replay(), so use ctx there.
          */
         const ctx = context;
+
+        /*
+         * V1010354_AVATAR_EDITOR_CAMO_SAMPLER_BACKGROUND / REAL_CANVAS_BACKGROUND
+         *
+         * This is deliberately drawn INTO the canvas instead of being a CSS
+         * background. The eyedropper reads ctx.getImageData(), so putting the
+         * image in the actual raster makes every colorful pixel sampleable.
+         */
+        const avatarSamplerBackground =
+            new Image();
+
+        let avatarSamplerBackgroundReady =
+            false;
+
+        avatarSamplerBackground.onload =
+            () => {
+                avatarSamplerBackgroundReady =
+                    true;
+                replay();
+            };
+
+        avatarSamplerBackground.onerror =
+            () => {
+                avatarSamplerBackgroundReady =
+                    false;
+                console.warn(
+                    '[Color Hunt] avatar sampler background failed to load',
+                );
+                replay();
+            };
+
+        avatarSamplerBackground.src =
+            '/assets/avatar-camo-sampler-bg.png';
 
         /*
          * V1010287_AVATAR_EDITOR_HIDER_PALETTE: customization shares the exact same palette as Hider paint.
@@ -18003,19 +18041,89 @@ export class GameScene extends Phaser.Scene {
             );
 
             /*
-             * V1010290_AVATAR_EDITOR_SOFT_NAVY_BG: simple high-contrast background.
-             * A muted light navy keeps the white avatar easy to see without
-             * competing visually with the paint colors.
+             * V1010354_AVATAR_EDITOR_CAMO_SAMPLER_BACKGROUND / SAMPLEABLE_CAMO_BACKGROUND
+             *
+             * Cover the entire editor canvas with the colorful image.
+             * Use a centered COVER crop so there are no empty strips and no
+             * aspect-ratio stretching. Since this raster is beneath the avatar,
+             * the pipette can sample the background anywhere outside the body.
              */
-            ctx.fillStyle =
-                '#71839a';
+            if (
+                avatarSamplerBackgroundReady &&
+                avatarSamplerBackground
+                    .naturalWidth > 0 &&
+                avatarSamplerBackground
+                    .naturalHeight > 0
+            ) {
+                const sourceWidth =
+                    avatarSamplerBackground
+                        .naturalWidth;
+                const sourceHeight =
+                    avatarSamplerBackground
+                        .naturalHeight;
 
-            ctx.fillRect(
-                0,
-                0,
-                canvas.width,
-                canvas.height,
-            );
+                const sourceAspect =
+                    sourceWidth /
+                    sourceHeight;
+                const canvasAspect =
+                    canvas.width /
+                    canvas.height;
+
+                let sx = 0;
+                let sy = 0;
+                let sw = sourceWidth;
+                let sh = sourceHeight;
+
+                if (
+                    sourceAspect >
+                    canvasAspect
+                ) {
+                    sw =
+                        sourceHeight *
+                        canvasAspect;
+                    sx =
+                        (
+                            sourceWidth -
+                            sw
+                        ) /
+                        2;
+                } else {
+                    sh =
+                        sourceWidth /
+                        canvasAspect;
+                    sy =
+                        (
+                            sourceHeight -
+                            sh
+                        ) /
+                        2;
+                }
+
+                ctx.drawImage(
+                    avatarSamplerBackground,
+                    sx,
+                    sy,
+                    sw,
+                    sh,
+                    0,
+                    0,
+                    canvas.width,
+                    canvas.height,
+                );
+            } else {
+                /*
+                 * Safe fallback before load or if the asset cannot load.
+                 */
+                ctx.fillStyle =
+                    '#71839a';
+
+                ctx.fillRect(
+                    0,
+                    0,
+                    canvas.width,
+                    canvas.height,
+                );
+            }
 
             for (
                 let y = 0;
@@ -19635,9 +19743,9 @@ export class GameScene extends Phaser.Scene {
                         canvasFrame.style,
                         {
                             width:
-                                'min(160px, 38vh)',
+                                'min(210px, 46vh)',
                             height:
-                                'min(240px, 57vh)',
+                                'min(315px, 69vh)',
                         },
                     );
 
@@ -19663,9 +19771,9 @@ export class GameScene extends Phaser.Scene {
                         'column';
 
                     canvasFrame.style.width =
-                        '170px';
+                        '220px';
                     canvasFrame.style.height =
-                        '255px';
+                        '330px';
                 }
             };
 
