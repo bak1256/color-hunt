@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010327_LOCK_MAIN_LOBBY_CANVAS_HEIGHT: freeze Phaser canvas on same-width mobile system-UI height growth in main lobby. */
     /* V1010326_MOBILE_LOBBY_SAFE_HEIGHT_PROFILE: mobile lobby safe height follows tolerant width profiles, never viewport orientation. */
     /* V1010325B_REMOVE_UNUSED_SAFEHEIGHT_DEBUG: remove write-only safe-height debug fields; stable cache remains intact. */
     /* V1010325_MOBILE_LOBBY_STABLE_SAFE_HEIGHT: mobile lobby never grows beyond the smallest safe viewport height for its width band. */
@@ -179,16 +180,174 @@ export class GameScene extends Phaser.Scene {
                 return;
             }
 
+            /*
+             * V1010327_LOCK_MAIN_LOBBY_CANVAS_HEIGHT
+             *
+             * MAIN-LOBBY ONLY:
+             * Android/Fold system navigation or browser chrome can disappear
+             * after unfold -> refold. The viewport HEIGHT grows while WIDTH
+             * remains the same physical folded state.
+             *
+             * Calling Phaser scale.refresh() for that height-only growth makes
+             * the GAME CANVAS itself taller. The DOM lobby then follows the
+             * larger canvas/viewport and its bottom content disappears.
+             *
+             * We already keep a minimum safe viewport height profile by WIDTH.
+             * If this is the same width profile and only HEIGHT has grown,
+             * freeze Phaser canvas geometry. Real Fold open/close changes width
+             * dramatically, so those transitions still refresh normally.
+             */
+            if (
+                this.mainLobbyRoot &&
+                window.matchMedia(
+                    '(pointer: coarse)',
+                ).matches
+            ) {
+                const viewport =
+                    window.visualViewport;
+
+                const liveWidth =
+                    viewport?.width ??
+                    window.innerWidth;
+
+                const liveHeight =
+                    viewport?.height ??
+                    window.innerHeight;
+
+                let matchedProfile:
+                    {
+                        width: number;
+                        safeHeight: number;
+                    } |
+                    undefined;
+
+                let bestWidthDistance =
+                    Number.POSITIVE_INFINITY;
+
+                this.mainLobbySafeHeightProfiles
+                    .forEach(
+                        (profile) => {
+                            const widthDistance =
+                                Math.abs(
+                                    profile.width -
+                                        liveWidth,
+                                );
+
+                            const widthTolerance =
+                                Math.max(
+                                    96,
+                                    Math.min(
+                                        profile.width,
+                                        liveWidth,
+                                    ) *
+                                        0.16,
+                                );
+
+                            if (
+                                widthDistance <=
+                                    widthTolerance &&
+                                widthDistance <
+                                    bestWidthDistance
+                            ) {
+                                matchedProfile =
+                                    profile;
+
+                                bestWidthDistance =
+                                    widthDistance;
+                            }
+                        },
+                    );
+
+                if (
+                    matchedProfile &&
+                    liveHeight >
+                        matchedProfile.safeHeight +
+                            2
+                ) {
+                    /*
+                     * Same physical mobile/Fold state, but system UI vanished:
+                     * DO NOT enlarge the Phaser canvas.
+                     *
+                     * Reposition DOM controls against the preserved safe lobby
+                     * geometry instead.
+                     */
+                    this.updateMainLobbyDomPosition();
+                    this.updateControlsHelpPosition();
+                    return;
+                }
+            }
+
             this.scale.refresh();
 
             this.time.delayedCall(
                 80,
                 () => {
                     if (
-                        this.sys.isActive()
+                        !this.sys.isActive()
                     ) {
-                        this.scale.refresh();
+                        return;
                     }
+
+                    /*
+                     * The viewport may grow during the 80ms settle window too.
+                     * Re-run the same MAIN-lobby guard before the delayed
+                     * refresh so the second refresh cannot re-expand canvas.
+                     */
+                    if (
+                        this.mainLobbyRoot &&
+                        window.matchMedia(
+                            '(pointer: coarse)',
+                        ).matches
+                    ) {
+                        const viewport =
+                            window.visualViewport;
+
+                        const liveWidth =
+                            viewport?.width ??
+                            window.innerWidth;
+
+                        const liveHeight =
+                            viewport?.height ??
+                            window.innerHeight;
+
+                        const sameProfile =
+                            this.mainLobbySafeHeightProfiles
+                                .find(
+                                    (profile) => {
+                                        const widthDistance =
+                                            Math.abs(
+                                                profile.width -
+                                                    liveWidth,
+                                            );
+
+                                        const widthTolerance =
+                                            Math.max(
+                                                96,
+                                                Math.min(
+                                                    profile.width,
+                                                    liveWidth,
+                                                ) *
+                                                    0.16,
+                                            );
+
+                                        return (
+                                            widthDistance <=
+                                                widthTolerance &&
+                                            liveHeight >
+                                                profile.safeHeight +
+                                                    2
+                                        );
+                                    },
+                                );
+
+                        if (sameProfile) {
+                            this.updateMainLobbyDomPosition();
+                            this.updateControlsHelpPosition();
+                            return;
+                        }
+                    }
+
+                    this.scale.refresh();
                 },
             );
         };
