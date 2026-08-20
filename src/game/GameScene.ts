@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010317_MOBILE_WAITING_TIMING_FILL_ALIGN: mobile timing headers left-aligned and 3 buttons fill width evenly. */
     /* V1010316_MOBILE_WAITING_TIMING_PC_LIKE: compact PC-like Paint/Hunt timing cards on mobile. */
     /* V1010315_MOBILE_WAITING_TIMING_CONTAINED: keep Paint/Hunt headers and buttons entirely inside their frames. */
     /* V1010314_MOBILE_WAITING_HEADER_UNCLIP: reserve mobile Paint/Hunt header height without enlarging outer frames. */
@@ -21644,16 +21645,13 @@ export class GameScene extends Phaser.Scene {
         }
 
         /*
-         * V1010316_MOBILE_WAITING_TIMING_PC_LIKE: mobile waiting timing now follows the compact PC visual rhythm.
+         * V1010317_MOBILE_WAITING_TIMING_FILL_ALIGN: final mobile timing polish.
          *
-         * DO NOT enlarge the surrounding information panel.
-         * Each Paint/Hunt card is compact:
-         *
-         *   title 14px
-         *   1px breathing gap
-         *   options 26px
-         *
-         * Two cards + 4px gap = 94px total.
+         * Keep v316 heights untouched.
+         * Only fix horizontal composition:
+         * - title stays left
+         * - current selected seconds stays right
+         * - three option buttons evenly fill the whole card width
          */
         const waitingTiming =
             this.waitingRoomRoot
@@ -21700,11 +21698,6 @@ export class GameScene extends Phaser.Scene {
                 'hidden',
                 'important',
             );
-            waitingTiming.style.setProperty(
-                'box-sizing',
-                'border-box',
-                'important',
-            );
         }
 
         this.waitingRoomRoot
@@ -21732,11 +21725,6 @@ export class GameScene extends Phaser.Scene {
                             'important',
                         );
                         section.style.setProperty(
-                            'align-content',
-                            'center',
-                            'important',
-                        );
-                        section.style.setProperty(
                             'height',
                             '45px',
                             'important',
@@ -21757,18 +21745,13 @@ export class GameScene extends Phaser.Scene {
                             'important',
                         );
                         section.style.setProperty(
-                            'margin',
-                            '0',
+                            'box-sizing',
+                            'border-box',
                             'important',
                         );
                         section.style.setProperty(
                             'overflow',
                             'hidden',
-                            'important',
-                        );
-                        section.style.setProperty(
-                            'box-sizing',
-                            'border-box',
                             'important',
                         );
                     }
@@ -21783,7 +21766,12 @@ export class GameScene extends Phaser.Scene {
                 (title) => {
                     title.style.setProperty(
                         'display',
-                        'flex',
+                        'grid',
+                        'important',
+                    );
+                    title.style.setProperty(
+                        'grid-template-columns',
+                        'minmax(0, 1fr) auto',
                         'important',
                     );
                     title.style.setProperty(
@@ -21792,18 +21780,8 @@ export class GameScene extends Phaser.Scene {
                         'important',
                     );
                     title.style.setProperty(
-                        'justify-content',
-                        'space-between',
-                        'important',
-                    );
-                    title.style.setProperty(
-                        'font-weight',
-                        '900',
-                        'important',
-                    );
-                    title.style.setProperty(
-                        'white-space',
-                        'nowrap',
+                        'column-gap',
+                        '6px',
                         'important',
                     );
 
@@ -21850,15 +21828,55 @@ export class GameScene extends Phaser.Scene {
                             'hidden',
                             'important',
                         );
-                    } else {
-                        title.style.setProperty(
-                            'font-size',
-                            '13px',
+                    }
+
+                    const label =
+                        title.querySelector<HTMLElement>(
+                            'span',
+                        );
+
+                    if (label) {
+                        label.style.setProperty(
+                            'justify-self',
+                            'start',
                             'important',
                         );
-                        title.style.setProperty(
-                            'line-height',
-                            '1.05',
+                        label.style.setProperty(
+                            'text-align',
+                            'left',
+                            'important',
+                        );
+                        label.style.setProperty(
+                            'white-space',
+                            'nowrap',
+                            'important',
+                        );
+                        label.style.setProperty(
+                            'overflow',
+                            'hidden',
+                            'important',
+                        );
+                    }
+
+                    const current =
+                        title.querySelector<HTMLElement>(
+                            'b',
+                        );
+
+                    if (current) {
+                        current.style.setProperty(
+                            'justify-self',
+                            'end',
+                            'important',
+                        );
+                        current.style.setProperty(
+                            'text-align',
+                            'right',
+                            'important',
+                        );
+                        current.style.setProperty(
+                            'white-space',
+                            'nowrap',
                             'important',
                         );
                     }
@@ -21885,8 +21903,13 @@ export class GameScene extends Phaser.Scene {
                             'important',
                         );
                         options.style.setProperty(
-                            'gap',
+                            'column-gap',
                             '4px',
+                            'important',
+                        );
+                        options.style.setProperty(
+                            'width',
+                            '100%',
                             'important',
                         );
                         options.style.setProperty(
@@ -21910,6 +21933,16 @@ export class GameScene extends Phaser.Scene {
                             'important',
                         );
                         options.style.setProperty(
+                            'padding',
+                            '0',
+                            'important',
+                        );
+                        options.style.setProperty(
+                            'box-sizing',
+                            'border-box',
+                            'important',
+                        );
+                        options.style.setProperty(
                             'overflow',
                             'hidden',
                             'important',
@@ -21924,23 +21957,32 @@ export class GameScene extends Phaser.Scene {
             )
             .forEach(
                 (button) => {
-                    button.style.setProperty(
-                        'font-weight',
-                        '900',
-                        'important',
-                    );
-                    button.style.setProperty(
-                        'line-height',
-                        '1',
-                        'important',
-                    );
-
                     if (
                         this.mobileControlsEnabled
                     ) {
                         button.style.setProperty(
+                            'display',
+                            'flex',
+                            'important',
+                        );
+                        button.style.setProperty(
+                            'align-items',
+                            'center',
+                            'important',
+                        );
+                        button.style.setProperty(
+                            'justify-content',
+                            'center',
+                            'important',
+                        );
+                        button.style.setProperty(
                             'width',
                             '100%',
+                            'important',
+                        );
+                        button.style.setProperty(
+                            'min-width',
+                            '0',
                             'important',
                         );
                         button.style.setProperty(
@@ -21964,6 +22006,16 @@ export class GameScene extends Phaser.Scene {
                             'important',
                         );
                         button.style.setProperty(
+                            'font-weight',
+                            '900',
+                            'important',
+                        );
+                        button.style.setProperty(
+                            'line-height',
+                            '1',
+                            'important',
+                        );
+                        button.style.setProperty(
                             'margin',
                             '0',
                             'important',
@@ -21981,12 +22033,6 @@ export class GameScene extends Phaser.Scene {
                         button.style.setProperty(
                             'overflow',
                             'hidden',
-                            'important',
-                        );
-                    } else {
-                        button.style.setProperty(
-                            'font-size',
-                            '14px',
                             'important',
                         );
                     }
