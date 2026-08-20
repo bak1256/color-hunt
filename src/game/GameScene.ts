@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010306_CLIENT_UI_WAITING_GAS_FINAL: uniform lobby icon rhythm, unclipped waiting footer, true full-height mobile dock, final GAS progression. */
     /* V1010305_REMOVE_UNUSED_RENDERED_HEIGHT: cleanup after v304 fixed mobile waiting-room top positioning. */
     /* V1010304_CLIENT_FINAL_UI_GAS_DRAIN: equal lobby icon inset, dense waiting panels, direct escalating GAS drain. */
     /* V1010303B_REMOVE_UNUSED_WAITING_SIZE_RECOVER: tolerant cleanup of obsolete v302 waiting-size declarations. */
@@ -12386,7 +12387,7 @@ export class GameScene extends Phaser.Scene {
             this.practiceFartLocked ||
             this.practiceFartAccidentCount >= 3
         ) {
-            return 0;
+            return 100;
         }
 
         if (
@@ -12707,7 +12708,7 @@ export class GameScene extends Phaser.Scene {
                     : this.practiceFartAccidentCount ===
                         2
                         ? 72
-                        : 0;
+                        : 100;
 
             /*
              * Start the REAL Practice state BEFORE any visual helper runs.
@@ -20125,10 +20126,12 @@ export class GameScene extends Phaser.Scene {
             const scale =
                 Math.max(
                     0.45,
-                    Math.min(
-                        heightScale,
-                        widthScale,
-                    ),
+                    landscapeCanvas
+                        ? heightScale
+                        : Math.min(
+                            heightScale,
+                            widthScale,
+                        ),
                 );
 
             const renderedWidth =
@@ -25771,6 +25774,172 @@ export class GameScene extends Phaser.Scene {
                             padding: 7px 8px !important;
                             gap: 4px !important;
                             box-sizing: border-box !important;
+                        }
+                    }
+
+
+                    /*
+                     * V1010306_CLIENT_UI_WAITING_GAS_FINAL: FINAL action-row geometry.
+                     * The first 3 room actions share EXACTLY the same:
+                     * - row height
+                     * - icon square
+                     * - top/bottom/left/right icon breathing room
+                     * - text baseline area
+                     */
+                    .ch-lobby-action--public,
+                    .ch-lobby-action--private,
+                    .ch-lobby-action--join {
+                        display: grid !important;
+                        grid-template-columns: 44px minmax(0, 1fr) !important;
+                        align-items: center !important;
+                        column-gap: 10px !important;
+                        height: 64px !important;
+                        min-height: 64px !important;
+                        max-height: 64px !important;
+                        padding: 9px 12px !important;
+                        margin: 0 !important;
+                        box-sizing: border-box !important;
+                        overflow: hidden !important;
+                    }
+
+                    .ch-lobby-action--public .ch-lobby-action-icon,
+                    .ch-lobby-action--private .ch-lobby-action-icon,
+                    .ch-lobby-action--join .ch-lobby-action-icon {
+                        display: grid !important;
+                        place-items: center !important;
+                        width: 44px !important;
+                        min-width: 44px !important;
+                        max-width: 44px !important;
+                        height: 44px !important;
+                        min-height: 44px !important;
+                        max-height: 44px !important;
+                        aspect-ratio: 1 / 1 !important;
+                        padding: 7px !important;
+                        margin: 0 !important;
+                        box-sizing: border-box !important;
+                        align-self: center !important;
+                        justify-self: center !important;
+                        overflow: hidden !important;
+                        line-height: 0 !important;
+                        font-size: 0 !important;
+                    }
+
+                    .ch-lobby-action--public .ch-lobby-action-svg,
+                    .ch-lobby-action--private .ch-lobby-action-svg,
+                    .ch-lobby-action--join .ch-lobby-action-svg {
+                        display: block !important;
+                        width: 28px !important;
+                        min-width: 28px !important;
+                        max-width: 28px !important;
+                        height: 28px !important;
+                        min-height: 28px !important;
+                        max-height: 28px !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        transform: none !important;
+                    }
+
+                    .ch-lobby-action--public > span:last-child,
+                    .ch-lobby-action--private > span:last-child,
+                    .ch-lobby-action--join > span:last-child {
+                        display: flex !important;
+                        flex-direction: column !important;
+                        justify-content: center !important;
+                        min-width: 0 !important;
+                        height: 100% !important;
+                        overflow: hidden !important;
+                    }
+
+                    .ch-lobby-action--public strong,
+                    .ch-lobby-action--private strong,
+                    .ch-lobby-action--join strong {
+                        margin: 0 !important;
+                        line-height: 1.08 !important;
+                    }
+
+                    .ch-lobby-action--public small,
+                    .ch-lobby-action--private small,
+                    .ch-lobby-action--join small {
+                        margin: 3px 0 0 !important;
+                        line-height: 1.08 !important;
+                    }
+
+                    /*
+                     * Desktop footer was visually clipped by inherited compact
+                     * heights. Footer owns its content height and never masks
+                     * the lower half of Copy Invite / Leave Lobby.
+                     */
+                    .colorhunt-waiting-room:not(.ch-uniform-mobile-scale)
+                    .ch-waiting-footer {
+                        display: grid !important;
+                        grid-template-columns: 1fr 1fr !important;
+                        gap: 6px !important;
+                        height: auto !important;
+                        min-height: 42px !important;
+                        max-height: none !important;
+                        padding: 0 !important;
+                        margin: 0 !important;
+                        overflow: visible !important;
+                    }
+
+                    .colorhunt-waiting-room:not(.ch-uniform-mobile-scale)
+                    .ch-waiting-footer button {
+                        display: flex !important;
+                        align-items: center !important;
+                        justify-content: center !important;
+                        height: 40px !important;
+                        min-height: 40px !important;
+                        max-height: none !important;
+                        padding: 6px 8px !important;
+                        box-sizing: border-box !important;
+                        overflow: visible !important;
+                        line-height: 1.08 !important;
+                    }
+
+                    /*
+                     * Compact the desktop shell slightly, but never by clipping.
+                     * Translated labels remain allowed to wrap where necessary.
+                     */
+                    .colorhunt-waiting-room:not(.ch-uniform-mobile-scale)
+                    .ch-waiting-shell {
+                        gap: 5px !important;
+                        padding-bottom: 9px !important;
+                        overflow: visible !important;
+                    }
+
+                    @media (pointer: coarse), (max-width: 760px) {
+                        .ch-lobby-action--public,
+                        .ch-lobby-action--private,
+                        .ch-lobby-action--join {
+                            grid-template-columns: 40px minmax(0, 1fr) !important;
+                            column-gap: 9px !important;
+                            height: 60px !important;
+                            min-height: 60px !important;
+                            max-height: 60px !important;
+                            padding: 9px 10px !important;
+                        }
+
+                        .ch-lobby-action--public .ch-lobby-action-icon,
+                        .ch-lobby-action--private .ch-lobby-action-icon,
+                        .ch-lobby-action--join .ch-lobby-action-icon {
+                            width: 40px !important;
+                            min-width: 40px !important;
+                            max-width: 40px !important;
+                            height: 40px !important;
+                            min-height: 40px !important;
+                            max-height: 40px !important;
+                            padding: 7px !important;
+                        }
+
+                        .ch-lobby-action--public .ch-lobby-action-svg,
+                        .ch-lobby-action--private .ch-lobby-action-svg,
+                        .ch-lobby-action--join .ch-lobby-action-svg {
+                            width: 26px !important;
+                            min-width: 26px !important;
+                            max-width: 26px !important;
+                            height: 26px !important;
+                            min-height: 26px !important;
+                            max-height: 26px !important;
                         }
                     }
 
