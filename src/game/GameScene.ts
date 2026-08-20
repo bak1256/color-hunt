@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010337_DESKTOP_TITLE_PROFILE_BALANCE: desktop translated title fits; profile top/bottom padding balanced. */
     /* V1010336_DESKTOP_HEADER_RESTORE_CONTROLS: restore desktop BGM/help sizing; compact only translated title; add profile bottom room. */
     /* V1010335_DESKTOP_HEADER_TRANSLATION_SAFE: desktop header uses translation-safe 3-column grid and profile bottom gap. */
     /* V1010334B_DESKTOP_LOBBY_TOP_SPACING_RUNTIME: resilient desktop-only top/profile spacing override. */
@@ -20888,6 +20889,115 @@ export class GameScene extends Phaser.Scene {
                 actions,
                 'gap',
                 '8px',
+            );
+        }
+
+        /*
+         * V1010337_DESKTOP_TITLE_PROFILE_BALANCE
+         *
+         * DESKTOP ONLY.
+         * Keep BGM / Help untouched.
+         * Make translated GAME START fit, and balance profile vertical padding.
+         */
+        if (
+            !window.matchMedia(
+                '(pointer: coarse)',
+            ).matches
+        ) {
+            const desktopSet =
+                (
+                    element:
+                        HTMLElement |
+                        null,
+                    property:
+                        string,
+                    value:
+                        string,
+                ): void => {
+                    element?.style.setProperty(
+                        property,
+                        value,
+                        'important',
+                    );
+                };
+
+            const titleRow =
+                root.querySelector<HTMLElement>(
+                    '.ch-lobby-actions-title-row',
+                );
+
+            const title =
+                titleRow
+                    ?.querySelector<HTMLElement>(
+                        'h2',
+                    ) ??
+                null;
+
+            desktopSet(
+                title,
+                'font-size',
+                '16px',
+            );
+            desktopSet(
+                title,
+                'line-height',
+                '1',
+            );
+            desktopSet(
+                title,
+                'flex',
+                '1 1 120px',
+            );
+            desktopSet(
+                title,
+                'min-width',
+                '120px',
+            );
+            desktopSet(
+                title,
+                'max-width',
+                'none',
+            );
+            desktopSet(
+                title,
+                'white-space',
+                'nowrap',
+            );
+            desktopSet(
+                title,
+                'overflow',
+                'visible',
+            );
+            desktopSet(
+                title,
+                'text-overflow',
+                'clip',
+            );
+            desktopSet(
+                title,
+                'letter-spacing',
+                '-0.2px',
+            );
+
+            const profile =
+                root.querySelector<HTMLElement>(
+                    '.ch-lobby-profile-card',
+                );
+
+            desktopSet(
+                profile,
+                'padding-top',
+                '10px',
+            );
+            desktopSet(
+                profile,
+                'padding-bottom',
+                '10px',
+            );
+            desktopSet(
+                profile,
+                'box-sizing',
+                'border-box',
             );
         }
 
