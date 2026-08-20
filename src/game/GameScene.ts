@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010334B_DESKTOP_LOBBY_TOP_SPACING_RUNTIME: resilient desktop-only top/profile spacing override. */
     /* V1010333B_REMOVE_UNUSED_COARSE_POINTER: remove v333 leftover unused coarsePointer declaration only. */
     /* V1010333_DESKTOP_LOBBY_NO_OVERLAP: desktop keeps large lobby frame but reuses stable v330 internal row heights. */
     /* V1010332_DESKTOP_LOBBY_RESTORE_MOBILE_KEEP: keep uniform Fold/mobile lobby, restore native-size desktop lobby. */
@@ -20066,6 +20067,211 @@ export class GameScene extends Phaser.Scene {
         set(language, 'min-height', '48px');
         set(language, 'max-height', '48px');
         set(language, 'overflow', 'hidden');
+        /*
+         * V1010334B_DESKTOP_LOBBY_TOP_SPACING_RUNTIME
+         *
+         * DESKTOP ONLY.
+         * Mobile/Fold v330-v333 geometry is already stable and must not change.
+         *
+         * Redistribute the right-column vertical budget:
+         * - more space for GAME START header
+         * - more space below My Character
+         * - slightly reclaim space from large action cards
+         */
+        if (
+            !window.matchMedia(
+                '(pointer: coarse)',
+            ).matches
+        ) {
+            const desktopSet =
+                (
+                    element:
+                        HTMLElement |
+                        null,
+                    property:
+                        string,
+                    value:
+                        string,
+                ): void => {
+                    element?.style.setProperty(
+                        property,
+                        value,
+                        'important',
+                    );
+                };
+
+            const desktopActions =
+                root.querySelector<HTMLElement>(
+                    '.ch-lobby-actions',
+                );
+
+            desktopSet(
+                desktopActions,
+                'grid-template-rows',
+                '50px 86px 52px 52px 52px 50px minmax(52px, 1fr)',
+            );
+
+            const desktopTitleRow =
+                root.querySelector<HTMLElement>(
+                    '.ch-lobby-actions-title-row',
+                );
+
+            desktopSet(
+                desktopTitleRow,
+                'height',
+                '50px',
+            );
+            desktopSet(
+                desktopTitleRow,
+                'min-height',
+                '50px',
+            );
+            desktopSet(
+                desktopTitleRow,
+                'max-height',
+                '50px',
+            );
+            desktopSet(
+                desktopTitleRow,
+                'align-items',
+                'center',
+            );
+            desktopSet(
+                desktopTitleRow,
+                'column-gap',
+                '12px',
+            );
+            desktopSet(
+                desktopTitleRow,
+                'padding',
+                '0 6px 0 4px',
+            );
+            desktopSet(
+                desktopTitleRow,
+                'box-sizing',
+                'border-box',
+            );
+            desktopSet(
+                desktopTitleRow,
+                'overflow',
+                'visible',
+            );
+
+            const desktopTitle =
+                desktopTitleRow
+                    ?.querySelector<HTMLElement>(
+                        'h2',
+                    ) ??
+                null;
+
+            desktopSet(
+                desktopTitle,
+                'font-size',
+                '22px',
+            );
+            desktopSet(
+                desktopTitle,
+                'line-height',
+                '1',
+            );
+            desktopSet(
+                desktopTitle,
+                'min-width',
+                '0',
+            );
+            desktopSet(
+                desktopTitle,
+                'padding-right',
+                '8px',
+            );
+            desktopSet(
+                desktopTitle,
+                'white-space',
+                'nowrap',
+            );
+
+            const desktopProfile =
+                root.querySelector<HTMLElement>(
+                    '.ch-lobby-profile-card',
+                );
+
+            desktopSet(
+                desktopProfile,
+                'height',
+                '86px',
+            );
+            desktopSet(
+                desktopProfile,
+                'min-height',
+                '86px',
+            );
+            desktopSet(
+                desktopProfile,
+                'max-height',
+                '86px',
+            );
+            desktopSet(
+                desktopProfile,
+                'padding-bottom',
+                '6px',
+            );
+            desktopSet(
+                desktopProfile,
+                'box-sizing',
+                'border-box',
+            );
+            desktopSet(
+                desktopProfile,
+                'overflow',
+                'hidden',
+            );
+
+            root.querySelectorAll<HTMLElement>(
+                '.ch-lobby-action--public, ' +
+                '.ch-lobby-action--private, ' +
+                '.ch-lobby-action--join',
+            ).forEach(
+                (button) => {
+                    desktopSet(
+                        button,
+                        'height',
+                        '52px',
+                    );
+                    desktopSet(
+                        button,
+                        'min-height',
+                        '52px',
+                    );
+                    desktopSet(
+                        button,
+                        'max-height',
+                        '52px',
+                    );
+                },
+            );
+
+            const desktopPractice =
+                root.querySelector<HTMLElement>(
+                    '.ch-lobby-action--practice',
+                );
+
+            desktopSet(
+                desktopPractice,
+                'height',
+                '50px',
+            );
+            desktopSet(
+                desktopPractice,
+                'min-height',
+                '50px',
+            );
+            desktopSet(
+                desktopPractice,
+                'max-height',
+                '50px',
+            );
+        }
+
     }
 
     private createMainLobbyDom(): void {
