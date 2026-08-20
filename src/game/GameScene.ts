@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010330_MAIN_LOBBY_UNIFORM_AUTHORING_FRAME: one fixed 960x510 lobby layout uniformly scales inside Phaser canvas. */
     /* V1010329B_FIX_DUPLICATE_HANDLER_CLOSE: remove accidental duplicate handleMobileViewportChange closure from v329. */
     /* V1010329_CLEAN_MAIN_LOBBY_CANVAS_ANCHOR: Phaser owns canvas; lobby follows rendered canvas rectangle only. */
     /* V1010328_MAIN_LOBBY_SMALL_VIEWPORT_STAGE: stable 960x540 small-viewport MAIN lobby stage for browser/PWA/Fold. */
@@ -19364,21 +19365,22 @@ export class GameScene extends Phaser.Scene {
     }
 
     private updateMainLobbyDomPosition(): void {
-        if (!this.mainLobbyRoot) {
+        const root =
+            this.mainLobbyRoot;
+
+        if (!root) {
             return;
         }
 
         /*
-         * V1010329_CLEAN_MAIN_LOBBY_CANVAS_ANCHOR
+         * V1010330_MAIN_LOBBY_UNIFORM_AUTHORING_FRAME
          *
-         * ONE source of truth for every environment:
-         *   installed PWA / normal browser / fullscreen / Fold open / Fold closed
+         * ONE authoring layout everywhere:
+         *   960 x 510
          *
-         * Phaser owns the canvas size.
-         * Main-lobby DOM only follows the ACTUAL rendered canvas rectangle.
-         *
-         * Never size or move the canvas from lobby code.
-         * Never use visualViewport/svh for lobby geometry.
+         * Fold closed/open, PWA, browser and browser fullscreen never reflow
+         * the lobby anymore. Only this WHOLE frame scales uniformly to fit
+         * inside the actual Phaser canvas.
          */
         const rect =
             this.game.canvas
@@ -19391,208 +19393,161 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
-        const coarsePointer =
-            window.matchMedia(
-                '(pointer: coarse)',
-            ).matches;
+        const designWidth =
+            960;
 
-        /*
-         * Keep the exact same proportional composition on all mobile devices.
-         * The canvas itself already letterboxes/preserves the 960x540 world.
-         *
-         * Mobile gets a slightly tighter rail than desktop, but geometry still
-         * comes exclusively from the canvas rectangle.
-         */
-        const sideRatio =
-            coarsePointer
-                ? 0.008
-                : 0.014;
+        const designHeight =
+            510;
 
-        const topRatio =
-            coarsePointer
-                ? 0.055
-                : 0.082;
+        const edge =
+            6;
 
-        const widthRatio =
-            coarsePointer
-                ? 0.984
-                : 0.972;
-
-        const heightRatio =
-            coarsePointer
-                ? 0.925
-                : 0.895;
-
-        this.mainLobbyRoot.style
-            .setProperty(
-                '--lobby-left',
-                Math.round(
-                    rect.left +
-                    rect.width *
-                        sideRatio,
-                ) +
-                    'px',
+        const availableWidth =
+            Math.max(
+                1,
+                rect.width -
+                    edge * 2,
             );
 
-        this.mainLobbyRoot.style
-            .setProperty(
-                '--lobby-top',
-                Math.round(
-                    rect.top +
-                    rect.height *
-                        topRatio,
-                ) +
-                    'px',
+        const availableHeight =
+            Math.max(
+                1,
+                rect.height -
+                    edge * 2,
             );
 
-        this.mainLobbyRoot.style
-            .setProperty(
-                '--lobby-width',
-                Math.round(
-                    rect.width *
-                        widthRatio,
-                ) +
-                    'px',
+        const uniformScale =
+            Math.max(
+                0.1,
+                Math.min(
+                    availableWidth /
+                        designWidth,
+                    availableHeight /
+                        designHeight,
+                ),
             );
 
-        this.mainLobbyRoot.style
-            .setProperty(
-                '--lobby-height',
-                Math.round(
-                    rect.height *
-                        heightRatio,
-                ) +
-                    'px',
-            );
+        const renderedWidth =
+            designWidth *
+            uniformScale;
 
-        /*
-         * Remove all v328 diagnostics/ownership leftovers if this method runs
-         * after hot reload or a Fold transition.
-         */
-        delete this.mainLobbyRoot.dataset
-            .stableViewportWidth;
-        delete this.mainLobbyRoot.dataset
-            .stableViewportHeight;
-        delete this.mainLobbyRoot.dataset
-            .stableStageWidth;
-        delete this.mainLobbyRoot.dataset
-            .stableStageHeight;
+        const renderedHeight =
+            designHeight *
+            uniformScale;
+
+        const left =
+            rect.left +
+            (
+                rect.width -
+                renderedWidth
+            ) /
+                2;
+
+        const top =
+            rect.top +
+            (
+                rect.height -
+                renderedHeight
+            ) /
+                2;
+
+        root.style.setProperty(
+            'position',
+            'fixed',
+            'important',
+        );
+        root.style.setProperty(
+            'left',
+            left.toFixed(2) +
+                'px',
+            'important',
+        );
+        root.style.setProperty(
+            'top',
+            top.toFixed(2) +
+                'px',
+            'important',
+        );
+        root.style.setProperty(
+            'right',
+            'auto',
+            'important',
+        );
+        root.style.setProperty(
+            'bottom',
+            'auto',
+            'important',
+        );
+        root.style.setProperty(
+            'width',
+            String(designWidth) +
+                'px',
+            'important',
+        );
+        root.style.setProperty(
+            'height',
+            String(designHeight) +
+                'px',
+            'important',
+        );
+        root.style.setProperty(
+            'min-width',
+            String(designWidth) +
+                'px',
+            'important',
+        );
+        root.style.setProperty(
+            'min-height',
+            String(designHeight) +
+                'px',
+            'important',
+        );
+        root.style.setProperty(
+            'max-width',
+            String(designWidth) +
+                'px',
+            'important',
+        );
+        root.style.setProperty(
+            'max-height',
+            String(designHeight) +
+                'px',
+            'important',
+        );
+        root.style.setProperty(
+            'transform',
+            'scale(' +
+                uniformScale.toFixed(6) +
+                ')',
+            'important',
+        );
+        root.style.setProperty(
+            'transform-origin',
+            'top left',
+            'important',
+        );
+        root.style.setProperty(
+            'overflow',
+            'hidden',
+            'important',
+        );
+        root.style.setProperty(
+            'box-sizing',
+            'border-box',
+            'important',
+        );
 
         this.applyMainLobbyActionRuntimeLayout();
         this.updateControlsHelpPosition();
     }
 
     /*
-     * V1010310C_CURRENT_SOURCE_HARDFIX_RECOVER
-     * Final lobby action geometry is applied at runtime.
+     * V1010330_MAIN_LOBBY_UNIFORM_AUTHORING_FRAME
      *
-     * Fold browsers can keep a wide CSS viewport after unfold -> fold,
-     * so media queries are not reliable enough here. We measure the ACTUAL
-     * rendered room-action button width instead.
+     * Deterministic MAIN-lobby internal geometry.
+     * No viewport/aspect/button-width/Fold-state branching.
      */
     private applyMainLobbyActionRuntimeLayout(): void {
-        /*
-         * V1010321_FOLD_REFOLD_LOBBY_SETTLE: after unfold -> refold, stale intrinsic heights can survive
-         * until the next responsive layout pass. The guide must always return
-         * to natural content height instead of retaining a clipped intermediate
-         * Fold height.
-         */
-        const guide =
-            this.mainLobbyRoot
-                ?.querySelector<HTMLElement>(
-                    '.ch-lobby-guide',
-                );
-
-        if (guide) {
-            guide.style.setProperty(
-                'height',
-                'auto',
-                'important',
-            );
-            guide.style.setProperty(
-                'min-height',
-                '0',
-                'important',
-            );
-            guide.style.setProperty(
-                'max-height',
-                'none',
-                'important',
-            );
-            guide.style.setProperty(
-                'overflow',
-                'visible',
-                'important',
-            );
-
-            const guideCopy =
-                guide.lastElementChild as
-                    HTMLElement |
-                    null;
-
-            if (guideCopy) {
-                guideCopy.style.setProperty(
-                    'min-width',
-                    '0',
-                    'important',
-                );
-                guideCopy.style.setProperty(
-                    'height',
-                    'auto',
-                    'important',
-                );
-                guideCopy.style.setProperty(
-                    'overflow',
-                    'visible',
-                    'important',
-                );
-            }
-
-            const guideSubtitle =
-                guide.querySelector<HTMLElement>(
-                    'span',
-                );
-
-            if (guideSubtitle) {
-                guideSubtitle.style.setProperty(
-                    'display',
-                    'block',
-                    'important',
-                );
-                guideSubtitle.style.setProperty(
-                    'height',
-                    'auto',
-                    'important',
-                );
-                guideSubtitle.style.setProperty(
-                    'max-height',
-                    'none',
-                    'important',
-                );
-                guideSubtitle.style.setProperty(
-                    'line-height',
-                    '1.15',
-                    'important',
-                );
-                guideSubtitle.style.setProperty(
-                    'white-space',
-                    'normal',
-                    'important',
-                );
-                guideSubtitle.style.setProperty(
-                    'overflow',
-                    'visible',
-                    'important',
-                );
-                guideSubtitle.style.setProperty(
-                    'text-overflow',
-                    'clip',
-                    'important',
-                );
-            }
-        }
-
-        /* V1010312B_REPAIR_PRACTICE_RUNTIME_PLACEMENT: v312 Practice layout moved outside actions.forEach(). */
         const root =
             this.mainLobbyRoot;
 
@@ -19600,7 +19555,109 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
+        const set =
+            (
+                element:
+                    HTMLElement |
+                    null,
+                property:
+                    string,
+                value:
+                    string,
+            ): void => {
+                element?.style.setProperty(
+                    property,
+                    value,
+                    'important',
+                );
+            };
+
+        const shell =
+            root.querySelector<HTMLElement>(
+                '.ch-lobby-shell',
+            );
+
+        set(shell, 'display', 'grid');
+        set(
+            shell,
+            'grid-template-columns',
+            'minmax(0, 2fr) minmax(300px, 1fr)',
+        );
+        set(
+            shell,
+            'grid-template-rows',
+            'minmax(0, 1fr) 48px',
+        );
+        set(shell, 'width', '100%');
+        set(shell, 'height', '100%');
+        set(shell, 'min-width', '0');
+        set(shell, 'min-height', '0');
+        set(shell, 'overflow', 'hidden');
+        set(shell, 'box-sizing', 'border-box');
+
+        const rooms =
+            root.querySelector<HTMLElement>(
+                '.ch-lobby-rooms',
+            );
+
+        set(rooms, 'grid-column', '1');
+        set(rooms, 'grid-row', '1');
+        set(rooms, 'min-width', '0');
+        set(rooms, 'min-height', '0');
+        set(rooms, 'overflow', 'hidden');
+
         const actions =
+            root.querySelector<HTMLElement>(
+                '.ch-lobby-actions',
+            );
+
+        set(actions, 'grid-column', '2');
+        set(actions, 'grid-row', '1');
+        set(actions, 'display', 'grid');
+        set(
+            actions,
+            'grid-template-rows',
+            '44px 78px 56px 56px 56px 54px minmax(52px, 1fr)',
+        );
+        set(actions, 'gap', '5px');
+        set(actions, 'align-content', 'stretch');
+        set(actions, 'min-width', '0');
+        set(actions, 'min-height', '0');
+        set(actions, 'overflow', 'hidden');
+        set(actions, 'box-sizing', 'border-box');
+
+        const titleRow =
+            root.querySelector<HTMLElement>(
+                '.ch-lobby-actions-title-row',
+            );
+
+        set(titleRow, 'height', '44px');
+        set(titleRow, 'min-height', '44px');
+        set(titleRow, 'max-height', '44px');
+        set(titleRow, 'overflow', 'visible');
+
+        const title =
+            titleRow
+                ?.querySelector<HTMLElement>(
+                    'h2',
+                ) ??
+            null;
+
+        set(title, 'font-size', '24px');
+        set(title, 'line-height', '1');
+        set(title, 'white-space', 'nowrap');
+
+        const profile =
+            root.querySelector<HTMLElement>(
+                '.ch-lobby-profile-card',
+            );
+
+        set(profile, 'height', '78px');
+        set(profile, 'min-height', '78px');
+        set(profile, 'max-height', '78px');
+        set(profile, 'overflow', 'hidden');
+
+        const normalActions =
             Array.from(
                 root.querySelectorAll<HTMLButtonElement>(
                     '.ch-lobby-action--public, ' +
@@ -19609,172 +19666,42 @@ export class GameScene extends Phaser.Scene {
                 ),
             );
 
-        actions.forEach(
+        normalActions.forEach(
             (button) => {
-                const buttonWidth =
-                    button.getBoundingClientRect()
-                        .width;
-
-                const viewportWidth =
-                    window.visualViewport?.width ??
-                    window.innerWidth;
-
-                const viewportHeight =
-                    window.visualViewport?.height ??
-                    window.innerHeight;
-
-                const viewportAspect =
-                    viewportWidth /
-                    Math.max(
-                        1,
-                        viewportHeight,
-                    );
-
-                /*
-                 * V1010311_UI_CANVAS_GAS_RISE_FIX: Fold closed landscape is a very wide/short viewport.
-                 * Do not rely only on buttonWidth after unfold -> fold.
-                 */
-                const compact =
-                    (
-                        viewportAspect >=
-                        1.75
-                    ) ||
-                    (
-                        buttonWidth > 0 &&
-                        buttonWidth < 245
-                    );
-
-                const iconCell =
-                    compact
-                        ? 24
-                        : 36;
-
-                const glyphSize =
-                    compact
-                        ? 14
-                        : 24;
-
-                const gap =
-                    compact
-                        ? 7
-                        : 9;
-
-                const padX =
-                    compact
-                        ? 8
-                        : 11;
-
-                button.style.setProperty(
-                    'display',
-                    'grid',
-                    'important',
-                );
-                button.style.setProperty(
+                set(button, 'display', 'grid');
+                set(
+                    button,
                     'grid-template-columns',
-                    String(iconCell) +
-                        'px minmax(0, 1fr)',
-                    'important',
+                    '34px minmax(0, 1fr)',
                 );
-                button.style.setProperty(
-                    'column-gap',
-                    String(gap) + 'px',
-                    'important',
-                );
-                button.style.setProperty(
-                    'align-items',
-                    'center',
-                    'important',
-                );
-                button.style.setProperty(
-                    'padding',
-                    '7px ' +
-                        String(padX) +
-                        'px',
-                    'important',
-                );
-                button.style.setProperty(
-                    'box-sizing',
-                    'border-box',
-                    'important',
-                );
-                button.style.setProperty(
-                    'overflow',
-                    'hidden',
-                    'important',
-                );
+                set(button, 'align-items', 'center');
+                set(button, 'column-gap', '9px');
+                set(button, 'height', '56px');
+                set(button, 'min-height', '56px');
+                set(button, 'max-height', '56px');
+                set(button, 'padding', '7px 10px');
+                set(button, 'margin', '0');
+                set(button, 'overflow', 'hidden');
+                set(button, 'box-sizing', 'border-box');
 
                 const icon =
                     button.querySelector<HTMLElement>(
                         '.ch-lobby-action-icon',
                     );
 
-                if (icon) {
-                    [
-                        'width',
-                        'min-width',
-                        'max-width',
-                        'height',
-                        'min-height',
-                        'max-height',
-                    ].forEach(
-                        (property) => {
-                            icon.style.setProperty(
-                                property,
-                                String(iconCell) +
-                                    'px',
-                                'important',
-                            );
-                        },
-                    );
-
-                    icon.style.setProperty(
-                        'display',
-                        'grid',
-                        'important',
-                    );
-                    icon.style.setProperty(
-                        'place-items',
-                        'center',
-                        'important',
-                    );
-                    icon.style.setProperty(
-                        'padding',
-                        compact
-                            ? '5px'
-                            : '6px',
-                        'important',
-                    );
-                    icon.style.setProperty(
-                        'margin',
-                        '0',
-                        'important',
-                    );
-                    icon.style.setProperty(
-                        'aspect-ratio',
-                        '1 / 1',
-                        'important',
-                    );
-                    icon.style.setProperty(
-                        'box-sizing',
-                        'border-box',
-                        'important',
-                    );
-                    icon.style.setProperty(
-                        'overflow',
-                        'hidden',
-                        'important',
-                    );
-                    icon.style.setProperty(
-                        'font-size',
-                        '0',
-                        'important',
-                    );
-                    icon.style.setProperty(
-                        'line-height',
-                        '0',
-                        'important',
-                    );
-                }
+                set(icon, 'display', 'grid');
+                set(icon, 'place-items', 'center');
+                set(icon, 'width', '34px');
+                set(icon, 'min-width', '34px');
+                set(icon, 'max-width', '34px');
+                set(icon, 'height', '34px');
+                set(icon, 'min-height', '34px');
+                set(icon, 'max-height', '34px');
+                set(icon, 'padding', '5px');
+                set(icon, 'margin', '0');
+                set(icon, 'box-sizing', 'border-box');
+                set(icon, 'overflow', 'hidden');
+                set(icon, 'font-size', '0');
 
                 const svg =
                     button.querySelector<SVGElement>(
@@ -19784,968 +19711,229 @@ export class GameScene extends Phaser.Scene {
                 if (svg) {
                     [
                         'width',
-                        'min-width',
-                        'max-width',
                         'height',
+                        'min-width',
                         'min-height',
+                        'max-width',
                         'max-height',
                     ].forEach(
                         (property) => {
                             svg.style.setProperty(
                                 property,
-                                String(glyphSize) +
-                                    'px',
+                                '22px',
                                 'important',
                             );
                         },
                     );
-
-                    svg.style.setProperty(
-                        'transform',
-                        'none',
-                        'important',
-                    );
-                    svg.style.setProperty(
-                        'margin',
-                        '0',
-                        'important',
-                    );
-                    svg.style.setProperty(
-                        'padding',
-                        '0',
-                        'important',
-                    );
                 }
 
-                const copy =
-                    button.lastElementChild as
-                        HTMLElement |
-                        null;
+                const strong =
+                    button.querySelector<HTMLElement>(
+                        'strong',
+                    );
 
-                if (copy) {
-                    copy.style.setProperty(
-                        'min-width',
-                        '0',
-                        'important',
+                set(strong, 'font-size', '18px');
+                set(strong, 'line-height', '1.05');
+                set(strong, 'white-space', 'nowrap');
+                set(strong, 'overflow', 'hidden');
+
+                const small =
+                    button.querySelector<HTMLElement>(
+                        'small',
                     );
-                    copy.style.setProperty(
-                        'overflow',
-                        'hidden',
-                        'important',
-                    );
-                }
+
+                set(small, 'font-size', '11px');
+                set(small, 'line-height', '1.08');
+                set(small, 'white-space', 'nowrap');
+                set(small, 'overflow', 'hidden');
             },
         );
 
-        /*
-         * V1010313_PRACTICE_HEIGHT_TIMING_FRAME_SAFE: Practice must follow the EXACT vertical rhythm of the room
-         * action buttons above it. Never make it taller on Fold.
-         */
-        const practiceButton =
+        const practice =
             root.querySelector<HTMLButtonElement>(
                 '.ch-lobby-action--practice',
             );
 
-        if (practiceButton) {
-            const referenceAction =
-                root.querySelector<HTMLButtonElement>(
-                    '.ch-lobby-action--public',
-                );
+        set(practice, 'display', 'grid');
+        set(
+            practice,
+            'grid-template-columns',
+            '34px minmax(0, 1fr)',
+        );
+        set(practice, 'align-items', 'center');
+        set(practice, 'column-gap', '9px');
+        set(practice, 'height', '54px');
+        set(practice, 'min-height', '54px');
+        set(practice, 'max-height', '54px');
+        set(practice, 'padding', '6px 10px');
+        set(practice, 'margin', '0');
+        set(practice, 'overflow', 'hidden');
+        set(practice, 'box-sizing', 'border-box');
 
-            const referenceHeight =
-                Math.max(
-                    1,
-                    Math.round(
-                        referenceAction
-                            ?.getBoundingClientRect()
-                            .height ??
-                        52,
-                    ),
-                );
+        const practiceIcon =
+            practice
+                ?.querySelector<HTMLElement>(
+                    '.ch-lobby-action-icon',
+                ) ??
+            null;
 
-            const viewportWidth =
-                window.visualViewport?.width ??
-                window.innerWidth;
+        set(practiceIcon, 'display', 'grid');
+        set(practiceIcon, 'place-items', 'center');
+        set(practiceIcon, 'width', '34px');
+        set(practiceIcon, 'min-width', '34px');
+        set(practiceIcon, 'max-width', '34px');
+        set(practiceIcon, 'height', '34px');
+        set(practiceIcon, 'min-height', '34px');
+        set(practiceIcon, 'max-height', '34px');
+        set(practiceIcon, 'padding', '0');
+        set(practiceIcon, 'font-size', '22px');
+        set(practiceIcon, 'overflow', 'hidden');
 
-            const viewportHeight =
-                window.visualViewport?.height ??
-                window.innerHeight;
+        const practiceCopy =
+            practice
+                ?.querySelector<HTMLElement>(
+                    '.ch-lobby-practice-copy',
+                ) ??
+            null;
 
-            const practiceWidth =
-                practiceButton
-                    .getBoundingClientRect()
-                    .width;
+        set(practiceCopy, 'display', 'grid');
+        set(
+            practiceCopy,
+            'grid-template-columns',
+            'auto minmax(0, 1fr)',
+        );
+        set(
+            practiceCopy,
+            'grid-template-rows',
+            '20px 16px',
+        );
+        set(practiceCopy, 'align-items', 'center');
+        set(practiceCopy, 'column-gap', '6px');
+        set(practiceCopy, 'row-gap', '1px');
+        set(practiceCopy, 'min-width', '0');
+        set(practiceCopy, 'overflow', 'hidden');
 
-            const compact =
-                (
-                    viewportWidth /
-                        Math.max(
-                            1,
-                            viewportHeight,
-                        ) >=
-                    1.75
-                ) ||
-                (
-                    practiceWidth > 0 &&
-                    practiceWidth < 245
-                );
+        const practiceBadge =
+            practice
+                ?.querySelector<HTMLElement>(
+                    '.ch-lobby-practice-badge',
+                ) ??
+            null;
 
-            const iconCell =
-                compact
-                    ? 24
-                    : 30;
+        set(practiceBadge, 'font-size', '10px');
+        set(practiceBadge, 'white-space', 'nowrap');
 
-            practiceButton.style.setProperty(
-                'display',
-                'grid',
-                'important',
-            );
-            practiceButton.style.setProperty(
-                'grid-template-columns',
-                String(iconCell) +
-                    'px minmax(0, 1fr)',
-                'important',
-            );
-            practiceButton.style.setProperty(
-                'column-gap',
-                compact
-                    ? '6px'
-                    : '8px',
-                'important',
-            );
-            practiceButton.style.setProperty(
-                'align-items',
-                'center',
-                'important',
-            );
-            practiceButton.style.setProperty(
-                'height',
-                String(referenceHeight) +
-                    'px',
-                'important',
-            );
-            practiceButton.style.setProperty(
-                'min-height',
-                String(referenceHeight) +
-                    'px',
-                'important',
-            );
-            practiceButton.style.setProperty(
-                'max-height',
-                String(referenceHeight) +
-                    'px',
-                'important',
-            );
-            practiceButton.style.setProperty(
-                'padding',
-                compact
-                    ? '4px 8px'
-                    : '5px 10px',
-                'important',
-            );
-            practiceButton.style.setProperty(
-                'box-sizing',
-                'border-box',
-                'important',
-            );
-            practiceButton.style.setProperty(
-                'overflow',
-                'hidden',
-                'important',
-            );
+        const practiceStrong =
+            practice
+                ?.querySelector<HTMLElement>(
+                    'strong',
+                ) ??
+            null;
 
-            const practiceIcon =
-                practiceButton
-                    .querySelector<HTMLElement>(
-                        '.ch-lobby-action-icon',
-                    );
+        set(practiceStrong, 'font-size', '17px');
+        set(practiceStrong, 'line-height', '20px');
+        set(practiceStrong, 'white-space', 'nowrap');
 
-            if (practiceIcon) {
-                [
-                    'width',
-                    'min-width',
-                    'max-width',
-                    'height',
-                    'min-height',
-                    'max-height',
-                ].forEach(
-                    (property) => {
-                        practiceIcon.style.setProperty(
-                            property,
-                            String(iconCell) +
-                                'px',
-                            'important',
-                        );
-                    },
-                );
+        const practiceSmall =
+            practice
+                ?.querySelector<HTMLElement>(
+                    'small',
+                ) ??
+            null;
 
-                practiceIcon.style.setProperty(
-                    'display',
-                    'grid',
-                    'important',
-                );
-                practiceIcon.style.setProperty(
-                    'place-items',
-                    'center',
-                    'important',
-                );
-                practiceIcon.style.setProperty(
-                    'padding',
-                    '0',
-                    'important',
-                );
-                practiceIcon.style.setProperty(
-                    'margin',
-                    '0',
-                    'important',
-                );
-                practiceIcon.style.setProperty(
-                    'font-size',
-                    compact
-                        ? '15px'
-                        : '18px',
-                    'important',
-                );
-                practiceIcon.style.setProperty(
-                    'line-height',
-                    '1',
-                    'important',
-                );
-                practiceIcon.style.setProperty(
-                    'overflow',
-                    'visible',
-                    'important',
-                );
-            }
+        set(practiceSmall, 'grid-column', '1 / -1');
+        set(practiceSmall, 'font-size', '10px');
+        set(practiceSmall, 'line-height', '16px');
+        set(practiceSmall, 'white-space', 'nowrap');
+        set(practiceSmall, 'overflow', 'hidden');
 
-            const copy =
-                practiceButton
-                    .querySelector<HTMLElement>(
-                        '.ch-lobby-practice-copy',
-                    );
-
-            if (copy) {
-                copy.style.setProperty(
-                    'display',
-                    'grid',
-                    'important',
-                );
-                copy.style.setProperty(
-                    'grid-template-columns',
-                    'auto minmax(0, 1fr)',
-                    'important',
-                );
-                copy.style.setProperty(
-                    'grid-template-rows',
-                    'auto auto',
-                    'important',
-                );
-                copy.style.setProperty(
-                    'column-gap',
-                    compact
-                        ? '5px'
-                        : '6px',
-                    'important',
-                );
-                copy.style.setProperty(
-                    'row-gap',
-                    '1px',
-                    'important',
-                );
-                copy.style.setProperty(
-                    'align-items',
-                    'center',
-                    'important',
-                );
-                copy.style.setProperty(
-                    'min-width',
-                    '0',
-                    'important',
-                );
-                copy.style.setProperty(
-                    'overflow',
-                    'hidden',
-                    'important',
-                );
-
-                const badge =
-                    copy.querySelector<HTMLElement>(
-                        '.ch-lobby-practice-badge',
-                    );
-
-                if (badge) {
-                    badge.style.setProperty(
-                        'font-size',
-                        compact
-                            ? '8px'
-                            : '9px',
-                        'important',
-                    );
-                    badge.style.setProperty(
-                        'line-height',
-                        '1',
-                        'important',
-                    );
-                    badge.style.setProperty(
-                        'padding',
-                        '2px 4px',
-                        'important',
-                    );
-                    badge.style.setProperty(
-                        'margin',
-                        '0',
-                        'important',
-                    );
-                    badge.style.setProperty(
-                        'white-space',
-                        'nowrap',
-                        'important',
-                    );
-                }
-
-                const title =
-                    copy.querySelector<HTMLElement>(
-                        'strong',
-                    );
-
-                if (title) {
-                    title.style.setProperty(
-                        'font-size',
-                        compact
-                            ? '13px'
-                            : '15px',
-                        'important',
-                    );
-                    title.style.setProperty(
-                        'line-height',
-                        '1',
-                        'important',
-                    );
-                    title.style.setProperty(
-                        'margin',
-                        '0',
-                        'important',
-                    );
-                    title.style.setProperty(
-                        'white-space',
-                        'nowrap',
-                        'important',
-                    );
-                }
-
-                const subtitle =
-                    copy.querySelector<HTMLElement>(
-                        'small',
-                    );
-
-                if (subtitle) {
-                    subtitle.style.setProperty(
-                        'grid-column',
-                        '1 / -1',
-                        'important',
-                    );
-                    subtitle.style.setProperty(
-                        'font-size',
-                        compact
-                            ? '8px'
-                            : '9px',
-                        'important',
-                    );
-                    subtitle.style.setProperty(
-                        'line-height',
-                        '1.05',
-                        'important',
-                    );
-                    subtitle.style.setProperty(
-                        'margin',
-                        '0',
-                        'important',
-                    );
-                    subtitle.style.setProperty(
-                        'white-space',
-                        'nowrap',
-                        'important',
-                    );
-                    subtitle.style.setProperty(
-                        'overflow',
-                        'hidden',
-                        'important',
-                    );
-                    subtitle.style.setProperty(
-                        'text-overflow',
-                        'ellipsis',
-                        'important',
-                    );
-                }
-            }
-        }
-
-        /*
-         * V1010322_FOLD_GUIDE_FIT_REAL_SPACE
-         *
-         * The guide is the LAST row in .ch-lobby-actions.
-         * After Fold unfold -> refold, browser/CSS intrinsic sizing can leave
-         * the upper rows a few pixels taller than on a cold folded launch.
-         *
-         * Do not guess a fixed guide height. Measure the REAL remaining space
-         * inside .ch-lobby-actions and fit the guide into that exact space.
-         */
-        const actionPanel =
-            root.querySelector<HTMLElement>(
-                '.ch-lobby-actions',
-            );
-
-        const liveGuide =
+        const guide =
             root.querySelector<HTMLElement>(
                 '.ch-lobby-guide',
             );
 
-        if (
-            actionPanel &&
-            liveGuide
-        ) {
-            const panelRect =
-                actionPanel
-                    .getBoundingClientRect();
+        set(guide, 'display', 'grid');
+        set(
+            guide,
+            'grid-template-columns',
+            '34px minmax(0, 1fr)',
+        );
+        set(guide, 'align-items', 'center');
+        set(guide, 'column-gap', '8px');
+        set(guide, 'height', '100%');
+        set(guide, 'min-height', '52px');
+        set(guide, 'max-height', 'none');
+        set(guide, 'padding', '5px 10px');
+        set(guide, 'box-sizing', 'border-box');
+        set(guide, 'overflow', 'hidden');
 
-            const guideRect =
-                liveGuide
-                    .getBoundingClientRect();
-
-            const remainingHeight =
-                Math.floor(
-                    panelRect.bottom -
-                    guideRect.top -
-                    2,
-                );
-
-            /*
-             * Keep enough height for title + subtitle, but never extend beyond
-             * the action panel. On normal/unfolded layouts this simply uses the
-             * available space; on refold it prevents bottom clipping.
-             */
-            const fittedHeight =
-                Math.max(
-                    38,
-                    remainingHeight,
-                );
-
-            liveGuide.style.setProperty(
-                'height',
-                String(fittedHeight) +
-                    'px',
-                'important',
-            );
-            liveGuide.style.setProperty(
-                'min-height',
-                String(fittedHeight) +
-                    'px',
-                'important',
-            );
-            liveGuide.style.setProperty(
-                'max-height',
-                String(fittedHeight) +
-                    'px',
-                'important',
-            );
-            liveGuide.style.setProperty(
-                'box-sizing',
-                'border-box',
-                'important',
-            );
-            liveGuide.style.setProperty(
-                'overflow',
-                'hidden',
-                'important',
-            );
-            liveGuide.style.setProperty(
-                'align-items',
-                'center',
-                'important',
-            );
-
-            const guideCopy =
-                liveGuide.lastElementChild as
-                    HTMLElement |
-                    null;
-
-            if (guideCopy) {
-                guideCopy.style.setProperty(
-                    'display',
-                    'grid',
-                    'important',
-                );
-                guideCopy.style.setProperty(
-                    'grid-template-rows',
-                    'auto auto',
-                    'important',
-                );
-                guideCopy.style.setProperty(
-                    'align-content',
-                    'center',
-                    'important',
-                );
-                guideCopy.style.setProperty(
-                    'row-gap',
-                    '1px',
-                    'important',
-                );
-                guideCopy.style.setProperty(
-                    'height',
-                    '100%',
-                    'important',
-                );
-                guideCopy.style.setProperty(
-                    'min-height',
-                    '0',
-                    'important',
-                );
-                guideCopy.style.setProperty(
-                    'overflow',
-                    'hidden',
-                    'important',
-                );
-
-                const guideTitle =
-                    guideCopy.querySelector<HTMLElement>(
-                        'strong',
-                    );
-
-                if (guideTitle) {
-                    guideTitle.style.setProperty(
-                        'line-height',
-                        '1.05',
-                        'important',
-                    );
-                    guideTitle.style.setProperty(
-                        'margin',
-                        '0',
-                        'important',
-                    );
-                    guideTitle.style.setProperty(
-                        'white-space',
-                        'nowrap',
-                        'important',
-                    );
-                }
-
-                const guideSubtitle =
-                    guideCopy.querySelector<HTMLElement>(
-                        'span',
-                    );
-
-                if (guideSubtitle) {
-                    guideSubtitle.style.setProperty(
-                        'display',
-                        'block',
-                        'important',
-                    );
-                    guideSubtitle.style.setProperty(
-                        'height',
-                        'auto',
-                        'important',
-                    );
-                    guideSubtitle.style.setProperty(
-                        'min-height',
-                        '0',
-                        'important',
-                    );
-                    guideSubtitle.style.setProperty(
-                        'max-height',
-                        'none',
-                        'important',
-                    );
-                    guideSubtitle.style.setProperty(
-                        'line-height',
-                        '1.05',
-                        'important',
-                    );
-                    guideSubtitle.style.setProperty(
-                        'margin',
-                        '0',
-                        'important',
-                    );
-                    guideSubtitle.style.setProperty(
-                        'white-space',
-                        'normal',
-                        'important',
-                    );
-                    guideSubtitle.style.setProperty(
-                        'overflow',
-                        'visible',
-                        'important',
-                    );
-                    guideSubtitle.style.setProperty(
-                        'text-overflow',
-                        'clip',
-                        'important',
-                    );
-                }
-            }
-        }
-
-        /*
-         * V1010323_FOLD_GUIDE_COMPACT_HARDFIX
-         *
-         * The Fold refold bug is NOT the guide's intrinsic height.
-         * The parent action column can retain a shorter row allocation after
-         * unfold -> refold. Make the guide itself require less vertical space
-         * whenever the actual room-action button proves we are in Fold-closed
-         * compact layout.
-         */
-        const compactReference =
-            root.querySelector<HTMLButtonElement>(
-                '.ch-lobby-action--public',
-            );
-
-        const compactGuide =
-            root.querySelector<HTMLElement>(
-                '.ch-lobby-guide',
-            );
-
-        if (
-            compactReference &&
-            compactGuide
-        ) {
-            const referenceWidth =
-                compactReference
-                    .getBoundingClientRect()
-                    .width;
-
-            /*
-             * V1010324_FOLD_REFOLD_GUIDE_ASPECT_FIX
-             *
-             * Galaxy Fold can keep the button's old unfolded width for one or
-             * more layout passes after refolding.  The viewport itself already
-             * has the correct wide/short shape, so use BOTH signals.
-             */
-            const viewportWidth =
-                window.visualViewport?.width ??
-                window.innerWidth;
-
-            const viewportHeight =
-                window.visualViewport?.height ??
-                window.innerHeight;
-
-            const viewportAspect =
-                viewportWidth /
-                Math.max(1, viewportHeight);
-
-            const foldCompact =
-                viewportAspect >= 1.75 ||
-                (
-                    referenceWidth > 0 &&
-                    referenceWidth < 245
-                );
-
-            const guideMascot =
-                compactGuide.querySelector<HTMLElement>(
+        const guideMascot =
+            guide
+                ?.querySelector<HTMLElement>(
                     '.ch-lobby-guide-mascot',
-                );
+                ) ??
+            null;
 
-            const guideCopy =
-                compactGuide.lastElementChild as
+        set(guideMascot, 'font-size', '26px');
+        set(guideMascot, 'line-height', '1');
+
+        const guideCopy =
+            guide
+                ?.lastElementChild as
                     HTMLElement |
                     null;
 
-            const guideTitle =
-                guideCopy
-                    ?.querySelector<HTMLElement>(
-                        'strong',
-                    );
+        set(guideCopy, 'display', 'grid');
+        set(
+            guideCopy,
+            'grid-template-rows',
+            '20px 16px',
+        );
+        set(guideCopy, 'align-content', 'center');
+        set(guideCopy, 'row-gap', '2px');
+        set(guideCopy, 'min-width', '0');
+        set(guideCopy, 'overflow', 'hidden');
 
-            const guideSubtitle =
-                guideCopy
-                    ?.querySelector<HTMLElement>(
-                        'span',
-                    );
+        const guideTitle =
+            guideCopy
+                ?.querySelector<HTMLElement>(
+                    'strong',
+                ) ??
+            null;
 
-            if (foldCompact) {
-                compactGuide.style.setProperty(
-                    'display',
-                    'grid',
-                    'important',
-                );
-                compactGuide.style.setProperty(
-                    'grid-template-columns',
-                    '26px minmax(0, 1fr)',
-                    'important',
-                );
-                compactGuide.style.setProperty(
-                    'column-gap',
-                    '7px',
-                    'important',
-                );
-                compactGuide.style.setProperty(
-                    'align-items',
-                    'center',
-                    'important',
-                );
-                compactGuide.style.setProperty(
-                    'height',
-                    '42px',
-                    'important',
-                );
-                compactGuide.style.setProperty(
-                    'min-height',
-                    '42px',
-                    'important',
-                );
-                compactGuide.style.setProperty(
-                    'max-height',
-                    '42px',
-                    'important',
-                );
-                compactGuide.style.setProperty(
-                    'padding',
-                    '4px 8px',
-                    'important',
-                );
-                compactGuide.style.setProperty(
-                    'margin',
-                    '0',
-                    'important',
-                );
-                compactGuide.style.setProperty(
-                    'box-sizing',
-                    'border-box',
-                    'important',
-                );
-                compactGuide.style.setProperty(
-                    'overflow',
-                    'hidden',
-                    'important',
-                );
+        set(guideTitle, 'font-size', '16px');
+        set(guideTitle, 'line-height', '20px');
+        set(guideTitle, 'white-space', 'nowrap');
+        set(guideTitle, 'overflow', 'hidden');
 
-                if (guideMascot) {
-                    guideMascot.style.setProperty(
-                        'font-size',
-                        '21px',
-                        'important',
-                    );
-                    guideMascot.style.setProperty(
-                        'line-height',
-                        '1',
-                        'important',
-                    );
-                    guideMascot.style.setProperty(
-                        'margin',
-                        '0',
-                        'important',
-                    );
-                }
+        const guideSubtitle =
+            guideCopy
+                ?.querySelector<HTMLElement>(
+                    'span',
+                ) ??
+            null;
 
-                if (guideCopy) {
-                    guideCopy.style.setProperty(
-                        'display',
-                        'grid',
-                        'important',
-                    );
-                    guideCopy.style.setProperty(
-                        'grid-template-rows',
-                        '14px 12px',
-                        'important',
-                    );
-                    guideCopy.style.setProperty(
-                        'row-gap',
-                        '1px',
-                        'important',
-                    );
-                    guideCopy.style.setProperty(
-                        'align-content',
-                        'center',
-                        'important',
-                    );
-                    guideCopy.style.setProperty(
-                        'height',
-                        '27px',
-                        'important',
-                    );
-                    guideCopy.style.setProperty(
-                        'min-height',
-                        '27px',
-                        'important',
-                    );
-                    guideCopy.style.setProperty(
-                        'overflow',
-                        'hidden',
-                        'important',
-                    );
-                }
+        set(guideSubtitle, 'display', 'block');
+        set(guideSubtitle, 'font-size', '10px');
+        set(guideSubtitle, 'line-height', '16px');
+        set(guideSubtitle, 'height', '16px');
+        set(guideSubtitle, 'min-height', '16px');
+        set(guideSubtitle, 'max-height', '16px');
+        set(guideSubtitle, 'white-space', 'nowrap');
+        set(guideSubtitle, 'overflow', 'hidden');
+        set(guideSubtitle, 'text-overflow', 'clip');
 
-                if (guideTitle) {
-                    guideTitle.style.setProperty(
-                        'font-size',
-                        '12px',
-                        'important',
-                    );
-                    guideTitle.style.setProperty(
-                        'line-height',
-                        '14px',
-                        'important',
-                    );
-                    guideTitle.style.setProperty(
-                        'height',
-                        '14px',
-                        'important',
-                    );
-                    guideTitle.style.setProperty(
-                        'margin',
-                        '0',
-                        'important',
-                    );
-                    guideTitle.style.setProperty(
-                        'white-space',
-                        'nowrap',
-                        'important',
-                    );
-                    guideTitle.style.setProperty(
-                        'overflow',
-                        'hidden',
-                        'important',
-                    );
-                }
+        const language =
+            root.querySelector<HTMLElement>(
+                '.ch-lobby-language',
+            );
 
-                if (guideSubtitle) {
-                    guideSubtitle.style.setProperty(
-                        'display',
-                        'block',
-                        'important',
-                    );
-                    guideSubtitle.style.setProperty(
-                        'font-size',
-                        '8.5px',
-                        'important',
-                    );
-                    guideSubtitle.style.setProperty(
-                        'line-height',
-                        '12px',
-                        'important',
-                    );
-                    guideSubtitle.style.setProperty(
-                        'height',
-                        '12px',
-                        'important',
-                    );
-                    guideSubtitle.style.setProperty(
-                        'min-height',
-                        '12px',
-                        'important',
-                    );
-                    guideSubtitle.style.setProperty(
-                        'max-height',
-                        '12px',
-                        'important',
-                    );
-                    guideSubtitle.style.setProperty(
-                        'margin',
-                        '0',
-                        'important',
-                    );
-                    guideSubtitle.style.setProperty(
-                        'white-space',
-                        'nowrap',
-                        'important',
-                    );
-                    guideSubtitle.style.setProperty(
-                        'overflow',
-                        'hidden',
-                        'important',
-                    );
-                    guideSubtitle.style.setProperty(
-                        'text-overflow',
-                        'clip',
-                        'important',
-                    );
-                }
-            } else {
-                /*
-                 * Restore CSS ownership on unfolded/desktop layouts.
-                 */
-                [
-                    'display',
-                    'grid-template-columns',
-                    'column-gap',
-                    'align-items',
-                    'height',
-                    'min-height',
-                    'max-height',
-                    'padding',
-                    'margin',
-                    'box-sizing',
-                    'overflow',
-                ].forEach(
-                    (property) => {
-                        compactGuide.style.removeProperty(
-                            property,
-                        );
-                    },
-                );
-
-                if (guideMascot) {
-                    [
-                        'font-size',
-                        'line-height',
-                        'margin',
-                    ].forEach(
-                        (property) => {
-                            guideMascot.style.removeProperty(
-                                property,
-                            );
-                        },
-                    );
-                }
-
-                if (guideCopy) {
-                    [
-                        'display',
-                        'grid-template-rows',
-                        'row-gap',
-                        'align-content',
-                        'height',
-                        'min-height',
-                        'overflow',
-                    ].forEach(
-                        (property) => {
-                            guideCopy.style.removeProperty(
-                                property,
-                            );
-                        },
-                    );
-                }
-
-                [guideTitle, guideSubtitle]
-                    .filter(
-                        (
-                            element,
-                        ): element is HTMLElement =>
-                            Boolean(element),
-                    )
-                    .forEach(
-                        (element) => {
-                            [
-                                'display',
-                                'font-size',
-                                'line-height',
-                                'height',
-                                'min-height',
-                                'max-height',
-                                'margin',
-                                'white-space',
-                                'overflow',
-                                'text-overflow',
-                            ].forEach(
-                                (property) => {
-                                    element.style.removeProperty(
-                                        property,
-                                    );
-                                },
-                            );
-                        },
-                    );
-            }
-        }
-
+        set(language, 'grid-column', '1 / -1');
+        set(language, 'grid-row', '2');
+        set(language, 'height', '48px');
+        set(language, 'min-height', '48px');
+        set(language, 'max-height', '48px');
+        set(language, 'overflow', 'hidden');
     }
 
     private createMainLobbyDom(): void {
@@ -21337,36 +20525,25 @@ export class GameScene extends Phaser.Scene {
     private readonly updateMainLobbyDomPositionBound =
         (): void => {
             /*
-             * V1010321_FOLD_REFOLD_LOBBY_SETTLE
+             * V1010330_MAIN_LOBBY_UNIFORM_AUTHORING_FRAME
              *
-             * Galaxy Fold unfold -> refold does not settle visualViewport and
-             * responsive CSS in a single synchronous resize callback.
-             *
-             * Re-run against the FINAL viewport several times. Each call is
-             * idempotent and safely returns if the lobby has already closed.
+             * No delayed 80/220/420/800/1400ms visual chasing.
+             * Phaser resizes once, then the fixed lobby frame follows on the
+             * next animation frame.
              */
-            this.updateMainLobbyDomPosition();
+            if (!this.sys.isActive()) {
+                return;
+            }
+
+            this.scale.refresh();
 
             requestAnimationFrame(
                 () => {
-                    this.updateMainLobbyDomPosition();
-                },
-            );
-
-            [
-                80,
-                220,
-                420,
-                800,
-                1400,
-            ].forEach(
-                (delay) => {
-                    window.setTimeout(
-                        () => {
-                            this.updateMainLobbyDomPosition();
-                        },
-                        delay,
-                    );
+                    if (
+                        this.sys.isActive()
+                    ) {
+                        this.updateMainLobbyDomPosition();
+                    }
                 },
             );
         };
