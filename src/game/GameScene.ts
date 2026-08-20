@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010352_AVATAR_EDITOR_EYEDROPPER_MASK: avatar-editor pipette respects the actual avatar body mask. */
     /* V1010350_AVATAR_EDITOR_FULL_PAINT_PARITY: avatar editor shares game/practice tool geometry and paint semantics. */
     /* V1010349_PAINT_BANNER_TOOL_ART_JOYSTICK_CENTER: background-only timer translucency + detailed paint tools + move-release recenter. */
     /* V1010348_AVATAR_EDITOR_PAINT_PARITY: avatar editor uses paint-only one-finger gesture and game-parity tools. */
@@ -18571,6 +18572,19 @@ export class GameScene extends Phaser.Scene {
                         event.clientY,
                     );
 
+                /*
+                 * V1010352_AVATAR_EDITOR_EYEDROPPER_MASK
+                 *
+                 * Avatar editor eyedropper must never sample the transparent
+                 * rectangular area around the avatar as black.
+                 *
+                 * Contract:
+                 *   - actual avatar body pixel -> sample rendered avatar color
+                 *   - outside avatar body      -> sample editor background color
+                 *
+                 * We test the SAME logical body mask used by painting before
+                 * reading the canvas pixel.
+                 */
                 const sampleEditorColor =
                     (): void => {
                         const rect =
@@ -18582,11 +18596,28 @@ export class GameScene extends Phaser.Scene {
                                 event.clientY,
                             );
 
+                        const sampleClientX =
+                            sampleTip.x;
+                        const sampleClientY =
+                            sampleTip.y;
+
+                        const logical =
+                            canvasToLogical(
+                                sampleClientX,
+                                sampleClientY,
+                            );
+
+                        const onAvatarBody =
+                            insideBody(
+                                logical.x,
+                                logical.y,
+                            );
+
                         const px =
                             Phaser.Math.Clamp(
                                 Math.floor(
                                     (
-                                        sampleTip.x -
+                                        sampleClientX -
                                         rect.left
                                     ) /
                                     Math.max(
@@ -18596,15 +18627,14 @@ export class GameScene extends Phaser.Scene {
                                     canvas.width,
                                 ),
                                 0,
-                                canvas.width -
-                                    1,
+                                canvas.width - 1,
                             );
 
                         const py =
                             Phaser.Math.Clamp(
                                 Math.floor(
                                     (
-                                        sampleTip.y -
+                                        sampleClientY -
                                         rect.top
                                     ) /
                                     Math.max(
@@ -18614,8 +18644,7 @@ export class GameScene extends Phaser.Scene {
                                     canvas.height,
                                 ),
                                 0,
-                                canvas.height -
-                                    1,
+                                canvas.height - 1,
                             );
 
                         const pixel =
@@ -18626,23 +18655,42 @@ export class GameScene extends Phaser.Scene {
                                 1,
                             ).data;
 
+                        /*
+                         * If the tip is outside the actual avatar body, do NOT
+                         * accept a transparent/black avatar-bounds pixel.
+                         *
+                         * The editor canvas background is visually rendered,
+                         * so an opaque pixel here is the intended background
+                         * sample. If transparency somehow remains, use the
+                         * editor's known light background instead of black.
+                         */
+                        let r = pixel[0];
+                        let g = pixel[1];
+                        let b = pixel[2];
+
                         if (
-                            pixel[3] <=
-                            0
+                            !onAvatarBody &&
+                            pixel[3] <= 0
                         ) {
+                            r = 251;
+                            g = 248;
+                            b = 233;
+                        } else if (
+                            onAvatarBody &&
+                            pixel[3] <= 0
+                        ) {
+                            /*
+                             * Body-mask says this is avatar, but no rendered
+                             * pixel exists. Ignore the sample rather than
+                             * turning the selected color black.
+                             */
                             return;
                         }
 
                         selectedColor =
-                            (
-                                pixel[0] <<
-                                16
-                            ) |
-                            (
-                                pixel[1] <<
-                                8
-                            ) |
-                            pixel[2];
+                            (r << 16) |
+                            (g << 8) |
+                            b;
 
                         eyedropperArmed =
                             false;
