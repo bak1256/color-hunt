@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010353_AVATAR_EDITOR_MOBILE_TOOL_HALF_SIZE: mobile avatar-editor tool visual scale = 50%. */
     /* V1010352_AVATAR_EDITOR_EYEDROPPER_MASK: avatar-editor pipette respects the actual avatar body mask. */
     /* V1010350_AVATAR_EDITOR_FULL_PAINT_PARITY: avatar editor shares game/practice tool geometry and paint semantics. */
     /* V1010349_PAINT_BANNER_TOOL_ART_JOYSTICK_CENTER: background-only timer translucency + detailed paint tools + move-release recenter. */
@@ -17303,6 +17304,18 @@ export class GameScene extends Phaser.Scene {
                             6,
                             '0',
                         )}`;
+
+                /*
+                 * V1010353_AVATAR_EDITOR_MOBILE_TOOL_HALF_SIZE
+                 * Avatar editor only: keep the same brush/pipette artwork and
+                 * interaction point, but halve its visual size on mobile.
+                 */
+                floatingTool.style.transformOrigin =
+                    '0 0';
+                floatingTool.style.transform =
+                    this.mobileControlsEnabled
+                        ? 'scale(0.5)'
+                        : '';
 
                 floatingTool.style.display =
                     'flex';
