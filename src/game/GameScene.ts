@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010315_MOBILE_WAITING_TIMING_CONTAINED: keep Paint/Hunt headers and buttons entirely inside their frames. */
     /* V1010314_MOBILE_WAITING_HEADER_UNCLIP: reserve mobile Paint/Hunt header height without enlarging outer frames. */
     /* V1010313_PRACTICE_HEIGHT_TIMING_FRAME_SAFE: Practice same-height rhythm + frame-safe waiting timing text. */
     /* V1010312_FOLD_PRACTICE_WAITING_TIMING_POLISH: Fold Practice spacing + unclipped waiting timing layout. */
@@ -21642,12 +21643,65 @@ export class GameScene extends Phaser.Scene {
         }
 
         /*
-         * V1010314_MOBILE_WAITING_HEADER_UNCLIP: mobile timing-header final fix.
+         * V1010315_MOBILE_WAITING_TIMING_CONTAINED: mobile timing layout is now fully contained.
          *
-         * Keep the outer Paint/Hunt frame geometry intact.
-         * Reclaim 3px from the option buttons and reserve that space for
-         * the header so "색칠 시간 / 사냥 시간" cannot be clipped.
+         * The waiting panel uses a 320x500 authoring frame and is uniformly
+         * scaled on every mobile device. Reserve a real 116px timing area
+         * inside that frame, then give each Paint/Hunt section its own:
+         *
+         *   17px header
+         *    2px gap
+         *   28px button row
+         *
+         * Nothing is allowed to escape its section frame.
          */
+        const waitingTiming =
+            this.waitingRoomRoot
+                ?.querySelector<HTMLElement>(
+                    '.ch-waiting-timing',
+                );
+
+        if (
+            waitingTiming &&
+            this.mobileControlsEnabled
+        ) {
+            waitingTiming.style.setProperty(
+                'display',
+                'grid',
+                'important',
+            );
+            waitingTiming.style.setProperty(
+                'grid-template-rows',
+                'repeat(2, minmax(54px, 1fr))',
+                'important',
+            );
+            waitingTiming.style.setProperty(
+                'gap',
+                '4px',
+                'important',
+            );
+            waitingTiming.style.setProperty(
+                'min-height',
+                '116px',
+                'important',
+            );
+            waitingTiming.style.setProperty(
+                'height',
+                '116px',
+                'important',
+            );
+            waitingTiming.style.setProperty(
+                'overflow',
+                'hidden',
+                'important',
+            );
+            waitingTiming.style.setProperty(
+                'box-sizing',
+                'border-box',
+                'important',
+            );
+        }
+
         this.waitingRoomRoot
             ?.querySelectorAll<HTMLElement>(
                 '.ch-waiting-timing section',
@@ -21658,18 +21712,48 @@ export class GameScene extends Phaser.Scene {
                         this.mobileControlsEnabled
                     ) {
                         section.style.setProperty(
+                            'display',
+                            'grid',
+                            'important',
+                        );
+                        section.style.setProperty(
+                            'grid-template-rows',
+                            '17px 28px',
+                            'important',
+                        );
+                        section.style.setProperty(
+                            'row-gap',
+                            '2px',
+                            'important',
+                        );
+                        section.style.setProperty(
+                            'align-content',
+                            'center',
+                            'important',
+                        );
+                        section.style.setProperty(
+                            'min-height',
+                            '54px',
+                            'important',
+                        );
+                        section.style.setProperty(
+                            'height',
+                            '54px',
+                            'important',
+                        );
+                        section.style.setProperty(
+                            'padding',
+                            '3px 6px',
+                            'important',
+                        );
+                        section.style.setProperty(
                             'overflow',
-                            'visible',
+                            'hidden',
                             'important',
                         );
                         section.style.setProperty(
-                            'padding-top',
-                            '5px',
-                            'important',
-                        );
-                        section.style.setProperty(
-                            'padding-bottom',
-                            '4px',
+                            'box-sizing',
+                            'border-box',
                             'important',
                         );
                     }
@@ -21710,20 +21794,8 @@ export class GameScene extends Phaser.Scene {
                         'important',
                     );
                     title.style.setProperty(
-                        'line-height',
-                        this.mobileControlsEnabled
-                            ? '17px'
-                            : '1.05',
-                        'important',
-                    );
-                    title.style.setProperty(
                         'white-space',
                         'nowrap',
-                        'important',
-                    );
-                    title.style.setProperty(
-                        'overflow',
-                        'visible',
                         'important',
                     );
 
@@ -21741,13 +21813,29 @@ export class GameScene extends Phaser.Scene {
                             'important',
                         );
                         title.style.setProperty(
+                            'line-height',
+                            '17px',
+                            'important',
+                        );
+                        title.style.setProperty(
                             'margin',
-                            '0 0 2px',
+                            '0',
                             'important',
                         );
                         title.style.setProperty(
                             'padding',
                             '0',
+                            'important',
+                        );
+                        title.style.setProperty(
+                            'overflow',
+                            'hidden',
+                            'important',
+                        );
+                    } else {
+                        title.style.setProperty(
+                            'line-height',
+                            '1.05',
                             'important',
                         );
                     }
@@ -21764,13 +21852,33 @@ export class GameScene extends Phaser.Scene {
                         this.mobileControlsEnabled
                     ) {
                         options.style.setProperty(
-                            'align-items',
-                            'stretch',
+                            'display',
+                            'grid',
+                            'important',
+                        );
+                        options.style.setProperty(
+                            'grid-template-columns',
+                            'repeat(3, minmax(0, 1fr))',
+                            'important',
+                        );
+                        options.style.setProperty(
+                            'gap',
+                            '4px',
+                            'important',
+                        );
+                        options.style.setProperty(
+                            'height',
+                            '28px',
                             'important',
                         );
                         options.style.setProperty(
                             'min-height',
                             '28px',
+                            'important',
+                        );
+                        options.style.setProperty(
+                            'overflow',
+                            'hidden',
                             'important',
                         );
                     }
@@ -21804,11 +21912,11 @@ export class GameScene extends Phaser.Scene {
                     if (
                         this.mobileControlsEnabled
                     ) {
-                        /*
-                         * Old mobile CSS reserves 31px. 28px still has ample
-                         * touch/readability at the uniformly scaled panel and
-                         * gives the header three extra pixels.
-                         */
+                        button.style.setProperty(
+                            'width',
+                            '100%',
+                            'important',
+                        );
                         button.style.setProperty(
                             'height',
                             '28px',
@@ -21820,8 +21928,28 @@ export class GameScene extends Phaser.Scene {
                             'important',
                         );
                         button.style.setProperty(
+                            'max-height',
+                            '28px',
+                            'important',
+                        );
+                        button.style.setProperty(
+                            'margin',
+                            '0',
+                            'important',
+                        );
+                        button.style.setProperty(
                             'padding',
                             '2px 3px',
+                            'important',
+                        );
+                        button.style.setProperty(
+                            'box-sizing',
+                            'border-box',
+                            'important',
+                        );
+                        button.style.setProperty(
+                            'overflow',
+                            'hidden',
                             'important',
                         );
                     }
