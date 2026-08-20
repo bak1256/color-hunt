@@ -320,6 +320,7 @@ export type PaintReadyStateHandler = (
 ) => void;
 
 export class MultiplayerClient {
+  /* V1010341_CLIENT_GAMEPLAY_STABILITY_SAFE: reconnect/background/tab stability. */
   /* V1010340C_MULTIPLAYER_TRANSPORT_HARDENING_FINAL: aim traffic and hidden-tab movement hardening. */
   /*
    * V1010340C_MULTIPLAYER_TRANSPORT_HARDENING_FINAL / AIM_TRANSPORT
@@ -1631,6 +1632,12 @@ this.manualReconnectInFlight = false;
         if (this.room !== room || !isActiveRound()) {
           return;
         }
+
+        /*
+         * V1010341_CLIENT_GAMEPLAY_STABILITY_SAFE / FOREGROUND_WATCHDOG_RESET
+         * Hidden duration must not become instant ping silence on resume.
+         */
+        this.lastRoomPingAt = now;
 
         /*
          * V1010339C_CRITICAL_ROUND_STABILITY_CLIENT / BACKGROUND_FALSE_WARNING_GUARD

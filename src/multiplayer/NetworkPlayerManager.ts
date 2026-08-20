@@ -47,6 +47,7 @@ type NetworkPlayerView = {
 };
 
 export class NetworkPlayerManager {
+  /* V1010341_CLIENT_GAMEPLAY_STABILITY_SAFE: movement + paint rendering stability. */
   /* V1010339C_CRITICAL_ROUND_STABILITY_CLIENT: preserve exact thin-brush remote density. */
   /* V1010338_CRITICAL_GAMEPLAY_TRIPLE_FIX: remote Hunter smoothing + remote paint raster continuity. */
   /* V1010286B_LOBBY_AVATAR_EXACT_RENDER_PATHFIX: saved avatar strokes replay continuously with editor-equivalent geometry. */
@@ -98,7 +99,7 @@ export class NetworkPlayerManager {
   private readonly hunterMoveSpeed = 125;
   /* V1010242_HUNTER_FART_SKILL: poop debuff. */
   private localHunterSpeedMultiplier = 1;
-  private readonly sendInterval = 16;
+  private readonly sendInterval = 33;
   private lastSendTime = 0;
   private recentSentPositions:
     Array<{

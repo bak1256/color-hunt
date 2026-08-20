@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010341_CLIENT_GAMEPLAY_STABILITY_SAFE: Hunt input + chat stability. */
     /* V1010338_CRITICAL_GAMEPLAY_TRIPLE_FIX: eyedropper no-fill + Hunt final paint snapshot. */
     /* V1010337_DESKTOP_TITLE_PROFILE_BALANCE: desktop translated title fits; profile top/bottom padding balanced. */
     /* V1010336_DESKTOP_HEADER_RESTORE_CONTROLS: restore desktop BGM/help sizing; compact only translated title; add profile bottom room. */
@@ -29928,6 +29929,25 @@ export class GameScene extends Phaser.Scene {
         }
 
         if (phase === 'hunt') {
+            /*
+             * V1010341_CLIENT_GAMEPLAY_STABILITY_SAFE / HUNT_INPUT_RELEASE
+             * Aim can still work while a DOM input owns keyboard focus.
+             */
+            if (
+                this.chatInput &&
+                document.activeElement ===
+                    this.chatInput
+            ) {
+                this.chatInput.blur();
+            }
+
+            this.input.enabled = true;
+
+            if (this.input.keyboard) {
+                this.input.keyboard.enabled =
+                    true;
+            }
+
             /*
              * V1010339C_CRITICAL_ROUND_STABILITY_CLIENT / HUNTER_INPUT_RELEASE
              *
