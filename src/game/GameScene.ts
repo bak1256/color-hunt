@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010362_POOP_DEBUFF_5S_GAUGE: poop slowdown lasts 5s; Hunter-underfoot countdown gauge mirrors authoritative deadline. */
     /* V1010361_HIDER_FART_REACTION_LINES_I18N: fart detection text is voiced as the Hider's smell reaction in KO/JA/EN/ZH; mechanics unchanged. */
     /* V1010360_AVATAR_EDITOR_FINAL_TIP_SAMPLE_PREVIEW: pipette commits pointerup color; persistent brush footprint always previews exact paint. */
     /* V1010359B_AVATAR_EDITOR_EYEDROPPER_COLOR_PERSIST_FINAL: larger pipette chip and explicit sampled-color persistence across tool switches. */
@@ -4741,7 +4742,7 @@ export class GameScene extends Phaser.Scene {
     private readonly practiceFartRadius = 110;
     private readonly practiceFartCost = 36;
     private readonly practiceFartRecoverPerSecond = 0.75;
-    private readonly practicePoopDurationMs = 8_000;
+    private readonly practicePoopDurationMs = 5_000;
 
     /*
      * V1010271_STABILIZE_PRACTICE_FART_AND_BGM: Practice owns its own authoritative poop timer.
@@ -42647,6 +42648,186 @@ export class GameScene extends Phaser.Scene {
         }
 
         /*
+         * V1010362_POOP_DEBUFF_5S_GAUGE: compact poop-debuff countdown directly under the Hunter.
+         * Everyone who receives the poop burst can see the remaining penalty,
+         * and it follows the Hunter while shrinking from full -> empty.
+         */
+        {
+            const gaugeWidth =
+                46;
+            const gaugeHeight =
+                5;
+
+            const gauge =
+                this.trackTransientGameplayVfx(
+                    this.add.graphics()
+                        .setDepth(
+                            23010,
+                        ),
+                );
+
+            const secondsText =
+                this.trackTransientGameplayVfx(
+                    this.add.text(
+                        0,
+                        0,
+                        '',
+                        {
+                            fontFamily:
+                                'monospace',
+                            fontSize:
+                                this.mobileControlsEnabled
+                                    ? '8px'
+                                    : '9px',
+                            fontStyle:
+                                'bold',
+                            color:
+                                '#fff7df',
+                            stroke:
+                                '#3b2418',
+                            strokeThickness:
+                                2,
+                        },
+                    )
+                        .setOrigin(
+                            0.5,
+                            0,
+                        )
+                        .setDepth(
+                            23011,
+                        ),
+                );
+
+            const redrawDebuffGauge =
+                (): void => {
+                    if (
+                        !gauge.active ||
+                        !secondsText.active
+                    ) {
+                        return;
+                    }
+
+                    const p =
+                        getHunterPosition();
+
+                    const remainingMs =
+                        Math.max(
+                            0,
+                            localUntil -
+                                Date.now(),
+                        );
+
+                    const ratio =
+                        Phaser.Math.Clamp(
+                            remainingMs /
+                                5_000,
+                            0,
+                            1,
+                        );
+
+                    const x =
+                        p.x -
+                        gaugeWidth /
+                            2;
+                    const y =
+                        p.y +
+                        23;
+
+                    gauge.clear();
+
+                    gauge
+                        .fillStyle(
+                            0x251a14,
+                            0.72,
+                        )
+                        .fillRoundedRect(
+                            x,
+                            y,
+                            gaugeWidth,
+                            gaugeHeight,
+                            2,
+                        );
+
+                    if (ratio > 0) {
+                        gauge
+                            .fillStyle(
+                                0xf1c84b,
+                                0.95,
+                            )
+                            .fillRoundedRect(
+                                x + 1,
+                                y + 1,
+                                Math.max(
+                                    1,
+                                    (
+                                        gaugeWidth -
+                                        2
+                                    ) *
+                                        ratio,
+                                ),
+                                gaugeHeight -
+                                    2,
+                                1,
+                            );
+                    }
+
+                    gauge
+                        .lineStyle(
+                            1,
+                            0xfff0cf,
+                            0.9,
+                        )
+                        .strokeRoundedRect(
+                            x,
+                            y,
+                            gaugeWidth,
+                            gaugeHeight,
+                            2,
+                        );
+
+                    secondsText
+                        .setPosition(
+                            p.x,
+                            y + 6,
+                        )
+                        .setText(
+                            (
+                                remainingMs /
+                                1000
+                            ).toFixed(
+                                1,
+                            ) +
+                                's',
+                        );
+                };
+
+            redrawDebuffGauge();
+
+            const gaugeTimer =
+                this.time.addEvent({
+                    delay:
+                        50,
+                    loop:
+                        true,
+                    callback:
+                        () => {
+                            redrawDebuffGauge();
+
+                            if (
+                                Date.now() >=
+                                localUntil
+                            ) {
+                                gaugeTimer.remove(
+                                    false,
+                                );
+                                gauge.destroy();
+                                secondsText.destroy();
+                            }
+                        },
+                });
+        }
+
+        /*
          * Slowdown explanation only for the affected Hunter.
          * Follow continuously below the character for the whole display time.
          */
@@ -42655,13 +42836,13 @@ export class GameScene extends Phaser.Scene {
         ) {
             const slowLabels = {
                 ko:
-                    '똥을 지려서 느려졌습니다 · 이동속도 -60%',
+                    '💩 똥을 지렸습니다 · 5초 동안 이동속도 -60%',
                 ja:
-                    '漏らして遅くなりました · 移動速度 -60%',
+                    '💩 漏らしました · 5秒間 移動速度 -60%',
                 en:
-                    'Pooped yourself · Move speed -60%',
+                    '💩 You pooped yourself · Move speed -60% for 5s',
                 zh:
-                    '拉裤子了 · 移速 -60%',
+                    '💩 拉裤子了 · 5秒内移速 -60%',
             } as const;
 
             const p =
@@ -42671,7 +42852,7 @@ export class GameScene extends Phaser.Scene {
                 this.trackTransientGameplayVfx(
                     this.add.text(
                         p.x,
-                        p.y + 37,
+                        p.y + 43,
                         slowLabels[
                             getLanguage()
                         ],
@@ -42715,7 +42896,7 @@ export class GameScene extends Phaser.Scene {
 
             followForLifetime(
                 slowText,
-                37,
+                43,
                 5000,
             );
 
@@ -42777,7 +42958,7 @@ export class GameScene extends Phaser.Scene {
                 const progress =
                     Phaser.Math.Clamp(
                         localPoopRemainingMs /
-                            8_000,
+                            5_000,
                         0,
                         1,
                     );
