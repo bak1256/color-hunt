@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010357_AVATAR_EDITOR_TOOL_STATE_PREVIEW: size preview stays at current tip; tool mode preserved; live pipette preview. */
     /* V1010356E_AVATAR_EDITOR_PRECISION_TOOLS_EXACT: exact-source avatar editor tool tip/scale/preview polish. */
     /* V1010354_AVATAR_EDITOR_CAMO_SAMPLER_BACKGROUND: larger avatar sampler canvas with real eyedropper-readable camo background. */
     /* V1010353_AVATAR_EDITOR_MOBILE_TOOL_HALF_SIZE: mobile avatar-editor tool visual scale = 50%. */
@@ -17183,6 +17184,12 @@ export class GameScene extends Phaser.Scene {
                     fill="#eef8fb" stroke="#26363d" stroke-width="3"
                     stroke-linejoin="round"/>
 
+                <!-- V1010357_AVATAR_EDITOR_TOOL_STATE_PREVIEW: sampled-color chip, same visual contract as game/practice -->
+                <circle cx="8" cy="33" r="8"
+                    fill="#26363d" fill-opacity="0.92"/>
+                <circle cx="8" cy="33" r="5.5"
+                    fill="currentColor" stroke="#ffffff" stroke-width="1.6"/>
+
                 <!-- glass shoulder/barrel -->
                 <path d="M21 21 L67 73"
                     fill="none" stroke="#304b54" stroke-width="17"
@@ -17315,10 +17322,88 @@ export class GameScene extends Phaser.Scene {
                         : brushCursorSvg;
 
                 /*
-                 * V1010350_AVATAR_EDITOR_FULL_PAINT_PARITY: currentColor feeds brush bristles and pipette liquid.
+                 * V1010357_AVATAR_EDITOR_TOOL_STATE_PREVIEW / LIVE_EYEDROPPER_COLOR
+                 *
+                 * Brush: selected paint color.
+                 * Pipette: the REAL canvas pixel under the SAME visible tip
+                 * used by sampleEditorColor().
                  */
+                let floatingToolColor =
+                    selectedColor;
+
+                if (eyedropperArmed) {
+                    const tip =
+                        getAvatarToolTipClient(
+                            clientX,
+                            clientY,
+                        );
+
+                    const rect =
+                        canvas.getBoundingClientRect();
+
+                    const px =
+                        Phaser.Math.Clamp(
+                            Math.floor(
+                                (
+                                    tip.x -
+                                    rect.left
+                                ) /
+                                Math.max(
+                                    1,
+                                    rect.width,
+                                ) *
+                                canvas.width,
+                            ),
+                            0,
+                            canvas.width - 1,
+                        );
+
+                    const py =
+                        Phaser.Math.Clamp(
+                            Math.floor(
+                                (
+                                    tip.y -
+                                    rect.top
+                                ) /
+                                Math.max(
+                                    1,
+                                    rect.height,
+                                ) *
+                                canvas.height,
+                            ),
+                            0,
+                            canvas.height - 1,
+                        );
+
+                    const previewContext =
+                        canvas.getContext('2d');
+
+                    if (previewContext) {
+                        const pixel =
+                            previewContext.getImageData(
+                                px,
+                                py,
+                                1,
+                                1,
+                            ).data;
+
+                        if (pixel[3] > 0) {
+                            floatingToolColor =
+                                (
+                                    pixel[0] <<
+                                    16
+                                ) |
+                                (
+                                    pixel[1] <<
+                                    8
+                                ) |
+                                pixel[2];
+                        }
+                    }
+                }
+
                 floatingTool.style.color =
-                    `#${selectedColor
+                    `#${floatingToolColor
                         .toString(16)
                         .padStart(
                             6,
@@ -18018,7 +18103,10 @@ export class GameScene extends Phaser.Scene {
 
         const drawBrushPreview =
             (): void => {
-                if (!hoverPoint) {
+                if (
+                    !hoverPoint ||
+                    eyedropperArmed
+                ) {
                     return;
                 }
 
@@ -18460,37 +18548,19 @@ export class GameScene extends Phaser.Scene {
                 );
 
                 /*
-                 * V1010347_PAINT_TOOL_UX_UNIFICATION / AVATAR_SIZE_CENTER
-                 * Same contract as Hider paint: size adjustment is a ROUND
-                 * brush operation and preview is forced to canvas center.
+                 * V1010357_AVATAR_EDITOR_TOOL_STATE_PREVIEW / SIZE_PREVIEW_IN_PLACE
+                 *
+                 * Never teleport the brush while the user adjusts size.
+                 * Keep:
+                 *   - circle as circle
+                 *   - square as square
+                 *   - straight-line mode armed
+                 *   - eyedropper armed
+                 *   - current visible tool position
+                 *
+                 * replay() redraws the semi-transparent footprint at the
+                 * existing hoverPoint, i.e. the CURRENT real brush-tip point.
                  */
-                eyedropperArmed =
-                    false;
-                straightLineArmed =
-                    false;
-                selectedShape =
-                    'circle';
-                straightLineStart =
-                    undefined;
-                const rect =
-                    canvas.getBoundingClientRect();
-                hoverPoint =
-                    canvasToLogical(
-                        rect.left + rect.width / 2,
-                        rect.top + rect.height / 2,
-                    );
-
-                floatingTool.innerHTML =
-                    brushCursorSvg;
-                floatingTool.style.left =
-                    `calc(50% - ${80 * avatarMobileToolScale}px)`;
-                floatingTool.style.top =
-                    `calc(50% - ${90 * avatarMobileToolScale}px)`;
-                floatingTool.style.display =
-                    this.mobileControlsEnabled
-                        ? 'flex'
-                        : 'none';
-
                 refreshToolStates();
                 replay();
             },
@@ -19445,6 +19515,9 @@ export class GameScene extends Phaser.Scene {
                 straightLineArmed =
                     false;
 
+                floatingTool.innerHTML =
+                    brushCursorSvg;
+
                 refreshToolStates();
                 replay();
             },
@@ -19464,6 +19537,9 @@ export class GameScene extends Phaser.Scene {
                     false;
                 straightLineArmed =
                     false;
+
+                floatingTool.innerHTML =
+                    brushCursorSvg;
 
                 refreshToolStates();
                 replay();
@@ -19488,6 +19564,12 @@ export class GameScene extends Phaser.Scene {
                 straightLineArmed =
                     false;
 
+                /*
+                 * V1010357_AVATAR_EDITOR_TOOL_STATE_PREVIEW / IMMEDIATE_EYEDROPPER_ART
+                 */
+                floatingTool.innerHTML =
+                    dropperCursorSvg;
+
                 refreshToolStates();
                 replay();
             },
@@ -19505,6 +19587,13 @@ export class GameScene extends Phaser.Scene {
                     true;
                 eyedropperArmed =
                     false;
+
+                /*
+                 * V1010357_AVATAR_EDITOR_TOOL_STATE_PREVIEW: line uses the same brush head; only path constraint
+                 * changes, so size adjustment must NOT leave line mode.
+                 */
+                floatingTool.innerHTML =
+                    brushCursorSvg;
 
                 refreshToolStates();
                 replay();
