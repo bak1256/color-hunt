@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010367_CLIENT_RECONNECT_SNAPSHOT_CONVERGENCE: reconnect recovery waits for authoritative paint convergence and avoids snapshot storms. */
     /* V1010365_MOBILE_PRECISION_CUSTOMIZATION_PAINT: mobile Lobby/Hunter customization uses drag-to-position then stationary hold-to-paint; Hider camouflage unchanged. */
     /* V1010363_POOP_SLOW_TEXT_SPACING: move poop slowdown explanation slightly below the under-Hunter countdown gauge. */
     /* V1010362_POOP_DEBUFF_5S_GAUGE: poop slowdown lasts 5s; Hunter-underfoot countdown gauge mirrors authoritative deadline. */
@@ -510,6 +511,23 @@ export class GameScene extends Phaser.Scene {
     private paintReadyHiderCount = 0;
     private hudPhaseDurationMs = 1;
     private lastAuthoritativePhaseCheckAt = 0;
+
+    /*
+     * V1010367_CLIENT_RECONNECT_SNAPSHOT_CONVERGENCE / SCENE_PAINT_BARRIER
+     *
+     * The captured failure showed Hunt timer advancing while player camouflage
+     * and actors had not converged. During recovery, do not rebuild Paint/Hunt
+     * until one authoritative paint snapshot arrives (bounded timeout).
+     */
+    private recoveryPaintSnapshotPending =
+        false;
+
+    private recoveryPaintSnapshotDeadline =
+        0;
+
+    private recoveryPaintSnapshotGeneration =
+        0;
+
     private knownAliveState =
         new Map<string, boolean>();
 
@@ -8437,6 +8455,61 @@ export class GameScene extends Phaser.Scene {
         const authoritativeEndsAt =
             multiplayerClient.getPhaseEndsAt();
 
+        const phaseNeedsPaintConvergence =
+            authoritativePhase === 'paint' ||
+            authoritativePhase === 'hunt';
+
+        if (
+            phaseNeedsPaintConvergence &&
+            this.recoveryPaintSnapshotPending &&
+            this.time.now <
+                this.recoveryPaintSnapshotDeadline
+        ) {
+            /*
+             * V1010367_CLIENT_RECONNECT_SNAPSHOT_CONVERGENCE / WAIT_FOR_PAINT
+             * Player Schema exists, but do not open a half-white/half-frozen
+             * Paint/Hunt view before authoritative camouflage arrives.
+             */
+            multiplayerClient
+                .requestRoundPaintState();
+
+            if (attempt < 30) {
+                const generation =
+                    this.recoveryPaintSnapshotGeneration;
+
+                this.time.delayedCall(
+                    120,
+                    () => {
+                        if (
+                            generation ===
+                                this.recoveryPaintSnapshotGeneration &&
+                            multiplayerClient.getRoom() ===
+                                room
+                        ) {
+                            this.resyncGameplayAfterConnectionRecovery(
+                                attempt + 1,
+                            );
+                        }
+                    },
+                );
+            }
+
+            return;
+        }
+
+        /*
+         * Bound recovery. If the paint response itself is lost, never trap the
+         * player forever; rebuild after the 2.2s ceiling and keep requesting
+         * through the normal throttled convergence path.
+         */
+        if (
+            phaseNeedsPaintConvergence &&
+            this.recoveryPaintSnapshotPending
+        ) {
+            this.recoveryPaintSnapshotPending =
+                false;
+        }
+
         /*
          * Re-enter even when phase === this.phase. The purpose is to rebuild
          * role-dependent camera/UI/actors after a replacement sessionId.
@@ -9011,6 +9084,17 @@ export class GameScene extends Phaser.Scene {
                     strokes:
                         NetworkPaintStroke[],
                 ) => {
+                    /*
+                     * V1010367_CLIENT_RECONNECT_SNAPSHOT_CONVERGENCE / PAINT_ACK
+                     * Empty or non-empty, this message is the authoritative
+                     * server response we were waiting for.
+                     */
+                    const wasRecoveryPending =
+                        this.recoveryPaintSnapshotPending;
+
+                    this.recoveryPaintSnapshotPending =
+                        false;
+
                     const localSessionId =
                         multiplayerClient
                             .getSessionId();
@@ -9191,6 +9275,20 @@ export class GameScene extends Phaser.Scene {
                                         },
                                     );
                                 }
+                            },
+                        );
+                    }
+
+                    if (
+                        wasRecoveryPending &&
+                        multiplayerClient.isConnected()
+                    ) {
+                        this.time.delayedCall(
+                            0,
+                            () => {
+                                this.resyncGameplayAfterConnectionRecovery(
+                                    31,
+                                );
                             },
                         );
                     }
@@ -9771,6 +9869,22 @@ export class GameScene extends Phaser.Scene {
         this.networkUnsubscribers.push(
             multiplayerClient.onConnectionDrop(
                 () => {
+                    if (
+                        this.phase === 'paint' ||
+                        this.phase === 'hunt' ||
+                        this.phase === 'countdown'
+                    ) {
+                        this.recoveryPaintSnapshotPending =
+                            true;
+
+                        this.recoveryPaintSnapshotDeadline =
+                            this.time.now +
+                            2200;
+
+                        this.recoveryPaintSnapshotGeneration +=
+                            1;
+                    }
+
                     this.showStatus(
                         tr('연결이 불안정합니다. 재접속 중...'),
                     );
@@ -9785,10 +9899,39 @@ export class GameScene extends Phaser.Scene {
                     this.attachRoleDisconnectCountdownListener();
 
                     /*
+                     * V1010367_CLIENT_RECONNECT_SNAPSHOT_CONVERGENCE / RECOVERY_START
+                     *
+                     * Role/phase alone is insufficient. Ask for authoritative
+                     * paint first and let resyncGameplay... wait until it arrives.
+                     */
+                    if (
+                        this.phase === 'paint' ||
+                        this.phase === 'hunt' ||
+                        this.phase === 'countdown' ||
+                        multiplayerClient.getPhase() === 'paint' ||
+                        multiplayerClient.getPhase() === 'hunt'
+                    ) {
+                        this.recoveryPaintSnapshotPending =
+                            true;
+
+                        this.recoveryPaintSnapshotDeadline =
+                            this.time.now +
+                            2200;
+
+                        this.recoveryPaintSnapshotGeneration +=
+                            1;
+
+                        multiplayerClient
+                            .requestRoundPaintState(
+                                true,
+                            );
+                    }
+
+                    /*
                      * v0.10.10.231:
                      * Connection recovery is not complete until the Scene has
                      * rebuilt itself from the replacement Room's authoritative
-                     * role + phase. Never leave Hunter in a Lobby/Hunt hybrid.
+                     * role + phase.
                      */
                     this.resyncGameplayAfterConnectionRecovery();
 
@@ -9822,7 +9965,7 @@ export class GameScene extends Phaser.Scene {
                      * mobile ticks. Rebuild cheap authoritative state repeatedly
                      * so a Hider cannot remain visually stuck at Paint 0s.
                      */
-                    [0, 120, 360, 800, 1600, 3200].forEach(
+                    [0, 300, 1000, 2400].forEach(
                         (delay) => {
                             this.time.delayedCall(
                                 delay,

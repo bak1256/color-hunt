@@ -320,6 +320,7 @@ export type PaintReadyStateHandler = (
 ) => void;
 
 export class MultiplayerClient {
+  /* V1010367_CLIENT_RECONNECT_SNAPSHOT_CONVERGENCE: throttle heavy paint snapshots and converge reconnect state before gameplay rebuild. */
   /* V1010364_P0_MULTIPLAYER_STABILITY: reduce high-frequency aim transport; preserve large-turn bypass. */
   /* V1010345_CONNECTION_STABILITY_HARDENING: same-session recovery wins; fresh handoff is final fallback. */
   /* V1010341_CLIENT_GAMEPLAY_STABILITY_SAFE: reconnect/background/tab stability. */
@@ -475,6 +476,16 @@ this.phaseChangedHandlers.forEach(
 
   private readonly roundPaintStateHandlers =
     new Set<RoundPaintStateHandler>();
+
+  /*
+   * V1010367_CLIENT_RECONNECT_SNAPSHOT_CONVERGENCE / PAINT_SNAPSHOT_THROTTLE
+   * A full round snapshot can replay thousands of raster stamps on mobile.
+   */
+  private lastRoundPaintStateRequestAt =
+    0;
+
+  private readonly roundPaintStateRequestMinIntervalMs =
+    900;
 
   private readonly reconnectedPlayerPaintHandlers =
     new Set<ReconnectedPlayerPaintHandler>();
@@ -1538,6 +1549,7 @@ this.lastRoomPingAt = Date.now();
     this.snapshotPaintDurationMs = 120_000;
     this.snapshotHuntDurationMs = 80_000;
     this.deliveredPhase = "";
+    this.lastRoundPaintStateRequestAt = 0;
 this.room = room;
 
     /*
@@ -1878,6 +1890,7 @@ this.manualReconnectInFlight = false;
                  */
                 this.requestLobbySnapshot();
                 this.requestPaintReadyState();
+                this.requestRoundPaintState();
               }
             },
           );
@@ -2058,13 +2071,18 @@ this.manualReconnectInFlight = false;
         this.requestLobbySnapshot();
         this.requestPaintReadyState();
         this.requestAvatarPresets();
-        this.requestRoundPaintState();
 
         /*
-         * V1010295_ALL_PHASE_RECONNECT: repeated pulses are cheap and make same-phase recovery
-         * deterministic on suspended mobile browsers.
+         * V1010367_CLIENT_RECONNECT_SNAPSHOT_CONVERGENCE: one authoritative full-paint request immediately.
          */
-        [120, 420, 1100].forEach(
+        this.requestRoundPaintState(
+          true,
+        );
+
+        /*
+         * Cheap phase/READY convergence can pulse more often than raster paint.
+         */
+        [250, 1250].forEach(
           (delay) => {
             globalThis.setTimeout(
               () => {
@@ -2075,7 +2093,10 @@ this.manualReconnectInFlight = false;
                 this.deliveredPhase = "";
                 this.requestLobbySnapshot();
                 this.requestPaintReadyState();
-                this.requestRoundPaintState();
+
+                if (delay >= 1250) {
+                  this.requestRoundPaintState();
+                }
               },
               delay,
             );
@@ -3400,8 +3421,29 @@ this.manualReconnectInFlight = false;
     };
   }
 
-  requestRoundPaintState(): void {
-    this.room?.send(
+  requestRoundPaintState(
+    force = false,
+  ): void {
+    if (!this.room) {
+      return;
+    }
+
+    const now =
+      Date.now();
+
+    if (
+      !force &&
+      now -
+        this.lastRoundPaintStateRequestAt <
+        this.roundPaintStateRequestMinIntervalMs
+    ) {
+      return;
+    }
+
+    this.lastRoundPaintStateRequestAt =
+      now;
+
+    this.room.send(
       "request_round_paint_state",
       {},
     );
