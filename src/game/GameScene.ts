@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010371_ROOM_CREATE_RECOVERY: coalesce lobby polling and guarantee room-create failure recovery instead of infinite busy UI. */
     /* V1010370_LARGE_ROOM_TRANSPORT_BUDGET: common PC/mobile large-room transport budget; paint keeps every point but sends fewer messages. */
     /* V1010369_MOBILE_NETWORK_VISUAL_GUARD_BUDGET: mobile per-player visibility/name self-heal loops run at 4Hz; gameplay simulation remains full-rate. */
     /* V1010368_MOBILE_RENDER_BUDGET: throttle expensive mobile-only HUD/lobby redraws without changing movement, input, paint, network, or reconnect cadence. */
@@ -4481,6 +4482,11 @@ export class GameScene extends Phaser.Scene {
     private roomListObjects: Phaser.GameObjects.GameObject[] = [];
     private roomListRenderSerial = 0;
     private roomListRefreshEvent?: Phaser.Time.TimerEvent;
+    /*
+     * V1010371_ROOM_CREATE_RECOVERY / ROOM_LIST_COALESCE
+     * Never issue overlapping /api/rooms requests from timer/focus/pageshow.
+     */
+    private roomListRefreshInFlight = false;
     private roomListVisibilityRefreshBound = false;
     private hunterBlindPanel!: Phaser.GameObjects.Rectangle;
     private hunterBlindText!: Phaser.GameObjects.Text;
@@ -4959,8 +4965,8 @@ export class GameScene extends Phaser.Scene {
             .setVisible(true);
 
         try {
-            const room =
-                await multiplayerClient
+            const createPromise =
+                multiplayerClient
                     .createRoom({
                         playerName:
                             pending.playerName,
@@ -4971,6 +4977,31 @@ export class GameScene extends Phaser.Scene {
                         password:
                             pending.password,
                     });
+
+            const createTimeout =
+                new Promise<never>(
+                    (
+                        _resolve,
+                        reject,
+                    ) => {
+                        window.setTimeout(
+                            () => {
+                                reject(
+                                    new Error(
+                                        'V1010371_ROOM_CREATE_RECOVERY: room create timed out after 12s',
+                                    ),
+                                );
+                            },
+                            12_000,
+                        );
+                    },
+                );
+
+            const room =
+                await Promise.race([
+                    createPromise,
+                    createTimeout,
+                ]);
 
             if (
                 operationSerial !== undefined &&
@@ -5229,6 +5260,11 @@ export class GameScene extends Phaser.Scene {
                 .setVisible(false);
 
             this.showMainMenu();
+
+            this.setModalBusy(
+                false,
+                tr('방을 만들지 못했습니다.'),
+            );
 
             this.showStatus(
                 tr('방을 만들지 못했습니다.'),
@@ -16654,7 +16690,11 @@ export class GameScene extends Phaser.Scene {
         }
         this.roomListRefreshEvent =
             this.time.addEvent({
-                delay: 3000,
+                /*
+                 * V1010371_ROOM_CREATE_RECOVERY: 10s is enough for a lobby browser list and prevents
+                 * multiple open tabs from hammering /api/rooms.
+                 */
+                delay: 10000,
                 loop: true,
                 callback: () => {
                     if (
@@ -24343,6 +24383,15 @@ export class GameScene extends Phaser.Scene {
 
         list.replaceChildren();
 
+        if (
+            this.roomListRefreshInFlight
+        ) {
+            return;
+        }
+
+        this.roomListRefreshInFlight =
+            true;
+
         if (showLoading) {
             const loading =
                 document.createElement(
@@ -24718,6 +24767,9 @@ export class GameScene extends Phaser.Scene {
             list.appendChild(
                 failed,
             );
+        } finally {
+            this.roomListRefreshInFlight =
+                false;
         }
     }
 
