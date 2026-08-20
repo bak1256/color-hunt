@@ -79,6 +79,8 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010329B_FIX_DUPLICATE_HANDLER_CLOSE: remove accidental duplicate handleMobileViewportChange closure from v329. */
+    /* V1010329_CLEAN_MAIN_LOBBY_CANVAS_ANCHOR: Phaser owns canvas; lobby follows rendered canvas rectangle only. */
     /* V1010328_MAIN_LOBBY_SMALL_VIEWPORT_STAGE: stable 960x540 small-viewport MAIN lobby stage for browser/PWA/Fold. */
     /* V1010327_LOCK_MAIN_LOBBY_CANVAS_HEIGHT: freeze Phaser canvas on same-width mobile system-UI height growth in main lobby. */
     /* V1010326_MOBILE_LOBBY_SAFE_HEIGHT_PROFILE: mobile lobby safe height follows tolerant width profiles, never viewport orientation. */
@@ -165,43 +167,61 @@ export class GameScene extends Phaser.Scene {
             }
 
             /*
-             * The mobile software keyboard changes visual/layout viewport
-             * dimensions. That must reposition chat only, never rescale the
-             * whole 960x540 game.
+             * Software keyboard movement is not a real game resize.
              */
             if (
                 this.mobileChatViewportLocked
             ) {
-                /*
-                 * Software-keyboard viewport changes are not real game-layout
-                 * changes. Keep Phaser's canvas geometry frozen and reposition
-                 * only the DOM chat.
-                 */
                 this.updateChatKeyboardOffset();
                 return;
             }
 
             /*
-             * V1010328_MAIN_LOBBY_SMALL_VIEWPORT_STAGE: MAIN lobby physical geometry is controlled by the stable
-             * svh/svw stage above. Do not let Phaser re-read dynamic browser
-             * viewport dimensions while the lobby is visible.
+             * V1010329_CLEAN_MAIN_LOBBY_CANVAS_ANCHOR
+             *
+             * Phaser owns canvas geometry again.
+             * Refresh first, THEN attach lobby DOM to the resulting canvas.
              */
-            if (this.mainLobbyRoot) {
-                this.updateMainLobbyDomPosition();
-                this.updateControlsHelpPosition();
-                return;
-            }
-
             this.scale.refresh();
 
-            this.time.delayedCall(
-                80,
+            requestAnimationFrame(
                 () => {
                     if (
-                        this.sys.isActive()
+                        !this.sys.isActive()
                     ) {
-                        this.scale.refresh();
+                        return;
                     }
+
+                    this.updateMainLobbyDomPosition();
+                    this.updateWaitingRoomDomPosition();
+                    this.updateControlsHelpPosition();
+                },
+            );
+
+            this.time.delayedCall(
+                100,
+                () => {
+                    if (
+                        !this.sys.isActive()
+                    ) {
+                        return;
+                    }
+
+                    this.scale.refresh();
+
+                    requestAnimationFrame(
+                        () => {
+                            if (
+                                !this.sys.isActive()
+                            ) {
+                                return;
+                            }
+
+                            this.updateMainLobbyDomPosition();
+                            this.updateWaitingRoomDomPosition();
+                            this.updateControlsHelpPosition();
+                        },
+                    );
                 },
             );
         };
@@ -19338,130 +19358,9 @@ export class GameScene extends Phaser.Scene {
         this.mainLobbyRoomList =
             undefined;
 
-        /*
-         * V1010328_MAIN_LOBBY_SMALL_VIEWPORT_STAGE: leave MAIN lobby -> return canvas sizing to Phaser before
-         * waiting/gameplay DOM calculates against its canvas rectangle.
-         */
-        const canvasStyle =
-            this.game.canvas.style;
-
-        [
-            'position',
-            'left',
-            'top',
-            'width',
-            'height',
-            'max-width',
-            'max-height',
-            'margin',
-            'transform',
-            'transform-origin',
-        ].forEach(
-            (property) => {
-                canvasStyle.removeProperty(
-                    property,
-                );
-            },
-        );
-
-        if (this.sys.isActive()) {
-            this.scale.refresh();
-
-            requestAnimationFrame(
-                () => {
-                    if (
-                        this.sys.isActive()
-                    ) {
-                        this.scale.refresh();
-                    }
-                },
-            );
-        }
-
         this.setUnifiedBgmButtonVisible(
             true,
         );
-    }
-
-    /*
-     * V1010328_MAIN_LOBBY_SMALL_VIEWPORT_STAGE
-     *
-     * CSS small viewport units are stable while mobile browser chrome /
-     * navigation UI hides and shows. Use them as the physical MAIN-lobby stage.
-     */
-    private getMainLobbyStableMobileViewport(): {
-        left: number;
-        top: number;
-        width: number;
-        height: number;
-    } {
-        const viewport =
-            window.visualViewport;
-
-        let width =
-            viewport?.width ??
-            window.innerWidth;
-
-        let height =
-            viewport?.height ??
-            window.innerHeight;
-
-        if (
-            typeof CSS !== 'undefined' &&
-            CSS.supports(
-                'height',
-                '100svh',
-            )
-        ) {
-            const probe =
-                document.createElement(
-                    'div',
-                );
-
-            probe.style.cssText =
-                [
-                    'position:fixed',
-                    'left:0',
-                    'top:0',
-                    'width:100svw',
-                    'height:100svh',
-                    'pointer-events:none',
-                    'visibility:hidden',
-                    'contain:strict',
-                    'z-index:-2147483648',
-                ].join(';');
-
-            document.body.appendChild(
-                probe,
-            );
-
-            const rect =
-                probe.getBoundingClientRect();
-
-            if (
-                rect.width > 0 &&
-                rect.height > 0
-            ) {
-                width =
-                    rect.width;
-
-                height =
-                    rect.height;
-            }
-
-            probe.remove();
-        }
-
-        return {
-            left:
-                viewport?.offsetLeft ??
-                0,
-            top:
-                viewport?.offsetTop ??
-                0,
-            width,
-            height,
-        };
     }
 
     private updateMainLobbyDomPosition(): void {
@@ -19469,281 +19368,118 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
+        /*
+         * V1010329_CLEAN_MAIN_LOBBY_CANVAS_ANCHOR
+         *
+         * ONE source of truth for every environment:
+         *   installed PWA / normal browser / fullscreen / Fold open / Fold closed
+         *
+         * Phaser owns the canvas size.
+         * Main-lobby DOM only follows the ACTUAL rendered canvas rectangle.
+         *
+         * Never size or move the canvas from lobby code.
+         * Never use visualViewport/svh for lobby geometry.
+         */
         const rect =
             this.game.canvas
                 .getBoundingClientRect();
+
+        if (
+            rect.width <= 0 ||
+            rect.height <= 0
+        ) {
+            return;
+        }
 
         const coarsePointer =
             window.matchMedia(
                 '(pointer: coarse)',
             ).matches;
 
-        if (coarsePointer) {
-            /*
-             * V1010328_MAIN_LOBBY_SMALL_VIEWPORT_STAGE
-             *
-             * One stable stage for:
-             * - installed PWA/app
-             * - normal mobile browser
-             * - browser fullscreen
-             * - Fold closed/open
-             *
-             * Never stretch from dynamic visualViewport.height.
-             */
-            const stableViewport =
-                this.getMainLobbyStableMobileViewport();
+        /*
+         * Keep the exact same proportional composition on all mobile devices.
+         * The canvas itself already letterboxes/preserves the 960x540 world.
+         *
+         * Mobile gets a slightly tighter rail than desktop, but geometry still
+         * comes exclusively from the canvas rectangle.
+         */
+        const sideRatio =
+            coarsePointer
+                ? 0.008
+                : 0.014;
 
-            const stageScale =
-                Math.max(
-                    0.1,
-                    Math.min(
-                        stableViewport.width /
-                            this.gameWidth,
-                        stableViewport.height /
-                            this.gameHeight,
-                    ),
-                );
+        const topRatio =
+            coarsePointer
+                ? 0.055
+                : 0.082;
 
-            const stageWidth =
-                this.gameWidth *
-                stageScale;
+        const widthRatio =
+            coarsePointer
+                ? 0.984
+                : 0.972;
 
-            const stageHeight =
-                this.gameHeight *
-                stageScale;
-
-            const stageLeft =
-                stableViewport.left +
-                (
-                    stableViewport.width -
-                    stageWidth
-                ) /
-                    2;
-
-            const stageTop =
-                stableViewport.top +
-                (
-                    stableViewport.height -
-                    stageHeight
-                ) /
-                    2;
-
-            /*
-             * MAIN lobby only: CSS owns the physical canvas rectangle.
-             * Logical Phaser world remains 960x540.
-             */
-            const canvasStyle =
-                this.game.canvas.style;
-
-            canvasStyle.setProperty(
-                'position',
-                'fixed',
-                'important',
-            );
-            canvasStyle.setProperty(
-                'left',
-                stageLeft.toFixed(2) +
-                    'px',
-                'important',
-            );
-            canvasStyle.setProperty(
-                'top',
-                stageTop.toFixed(2) +
-                    'px',
-                'important',
-            );
-            canvasStyle.setProperty(
-                'width',
-                stageWidth.toFixed(2) +
-                    'px',
-                'important',
-            );
-            canvasStyle.setProperty(
-                'height',
-                stageHeight.toFixed(2) +
-                    'px',
-                'important',
-            );
-            canvasStyle.setProperty(
-                'max-width',
-                'none',
-                'important',
-            );
-            canvasStyle.setProperty(
-                'max-height',
-                'none',
-                'important',
-            );
-            canvasStyle.setProperty(
-                'margin',
-                '0',
-                'important',
-            );
-            canvasStyle.setProperty(
-                'transform',
-                'none',
-                'important',
-            );
-            canvasStyle.setProperty(
-                'transform-origin',
-                '0 0',
-                'important',
-            );
-
-            const sideInset =
-                Math.max(
-                    5,
-                    Math.min(
-                        10,
-                        stageWidth *
-                            0.008,
-                    ),
-                );
-
-            const topRail =
-                Math.max(
-                    30,
-                    Math.min(
-                        42,
-                        stageHeight *
-                            0.065,
-                    ),
-                );
-
-            const bottomInset =
-                Math.max(
-                    4,
-                    Math.min(
-                        8,
-                        stageHeight *
-                            0.012,
-                    ),
-                );
-
-            this.mainLobbyRoot.style
-                .setProperty(
-                    '--lobby-left',
-                    Math.round(
-                        stageLeft +
-                        sideInset,
-                    ) +
-                        'px',
-                );
-
-            this.mainLobbyRoot.style
-                .setProperty(
-                    '--lobby-top',
-                    Math.round(
-                        stageTop +
-                        topRail,
-                    ) +
-                        'px',
-                );
-
-            this.mainLobbyRoot.style
-                .setProperty(
-                    '--lobby-width',
-                    Math.round(
-                        Math.max(
-                            240,
-                            stageWidth -
-                                sideInset *
-                                    2,
-                        ),
-                    ) +
-                        'px',
-                );
-
-            this.mainLobbyRoot.style
-                .setProperty(
-                    '--lobby-height',
-                    Math.round(
-                        Math.max(
-                            220,
-                            stageHeight -
-                                topRail -
-                                bottomInset,
-                        ),
-                    ) +
-                        'px',
-                );
-
-            this.mainLobbyRoot.dataset
-                .stableViewportWidth =
-                String(
-                    Math.round(
-                        stableViewport.width,
-                    ),
-                );
-
-            this.mainLobbyRoot.dataset
-                .stableViewportHeight =
-                String(
-                    Math.round(
-                        stableViewport.height,
-                    ),
-                );
-
-            this.mainLobbyRoot.dataset
-                .stableStageWidth =
-                String(
-                    Math.round(
-                        stageWidth,
-                    ),
-                );
-
-            this.mainLobbyRoot.dataset
-                .stableStageHeight =
-                String(
-                    Math.round(
-                        stageHeight,
-                    ),
-                );
-
-            this.applyMainLobbyActionRuntimeLayout();
-            this.updateControlsHelpPosition();
-            return;
-        }
+        const heightRatio =
+            coarsePointer
+                ? 0.925
+                : 0.895;
 
         this.mainLobbyRoot.style
             .setProperty(
                 '--lobby-left',
-                `${Math.round(
+                Math.round(
                     rect.left +
                     rect.width *
-                        0.014,
-                )}px`,
+                        sideRatio,
+                ) +
+                    'px',
             );
 
         this.mainLobbyRoot.style
             .setProperty(
                 '--lobby-top',
-                `${Math.round(
+                Math.round(
                     rect.top +
                     rect.height *
-                        0.082,
-                )}px`,
+                        topRatio,
+                ) +
+                    'px',
             );
 
         this.mainLobbyRoot.style
             .setProperty(
                 '--lobby-width',
-                `${Math.round(
+                Math.round(
                     rect.width *
-                        0.972,
-                )}px`,
+                        widthRatio,
+                ) +
+                    'px',
             );
 
         this.mainLobbyRoot.style
             .setProperty(
                 '--lobby-height',
-                `${Math.round(
+                Math.round(
                     rect.height *
-                        0.895,
-                )}px`,
+                        heightRatio,
+                ) +
+                    'px',
             );
 
+        /*
+         * Remove all v328 diagnostics/ownership leftovers if this method runs
+         * after hot reload or a Fold transition.
+         */
+        delete this.mainLobbyRoot.dataset
+            .stableViewportWidth;
+        delete this.mainLobbyRoot.dataset
+            .stableViewportHeight;
+        delete this.mainLobbyRoot.dataset
+            .stableStageWidth;
+        delete this.mainLobbyRoot.dataset
+            .stableStageHeight;
+
         this.applyMainLobbyActionRuntimeLayout();
+        this.updateControlsHelpPosition();
     }
 
     /*
@@ -21513,6 +21249,31 @@ export class GameScene extends Phaser.Scene {
                     );
                 },
             );
+
+        /*
+         * V1010329_CLEAN_MAIN_LOBBY_CANVAS_ANCHOR: clear stale v328 canvas ownership before first lobby layout.
+         */
+        [
+            'position',
+            'left',
+            'top',
+            'width',
+            'height',
+            'max-width',
+            'max-height',
+            'margin',
+            'transform',
+            'transform-origin',
+        ].forEach(
+            (property) => {
+                this.game.canvas.style
+                    .removeProperty(
+                        property,
+                    );
+            },
+        );
+
+        this.scale.refresh();
 
         this.updateMainLobbyDomPosition();
         this.updateControlsHelpPosition();
