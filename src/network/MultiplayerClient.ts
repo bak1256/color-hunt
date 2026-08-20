@@ -293,6 +293,15 @@ export type HuntSettlingHandler = (
   remainingMs: number,
 ) => void;
 
+export type FinalCamouflageSnapshot = {
+  sessionId: string;
+  dataUrl: string;
+};
+
+export type FinalCamouflageSnapshotHandler = (
+  snapshot: FinalCamouflageSnapshot,
+) => void;
+
 export type StartGameErrorHandler = (
   message: string,
 ) => void;
@@ -324,6 +333,7 @@ export type PaintReadyStateHandler = (
 ) => void;
 
 export class MultiplayerClient {
+  /* V1010377_FINAL_CAMOUFLAGE_SNAPSHOT: Hunt receives immutable final camouflage PNGs instead of historical paint replay. */
   /* V1010375_READY_GO_SETTLING: receives the server's short Paint->Hunt settling deadline separately from normal phases. */
   /* V1010374_PAINT_FLOOD_FRAME_BUDGET: dense paint is not queued into an unstable/reconnecting transport. */
   /* V1010373_RECONNECT_SINGLE_AUTHORITY_GAMEPLAY_LOCK: reconnect has one transport owner; gameplay sends pause until the authoritative Room is stable. */
@@ -656,6 +666,9 @@ this.phaseChangedHandlers.forEach(
    */
   private readonly huntSettlingHandlers =
     new Set<HuntSettlingHandler>();
+
+  private readonly finalCamouflageSnapshotHandlers =
+    new Set<FinalCamouflageSnapshotHandler>();
 
   private readonly startGameErrorHandlers =
     new Set<StartGameErrorHandler>();
@@ -2668,6 +2681,57 @@ this.manualReconnectInFlight = false;
       },
     );
 
+    room.onMessage<FinalCamouflageSnapshot>(
+      "final_camouflage_snapshot",
+      (snapshot) => {
+        if (
+          !snapshot ||
+          typeof snapshot.sessionId !== "string" ||
+          typeof snapshot.dataUrl !== "string"
+        ) {
+          return;
+        }
+
+        this.finalCamouflageSnapshotHandlers
+          .forEach(
+            (handler) => {
+              handler(snapshot);
+            },
+          );
+      },
+    );
+
+    room.onMessage<{
+      snapshots?: FinalCamouflageSnapshot[];
+    }>(
+      "final_camouflage_snapshots",
+      (payload) => {
+        const snapshots =
+          Array.isArray(payload?.snapshots)
+            ? payload.snapshots
+            : [];
+
+        snapshots.forEach(
+          (snapshot) => {
+            if (
+              !snapshot ||
+              typeof snapshot.sessionId !== "string" ||
+              typeof snapshot.dataUrl !== "string"
+            ) {
+              return;
+            }
+
+            this.finalCamouflageSnapshotHandlers
+              .forEach(
+                (handler) => {
+                  handler(snapshot);
+                },
+              );
+          },
+        );
+      },
+    );
+
     room.onMessage<{
       endsAt?: number;
       serverNow?: number;
@@ -4016,6 +4080,46 @@ this.manualReconnectInFlight = false;
         handler,
       );
     };
+  }
+
+  onFinalCamouflageSnapshot(
+    handler: FinalCamouflageSnapshotHandler,
+  ): () => void {
+    this.finalCamouflageSnapshotHandlers
+      .add(handler);
+
+    return () => {
+      this.finalCamouflageSnapshotHandlers
+        .delete(handler);
+    };
+  }
+
+  sendFinalCamouflageSnapshot(
+    dataUrl: string,
+  ): void {
+    if (
+      !this.room ||
+      !this.isGameplayTransportStable() ||
+      !dataUrl.startsWith(
+        "data:image/png;base64,",
+      )
+    ) {
+      return;
+    }
+
+    this.room.send(
+      "final_camouflage_snapshot",
+      {
+        dataUrl,
+      },
+    );
+  }
+
+  requestFinalCamouflageSnapshots(): void {
+    this.room?.send(
+      "request_final_camouflage_snapshots",
+      {},
+    );
   }
 
   onHuntSettling(
