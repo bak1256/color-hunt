@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010316_MOBILE_WAITING_TIMING_PC_LIKE: compact PC-like Paint/Hunt timing cards on mobile. */
     /* V1010315_MOBILE_WAITING_TIMING_CONTAINED: keep Paint/Hunt headers and buttons entirely inside their frames. */
     /* V1010314_MOBILE_WAITING_HEADER_UNCLIP: reserve mobile Paint/Hunt header height without enlarging outer frames. */
     /* V1010313_PRACTICE_HEIGHT_TIMING_FRAME_SAFE: Practice same-height rhythm + frame-safe waiting timing text. */
@@ -21643,17 +21644,16 @@ export class GameScene extends Phaser.Scene {
         }
 
         /*
-         * V1010315_MOBILE_WAITING_TIMING_CONTAINED: mobile timing layout is now fully contained.
+         * V1010316_MOBILE_WAITING_TIMING_PC_LIKE: mobile waiting timing now follows the compact PC visual rhythm.
          *
-         * The waiting panel uses a 320x500 authoring frame and is uniformly
-         * scaled on every mobile device. Reserve a real 116px timing area
-         * inside that frame, then give each Paint/Hunt section its own:
+         * DO NOT enlarge the surrounding information panel.
+         * Each Paint/Hunt card is compact:
          *
-         *   17px header
-         *    2px gap
-         *   28px button row
+         *   title 14px
+         *   1px breathing gap
+         *   options 26px
          *
-         * Nothing is allowed to escape its section frame.
+         * Two cards + 4px gap = 94px total.
          */
         const waitingTiming =
             this.waitingRoomRoot
@@ -21672,7 +21672,7 @@ export class GameScene extends Phaser.Scene {
             );
             waitingTiming.style.setProperty(
                 'grid-template-rows',
-                'repeat(2, minmax(54px, 1fr))',
+                '45px 45px',
                 'important',
             );
             waitingTiming.style.setProperty(
@@ -21681,13 +21681,18 @@ export class GameScene extends Phaser.Scene {
                 'important',
             );
             waitingTiming.style.setProperty(
-                'min-height',
-                '116px',
+                'height',
+                '94px',
                 'important',
             );
             waitingTiming.style.setProperty(
-                'height',
-                '116px',
+                'min-height',
+                '94px',
+                'important',
+            );
+            waitingTiming.style.setProperty(
+                'max-height',
+                '94px',
                 'important',
             );
             waitingTiming.style.setProperty(
@@ -21718,12 +21723,12 @@ export class GameScene extends Phaser.Scene {
                         );
                         section.style.setProperty(
                             'grid-template-rows',
-                            '17px 28px',
+                            '14px 26px',
                             'important',
                         );
                         section.style.setProperty(
                             'row-gap',
-                            '2px',
+                            '1px',
                             'important',
                         );
                         section.style.setProperty(
@@ -21732,18 +21737,28 @@ export class GameScene extends Phaser.Scene {
                             'important',
                         );
                         section.style.setProperty(
-                            'min-height',
-                            '54px',
+                            'height',
+                            '45px',
                             'important',
                         );
                         section.style.setProperty(
-                            'height',
-                            '54px',
+                            'min-height',
+                            '45px',
+                            'important',
+                        );
+                        section.style.setProperty(
+                            'max-height',
+                            '45px',
                             'important',
                         );
                         section.style.setProperty(
                             'padding',
-                            '3px 6px',
+                            '2px 6px',
+                            'important',
+                        );
+                        section.style.setProperty(
+                            'margin',
+                            '0',
                             'important',
                         );
                         section.style.setProperty(
@@ -21782,13 +21797,6 @@ export class GameScene extends Phaser.Scene {
                         'important',
                     );
                     title.style.setProperty(
-                        'font-size',
-                        this.mobileControlsEnabled
-                            ? '11px'
-                            : '13px',
-                        'important',
-                    );
-                    title.style.setProperty(
                         'font-weight',
                         '900',
                         'important',
@@ -21804,17 +21812,27 @@ export class GameScene extends Phaser.Scene {
                     ) {
                         title.style.setProperty(
                             'height',
-                            '17px',
+                            '14px',
                             'important',
                         );
                         title.style.setProperty(
                             'min-height',
-                            '17px',
+                            '14px',
+                            'important',
+                        );
+                        title.style.setProperty(
+                            'max-height',
+                            '14px',
+                            'important',
+                        );
+                        title.style.setProperty(
+                            'font-size',
+                            '10.5px',
                             'important',
                         );
                         title.style.setProperty(
                             'line-height',
-                            '17px',
+                            '14px',
                             'important',
                         );
                         title.style.setProperty(
@@ -21833,6 +21851,11 @@ export class GameScene extends Phaser.Scene {
                             'important',
                         );
                     } else {
+                        title.style.setProperty(
+                            'font-size',
+                            '13px',
+                            'important',
+                        );
                         title.style.setProperty(
                             'line-height',
                             '1.05',
@@ -21868,12 +21891,22 @@ export class GameScene extends Phaser.Scene {
                         );
                         options.style.setProperty(
                             'height',
-                            '28px',
+                            '26px',
                             'important',
                         );
                         options.style.setProperty(
                             'min-height',
-                            '28px',
+                            '26px',
+                            'important',
+                        );
+                        options.style.setProperty(
+                            'max-height',
+                            '26px',
+                            'important',
+                        );
+                        options.style.setProperty(
+                            'margin',
+                            '0',
                             'important',
                         );
                         options.style.setProperty(
@@ -21891,13 +21924,6 @@ export class GameScene extends Phaser.Scene {
             )
             .forEach(
                 (button) => {
-                    button.style.setProperty(
-                        'font-size',
-                        this.mobileControlsEnabled
-                            ? '12px'
-                            : '14px',
-                        'important',
-                    );
                     button.style.setProperty(
                         'font-weight',
                         '900',
@@ -21919,17 +21945,22 @@ export class GameScene extends Phaser.Scene {
                         );
                         button.style.setProperty(
                             'height',
-                            '28px',
+                            '26px',
                             'important',
                         );
                         button.style.setProperty(
                             'min-height',
-                            '28px',
+                            '26px',
                             'important',
                         );
                         button.style.setProperty(
                             'max-height',
-                            '28px',
+                            '26px',
+                            'important',
+                        );
+                        button.style.setProperty(
+                            'font-size',
+                            '11px',
                             'important',
                         );
                         button.style.setProperty(
@@ -21950,6 +21981,12 @@ export class GameScene extends Phaser.Scene {
                         button.style.setProperty(
                             'overflow',
                             'hidden',
+                            'important',
+                        );
+                    } else {
+                        button.style.setProperty(
+                            'font-size',
+                            '14px',
                             'important',
                         );
                     }
