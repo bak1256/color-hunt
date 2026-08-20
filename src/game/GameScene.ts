@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010332_DESKTOP_LOBBY_RESTORE_MOBILE_KEEP: keep uniform Fold/mobile lobby, restore native-size desktop lobby. */
     /* V1010331_MAIN_LOBBY_GUIDE_WRAP: allow main-lobby guide subtitle to wrap to two lines without changing the stable frame. */
     /* V1010330_MAIN_LOBBY_UNIFORM_AUTHORING_FRAME: one fixed 960x510 lobby layout uniformly scales inside Phaser canvas. */
     /* V1010329B_FIX_DUPLICATE_HANDLER_CLOSE: remove accidental duplicate handleMobileViewportChange closure from v329. */
@@ -19373,16 +19374,6 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
-        /*
-         * V1010330_MAIN_LOBBY_UNIFORM_AUTHORING_FRAME
-         *
-         * ONE authoring layout everywhere:
-         *   960 x 510
-         *
-         * Fold closed/open, PWA, browser and browser fullscreen never reflow
-         * the lobby anymore. Only this WHOLE frame scales uniformly to fit
-         * inside the actual Phaser canvas.
-         */
         const rect =
             this.game.canvas
                 .getBoundingClientRect();
@@ -19394,149 +19385,271 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
-        const designWidth =
-            960;
+        const coarsePointer =
+            window.matchMedia(
+                '(pointer: coarse)',
+            ).matches;
 
-        const designHeight =
-            510;
+        if (coarsePointer) {
+            /*
+             * V1010332_DESKTOP_LOBBY_RESTORE_MOBILE_KEEP
+             *
+             * MOBILE / TABLET / FOLD:
+             * Keep the v330 solution exactly as-is.
+             * One 960x510 authoring frame uniformly scales inside Phaser canvas.
+             */
+            const designWidth =
+                960;
 
-        const edge =
-            6;
+            const designHeight =
+                510;
 
-        const availableWidth =
-            Math.max(
-                1,
-                rect.width -
-                    edge * 2,
+            const edge =
+                6;
+
+            const availableWidth =
+                Math.max(
+                    1,
+                    rect.width -
+                        edge * 2,
+                );
+
+            const availableHeight =
+                Math.max(
+                    1,
+                    rect.height -
+                        edge * 2,
+                );
+
+            const uniformScale =
+                Math.max(
+                    0.1,
+                    Math.min(
+                        availableWidth /
+                            designWidth,
+                        availableHeight /
+                            designHeight,
+                    ),
+                );
+
+            const renderedWidth =
+                designWidth *
+                uniformScale;
+
+            const renderedHeight =
+                designHeight *
+                uniformScale;
+
+            const left =
+                rect.left +
+                (
+                    rect.width -
+                        renderedWidth
+                ) /
+                    2;
+
+            const top =
+                rect.top +
+                (
+                    rect.height -
+                        renderedHeight
+                ) /
+                    2;
+
+            root.style.setProperty(
+                'position',
+                'fixed',
+                'important',
+            );
+            root.style.setProperty(
+                'left',
+                left.toFixed(2) +
+                    'px',
+                'important',
+            );
+            root.style.setProperty(
+                'top',
+                top.toFixed(2) +
+                    'px',
+                'important',
+            );
+            root.style.setProperty(
+                'right',
+                'auto',
+                'important',
+            );
+            root.style.setProperty(
+                'bottom',
+                'auto',
+                'important',
+            );
+            root.style.setProperty(
+                'width',
+                String(designWidth) +
+                    'px',
+                'important',
+            );
+            root.style.setProperty(
+                'height',
+                String(designHeight) +
+                    'px',
+                'important',
+            );
+            root.style.setProperty(
+                'min-width',
+                String(designWidth) +
+                    'px',
+                'important',
+            );
+            root.style.setProperty(
+                'min-height',
+                String(designHeight) +
+                    'px',
+                'important',
+            );
+            root.style.setProperty(
+                'max-width',
+                String(designWidth) +
+                    'px',
+                'important',
+            );
+            root.style.setProperty(
+                'max-height',
+                String(designHeight) +
+                    'px',
+                'important',
+            );
+            root.style.setProperty(
+                'transform',
+                'scale(' +
+                    uniformScale.toFixed(6) +
+                    ')',
+                'important',
+            );
+            root.style.setProperty(
+                'transform-origin',
+                'top left',
+                'important',
+            );
+            root.style.setProperty(
+                'overflow',
+                'hidden',
+                'important',
+            );
+            root.style.setProperty(
+                'box-sizing',
+                'border-box',
+                'important',
+            );
+        } else {
+            /*
+             * DESKTOP:
+             * Do NOT scale the entire lobby like mobile.
+             * Fill the normal rendered Phaser canvas with the original desktop
+             * proportions so text/buttons retain desktop size.
+             */
+            const desktopInsetX =
+                Math.max(
+                    10,
+                    rect.width *
+                        0.018,
+                );
+
+            const desktopInsetTop =
+                Math.max(
+                    16,
+                    rect.height *
+                        0.075,
+                );
+
+            const desktopInsetBottom =
+                Math.max(
+                    10,
+                    rect.height *
+                        0.025,
+                );
+
+            [
+                'min-width',
+                'min-height',
+                'max-width',
+                'max-height',
+                'transform',
+                'transform-origin',
+            ].forEach(
+                (property) => {
+                    root.style.removeProperty(
+                        property,
+                    );
+                },
             );
 
-        const availableHeight =
-            Math.max(
-                1,
-                rect.height -
-                    edge * 2,
+            root.style.setProperty(
+                'position',
+                'fixed',
+                'important',
             );
-
-        const uniformScale =
-            Math.max(
-                0.1,
-                Math.min(
-                    availableWidth /
-                        designWidth,
-                    availableHeight /
-                        designHeight,
-                ),
+            root.style.setProperty(
+                'left',
+                (
+                    rect.left +
+                    desktopInsetX
+                ).toFixed(2) +
+                    'px',
+                'important',
             );
-
-        const renderedWidth =
-            designWidth *
-            uniformScale;
-
-        const renderedHeight =
-            designHeight *
-            uniformScale;
-
-        const left =
-            rect.left +
-            (
-                rect.width -
-                renderedWidth
-            ) /
-                2;
-
-        const top =
-            rect.top +
-            (
-                rect.height -
-                renderedHeight
-            ) /
-                2;
-
-        root.style.setProperty(
-            'position',
-            'fixed',
-            'important',
-        );
-        root.style.setProperty(
-            'left',
-            left.toFixed(2) +
-                'px',
-            'important',
-        );
-        root.style.setProperty(
-            'top',
-            top.toFixed(2) +
-                'px',
-            'important',
-        );
-        root.style.setProperty(
-            'right',
-            'auto',
-            'important',
-        );
-        root.style.setProperty(
-            'bottom',
-            'auto',
-            'important',
-        );
-        root.style.setProperty(
-            'width',
-            String(designWidth) +
-                'px',
-            'important',
-        );
-        root.style.setProperty(
-            'height',
-            String(designHeight) +
-                'px',
-            'important',
-        );
-        root.style.setProperty(
-            'min-width',
-            String(designWidth) +
-                'px',
-            'important',
-        );
-        root.style.setProperty(
-            'min-height',
-            String(designHeight) +
-                'px',
-            'important',
-        );
-        root.style.setProperty(
-            'max-width',
-            String(designWidth) +
-                'px',
-            'important',
-        );
-        root.style.setProperty(
-            'max-height',
-            String(designHeight) +
-                'px',
-            'important',
-        );
-        root.style.setProperty(
-            'transform',
-            'scale(' +
-                uniformScale.toFixed(6) +
-                ')',
-            'important',
-        );
-        root.style.setProperty(
-            'transform-origin',
-            'top left',
-            'important',
-        );
-        root.style.setProperty(
-            'overflow',
-            'hidden',
-            'important',
-        );
-        root.style.setProperty(
-            'box-sizing',
-            'border-box',
-            'important',
-        );
+            root.style.setProperty(
+                'top',
+                (
+                    rect.top +
+                    desktopInsetTop
+                ).toFixed(2) +
+                    'px',
+                'important',
+            );
+            root.style.setProperty(
+                'right',
+                'auto',
+                'important',
+            );
+            root.style.setProperty(
+                'bottom',
+                'auto',
+                'important',
+            );
+            root.style.setProperty(
+                'width',
+                Math.max(
+                    760,
+                    rect.width -
+                        desktopInsetX *
+                            2,
+                ).toFixed(2) +
+                    'px',
+                'important',
+            );
+            root.style.setProperty(
+                'height',
+                Math.max(
+                    430,
+                    rect.height -
+                        desktopInsetTop -
+                        desktopInsetBottom,
+                ).toFixed(2) +
+                    'px',
+                'important',
+            );
+            root.style.setProperty(
+                'overflow',
+                'hidden',
+                'important',
+            );
+            root.style.setProperty(
+                'box-sizing',
+                'border-box',
+                'important',
+            );
+        }
 
         this.applyMainLobbyActionRuntimeLayout();
         this.updateControlsHelpPosition();
@@ -19555,6 +19668,11 @@ export class GameScene extends Phaser.Scene {
         if (!root) {
             return;
         }
+
+        const coarsePointer =
+            window.matchMedia(
+                '(pointer: coarse)',
+            ).matches;
 
         const set =
             (
@@ -19618,7 +19736,9 @@ export class GameScene extends Phaser.Scene {
         set(
             actions,
             'grid-template-rows',
-            '44px 78px 56px 56px 56px 54px minmax(52px, 1fr)',
+            coarsePointer
+                ? '44px 78px 56px 56px 56px 54px minmax(52px, 1fr)'
+                : '54px 94px 64px 64px 64px 62px minmax(66px, 1fr)',
         );
         set(actions, 'gap', '5px');
         set(actions, 'align-content', 'stretch');
@@ -19644,7 +19764,13 @@ export class GameScene extends Phaser.Scene {
                 ) ??
             null;
 
-        set(title, 'font-size', '24px');
+        set(
+            title,
+            'font-size',
+            coarsePointer
+                ? '24px'
+                : '28px',
+        );
         set(title, 'line-height', '1');
         set(title, 'white-space', 'nowrap');
 
@@ -19677,9 +19803,27 @@ export class GameScene extends Phaser.Scene {
                 );
                 set(button, 'align-items', 'center');
                 set(button, 'column-gap', '9px');
-                set(button, 'height', '56px');
-                set(button, 'min-height', '56px');
-                set(button, 'max-height', '56px');
+                set(
+                    button,
+                    'height',
+                    coarsePointer
+                        ? '56px'
+                        : '64px',
+                );
+                set(
+                    button,
+                    'min-height',
+                    coarsePointer
+                        ? '56px'
+                        : '64px',
+                );
+                set(
+                    button,
+                    'max-height',
+                    coarsePointer
+                        ? '56px'
+                        : '64px',
+                );
                 set(button, 'padding', '7px 10px');
                 set(button, 'margin', '0');
                 set(button, 'overflow', 'hidden');
@@ -19733,7 +19877,13 @@ export class GameScene extends Phaser.Scene {
                         'strong',
                     );
 
-                set(strong, 'font-size', '18px');
+                set(
+                    strong,
+                    'font-size',
+                    coarsePointer
+                        ? '18px'
+                        : '20px',
+                );
                 set(strong, 'line-height', '1.05');
                 set(strong, 'white-space', 'nowrap');
                 set(strong, 'overflow', 'hidden');
@@ -19743,7 +19893,13 @@ export class GameScene extends Phaser.Scene {
                         'small',
                     );
 
-                set(small, 'font-size', '11px');
+                set(
+                    small,
+                    'font-size',
+                    coarsePointer
+                        ? '11px'
+                        : '12px',
+                );
                 set(small, 'line-height', '1.08');
                 set(small, 'white-space', 'nowrap');
                 set(small, 'overflow', 'hidden');
@@ -19763,9 +19919,27 @@ export class GameScene extends Phaser.Scene {
         );
         set(practice, 'align-items', 'center');
         set(practice, 'column-gap', '9px');
-        set(practice, 'height', '54px');
-        set(practice, 'min-height', '54px');
-        set(practice, 'max-height', '54px');
+        set(
+            practice,
+            'height',
+            coarsePointer
+                ? '54px'
+                : '62px',
+        );
+        set(
+            practice,
+            'min-height',
+            coarsePointer
+                ? '54px'
+                : '62px',
+        );
+        set(
+            practice,
+            'max-height',
+            coarsePointer
+                ? '54px'
+                : '62px',
+        );
         set(practice, 'padding', '6px 10px');
         set(practice, 'margin', '0');
         set(practice, 'overflow', 'hidden');
@@ -19862,7 +20036,13 @@ export class GameScene extends Phaser.Scene {
         set(guide, 'align-items', 'center');
         set(guide, 'column-gap', '8px');
         set(guide, 'height', '100%');
-        set(guide, 'min-height', '52px');
+        set(
+            guide,
+            'min-height',
+            coarsePointer
+                ? '52px'
+                : '66px',
+        );
         set(guide, 'max-height', 'none');
         set(guide, 'padding', '5px 10px');
         set(guide, 'box-sizing', 'border-box');
