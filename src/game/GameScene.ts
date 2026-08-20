@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010347_PAINT_TOOL_UX_UNIFICATION: unified brush/pipette/line UX for Hider paint + lobby avatar editor. */
     /* V1010344B_HIDER_SELF_PAINT_HUNT_SETTLE: preserve the owner's Hider camouflage through Hunt transition. */
     /* V1010343_URGENT_HUNTER_INPUT_JITTER_EYEDROPPER: Hunter input/focus recovery + eyedropper hardening. */
     private gameplayDocumentWasFocused =
@@ -2676,11 +2677,10 @@ export class GameScene extends Phaser.Scene {
                             performance.now() + 500;
 
                         if (this.phase === 'paint') {
-                            if (this.eyedropperArmed) {
-                                this.showMobileIdleEyedropperGuide();
-                            } else {
-                                this.showMobileIdleBrushGuide();
-                            }
+                            /*
+                             * V1010347_PAINT_TOOL_UX_UNIFICATION / PINCH_RELEASE_CENTER
+                             */
+                            this.centerMobilePaintToolGuide();
                         }
                     }
                 }
@@ -3232,11 +3232,10 @@ export class GameScene extends Phaser.Scene {
                         wasPinching &&
                         this.phase === 'paint'
                     ) {
-                        if (this.eyedropperArmed) {
-                            this.showMobileIdleEyedropperGuide();
-                        } else {
-                            this.showMobileIdleBrushGuide();
-                        }
+                        /*
+                         * V1010347_PAINT_TOOL_UX_UNIFICATION / PINCH_RELEASE_CENTER
+                         */
+                        this.centerMobilePaintToolGuide();
                     }
                 }
             };
@@ -7642,19 +7641,25 @@ export class GameScene extends Phaser.Scene {
                         sizeInput.value,
                     ),
                 );
-                this.syncMobilePaintDockUi();
 
                 /*
-                 * v0.10.10.194:
-                 * A DOM range input may temporarily become the browser's
-                 * active pointer target. Never let that make the in-game
-                 * brush disappear: redraw the persistent brush now and once
-                 * more on the next animation frame after the slider settles.
+                 * V1010347_PAINT_TOOL_UX_UNIFICATION / SIZE_SLIDER_CENTER
+                 * Brush size is a brush operation. If the pipette was selected,
+                 * intentionally return to ROUND brush and show the footprint at
+                 * screen center where the timer/HUD cannot hide it.
                  */
-                this.showMobileIdleBrushGuide();
+                if (this.eyedropperArmed) {
+                    this.activateMobileBrushTool(
+                        'circle',
+                    );
+                }
+
+                this.syncMobilePaintDockUi();
+                this.centerMobilePaintToolGuide();
+
                 window.requestAnimationFrame(
                     () => {
-                        this.showMobileIdleBrushGuide();
+                        this.centerMobilePaintToolGuide();
                     },
                 );
             },
@@ -7780,6 +7785,51 @@ export class GameScene extends Phaser.Scene {
             this.mobilePaintSizeValue.textContent =
                 `${this.brushSize}px`;
         }
+    }
+
+    /*
+     * V1010347_PAINT_TOOL_UX_UNIFICATION / CENTER_TOOL_GUIDE
+     * Sliders and pinch gestures can hide the brush under HUD/fingers.
+     * Put the active tool at the visual center after precision adjustments.
+     */
+    private centerMobilePaintToolGuide(
+        forceCircleBrush = false,
+    ): void {
+        if (
+            !this.mobileControlsEnabled ||
+            this.phase !== 'paint'
+        ) {
+            return;
+        }
+
+        if (forceCircleBrush) {
+            this.activateMobileBrushTool(
+                'circle',
+            );
+        }
+
+        const center =
+            new Phaser.Math.Vector2();
+
+        this.cameras.main.getWorldPoint(
+            this.gameWidth * 0.5,
+            this.gameHeight * 0.5,
+            center,
+        );
+
+        this.mobileLastBrushTargetWorld =
+            center.clone();
+
+        if (this.eyedropperArmed) {
+            this.hideMobilePaintPrecisionGuide();
+            this.paintPreview
+                ?.setVisible(false);
+            this.showMobileIdleEyedropperGuide();
+            return;
+        }
+
+        this.hideEyedropperMagnifier();
+        this.showMobileIdleBrushGuide();
     }
 
     private updateMobilePaintDockPosition(): void {
@@ -13693,6 +13743,14 @@ export class GameScene extends Phaser.Scene {
         timeWrap.className =
             'colorhunt-hider-record-time';
 
+        /*
+         * V1010347_PAINT_TOOL_UX_UNIFICATION / RECORD_TIMER_TRANSLUCENT
+         * The timer is informative but must not hide camouflage artwork.
+         * The separate Finish button stays fully opaque/clickable.
+         */
+        timeWrap.style.opacity =
+            '0.46';
+
         const label =
             document.createElement(
                 'small',
@@ -16984,27 +17042,35 @@ export class GameScene extends Phaser.Scene {
             },
         );
 
+        /*
+         * V1010347_PAINT_TOOL_UX_UNIFICATION / AVATAR_TOOL_ART
+         * Same clear brush/pipette visual language as Hider painting.
+         */
         const brushCursorSvg =
-            `<svg viewBox="0 0 48 48" width="38" height="38" aria-hidden="true">
-                <g transform="rotate(-34 24 24)">
-                    <rect x="21" y="4" width="7" height="25" rx="3.5"
-                        fill="#c99862" stroke="#4c392c" stroke-width="2"/>
-                    <path d="M18 26 Q24 20 31 27 L29 38 Q24 44 18 38 Z"
-                        fill="#f5eee2" stroke="#4c392c" stroke-width="2"/>
-                    <path d="M20 33 Q24 29 29 33"
+            `<svg viewBox="0 0 48 48" width="42" height="42" aria-hidden="true">
+                <g transform="rotate(-36 24 24)" stroke-linejoin="round">
+                    <rect x="21" y="2" width="7" height="25" rx="2.5"
+                        fill="#c98a4b" stroke="#3f3025" stroke-width="2.4"/>
+                    <rect x="18" y="24" width="13" height="7" rx="1.5"
+                        fill="#e7edf0" stroke="#3f4a50" stroke-width="2.2"/>
+                    <path d="M18 31h13l-2 9c-1 4-8 6-13 4 3-4 3-8 2-13z"
+                        fill="#f5eee2" stroke="#3f3025" stroke-width="2.3"/>
+                    <path d="M18 39c4 1 7 .6 11-1"
                         fill="none" stroke="#ffffff" stroke-width="2"/>
                 </g>
             </svg>`;
 
         const dropperCursorSvg =
-            `<svg viewBox="0 0 48 48" width="38" height="38" aria-hidden="true">
-                <g transform="rotate(-38 24 24)">
-                    <path d="M18 7 L31 20 L27 24 L14 11 Z"
-                        fill="#dce9ef" stroke="#304b54" stroke-width="2.4"/>
-                    <path d="M16 13 L27 24 L17 34 L9 38 L13 30 L23 20"
-                        fill="#eef8fb" stroke="#304b54" stroke-width="2.4"/>
-                    <circle cx="12" cy="39" r="4"
-                        fill="#3b82f6" stroke="#ffffff" stroke-width="1.5"/>
+            `<svg viewBox="0 0 48 48" width="42" height="42" aria-hidden="true">
+                <g transform="rotate(-42 24 24)" stroke-linejoin="round">
+                    <rect x="20" y="2" width="9" height="11" rx="2"
+                        fill="#b9d1dc" stroke="#304b54" stroke-width="2.5"/>
+                    <rect x="17" y="11" width="15" height="7" rx="2"
+                        fill="#dce9ef" stroke="#304b54" stroke-width="2.5"/>
+                    <path d="M20 18h9v13l-4.5 10-4.5-10z"
+                        fill="#eef8fb" stroke="#304b54" stroke-width="2.5"/>
+                    <path d="M24.5 41v4"
+                        fill="none" stroke="#304b54" stroke-width="2.5" stroke-linecap="round"/>
                 </g>
             </svg>`;
 
@@ -17700,6 +17766,11 @@ export class GameScene extends Phaser.Scene {
                     return;
                 }
 
+                /*
+                 * V1010347_PAINT_TOOL_UX_UNIFICATION / AVATAR_FOOTPRINT_ONLY
+                 * Reuse the exact raster stamp itself as preview. No decorative
+                 * outer ring, so a 1px brush really looks like one pixel.
+                 */
                 const previewStroke:
                     NetworkPaintStroke = {
                         targetSessionId: '',
@@ -17718,57 +17789,6 @@ export class GameScene extends Phaser.Scene {
                     previewStroke,
                     0.42,
                 );
-
-                const center =
-                    logicalToCanvas(
-                        hoverPoint.x,
-                        hoverPoint.y,
-                    );
-
-                context.strokeStyle =
-                    'rgba(35, 62, 48, .88)';
-                context.lineWidth =
-                    Math.max(
-                        1,
-                        editorZoom,
-                    );
-
-                const previewDiameter =
-                    Math.max(
-                        1,
-                        selectedSize,
-                    ) *
-                    editorPixelScale *
-                    editorZoom;
-
-                context.beginPath();
-
-                if (
-                    selectedShape ===
-                    'square'
-                ) {
-                    context.rect(
-                        center.x -
-                            previewDiameter /
-                                2,
-                        center.y -
-                            previewDiameter /
-                                2,
-                        previewDiameter,
-                        previewDiameter,
-                    );
-                } else {
-                    context.arc(
-                        center.x,
-                        center.y,
-                        previewDiameter /
-                            2,
-                        0,
-                        Math.PI * 2,
-                    );
-                }
-
-                context.stroke();
             };
 
         function replay(): void {
@@ -18043,6 +18063,42 @@ export class GameScene extends Phaser.Scene {
             },
         );
 
+        const centerAvatarToolAfterZoom =
+            (): void => {
+                /*
+                 * V1010347_PAINT_TOOL_UX_UNIFICATION / AVATAR_ZOOM_RELEASE_CENTER
+                 */
+                hoverPoint = {
+                    x: 40,
+                    y: 60,
+                };
+
+                floatingTool.innerHTML =
+                    eyedropperArmed
+                        ? dropperCursorSvg
+                        : brushCursorSvg;
+                floatingTool.style.left =
+                    '50%';
+                floatingTool.style.top =
+                    '50%';
+                floatingTool.style.display =
+                    this.mobileControlsEnabled
+                        ? 'flex'
+                        : 'none';
+
+                replay();
+            };
+
+        zoomInput.addEventListener(
+            'change',
+            centerAvatarToolAfterZoom,
+        );
+
+        zoomInput.addEventListener(
+            'pointerup',
+            centerAvatarToolAfterZoom,
+        );
+
         sizeInput.type = 'range';
         sizeInput.min = '1';
         sizeInput.max = '12';
@@ -18068,6 +18124,38 @@ export class GameScene extends Phaser.Scene {
                         sizeInput.value,
                     ),
                 );
+
+                /*
+                 * V1010347_PAINT_TOOL_UX_UNIFICATION / AVATAR_SIZE_CENTER
+                 * Same contract as Hider paint: size adjustment is a ROUND
+                 * brush operation and preview is forced to canvas center.
+                 */
+                eyedropperArmed =
+                    false;
+                straightLineArmed =
+                    false;
+                selectedShape =
+                    'circle';
+                straightLineStart =
+                    undefined;
+                hoverPoint = {
+                    x: 40,
+                    y: 60,
+                };
+
+                floatingTool.innerHTML =
+                    brushCursorSvg;
+                floatingTool.style.left =
+                    '50%';
+                floatingTool.style.top =
+                    '50%';
+                floatingTool.style.display =
+                    this.mobileControlsEnabled
+                        ? 'flex'
+                        : 'none';
+
+                refreshToolStates();
+                replay();
             },
         );
 
@@ -33613,9 +33701,7 @@ export class GameScene extends Phaser.Scene {
                 accent,
                 0.92,
             )
-            .setVisible(
-                this.brushShape !== 'square',
-            );
+            .setVisible(false);
 
         this.mobilePaintPrecisionCrosshair
             ?.clear()
@@ -33643,7 +33729,7 @@ export class GameScene extends Phaser.Scene {
 
         /* Square paintPreview already draws the exact stamp outline. */
         this.mobilePaintPrecisionCrosshair
-            ?.setVisible(this.brushShape !== 'square');
+            ?.setVisible(false);
 
         const dx = fingerWorld.x - target.x;
         const dy = fingerWorld.y - target.y;
@@ -33699,18 +33785,10 @@ export class GameScene extends Phaser.Scene {
                 target.x + ux * (16 / zoom) + px * (7 / zoom),
                 target.y + uy * (16 / zoom) + py * (7 / zoom),
             )
-            .fillStyle(0x172027, 0.96)
-            .fillCircle(
-                fingerWorld.x,
-                fingerWorld.y,
-                this.straightLineModeActive ? 16 / zoom : 14 / zoom,
-            )
-            .fillStyle(0xffffff, 0.97)
-            .fillCircle(
-                fingerWorld.x,
-                fingerWorld.y,
-                this.straightLineModeActive ? 10 / zoom : 9 / zoom,
-            )
+            /*
+             * V1010347_PAINT_TOOL_UX_UNIFICATION / NO_GRIP_DOT
+             * The wooden shaft itself is the handle. No circular end marker.
+             */
             .setVisible(true);
     }
 
@@ -33792,9 +33870,7 @@ export class GameScene extends Phaser.Scene {
                 0x172027,
                 0.9,
             )
-            .setVisible(
-                this.brushShape !== 'square',
-            );
+            .setVisible(false);
 
         this.mobilePaintPrecisionCrosshair
             ?.clear()
@@ -33822,7 +33898,7 @@ export class GameScene extends Phaser.Scene {
 
         /* Square paintPreview already draws the exact stamp outline. */
         this.mobilePaintPrecisionCrosshair
-            ?.setVisible(this.brushShape !== 'square');
+            ?.setVisible(false);
 
         /*
          * A real brush silhouette: diagonal wooden shaft, silver ferrule,
@@ -33871,10 +33947,10 @@ export class GameScene extends Phaser.Scene {
                 target.x + ux * (18 / zoom) + px * (8 / zoom),
                 target.y + uy * (18 / zoom) + py * (8 / zoom),
             )
-            .fillStyle(0x172027, 0.96)
-            .fillCircle(grip.x, grip.y, 15 / zoom)
-            .fillStyle(0xffffff, 0.98)
-            .fillCircle(grip.x, grip.y, 9 / zoom)
+            /*
+             * V1010347_PAINT_TOOL_UX_UNIFICATION / NO_GRIP_DOT
+             * The wooden shaft itself is the handle. No circular end marker.
+             */
             .setVisible(true);
     }
 
@@ -34503,37 +34579,53 @@ export class GameScene extends Phaser.Scene {
                 pointer,
             );
 
-        const previewWidth =
+        const zoom =
             Math.max(
-                1,
-                this.getPaintPreviewBrushSize() *
-                    1.7,
+                0.01,
+                this.cameras.main.zoom,
             );
 
         this.straightLinePreview
             .clear()
-            .setVisible(true)
+            .setVisible(true);
+
+        if (this.brushSize <= 1) {
+            /*
+             * V1010347_PAINT_TOOL_UX_UNIFICATION / TRUE_ONE_PIXEL_LINE_GUIDE
+             * Exactly one translucent selected-color pixel-width guide.
+             * No second dark outline can obscure the 1px target.
+             */
+            this.straightLinePreview
+                .lineStyle(
+                    1 / zoom,
+                    this.paintColor,
+                    0.56,
+                )
+                .lineBetween(
+                    this.straightLineStartWorld.x,
+                    this.straightLineStartWorld.y,
+                    target.x,
+                    target.y,
+                );
+
+            return;
+        }
+
+        const previewWidth =
+            Math.max(
+                1 / zoom,
+                this.getPaintPreviewBrushSize() *
+                    1.15,
+            );
+
+        this.straightLinePreview
             .lineStyle(
                 previewWidth,
                 this.paintColor,
                 this.networkPlayerManager
                     ?.canLocalControlHunter?.()
                     ? 0.68
-                    : 0.48,
-            )
-            .lineBetween(
-                this.straightLineStartWorld.x,
-                this.straightLineStartWorld.y,
-                target.x,
-                target.y,
-            )
-            .lineStyle(
-                this.networkPlayerManager
-                    ?.canLocalControlHunter?.()
-                    ? 2.5
-                    : 1.5,
-                0x172027,
-                0.88,
+                    : 0.52,
             )
             .lineBetween(
                 this.straightLineStartWorld.x,
@@ -36678,26 +36770,23 @@ export class GameScene extends Phaser.Scene {
                 target.y + uy * (20 / zoom) + py * (7 / zoom),
             )
             /*
-             * Larger hand grip: clearly shows where the finger should hold
-             * the tool and matches the improved brush handle readability.
+             * V1010347_PAINT_TOOL_UX_UNIFICATION / PIPETTE_NO_GRIP_DOT
+             * The glass barrel and top cap are the visible handle.
+             * Keep the sampled-color chip at the TIP only.
              */
-            .fillStyle(0x172027, 0.98)
-            .fillCircle(
+            .lineStyle(16 / zoom, 0x172027, 0.95)
+            .lineBetween(
+                grip.x - ux * (12 / zoom),
+                grip.y - uy * (12 / zoom),
                 grip.x,
                 grip.y,
-                14 / zoom,
             )
-            .fillStyle(0xffffff, 0.98)
-            .fillCircle(
+            .lineStyle(10 / zoom, 0xdce9ef, 1)
+            .lineBetween(
+                grip.x - ux * (12 / zoom),
+                grip.y - uy * (12 / zoom),
                 grip.x,
                 grip.y,
-                10 / zoom,
-            )
-            .fillStyle(previewColor, 1)
-            .fillCircle(
-                grip.x,
-                grip.y,
-                7 / zoom,
             )
             .setVisible(true);
     }
