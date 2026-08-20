@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010370_LARGE_ROOM_TRANSPORT_BUDGET: common PC/mobile large-room transport budget; paint keeps every point but sends fewer messages. */
     /* V1010369_MOBILE_NETWORK_VISUAL_GUARD_BUDGET: mobile per-player visibility/name self-heal loops run at 4Hz; gameplay simulation remains full-rate. */
     /* V1010368_MOBILE_RENDER_BUDGET: throttle expensive mobile-only HUD/lobby redraws without changing movement, input, paint, network, or reconnect cadence. */
     private lastMobileSurvivalHudRenderAt = -Infinity;
@@ -37163,7 +37164,7 @@ export class GameScene extends Phaser.Scene {
 
         if (
             multiplayerClient.isConnected() &&
-            this.activeStrokePoints.length >= 24
+            this.activeStrokePoints.length >= 48
         ) {
             this.flushActivePaintStrokeChunk(
                 true,
