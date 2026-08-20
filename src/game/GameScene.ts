@@ -79,6 +79,8 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010325B_REMOVE_UNUSED_SAFEHEIGHT_DEBUG: remove write-only safe-height debug fields; stable cache remains intact. */
+    /* V1010325_MOBILE_LOBBY_STABLE_SAFE_HEIGHT: mobile lobby never grows beyond the smallest safe viewport height for its width band. */
     /* V1010324_FOLD_REFOLD_GUIDE_ASPECT_FIX: refold compact detection trusts final viewport aspect even when button width is stale. */
     /* V1010323_FOLD_GUIDE_COMPACT_HARDFIX: Fold-closed guide is a fixed 42px compact card based on actual button width. */
     /* V1010322_FOLD_GUIDE_FIT_REAL_SPACE: Practice Fold detection uses real width; guide fits real remaining panel space. */
@@ -4289,6 +4291,20 @@ export class GameScene extends Phaser.Scene {
         HTMLButtonElement[] = [];
     private mainLobbyRoot?: HTMLDivElement;
     private mainLobbyRoomList?: HTMLDivElement;
+
+    /*
+     * V1010325_MOBILE_LOBBY_STABLE_SAFE_HEIGHT
+     *
+     * Mobile browser/system navigation UI can disappear after a Fold
+     * unfold -> refold cycle. visualViewport.height then GROWS even though the
+     * physical Fold-closed layout should keep exactly the same lobby geometry.
+     *
+     * Cache the smallest observed usable viewport height per orientation +
+     * width bucket. Growing browser chrome space becomes harmless empty space
+     * instead of stretching the lobby and clipping its bottom content.
+     */
+    private readonly mainLobbySafeHeightByViewportBand =
+        new Map<string, number>();
     private waitingRoomRoot?: HTMLDivElement;
     private waitingRoomInfo?: HTMLDivElement;
     private waitingRoomMapText?: HTMLSpanElement;
@@ -19360,6 +19376,57 @@ export class GameScene extends Phaser.Scene {
                 viewport?.height ??
                 window.innerHeight;
 
+            /*
+             * V1010325_MOBILE_LOBBY_STABLE_SAFE_HEIGHT
+             *
+             * Use WIDTH as the state identity because Fold closed/open changes
+             * width dramatically, while Android navigation/browser chrome
+             * usually changes HEIGHT only.
+             *
+             * 64px buckets tolerate a few CSS-pixel fluctuations without
+             * accidentally merging Fold-open and Fold-closed layouts.
+             */
+            const viewportOrientation =
+                viewportWidth >=
+                    viewportHeight
+                    ? 'landscape'
+                    : 'portrait';
+
+            const viewportWidthBand =
+                Math.round(
+                    viewportWidth /
+                    64,
+                ) *
+                64;
+
+            const safeViewportBand =
+                viewportOrientation +
+                ':' +
+                String(
+                    viewportWidthBand,
+                );
+
+            const previousSafeHeight =
+                this.mainLobbySafeHeightByViewportBand
+                    .get(
+                        safeViewportBand,
+                    );
+
+            const safeViewportHeight =
+                previousSafeHeight ===
+                    undefined
+                    ? viewportHeight
+                    : Math.min(
+                        previousSafeHeight,
+                        viewportHeight,
+                    );
+
+            this.mainLobbySafeHeightByViewportBand
+                .set(
+                    safeViewportBand,
+                    safeViewportHeight,
+                );
+
             const sideInset =
                 Math.max(
                     5,
@@ -19375,7 +19442,7 @@ export class GameScene extends Phaser.Scene {
                     38,
                     Math.min(
                         46,
-                        viewportHeight *
+                        safeViewportHeight *
                             0.065,
                     ),
                 );
@@ -19385,7 +19452,7 @@ export class GameScene extends Phaser.Scene {
                     5,
                     Math.min(
                         9,
-                        viewportHeight *
+                        safeViewportHeight *
                             0.012,
                     ),
                 );
@@ -19427,11 +19494,35 @@ export class GameScene extends Phaser.Scene {
                     `${Math.round(
                         Math.max(
                             220,
-                            viewportHeight -
+                            safeViewportHeight -
                                 topRail -
                                 bottomInset,
                         ),
                     )}px`,
+                );
+
+            /*
+             * Keep these values visible in DevTools if another unusual mobile
+             * device needs diagnosis later.
+             */
+            this.mainLobbyRoot.dataset
+                .safeViewportBand =
+                safeViewportBand;
+
+            this.mainLobbyRoot.dataset
+                .safeViewportHeight =
+                String(
+                    Math.round(
+                        safeViewportHeight,
+                    ),
+                );
+
+            this.mainLobbyRoot.dataset
+                .liveViewportHeight =
+                String(
+                    Math.round(
+                        viewportHeight,
+                    ),
                 );
 
             this.applyMainLobbyActionRuntimeLayout();
