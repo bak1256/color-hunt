@@ -1626,6 +1626,12 @@ this.manualReconnectInFlight = false;
         }
 
         /*
+         * V1010339C_CRITICAL_ROUND_STABILITY_CLIENT / BACKGROUND_FALSE_WARNING_GUARD
+         * Hidden-tab time must not count as immediate connection silence.
+         */
+        this.lastRoomPingAt = now;
+
+        /*
          * v0.10.10.221 CONNECTION STABILITY:
          * Do NOT reconnect merely because the browser regained focus.
          * Alt-tab, Home, lock-screen and app switching are normal user
@@ -1867,8 +1873,16 @@ this.manualReconnectInFlight = false;
 
           if (
             activeRound &&
-            silentFor >= 15_000
+            silentFor >= 30_000 &&
+            (
+              this.browserOfflineCycleActive ||
+              this.lastConfirmedTransportDropAt > 0 ||
+              room.reconnection.isReconnecting
+            )
           ) {
+            /*
+             * V1010339C_CRITICAL_ROUND_STABILITY_CLIENT: throttled/background timers alone are not a disconnect.
+             */
             this.notifyConnectionIssue(
               "ping_timeout",
             );
@@ -3318,9 +3332,13 @@ this.manualReconnectInFlight = false;
       "restore_local_paint",
       {
         strokes:
+          /*
+           * V1010339C_CRITICAL_ROUND_STABILITY_CLIENT / FULL_ROUND_PAINT
+           * Dense full-body camouflage can exceed 240 strokes.
+           */
           strokes.slice(
             0,
-            240,
+            500,
           ),
       },
     );
@@ -3760,12 +3778,21 @@ this.manualReconnectInFlight = false;
   }
 
   private getStableClientKey(): string {
+    /*
+     * V1010339C_CRITICAL_ROUND_STABILITY_CLIENT / TAB_SCOPED_RECOVERY_ID
+     *
+     * localStorage is shared by every browser tab. Opening a second game tab
+     * could therefore supersede the active tab's player connection.
+     *
+     * sessionStorage survives refresh in this tab while independent tabs get
+     * independent identities.
+     */
     const storageKey =
-      "chameleon-hunt-client-key";
+      "chameleon-hunt-tab-client-key";
 
     try {
       const existing =
-        localStorage.getItem(
+        sessionStorage.getItem(
           storageKey,
         );
 
@@ -3782,7 +3809,7 @@ this.manualReconnectInFlight = false;
               .toString(36)
               .slice(2)}`;
 
-      localStorage.setItem(
+      sessionStorage.setItem(
         storageKey,
         created,
       );

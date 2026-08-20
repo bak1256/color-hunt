@@ -7137,8 +7137,26 @@ export class GameScene extends Phaser.Scene {
                 ?.remove();
         }
 
-        this.chatLog.scrollTop =
-            this.chatLog.scrollHeight;
+        /*
+         * V1010339C_CRITICAL_ROUND_STABILITY_CLIENT / CHAT_ALWAYS_FOLLOW_NEWEST
+         */
+        const scrollChatToBottom =
+            (): void => {
+                if (!this.chatLog) {
+                    return;
+                }
+
+                this.chatLog.scrollTop =
+                    this.chatLog.scrollHeight;
+            };
+
+        scrollChatToBottom();
+        queueMicrotask(
+            scrollChatToBottom,
+        );
+        window.requestAnimationFrame(
+            scrollChatToBottom,
+        );
     }
 
     private showChatNotice(
@@ -7162,8 +7180,26 @@ export class GameScene extends Phaser.Scene {
             line,
         );
 
-        this.chatLog.scrollTop =
-            this.chatLog.scrollHeight;
+        /*
+         * V1010339C_CRITICAL_ROUND_STABILITY_CLIENT / CHAT_ALWAYS_FOLLOW_NEWEST
+         */
+        const scrollChatToBottom =
+            (): void => {
+                if (!this.chatLog) {
+                    return;
+                }
+
+                this.chatLog.scrollTop =
+                    this.chatLog.scrollHeight;
+            };
+
+        scrollChatToBottom();
+        queueMicrotask(
+            scrollChatToBottom,
+        );
+        window.requestAnimationFrame(
+            scrollChatToBottom,
+        );
     }
 
     private destroyChatUi(): void {
@@ -29892,6 +29928,27 @@ export class GameScene extends Phaser.Scene {
         }
 
         if (phase === 'hunt') {
+            /*
+             * V1010339C_CRITICAL_ROUND_STABILITY_CLIENT / HUNTER_INPUT_RELEASE
+             *
+             * A DOM chat/menu/paint control can retain focus or leave Phaser
+             * keyboard disabled. Aim still moves, but WASD then appears dead.
+             */
+            if (
+                this.chatInput &&
+                document.activeElement ===
+                    this.chatInput
+            ) {
+                this.chatInput.blur();
+            }
+
+            this.input.enabled = true;
+
+            if (this.input.keyboard) {
+                this.input.keyboard.enabled =
+                    true;
+            }
+
             /*
              * HOTFIX: Hunt can begin before the painter's final pointer-up.
              * Finish the last stroke first, then rebroadcast the Hider's

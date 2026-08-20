@@ -47,6 +47,7 @@ type NetworkPlayerView = {
 };
 
 export class NetworkPlayerManager {
+  /* V1010339C_CRITICAL_ROUND_STABILITY_CLIENT: preserve exact thin-brush remote density. */
   /* V1010338_CRITICAL_GAMEPLAY_TRIPLE_FIX: remote Hunter smoothing + remote paint raster continuity. */
   /* V1010286B_LOBBY_AVATAR_EXACT_RENDER_PATHFIX: saved avatar strokes replay continuously with editor-equivalent geometry. */
   private readonly scene: Phaser.Scene;
@@ -3050,7 +3051,12 @@ export class NetworkPlayerManager {
           Math.max(
             1,
             Math.ceil(
-              distance / 0.65,
+              distance /
+                (
+                  stroke.size <= 1
+                    ? 1
+                    : 0.65
+                ),
             ),
           );
 
