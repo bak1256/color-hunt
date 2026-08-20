@@ -38669,6 +38669,70 @@ export class GameScene extends Phaser.Scene {
         }
 
         /*
+         * V1010351_EYEDROPPER_BODY_MASK_HOTFIX
+         *
+         * localPaintHistory lives in the Hider's 80x120 texture coordinate
+         * space, but most of that rectangle is transparent. Previously the
+         * eyedropper searched stroke history anywhere inside that rectangle.
+         * A stroke whose brush footprint crossed transparent space could then
+         * win over the map sampler, so a visibly green map pixel could be
+         * reported as an old black camouflage color.
+         *
+         * Only let local camouflage history participate when the pipette tip
+         * is on a REAL Hider body pixel. Transparent character bounds must
+         * fall through to sampleBackgroundColorAtWorld().
+         */
+        const headDx = textureX - 40;
+        const headDy = textureY - 48;
+
+        const insideHead =
+            headDx * headDx +
+                headDy * headDy <=
+            12 * 12;
+
+        const insideTorso =
+            textureX >= 31 &&
+            textureX <= 48 &&
+            textureY >= 55 &&
+            textureY <= 78;
+
+        const insideLeftArm =
+            textureX >= 24 &&
+            textureX <= 31 &&
+            textureY >= 57 &&
+            textureY <= 74;
+
+        const insideRightArm =
+            textureX >= 48 &&
+            textureX <= 55 &&
+            textureY >= 57 &&
+            textureY <= 74;
+
+        const insideLeftLeg =
+            textureX >= 31 &&
+            textureX <= 38 &&
+            textureY >= 75 &&
+            textureY <= 88;
+
+        const insideRightLeg =
+            textureX >= 41 &&
+            textureX <= 48 &&
+            textureY >= 75 &&
+            textureY <= 88;
+
+        const insideActualHiderBody =
+            insideHead ||
+            insideTorso ||
+            insideLeftArm ||
+            insideRightArm ||
+            insideLeftLeg ||
+            insideRightLeg;
+
+        if (!insideActualHiderBody) {
+            return null;
+        }
+
+        /*
          * Walk newest stroke -> oldest stroke so the sampled color is exactly
          * the topmost paint currently visible at this body pixel.
          */
