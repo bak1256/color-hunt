@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010349_PAINT_BANNER_TOOL_ART_JOYSTICK_CENTER: background-only timer translucency + detailed paint tools + move-release recenter. */
     /* V1010348_AVATAR_EDITOR_PAINT_PARITY: avatar editor uses paint-only one-finger gesture and game-parity tools. */
     /* V1010347_PAINT_TOOL_UX_UNIFICATION: unified brush/pipette/line UX for Hider paint + lobby avatar editor. */
     /* V1010344B_HIDER_SELF_PAINT_HUNT_SETTLE: preserve the owner's Hider camouflage through Hunt transition. */
@@ -3157,6 +3158,32 @@ export class GameScene extends Phaser.Scene {
                     this.mobileMovePointerId
                 ) {
                     this.resetMobileMoveControl();
+
+                    /*
+                     * V1010349_PAINT_BANNER_TOOL_ART_JOYSTICK_CENTER / MOVE_RELEASE_CENTER_TOOL
+                     *
+                     * Movement temporarily shifts attention and camera framing.
+                     * As soon as the MOVE finger is released, return whichever
+                     * paint tool is active to the visual center.
+                     */
+                    if (
+                        this.phase === 'paint' &&
+                        this.mobileControlsEnabled
+                    ) {
+                        this.time.delayedCall(
+                            0,
+                            () => {
+                                if (
+                                    this.phase !==
+                                        'paint'
+                                ) {
+                                    return;
+                                }
+
+                                this.centerMobilePaintToolGuide();
+                            },
+                        );
+                    }
                 }
 
                 if (
@@ -13745,12 +13772,29 @@ export class GameScene extends Phaser.Scene {
             'colorhunt-hider-record-time';
 
         /*
-         * V1010347_PAINT_TOOL_UX_UNIFICATION / RECORD_TIMER_TRANSLUCENT
-         * The timer is informative but must not hide camouflage artwork.
-         * The separate Finish button stays fully opaque/clickable.
+         * V1010349_PAINT_BANNER_TOOL_ART_JOYSTICK_CENTER / RECORD_BANNER_BACKGROUND_ONLY
+         *
+         * Never use element opacity here: that fades text too.
+         * Keep all label/time glyphs 100% opaque and make ONLY the card paint
+         * translucent. Inline values intentionally override older CSS.
          */
         timeWrap.style.opacity =
-            '0.46';
+            '1';
+        timeWrap.style.background =
+            'rgba(255, 249, 232, 0.38)';
+        timeWrap.style.color =
+            '#263b2d';
+        timeWrap.style.boxShadow =
+            '0 2px 8px rgba(0, 0, 0, 0.10)';
+
+        /*
+         * If the outer record bar itself has an old opaque CSS background,
+         * neutralize it. Finish is a separate button and stays fully opaque.
+         */
+        root.style.background =
+            'transparent';
+        root.style.boxShadow =
+            'none';
 
         const label =
             document.createElement(
@@ -13765,6 +13809,24 @@ export class GameScene extends Phaser.Scene {
             );
         time.textContent =
             tr('첫 붓질부터 기록');
+
+        /*
+         * V1010349_BUILD_ORDER_FIX:
+         * label/time styles must run after both elements are declared.
+         */
+        label.style.opacity =
+            '1';
+        label.style.color =
+            '#263b2d';
+        label.style.fontWeight =
+            '800';
+
+        time.style.opacity =
+            '1';
+        time.style.color =
+            '#17251b';
+        time.style.fontWeight =
+            '900';
 
         const finish =
             document.createElement(
@@ -33684,42 +33746,134 @@ export class GameScene extends Phaser.Scene {
         const ferruleX = target.x + ux * (22 / zoom);
         const ferruleY = target.y + uy * (22 / zoom);
 
+        /*
+         * V1010349_PAINT_BANNER_TOOL_ART_JOYSTICK_CENTER / DETAILED_LIVE_BRUSH
+         *
+         * A recognizable real brush:
+         * dark wooden shaft -> warm wood body -> wood highlight ->
+         * dark ferrule edge -> silver ferrule -> colored bristle head.
+         * No circular grip marker.
+         */
+        const handleEndX =
+            fingerWorld.x;
+        const handleEndY =
+            fingerWorld.y;
+
+        const buttInsetX =
+            handleEndX - ux * (4 / zoom);
+        const buttInsetY =
+            handleEndY - uy * (4 / zoom);
+
         this.mobilePaintPrecisionHandle
             ?.clear()
-            /* dark outline */
+            /* dark shaft silhouette */
             .lineStyle(
-                this.straightLineModeActive ? 11 / zoom : 9 / zoom,
-                0x172027,
-                0.92,
-            )
-            .lineBetween(
-                ferruleX,
-                ferruleY,
-                fingerWorld.x,
-                fingerWorld.y,
-            )
-            /* wooden handle */
-            .lineStyle(
-                this.straightLineModeActive ? 7 / zoom : 6 / zoom,
-                this.straightLineModeActive ? 0xf59e0b : 0xc98245,
+                this.straightLineModeActive
+                    ? 12 / zoom
+                    : 10 / zoom,
+                0x3b2b20,
                 0.98,
             )
             .lineBetween(
                 ferruleX,
                 ferruleY,
-                fingerWorld.x,
-                fingerWorld.y,
+                handleEndX,
+                handleEndY,
             )
-            /* metal ferrule */
-            .lineStyle(8 / zoom, 0xe8edf0, 0.98)
+            /* wooden shaft */
+            .lineStyle(
+                this.straightLineModeActive
+                    ? 8 / zoom
+                    : 7 / zoom,
+                this.straightLineModeActive
+                    ? 0xe49a3a
+                    : 0xb86f36,
+                1,
+            )
             .lineBetween(
-                target.x + ux * (10 / zoom),
-                target.y + uy * (10 / zoom),
+                ferruleX,
+                ferruleY,
+                handleEndX,
+                handleEndY,
+            )
+            /* wood highlight */
+            .lineStyle(
+                2 / zoom,
+                0xf2c184,
+                0.9,
+            )
+            .lineBetween(
+                ferruleX + px * (2 / zoom),
+                ferruleY + py * (2 / zoom),
+                buttInsetX + px * (2 / zoom),
+                buttInsetY + py * (2 / zoom),
+            )
+            /* flat dark butt cap, clearly the handle end */
+            .lineStyle(
+                9 / zoom,
+                0x33251c,
+                1,
+            )
+            .lineBetween(
+                handleEndX - px * (4 / zoom),
+                handleEndY - py * (4 / zoom),
+                handleEndX + px * (4 / zoom),
+                handleEndY + py * (4 / zoom),
+            )
+            /* ferrule dark edge */
+            .lineStyle(
+                12 / zoom,
+                0x43505a,
+                1,
+            )
+            .lineBetween(
+                target.x + ux * (9 / zoom),
+                target.y + uy * (9 / zoom),
                 ferruleX,
                 ferruleY,
             )
-            /* colored bristle tip */
-            .fillStyle(this.paintColor, 0.98)
+            /* silver ferrule */
+            .lineStyle(
+                8 / zoom,
+                0xdde6eb,
+                1,
+            )
+            .lineBetween(
+                target.x + ux * (9 / zoom),
+                target.y + uy * (9 / zoom),
+                ferruleX,
+                ferruleY,
+            )
+            /* ferrule highlight */
+            .lineStyle(
+                2 / zoom,
+                0xffffff,
+                0.9,
+            )
+            .lineBetween(
+                target.x + ux * (11 / zoom) + px * (2 / zoom),
+                target.y + uy * (11 / zoom) + py * (2 / zoom),
+                ferruleX + px * (2 / zoom),
+                ferruleY + py * (2 / zoom),
+            )
+            /* bristle dark silhouette */
+            .fillStyle(
+                0x3a3028,
+                1,
+            )
+            .fillTriangle(
+                target.x - ux * (2 / zoom),
+                target.y - uy * (2 / zoom),
+                target.x + ux * (18 / zoom) - px * (9 / zoom),
+                target.y + uy * (18 / zoom) - py * (9 / zoom),
+                target.x + ux * (18 / zoom) + px * (9 / zoom),
+                target.y + uy * (18 / zoom) + py * (9 / zoom),
+            )
+            /* selected-color bristles */
+            .fillStyle(
+                this.paintColor,
+                0.98,
+            )
             .fillTriangle(
                 target.x,
                 target.y,
@@ -33728,10 +33882,6 @@ export class GameScene extends Phaser.Scene {
                 target.x + ux * (16 / zoom) + px * (7 / zoom),
                 target.y + uy * (16 / zoom) + py * (7 / zoom),
             )
-            /*
-             * V1010347_PAINT_TOOL_UX_UNIFICATION / NO_GRIP_DOT
-             * The wooden shaft itself is the handle. No circular end marker.
-             */
             .setVisible(true);
     }
 
@@ -33858,42 +34008,131 @@ export class GameScene extends Phaser.Scene {
         const ferruleX = target.x + ux * (24 / zoom);
         const ferruleY = target.y + uy * (24 / zoom);
 
+        /*
+         * V1010349_PAINT_BANNER_TOOL_ART_JOYSTICK_CENTER / DETAILED_IDLE_BRUSH
+         * Same art language as the live brush so Practice and Game are
+         * visually identical.
+         */
+        const handleEndX =
+            grip.x;
+        const handleEndY =
+            grip.y;
+
         this.mobilePaintPrecisionHandle
             ?.clear()
-            .lineStyle(12 / zoom, 0x172027, 0.92)
+            .lineStyle(
+                12 / zoom,
+                0x3b2b20,
+                0.98,
+            )
             .lineBetween(
                 ferruleX,
                 ferruleY,
-                grip.x,
-                grip.y,
+                handleEndX,
+                handleEndY,
             )
-            .lineStyle(7 / zoom, 0xc98245, 1)
+            .lineStyle(
+                7 / zoom,
+                0xb86f36,
+                1,
+            )
             .lineBetween(
                 ferruleX,
                 ferruleY,
-                grip.x,
-                grip.y,
+                handleEndX,
+                handleEndY,
             )
-            .lineStyle(10 / zoom, 0xe8edf0, 1)
+            .lineStyle(
+                2 / zoom,
+                0xf2c184,
+                0.92,
+            )
             .lineBetween(
-                target.x + ux * (10 / zoom),
-                target.y + uy * (10 / zoom),
+                ferruleX + px * (2 / zoom),
+                ferruleY + py * (2 / zoom),
+                handleEndX - ux * (5 / zoom) +
+                    px * (2 / zoom),
+                handleEndY - uy * (5 / zoom) +
+                    py * (2 / zoom),
+            )
+            .lineStyle(
+                10 / zoom,
+                0x33251c,
+                1,
+            )
+            .lineBetween(
+                handleEndX - px * (4 / zoom),
+                handleEndY - py * (4 / zoom),
+                handleEndX + px * (4 / zoom),
+                handleEndY + py * (4 / zoom),
+            )
+            .lineStyle(
+                13 / zoom,
+                0x43505a,
+                1,
+            )
+            .lineBetween(
+                target.x + ux * (9 / zoom),
+                target.y + uy * (9 / zoom),
                 ferruleX,
                 ferruleY,
             )
-            .fillStyle(this.paintColor, 0.98)
+            .lineStyle(
+                9 / zoom,
+                0xdde6eb,
+                1,
+            )
+            .lineBetween(
+                target.x + ux * (9 / zoom),
+                target.y + uy * (9 / zoom),
+                ferruleX,
+                ferruleY,
+            )
+            .lineStyle(
+                2 / zoom,
+                0xffffff,
+                0.9,
+            )
+            .lineBetween(
+                target.x + ux * (11 / zoom) +
+                    px * (2 / zoom),
+                target.y + uy * (11 / zoom) +
+                    py * (2 / zoom),
+                ferruleX + px * (2 / zoom),
+                ferruleY + py * (2 / zoom),
+            )
+            .fillStyle(
+                0x3a3028,
+                1,
+            )
+            .fillTriangle(
+                target.x - ux * (2 / zoom),
+                target.y - uy * (2 / zoom),
+                target.x + ux * (20 / zoom) -
+                    px * (9 / zoom),
+                target.y + uy * (20 / zoom) -
+                    py * (9 / zoom),
+                target.x + ux * (20 / zoom) +
+                    px * (9 / zoom),
+                target.y + uy * (20 / zoom) +
+                    py * (9 / zoom),
+            )
+            .fillStyle(
+                this.paintColor,
+                0.98,
+            )
             .fillTriangle(
                 target.x,
                 target.y,
-                target.x + ux * (18 / zoom) - px * (8 / zoom),
-                target.y + uy * (18 / zoom) - py * (8 / zoom),
-                target.x + ux * (18 / zoom) + px * (8 / zoom),
-                target.y + uy * (18 / zoom) + py * (8 / zoom),
+                target.x + ux * (18 / zoom) -
+                    px * (7 / zoom),
+                target.y + uy * (18 / zoom) -
+                    py * (7 / zoom),
+                target.x + ux * (18 / zoom) +
+                    px * (7 / zoom),
+                target.y + uy * (18 / zoom) +
+                    py * (7 / zoom),
             )
-            /*
-             * V1010347_PAINT_TOOL_UX_UNIFICATION / NO_GRIP_DOT
-             * The wooden shaft itself is the handle. No circular end marker.
-             */
             .setVisible(true);
     }
 
@@ -36665,71 +36904,163 @@ export class GameScene extends Phaser.Scene {
         const barrelStartX = target.x + ux * (18 / zoom);
         const barrelStartY = target.y + uy * (18 / zoom);
 
+        const bulbStartX =
+            grip.x - ux * (15 / zoom);
+        const bulbStartY =
+            grip.y - uy * (15 / zoom);
+
         guide
             .clear()
-            /* large sampled-color chip beside the sampling tip, not finger */
-            .fillStyle(0x172027, 0.96)
-            .fillCircle(
-                target.x - px * (26 / zoom),
-                target.y - py * (26 / zoom),
-                18 / zoom,
+            /*
+             * V1010349_PAINT_BANNER_TOOL_ART_JOYSTICK_CENTER / DETAILED_EYEDROPPER
+             * Sampled color chip remains beside the exact sampling tip.
+             */
+            .fillStyle(
+                0x172027,
+                0.95,
             )
-            .fillStyle(previewColor, 1)
             .fillCircle(
-                target.x - px * (26 / zoom),
-                target.y - py * (26 / zoom),
+                target.x - px * (25 / zoom),
+                target.y - py * (25 / zoom),
+                16 / zoom,
+            )
+            .fillStyle(
+                previewColor,
+                1,
+            )
+            .fillCircle(
+                target.x - px * (25 / zoom),
+                target.y - py * (25 / zoom),
+                12 / zoom,
+            )
+            /* dark barrel silhouette */
+            .lineStyle(
                 14 / zoom,
+                0x304b54,
+                1,
             )
-            /* dark outline + glass pipette, same angle/length as brush */
-            .lineStyle(13 / zoom, 0x172027, 0.95)
             .lineBetween(
                 barrelStartX,
                 barrelStartY,
-                grip.x,
-                grip.y,
+                bulbStartX,
+                bulbStartY,
             )
-            .lineStyle(8 / zoom, 0xe7eef2, 1)
+            /* translucent glass body */
+            .lineStyle(
+                9 / zoom,
+                0xd9edf4,
+                1,
+            )
             .lineBetween(
                 barrelStartX,
                 barrelStartY,
+                bulbStartX,
+                bulbStartY,
+            )
+            /* glass highlight */
+            .lineStyle(
+                2 / zoom,
+                0xffffff,
+                0.92,
+            )
+            .lineBetween(
+                barrelStartX + px * (2 / zoom),
+                barrelStartY + py * (2 / zoom),
+                bulbStartX + px * (2 / zoom),
+                bulbStartY + py * (2 / zoom),
+            )
+            /* sampled-color liquid inside glass */
+            .lineStyle(
+                4 / zoom,
+                previewColor,
+                0.94,
+            )
+            .lineBetween(
+                target.x + ux * (29 / zoom),
+                target.y + uy * (29 / zoom),
+                bulbStartX - ux * (2 / zoom),
+                bulbStartY - uy * (2 / zoom),
+            )
+            /* rubber bulb silhouette */
+            .lineStyle(
+                19 / zoom,
+                0x26363d,
+                1,
+            )
+            .lineBetween(
+                bulbStartX,
+                bulbStartY,
                 grip.x,
                 grip.y,
             )
-            .lineStyle(4 / zoom, previewColor, 0.92)
-            .lineBetween(
-                target.x + ux * (28 / zoom),
-                target.y + uy * (28 / zoom),
-                grip.x - ux * (13 / zoom),
-                grip.y - uy * (13 / zoom),
+            /* rubber bulb body */
+            .lineStyle(
+                13 / zoom,
+                0x8fa6b0,
+                1,
             )
-            /* pointed sampling tip faces the exact selected pixel */
-            .fillStyle(0x172027, 1)
+            .lineBetween(
+                bulbStartX,
+                bulbStartY,
+                grip.x,
+                grip.y,
+            )
+            /* flat bulb end cap: no confusing circle */
+            .lineStyle(
+                15 / zoom,
+                0x26363d,
+                1,
+            )
+            .lineBetween(
+                grip.x - px * (6 / zoom),
+                grip.y - py * (6 / zoom),
+                grip.x + px * (6 / zoom),
+                grip.y + py * (6 / zoom),
+            )
+            .lineStyle(
+                9 / zoom,
+                0xaec3cb,
+                1,
+            )
+            .lineBetween(
+                grip.x - px * (5 / zoom),
+                grip.y - py * (5 / zoom),
+                grip.x + px * (5 / zoom),
+                grip.y + py * (5 / zoom),
+            )
+            /* dark exact sampling-tip silhouette */
+            .fillStyle(
+                0x26363d,
+                1,
+            )
+            .fillTriangle(
+                target.x - ux * (2 / zoom),
+                target.y - uy * (2 / zoom),
+                target.x + ux * (21 / zoom) -
+                    px * (8 / zoom),
+                target.y + uy * (21 / zoom) -
+                    py * (8 / zoom),
+                target.x + ux * (21 / zoom) +
+                    px * (8 / zoom),
+                target.y + uy * (21 / zoom) +
+                    py * (8 / zoom),
+            )
+            /* glass sampling tip */
+            .fillStyle(
+                0xe8f5f9,
+                1,
+            )
             .fillTriangle(
                 target.x,
                 target.y,
-                target.x + ux * (20 / zoom) - px * (7 / zoom),
-                target.y + uy * (20 / zoom) - py * (7 / zoom),
-                target.x + ux * (20 / zoom) + px * (7 / zoom),
-                target.y + uy * (20 / zoom) + py * (7 / zoom),
-            )
-            /*
-             * V1010347_PAINT_TOOL_UX_UNIFICATION / PIPETTE_NO_GRIP_DOT
-             * The glass barrel and top cap are the visible handle.
-             * Keep the sampled-color chip at the TIP only.
-             */
-            .lineStyle(16 / zoom, 0x172027, 0.95)
-            .lineBetween(
-                grip.x - ux * (12 / zoom),
-                grip.y - uy * (12 / zoom),
-                grip.x,
-                grip.y,
-            )
-            .lineStyle(10 / zoom, 0xdce9ef, 1)
-            .lineBetween(
-                grip.x - ux * (12 / zoom),
-                grip.y - uy * (12 / zoom),
-                grip.x,
-                grip.y,
+                target.x + ux * (19 / zoom) -
+                    px * (5 / zoom),
+                target.y + uy * (19 / zoom) -
+                    py * (5 / zoom),
+                target.x + ux * (19 / zoom) +
+                    px * (5 / zoom),
+                target.y + uy * (19 / zoom) +
+                    py * (5 / zoom),
             )
             .setVisible(true);
     }
