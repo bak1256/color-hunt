@@ -79,6 +79,8 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010305_REMOVE_UNUSED_RENDERED_HEIGHT: cleanup after v304 fixed mobile waiting-room top positioning. */
+    /* V1010304_CLIENT_FINAL_UI_GAS_DRAIN: equal lobby icon inset, dense waiting panels, direct escalating GAS drain. */
     /* V1010303B_REMOVE_UNUSED_WAITING_SIZE_RECOVER: tolerant cleanup of obsolete v302 waiting-size declarations. */
     /* V1010302_CLIENT_UI_FART_PROGRESSION: final lobby geometry + full-height waiting dock + escalating Practice fart lock. */
     /* V1010301_LOBBY_WAITING_JOYSTICK_POLISH: deterministic lobby SVG icons, flush full-height waiting dock, reliable captured mobile MOVE joystick. */
@@ -4635,6 +4637,12 @@ export class GameScene extends Phaser.Scene {
      */
     private practiceFartAccidentCount = 0;
     private practiceFartLocked = false;
+
+    /*
+     * V1010304_CLIENT_FINAL_UI_GAS_DRAIN: freeze the destination for the current 8s poop animation.
+     * This prevents a transient 100 -> 0 -> 36/72 visual snap.
+     */
+    private practicePoopGasTarget = 0;
 
     private practiceLastPoopTrailAt = 0;
     private practiceLastPoopTearAt = 0;
@@ -12434,7 +12442,7 @@ export class GameScene extends Phaser.Scene {
              * During the 14-second punishment GAS visibly drains 100 -> 0.
              */
             const postPoopFloor =
-                this.getPracticeFartFloor();
+                this.practicePoopGasTarget;
 
             const poopProgress =
                 Phaser.Math.Clamp(
@@ -12692,6 +12700,15 @@ export class GameScene extends Phaser.Scene {
                     true;
             }
 
+            this.practicePoopGasTarget =
+                this.practiceFartAccidentCount ===
+                    1
+                    ? 36
+                    : this.practiceFartAccidentCount ===
+                        2
+                        ? 72
+                        : 0;
+
             /*
              * Start the REAL Practice state BEFORE any visual helper runs.
              */
@@ -12864,7 +12881,7 @@ export class GameScene extends Phaser.Scene {
             0;
 
         this.fartGauge =
-            this.getPracticeFartFloor();
+            this.practicePoopGasTarget;
 
         this.practiceLastPoopTrailAt =
             0;
@@ -13371,6 +13388,7 @@ export class GameScene extends Phaser.Scene {
         this.lastFartUseAt = 0;
         this.practiceFartAccidentCount = 0;
         this.practiceFartLocked = false;
+        this.practicePoopGasTarget = 0;
         this.practicePoopRemainingMs = 0;
         this.practicePoopUntil = 0;
         this.localPoopUntil = 0;
@@ -20115,8 +20133,6 @@ export class GameScene extends Phaser.Scene {
 
             const renderedWidth =
                 designWidth * scale;
-            const renderedHeight =
-                designHeight * scale;
 
             const mobileRightInset =
                 0;
@@ -20128,14 +20144,7 @@ export class GameScene extends Phaser.Scene {
 
             const top =
                 rect.top +
-                Math.max(
-                    0,
-                    (
-                        rect.height -
-                        renderedHeight
-                    ) /
-                        2,
-                );
+                1;
 
             this.waitingRoomRoot.classList.add(
                 'ch-uniform-mobile-scale',
@@ -20205,7 +20214,8 @@ export class GameScene extends Phaser.Scene {
              */
             const snappedLeft =
                 rect.right -
-                renderedWidth;
+                renderedWidth -
+                1;
 
             this.waitingRoomRoot.style
                 .left =
@@ -25567,6 +25577,200 @@ export class GameScene extends Phaser.Scene {
                             min-height: 28px !important;
                             max-height: 28px !important;
                             font-size: 20px !important;
+                        }
+                    }
+
+
+                    /*
+                     * V1010304_CLIENT_FINAL_UI_GAS_DRAIN: final visual contract for lobby action buttons.
+                     * Every icon gets the exact same square cell and the exact
+                     * same 6px optical inset on all four sides.
+                     */
+                    .ch-lobby-action--public,
+                    .ch-lobby-action--private,
+                    .ch-lobby-action--join {
+                        display: grid !important;
+                        grid-template-columns: 36px minmax(0, 1fr) !important;
+                        align-items: center !important;
+                        column-gap: 9px !important;
+                        min-height: 58px !important;
+                        padding: 7px 12px !important;
+                        box-sizing: border-box !important;
+                        overflow: hidden !important;
+                    }
+
+                    .ch-lobby-action--public .ch-lobby-action-icon,
+                    .ch-lobby-action--private .ch-lobby-action-icon,
+                    .ch-lobby-action--join .ch-lobby-action-icon {
+                        display: grid !important;
+                        place-items: center !important;
+                        width: 36px !important;
+                        min-width: 36px !important;
+                        max-width: 36px !important;
+                        height: 36px !important;
+                        min-height: 36px !important;
+                        max-height: 36px !important;
+                        aspect-ratio: 1 / 1 !important;
+                        padding: 6px !important;
+                        margin: 0 !important;
+                        box-sizing: border-box !important;
+                        overflow: hidden !important;
+                        border-radius: 8px !important;
+                        line-height: 0 !important;
+                        font-size: 0 !important;
+                        align-self: center !important;
+                        justify-self: center !important;
+                    }
+
+                    .ch-lobby-action--public .ch-lobby-action-svg,
+                    .ch-lobby-action--private .ch-lobby-action-svg,
+                    .ch-lobby-action--join .ch-lobby-action-svg {
+                        width: 24px !important;
+                        min-width: 24px !important;
+                        max-width: 24px !important;
+                        height: 24px !important;
+                        min-height: 24px !important;
+                        max-height: 24px !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        transform: none !important;
+                        overflow: visible !important;
+                    }
+
+                    .ch-lobby-action--practice .ch-lobby-action-icon {
+                        display: grid !important;
+                        place-items: center !important;
+                        width: 36px !important;
+                        min-width: 36px !important;
+                        max-width: 36px !important;
+                        height: 36px !important;
+                        min-height: 36px !important;
+                        max-height: 36px !important;
+                        aspect-ratio: 1 / 1 !important;
+                        padding: 6px !important;
+                        margin: 0 !important;
+                        box-sizing: border-box !important;
+                        overflow: hidden !important;
+                        font-size: 23px !important;
+                        line-height: 1 !important;
+                    }
+
+                    /*
+                     * PC waiting room: remove dead air without squeezing copy.
+                     * Keep each translated label on a stable line.
+                     */
+                    @media (pointer: fine) and (min-width: 761px) {
+                        .colorhunt-waiting-room:not(.ch-uniform-mobile-scale)
+                        .ch-waiting-shell {
+                            padding: 9px 10px !important;
+                            gap: 5px !important;
+                        }
+
+                        .colorhunt-waiting-room:not(.ch-uniform-mobile-scale)
+                        .ch-waiting-header {
+                            min-height: 45px !important;
+                        }
+
+                        .colorhunt-waiting-room:not(.ch-uniform-mobile-scale)
+                        .ch-waiting-info {
+                            padding: 6px 8px !important;
+                            min-height: 50px !important;
+                        }
+
+                        .colorhunt-waiting-room:not(.ch-uniform-mobile-scale)
+                        .ch-waiting-map {
+                            min-height: 48px !important;
+                            padding: 5px 7px !important;
+                        }
+
+                        .colorhunt-waiting-room:not(.ch-uniform-mobile-scale)
+                        .ch-waiting-role-wrap {
+                            padding: 3px 0 !important;
+                            gap: 3px !important;
+                        }
+
+                        .colorhunt-waiting-room:not(.ch-uniform-mobile-scale)
+                        .ch-waiting-role-status {
+                            min-height: 17px !important;
+                            line-height: 1.05 !important;
+                        }
+
+                        .colorhunt-waiting-room:not(.ch-uniform-mobile-scale)
+                        .ch-waiting-timing {
+                            gap: 5px !important;
+                        }
+
+                        .colorhunt-waiting-room:not(.ch-uniform-mobile-scale)
+                        .ch-waiting-timing section {
+                            padding: 5px 6px !important;
+                        }
+
+                        .colorhunt-waiting-room:not(.ch-uniform-mobile-scale)
+                        .ch-waiting-start {
+                            min-height: 43px !important;
+                            padding: 6px 8px !important;
+                        }
+
+                        .colorhunt-waiting-room:not(.ch-uniform-mobile-scale)
+                        .ch-waiting-footer button {
+                            min-height: 36px !important;
+                            padding: 5px 6px !important;
+                        }
+                    }
+
+                    /*
+                     * Mobile: same optical icon inset, slightly smaller square.
+                     */
+                    @media (pointer: coarse), (max-width: 760px) {
+                        .ch-lobby-action--public,
+                        .ch-lobby-action--private,
+                        .ch-lobby-action--join {
+                            grid-template-columns: 32px minmax(0, 1fr) !important;
+                            column-gap: 8px !important;
+                            min-height: 52px !important;
+                            padding: 6px 10px !important;
+                        }
+
+                        .ch-lobby-action--public .ch-lobby-action-icon,
+                        .ch-lobby-action--private .ch-lobby-action-icon,
+                        .ch-lobby-action--join .ch-lobby-action-icon,
+                        .ch-lobby-action--practice .ch-lobby-action-icon {
+                            width: 32px !important;
+                            min-width: 32px !important;
+                            max-width: 32px !important;
+                            height: 32px !important;
+                            min-height: 32px !important;
+                            max-height: 32px !important;
+                            padding: 6px !important;
+                        }
+
+                        .ch-lobby-action--public .ch-lobby-action-svg,
+                        .ch-lobby-action--private .ch-lobby-action-svg,
+                        .ch-lobby-action--join .ch-lobby-action-svg {
+                            width: 20px !important;
+                            min-width: 20px !important;
+                            max-width: 20px !important;
+                            height: 20px !important;
+                            min-height: 20px !important;
+                            max-height: 20px !important;
+                        }
+
+                        .ch-lobby-action--practice .ch-lobby-action-icon {
+                            font-size: 20px !important;
+                        }
+
+                        /*
+                         * Waiting-room body uses almost the whole rendered
+                         * authoring frame; retain only 1px outer breathing room.
+                         */
+                        .colorhunt-waiting-room.ch-uniform-mobile-scale
+                        .ch-waiting-shell {
+                            width: calc(100% - 2px) !important;
+                            height: calc(100% - 2px) !important;
+                            margin: 1px !important;
+                            padding: 7px 8px !important;
+                            gap: 4px !important;
+                            box-sizing: border-box !important;
                         }
                     }
 
