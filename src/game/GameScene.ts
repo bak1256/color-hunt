@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010360_AVATAR_EDITOR_FINAL_TIP_SAMPLE_PREVIEW: pipette commits pointerup color; persistent brush footprint always previews exact paint. */
     /* V1010359B_AVATAR_EDITOR_EYEDROPPER_COLOR_PERSIST_FINAL: larger pipette chip and explicit sampled-color persistence across tool switches. */
     /* V1010358_AVATAR_EDITOR_PERSISTENT_TOOLS: editor tool remains at last tip; eyedropper stays selected after sampling. */
     /* V1010357_AVATAR_EDITOR_TOOL_STATE_PREVIEW: size preview stays at current tip; tool mode preserved; live pipette preview. */
@@ -17403,6 +17404,13 @@ export class GameScene extends Phaser.Scene {
                                     8
                                 ) |
                                 pixel[2];
+
+                            /*
+                             * V1010360B_AVATAR_EDITOR_FINAL_TIP_SAMPLE_PREVIEW: remember what the user ACTUALLY sees
+                             * beside the pipette tip. pointerup commits this.
+                             */
+                            lastEyedropperPreviewColor =
+                                floatingToolColor;
                         }
                     }
                 }
@@ -17505,6 +17513,16 @@ export class GameScene extends Phaser.Scene {
 
         let selectedColor =
             0x3b82f6;
+
+        /*
+         * V1010360B_AVATAR_EDITOR_FINAL_TIP_SAMPLE_PREVIEW / FINAL_SAMPLE_STATE
+         * Must be declared AFTER selectedColor.
+         */
+        let lastEyedropperPreviewColor =
+            selectedColor;
+
+        let avatarEyedropperPointerId =
+            -1;
 
         /*
          * V1010359B_AVATAR_EDITOR_EYEDROPPER_COLOR_PERSIST_FINAL / SAMPLED_COLOR_MEMORY
@@ -18125,9 +18143,12 @@ export class GameScene extends Phaser.Scene {
                 }
 
                 /*
-                 * V1010347_PAINT_TOOL_UX_UNIFICATION / AVATAR_FOOTPRINT_ONLY
-                 * Reuse the exact raster stamp itself as preview. No decorative
-                 * outer ring, so a 1px brush really looks like one pixel.
+                 * V1010360B_AVATAR_EDITOR_FINAL_TIP_SAMPLE_PREVIEW / ALWAYS_VISIBLE_BRUSH_FOOTPRINT
+                 *
+                 * Before the next paint action, always show exactly what will
+                 * be painted at the persistent last brush-tip position:
+                 * current color + current size + Circle/Square shape.
+                 * Straight mode uses the same selected brush footprint.
                  */
                 const previewStroke:
                     NetworkPaintStroke = {
@@ -18139,13 +18160,16 @@ export class GameScene extends Phaser.Scene {
                         shape:
                             selectedShape,
                         points: [
-                            hoverPoint,
+                            {
+                                x: hoverPoint.x,
+                                y: hoverPoint.y,
+                            },
                         ],
                     };
 
                 paintStroke(
                     previewStroke,
-                    0.42,
+                    0.50,
                 );
             };
 
@@ -18806,203 +18830,29 @@ export class GameScene extends Phaser.Scene {
                     );
 
                 /*
-                 * V1010352_AVATAR_EDITOR_EYEDROPPER_MASK
+                 * V1010360B_AVATAR_EDITOR_FINAL_TIP_SAMPLE_PREVIEW / EYEDROPPER_DRAG_START
                  *
-                 * Avatar editor eyedropper must never sample the transparent
-                 * rectangular area around the avatar as black.
-                 *
-                 * Contract:
-                 *   - actual avatar body pixel -> sample rendered avatar color
-                 *   - outside avatar body      -> sample editor background color
-                 *
-                 * We test the SAME logical body mask used by painting before
-                 * reading the canvas pixel.
+                 * Do NOT pick a color on pointerdown.
+                 * The pipette may move after the initial touch. While dragging,
+                 * updateFloatingTool() continuously previews the exact color
+                 * under the visible tip. pointerup commits the FINAL color.
                  */
-                const sampleEditorColor =
-                    (): void => {
-                        const rect =
-                            canvas.getBoundingClientRect();
-
-                        const sampleTip =
-                            getAvatarToolTipClient(
-                                event.clientX,
-                                event.clientY,
-                            );
-
-                        const sampleClientX =
-                            sampleTip.x;
-                        const sampleClientY =
-                            sampleTip.y;
-
-                        const logical =
-                            canvasToLogical(
-                                sampleClientX,
-                                sampleClientY,
-                            );
-
-                        const onAvatarBody =
-                            insideBody(
-                                logical.x,
-                                logical.y,
-                            );
-
-                        const px =
-                            Phaser.Math.Clamp(
-                                Math.floor(
-                                    (
-                                        sampleClientX -
-                                        rect.left
-                                    ) /
-                                    Math.max(
-                                        1,
-                                        rect.width,
-                                    ) *
-                                    canvas.width,
-                                ),
-                                0,
-                                canvas.width - 1,
-                            );
-
-                        const py =
-                            Phaser.Math.Clamp(
-                                Math.floor(
-                                    (
-                                        sampleClientY -
-                                        rect.top
-                                    ) /
-                                    Math.max(
-                                        1,
-                                        rect.height,
-                                    ) *
-                                    canvas.height,
-                                ),
-                                0,
-                                canvas.height - 1,
-                            );
-
-                        const pixel =
-                            ctx.getImageData(
-                                px,
-                                py,
-                                1,
-                                1,
-                            ).data;
-
-                        /*
-                         * If the tip is outside the actual avatar body, do NOT
-                         * accept a transparent/black avatar-bounds pixel.
-                         *
-                         * The editor canvas background is visually rendered,
-                         * so an opaque pixel here is the intended background
-                         * sample. If transparency somehow remains, use the
-                         * editor's known light background instead of black.
-                         */
-                        let r = pixel[0];
-                        let g = pixel[1];
-                        let b = pixel[2];
-
-                        if (
-                            !onAvatarBody &&
-                            pixel[3] <= 0
-                        ) {
-                            r = 251;
-                            g = 248;
-                            b = 233;
-                        } else if (
-                            onAvatarBody &&
-                            pixel[3] <= 0
-                        ) {
-                            /*
-                             * Body-mask says this is avatar, but no rendered
-                             * pixel exists. Ignore the sample rather than
-                             * turning the selected color black.
-                             */
-                            return;
-                        }
-
-                        selectedColor =
-                            (r << 16) |
-                            (g << 8) |
-                            b;
-
-                        sampledEditorColor =
-                            selectedColor;
-
-                        /*
-                         * V1010359B_AVATAR_EDITOR_EYEDROPPER_COLOR_PERSIST_FINAL / SAMPLE_BECOMES_PAINT_COLOR
-                         * This sampled value is now the authoritative paint
-                         * color for Circle / Square / Straight.
-                         */
-                        floatingTool.style.color =
-                            `#${selectedColor
-                                .toString(16)
-                                .padStart(
-                                    6,
-                                    '0',
-                                )}`;
-
-                        /*
-                         * V1010358_AVATAR_EDITOR_PERSISTENT_TOOLS / PERSISTENT_EYEDROPPER
-                         *
-                         * Sampling changes COLOR only. It must NOT change the
-                         * selected tool. Stay in eyedropper mode until the user
-                         * explicitly chooses Circle / Square / Line.
-                         */
-                        eyedropperArmed =
-                            true;
-
-                        floatingTool.innerHTML =
-                            dropperCursorSvg;
-
-                        refreshToolStates();
-
-                        controls
-                            .querySelectorAll(
-                                'button[data-avatar-color]',
-                            )
-                            .forEach(
-                                (
-                                    node,
-                                ) => {
-                                    const element =
-                                        node as
-                                            HTMLButtonElement;
-
-                                    const value =
-                                        Number(
-                                            element.dataset
-                                                .avatarColor,
-                                        );
-
-                                    element.style.border =
-                                        value ===
-                                        selectedColor
-                                            ? '3px solid #35523d'
-                                            : '2px solid #788b70';
-                                },
-                            );
-
-                        replay();
-
-                        if (
-                            this.mobileControlsEnabled
-                        ) {
-                            updateFloatingTool(
-                                event.clientX,
-                                event.clientY,
-                            );
-                        }
-                    };
-
                 if (
                     event.button ===
                         2 ||
                     eyedropperArmed
                 ) {
-                    sampleEditorColor();
+                    avatarEyedropperPointerId =
+                        event.pointerId;
+
+                    hoverPoint =
+                        downLogical;
+
                     drawing = false;
                     paintStarted = false;
                     pendingPointerId = -1;
+
+                    replay();
                     return;
                 }
 
@@ -19054,6 +18904,11 @@ export class GameScene extends Phaser.Scene {
                         event.clientY,
                     );
 
+                /*
+                 * V1010360B_AVATAR_EDITOR_FINAL_TIP_SAMPLE_PREVIEW: while pipette is held, updateFloatingTool() above
+                 * has already refreshed lastEyedropperPreviewColor for this
+                 * exact pointer position.
+                 */
                 if (
                     activePointers.has(
                         event.pointerId,
@@ -19208,6 +19063,53 @@ export class GameScene extends Phaser.Scene {
             (
                 event: PointerEvent,
             ): void => {
+                /*
+                 * V1010360B_AVATAR_EDITOR_FINAL_TIP_SAMPLE_PREVIEW / COMMIT_FINAL_PIPETTE_TIP
+                 *
+                 * Browser pointerup coordinates are the final stopped position.
+                 * Refresh the visual/sample one last time, then persist exactly
+                 * that color. Never use the original pointerdown color.
+                 */
+                if (
+                    eyedropperArmed &&
+                    avatarEyedropperPointerId ===
+                        event.pointerId
+                ) {
+                    updateFloatingTool(
+                        event.clientX,
+                        event.clientY,
+                    );
+
+                    hoverPoint =
+                        avatarToolTipToLogical(
+                            event.clientX,
+                            event.clientY,
+                        );
+
+                    selectedColor =
+                        lastEyedropperPreviewColor;
+
+                    sampledEditorColor =
+                        selectedColor;
+
+                    floatingTool.style.color =
+                        `#${selectedColor
+                            .toString(16)
+                            .padStart(
+                                6,
+                                '0',
+                            )}`;
+
+                    floatingTool.innerHTML =
+                        dropperCursorSvg;
+
+                    avatarEyedropperPointerId =
+                        -1;
+
+                    refreshToolStates();
+                    replay();
+                }
+
                 activePointers.delete(
                     event.pointerId,
                 );
