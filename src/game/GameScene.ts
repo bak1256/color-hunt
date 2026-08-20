@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010335_DESKTOP_HEADER_TRANSLATION_SAFE: desktop header uses translation-safe 3-column grid and profile bottom gap. */
     /* V1010334B_DESKTOP_LOBBY_TOP_SPACING_RUNTIME: resilient desktop-only top/profile spacing override. */
     /* V1010333B_REMOVE_UNUSED_COARSE_POINTER: remove v333 leftover unused coarsePointer declaration only. */
     /* V1010333_DESKTOP_LOBBY_NO_OVERLAP: desktop keeps large lobby frame but reuses stable v330 internal row heights. */
@@ -20269,6 +20270,371 @@ export class GameScene extends Phaser.Scene {
                 desktopPractice,
                 'max-height',
                 '50px',
+            );
+        }
+
+        /*
+         * V1010335_DESKTOP_HEADER_TRANSLATION_SAFE
+         *
+         * DESKTOP ONLY.
+         *
+         * Translation-safe header:
+         *   GAME START | BGM | HELP
+         *
+         * Each area owns its grid cell, so longer translated titles cannot
+         * slide under the buttons. Title may use up to two lines.
+         *
+         * Profile also gets a real visual bottom gap before Public Room.
+         */
+        if (
+            !window.matchMedia(
+                '(pointer: coarse)',
+            ).matches
+        ) {
+            const desktopSet =
+                (
+                    element:
+                        HTMLElement |
+                        null,
+                    property:
+                        string,
+                    value:
+                        string,
+                ): void => {
+                    element?.style.setProperty(
+                        property,
+                        value,
+                        'important',
+                    );
+                };
+
+            const actions =
+                root.querySelector<HTMLElement>(
+                    '.ch-lobby-actions',
+                );
+
+            /*
+             * Keep overall vertical budget controlled:
+             * +8 title, +8 profile
+             * reclaimed from 3 action rows + practice.
+             */
+            desktopSet(
+                actions,
+                'grid-template-rows',
+                '58px 94px 48px 48px 48px 46px minmax(52px, 1fr)',
+            );
+            desktopSet(
+                actions,
+                'gap',
+                '5px',
+            );
+
+            const titleRow =
+                root.querySelector<HTMLElement>(
+                    '.ch-lobby-actions-title-row',
+                );
+
+            desktopSet(
+                titleRow,
+                'display',
+                'grid',
+            );
+            desktopSet(
+                titleRow,
+                'grid-template-columns',
+                'minmax(0, 1fr) auto auto',
+            );
+            desktopSet(
+                titleRow,
+                'align-items',
+                'center',
+            );
+            desktopSet(
+                titleRow,
+                'column-gap',
+                '8px',
+            );
+            desktopSet(
+                titleRow,
+                'height',
+                '58px',
+            );
+            desktopSet(
+                titleRow,
+                'min-height',
+                '58px',
+            );
+            desktopSet(
+                titleRow,
+                'max-height',
+                '58px',
+            );
+            desktopSet(
+                titleRow,
+                'padding',
+                '4px 6px 4px 4px',
+            );
+            desktopSet(
+                titleRow,
+                'box-sizing',
+                'border-box',
+            );
+            desktopSet(
+                titleRow,
+                'overflow',
+                'hidden',
+            );
+
+            const title =
+                titleRow
+                    ?.querySelector<HTMLElement>(
+                        'h2',
+                    ) ??
+                null;
+
+            desktopSet(
+                title,
+                'display',
+                '-webkit-box',
+            );
+            desktopSet(
+                title,
+                'font-size',
+                '20px',
+            );
+            desktopSet(
+                title,
+                'line-height',
+                '1.05',
+            );
+            desktopSet(
+                title,
+                'min-width',
+                '0',
+            );
+            desktopSet(
+                title,
+                'max-width',
+                '100%',
+            );
+            desktopSet(
+                title,
+                'margin',
+                '0',
+            );
+            desktopSet(
+                title,
+                'padding',
+                '0',
+            );
+            desktopSet(
+                title,
+                'white-space',
+                'normal',
+            );
+            desktopSet(
+                title,
+                'overflow',
+                'hidden',
+            );
+            desktopSet(
+                title,
+                'overflow-wrap',
+                'anywhere',
+            );
+            desktopSet(
+                title,
+                '-webkit-box-orient',
+                'vertical',
+            );
+            desktopSet(
+                title,
+                '-webkit-line-clamp',
+                '2',
+            );
+
+            /*
+             * The title-row's non-title children are BGM / Help controls.
+             * Keep each in its own grid cell and never allow shrink/overlap.
+             */
+            if (titleRow) {
+                Array.from(
+                    titleRow.children,
+                ).forEach(
+                    (
+                        child,
+                        index,
+                    ) => {
+                        if (
+                            !(child instanceof HTMLElement) ||
+                            index === 0
+                        ) {
+                            return;
+                        }
+
+                        child.style.setProperty(
+                            'position',
+                            'static',
+                            'important',
+                        );
+                        child.style.setProperty(
+                            'transform',
+                            'none',
+                            'important',
+                        );
+                        child.style.setProperty(
+                            'margin',
+                            '0',
+                            'important',
+                        );
+                        child.style.setProperty(
+                            'flex',
+                            'none',
+                            'important',
+                        );
+                        child.style.setProperty(
+                            'min-width',
+                            '0',
+                            'important',
+                        );
+                        child.style.setProperty(
+                            'max-width',
+                            '88px',
+                            'important',
+                        );
+                        child.style.setProperty(
+                            'height',
+                            '38px',
+                            'important',
+                        );
+                        child.style.setProperty(
+                            'min-height',
+                            '38px',
+                            'important',
+                        );
+                        child.style.setProperty(
+                            'max-height',
+                            '38px',
+                            'important',
+                        );
+                        child.style.setProperty(
+                            'padding',
+                            '0 9px',
+                            'important',
+                        );
+                        child.style.setProperty(
+                            'box-sizing',
+                            'border-box',
+                            'important',
+                        );
+                        child.style.setProperty(
+                            'white-space',
+                            'nowrap',
+                            'important',
+                        );
+                    },
+                );
+            }
+
+            const profile =
+                root.querySelector<HTMLElement>(
+                    '.ch-lobby-profile-card',
+                );
+
+            desktopSet(
+                profile,
+                'height',
+                '90px',
+            );
+            desktopSet(
+                profile,
+                'min-height',
+                '90px',
+            );
+            desktopSet(
+                profile,
+                'max-height',
+                '90px',
+            );
+            desktopSet(
+                profile,
+                'align-self',
+                'start',
+            );
+            desktopSet(
+                profile,
+                'margin',
+                '0 0 4px 0',
+            );
+            desktopSet(
+                profile,
+                'padding-bottom',
+                '8px',
+            );
+            desktopSet(
+                profile,
+                'box-sizing',
+                'border-box',
+            );
+            desktopSet(
+                profile,
+                'overflow',
+                'hidden',
+            );
+
+            root.querySelectorAll<HTMLElement>(
+                '.ch-lobby-action--public, ' +
+                '.ch-lobby-action--private, ' +
+                '.ch-lobby-action--join',
+            ).forEach(
+                (button) => {
+                    desktopSet(
+                        button,
+                        'height',
+                        '48px',
+                    );
+                    desktopSet(
+                        button,
+                        'min-height',
+                        '48px',
+                    );
+                    desktopSet(
+                        button,
+                        'max-height',
+                        '48px',
+                    );
+                    desktopSet(
+                        button,
+                        'padding-top',
+                        '5px',
+                    );
+                    desktopSet(
+                        button,
+                        'padding-bottom',
+                        '5px',
+                    );
+                },
+            );
+
+            const practice =
+                root.querySelector<HTMLElement>(
+                    '.ch-lobby-action--practice',
+                );
+
+            desktopSet(
+                practice,
+                'height',
+                '46px',
+            );
+            desktopSet(
+                practice,
+                'min-height',
+                '46px',
+            );
+            desktopSet(
+                practice,
+                'max-height',
+                '46px',
             );
         }
 
