@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010363_POOP_SLOW_TEXT_SPACING: move poop slowdown explanation slightly below the under-Hunter countdown gauge. */
     /* V1010362_POOP_DEBUFF_5S_GAUGE: poop slowdown lasts 5s; Hunter-underfoot countdown gauge mirrors authoritative deadline. */
     /* V1010361_HIDER_FART_REACTION_LINES_I18N: fart detection text is voiced as the Hider's smell reaction in KO/JA/EN/ZH; mechanics unchanged. */
     /* V1010360_AVATAR_EDITOR_FINAL_TIP_SAMPLE_PREVIEW: pipette commits pointerup color; persistent brush footprint always previews exact paint. */
@@ -42852,7 +42853,7 @@ export class GameScene extends Phaser.Scene {
                 this.trackTransientGameplayVfx(
                     this.add.text(
                         p.x,
-                        p.y + 43,
+                        p.y + 52,
                         slowLabels[
                             getLanguage()
                         ],
@@ -42896,7 +42897,7 @@ export class GameScene extends Phaser.Scene {
 
             followForLifetime(
                 slowText,
-                43,
+                52,
                 5000,
             );
 
