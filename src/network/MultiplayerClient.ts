@@ -320,6 +320,7 @@ export type PaintReadyStateHandler = (
 ) => void;
 
 export class MultiplayerClient {
+  /* V1010364_P0_MULTIPLAYER_STABILITY: reduce high-frequency aim transport; preserve large-turn bypass. */
   /* V1010345_CONNECTION_STABILITY_HARDENING: same-session recovery wins; fresh handoff is final fallback. */
   /* V1010341_CLIENT_GAMEPLAY_STABILITY_SAFE: reconnect/background/tab stability. */
   /* V1010340C_MULTIPLAYER_TRANSPORT_HARDENING_FINAL: aim traffic and hidden-tab movement hardening. */
@@ -3050,7 +3051,7 @@ this.manualReconnectInFlight = false;
      * V1010340C_MULTIPLAYER_TRANSPORT_HARDENING_FINAL / AIM_THROTTLE
      *
      * Gaming mice can produce hundreds of pointer events each second.
-     * Ordinary aim updates are limited to ~30Hz, while large turns bypass.
+     * Ordinary aim updates are limited to ~15Hz, while large turns bypass.
      */
     if (
       !this.room ||
@@ -3087,7 +3088,7 @@ this.manualReconnectInFlight = false;
     if (
       now -
         this.lastHunterAimSentAt <
-        33 &&
+        66 &&
       angularJump < 0.14
     ) {
       return;

@@ -47,6 +47,7 @@ type NetworkPlayerView = {
 };
 
 export class NetworkPlayerManager {
+  /* V1010364_P0_MULTIPLAYER_STABILITY: cap movement transport to 20Hz while keeping local rendering frame-rate smooth. */
   /* V1010346_MOVEMENT_JITTER_MAX_HARDENING: local prediction, remote damping, delta and network cadence hardening. */
   /* V1010343_URGENT_HUNTER_INPUT_JITTER_EYEDROPPER: protect active local Hunter prediction from delayed echo jitter. */
   /* V1010341_CLIENT_GAMEPLAY_STABILITY_SAFE: movement + paint rendering stability. */
@@ -101,7 +102,7 @@ export class NetworkPlayerManager {
   private readonly hunterMoveSpeed = 125;
   /* V1010242_HUNTER_FART_SKILL: poop debuff. */
   private localHunterSpeedMultiplier = 1;
-  private readonly sendInterval = 33;
+  private readonly sendInterval = 50;
   private lastSendTime = 0;
   private recentSentPositions:
     Array<{
@@ -121,7 +122,7 @@ export class NetworkPlayerManager {
    * V1010346_MOVEMENT_JITTER_MAX_HARDENING / AUTHORITY_SYNC_RATE
    * Avoid redundant remote target reconciliation at render-frame frequency.
    */
-  private readonly authoritativeSyncIntervalMs = 33;
+  private readonly authoritativeSyncIntervalMs = 50;
   /*
    * V1010343_URGENT_HUNTER_INPUT_JITTER_EYEDROPPER / LOCAL_PREDICTION_GRACE
    * During active input, delayed server echoes must not fight the locally
