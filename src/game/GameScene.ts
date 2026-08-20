@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010359B_AVATAR_EDITOR_EYEDROPPER_COLOR_PERSIST_FINAL: larger pipette chip and explicit sampled-color persistence across tool switches. */
     /* V1010358_AVATAR_EDITOR_PERSISTENT_TOOLS: editor tool remains at last tip; eyedropper stays selected after sampling. */
     /* V1010357_AVATAR_EDITOR_TOOL_STATE_PREVIEW: size preview stays at current tip; tool mode preserved; live pipette preview. */
     /* V1010356E_AVATAR_EDITOR_PRECISION_TOOLS_EXACT: exact-source avatar editor tool tip/scale/preview polish. */
@@ -17185,11 +17186,11 @@ export class GameScene extends Phaser.Scene {
                     fill="#eef8fb" stroke="#26363d" stroke-width="3"
                     stroke-linejoin="round"/>
 
-                <!-- V1010357_AVATAR_EDITOR_TOOL_STATE_PREVIEW: sampled-color chip, same visual contract as game/practice -->
-                <circle cx="8" cy="33" r="8"
-                    fill="#26363d" fill-opacity="0.92"/>
-                <circle cx="8" cy="33" r="5.5"
-                    fill="currentColor" stroke="#ffffff" stroke-width="1.6"/>
+                <!-- V1010359B_AVATAR_EDITOR_EYEDROPPER_COLOR_PERSIST_FINAL: larger, easy-to-read sampled-color chip -->
+                <circle cx="11" cy="36" r="14"
+                    fill="#26363d" fill-opacity="0.95"/>
+                <circle cx="11" cy="36" r="10"
+                    fill="currentColor" stroke="#ffffff" stroke-width="2.6"/>
 
                 <!-- V1010358_AVATAR_EDITOR_PERSISTENT_TOOLS: unmistakable transparent glass pipette barrel -->
                 <path d="M19 19 L65 71"
@@ -17504,6 +17505,15 @@ export class GameScene extends Phaser.Scene {
 
         let selectedColor =
             0x3b82f6;
+
+        /*
+         * V1010359B_AVATAR_EDITOR_EYEDROPPER_COLOR_PERSIST_FINAL / SAMPLED_COLOR_MEMORY
+         * Set only by the eyedropper. Circle/Square/Line reuse it until the
+         * user explicitly picks a palette swatch.
+         */
+        let sampledEditorColor:
+            number |
+            undefined;
 
         let selectedSize = 3;
 
@@ -18369,6 +18379,9 @@ export class GameScene extends Phaser.Scene {
                                 16,
                             );
 
+                        sampledEditorColor =
+                            undefined;
+
                         eyedropperArmed =
                             false;
 
@@ -18911,6 +18924,22 @@ export class GameScene extends Phaser.Scene {
                             (r << 16) |
                             (g << 8) |
                             b;
+
+                        sampledEditorColor =
+                            selectedColor;
+
+                        /*
+                         * V1010359B_AVATAR_EDITOR_EYEDROPPER_COLOR_PERSIST_FINAL / SAMPLE_BECOMES_PAINT_COLOR
+                         * This sampled value is now the authoritative paint
+                         * color for Circle / Square / Straight.
+                         */
+                        floatingTool.style.color =
+                            `#${selectedColor
+                                .toString(16)
+                                .padStart(
+                                    6,
+                                    '0',
+                                )}`;
 
                         /*
                          * V1010358_AVATAR_EDITOR_PERSISTENT_TOOLS / PERSISTENT_EYEDROPPER
@@ -19528,6 +19557,14 @@ export class GameScene extends Phaser.Scene {
                 event.preventDefault();
                 event.stopPropagation();
 
+                if (
+                    sampledEditorColor !==
+                    undefined
+                ) {
+                    selectedColor =
+                        sampledEditorColor;
+                }
+
                 selectedShape =
                     'circle';
                 eyedropperArmed =
@@ -19537,6 +19574,13 @@ export class GameScene extends Phaser.Scene {
 
                 floatingTool.innerHTML =
                     brushCursorSvg;
+                floatingTool.style.color =
+                    `#${selectedColor
+                        .toString(16)
+                        .padStart(
+                            6,
+                            '0',
+                        )}`;
 
                 refreshToolStates();
                 replay();
@@ -19551,6 +19595,14 @@ export class GameScene extends Phaser.Scene {
                 event.preventDefault();
                 event.stopPropagation();
 
+                if (
+                    sampledEditorColor !==
+                    undefined
+                ) {
+                    selectedColor =
+                        sampledEditorColor;
+                }
+
                 selectedShape =
                     'square';
                 eyedropperArmed =
@@ -19560,6 +19612,13 @@ export class GameScene extends Phaser.Scene {
 
                 floatingTool.innerHTML =
                     brushCursorSvg;
+                floatingTool.style.color =
+                    `#${selectedColor
+                        .toString(16)
+                        .padStart(
+                            6,
+                            '0',
+                        )}`;
 
                 refreshToolStates();
                 replay();
@@ -19603,6 +19662,14 @@ export class GameScene extends Phaser.Scene {
                 event.preventDefault();
                 event.stopPropagation();
 
+                if (
+                    sampledEditorColor !==
+                    undefined
+                ) {
+                    selectedColor =
+                        sampledEditorColor;
+                }
+
                 straightLineArmed =
                     true;
                 eyedropperArmed =
@@ -19614,6 +19681,13 @@ export class GameScene extends Phaser.Scene {
                  */
                 floatingTool.innerHTML =
                     brushCursorSvg;
+                floatingTool.style.color =
+                    `#${selectedColor
+                        .toString(16)
+                        .padStart(
+                            6,
+                            '0',
+                        )}`;
 
                 refreshToolStates();
                 replay();
