@@ -47,6 +47,7 @@ type NetworkPlayerView = {
 };
 
 export class NetworkPlayerManager {
+  /* V1010338_CRITICAL_GAMEPLAY_TRIPLE_FIX: remote Hunter smoothing + remote paint raster continuity. */
   /* V1010286B_LOBBY_AVATAR_EXACT_RENDER_PATHFIX: saved avatar strokes replay continuously with editor-equivalent geometry. */
   private readonly scene: Phaser.Scene;
   private readonly gameWidth: number;
@@ -1766,19 +1767,42 @@ export class NetworkPlayerManager {
           return;
         }
 
+        /*
+         * V1010338_CRITICAL_GAMEPLAY_TRIPLE_FIX / REMOTE_HUNTER_SMOOTHING
+         *
+         * Fixed 0.22 lerp depends on FPS and makes uneven network packet
+         * cadence visible as stop/go motion, especially with 3+ players.
+         *
+         * Hunter gets frame-rate-independent damping during Hunt.
+         * Other phases keep a slightly softer equivalent damping.
+         */
+        const smoothing =
+          1 -
+          Math.pow(
+            huntActive &&
+            view.role === "hunter"
+              ? 0.00001
+              : 0.00008,
+            Math.max(1, delta) / 1000,
+          );
+
         const x = Phaser.Math.Linear(
           view.container.x,
           view.targetX,
-          0.22,
+          smoothing,
         );
 
         const y = Phaser.Math.Linear(
           view.container.y,
           view.targetY,
-          0.22,
+          smoothing,
         );
 
-        this.setViewPosition(view, x, y);
+        this.setViewPosition(
+          view,
+          x,
+          y,
+        );
 
         this.applyWalkMotion(
           view,
@@ -2991,27 +3015,89 @@ export class NetworkPlayerManager {
       return;
     }
 
+    /*
+     * V1010338_CRITICAL_GAMEPLAY_TRIPLE_FIX / REMOTE_PAINT_RASTER_CONTINUITY
+     *
+     * Replay the path, not just isolated serialized points.
+     * This closes 1px diagonal/rounding holes while the exact character mask
+     * still prevents paint outside the body.
+     */
+    let previousPoint:
+      NetworkPaintPoint |
+      undefined;
+
     stroke.points.forEach((point) => {
       const pixelX =
         Math.round(point.x);
       const pixelY =
         Math.round(point.y);
 
-      /*
-       * Do not reject remote brush centers with a smaller bounding box.
-       * The exact character geometry mask below is already authoritative.
-       * Keeping an extra remote-only center filter can make edge paint
-       * visible to the Hider but missing on the Hunter.
-       */
-      this.stampMaskedPaintBrush(
-        view,
-        pixelX,
-        pixelY,
-        stroke.color,
-        stroke.size,
-        stroke.shape,
-      );
+      if (previousPoint) {
+        const fromX =
+          Math.round(previousPoint.x);
+        const fromY =
+          Math.round(previousPoint.y);
+
+        const distance =
+          Phaser.Math.Distance.Between(
+            fromX,
+            fromY,
+            pixelX,
+            pixelY,
+          );
+
+        const steps =
+          Math.max(
+            1,
+            Math.ceil(
+              distance / 0.65,
+            ),
+          );
+
+        for (
+          let step = 1;
+          step <= steps;
+          step += 1
+        ) {
+          const t =
+            step / steps;
+
+          this.stampMaskedPaintBrush(
+            view,
+            Phaser.Math.Linear(
+              fromX,
+              pixelX,
+              t,
+            ),
+            Phaser.Math.Linear(
+              fromY,
+              pixelY,
+              t,
+            ),
+            stroke.color,
+            stroke.size,
+            stroke.shape,
+            false,
+          );
+        }
+      } else {
+        this.stampMaskedPaintBrush(
+          view,
+          pixelX,
+          pixelY,
+          stroke.color,
+          stroke.size,
+          stroke.shape,
+          false,
+        );
+      }
+
+      previousPoint = point;
     });
+
+    this.renderPaintTexture(
+      view.paintLayer.texture,
+    );
 
     this.syncPaintLayerPosition(
       view,

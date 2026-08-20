@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010338_CRITICAL_GAMEPLAY_TRIPLE_FIX: eyedropper no-fill + Hunt final paint snapshot. */
     /* V1010337_DESKTOP_TITLE_PROFILE_BALANCE: desktop translated title fits; profile top/bottom padding balanced. */
     /* V1010336_DESKTOP_HEADER_RESTORE_CONTROLS: restore desktop BGM/help sizing; compact only translated title; add profile bottom room. */
     /* V1010335_DESKTOP_HEADER_TRANSLATION_SAFE: desktop header uses translation-safe 3-column grid and profile bottom gap. */
@@ -7466,7 +7467,7 @@ export class GameScene extends Phaser.Scene {
             `<svg viewBox="0 0 32 32" aria-hidden="true"><rect x="8" y="8" width="16" height="16" rx="2"/><path d="M5 27L12 20"/></svg>`;
 
         const dropperSvg =
-            `<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M20 5l7 7-4 4-2-2-9 9-5 2 2-5 9-9-2-2z"/><path d="M7 25h8"/></svg>`;
+            `<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M20 5l7 7-4 4-2-2-9 9-5 2 2-5 9-9-2-2z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 25h8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>`;
 
         const undoSvg =
             `<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M12 9L5 15l7 6"/><path d="M7 15h11c6 0 9 4 9 9"/></svg>`;
@@ -18683,8 +18684,8 @@ export class GameScene extends Phaser.Scene {
 
         const dropperSvg =
             `<svg viewBox="0 0 32 32" aria-hidden="true">
-                <path d="M20 5l7 7-4 4-2-2-9 9-5 2 2-5 9-9-2-2z"/>
-                <path d="M7 25h8"/>
+                <path d="M20 5l7 7-4 4-2-2-9 9-5 2 2-5 9-9-2-2z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M7 25h8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
             </svg>`;
 
         const lineSvg =
@@ -29905,7 +29906,44 @@ export class GameScene extends Phaser.Scene {
                     .isLocalHider() &&
                 this.localPaintHistory.length > 0
             ) {
-                this.rebuildLocalPaintFromHistory();
+                /*
+                 * V1010338_CRITICAL_GAMEPLAY_TRIPLE_FIX / HUNT_PAINT_FINAL_SNAPSHOT
+                 *
+                 * Server rejects ordinary paint_stroke after phase becomes Hunt.
+                 * Do NOT try to rebroadcast final camouflage through that path.
+                 *
+                 * 1) Rebuild the local raster exactly from complete history.
+                 * 2) Send the complete history through restore_local_paint,
+                 *    which is explicitly accepted during Hunt and replaces the
+                 *    authoritative round snapshot for this Hider.
+                 */
+                this.rebuildLocalPaintFromHistory(
+                    false,
+                );
+
+                multiplayerClient
+                    .sendReconnectPaintSnapshot(
+                        this.localPaintHistory,
+                    );
+
+                /*
+                 * Ask for one convergence snapshot after opponents/server had
+                 * time to process the replacement. This is cheap and prevents
+                 * an early Hunt render from staying on an older partial image.
+                 */
+                this.time.delayedCall(
+                    260,
+                    () => {
+                        if (
+                            this.phase ===
+                            'hunt' &&
+                            this.isMultiplayerSession()
+                        ) {
+                            multiplayerClient
+                                .requestRoundPaintState();
+                        }
+                    },
+                );
             }
 
             this.clearStatus();
