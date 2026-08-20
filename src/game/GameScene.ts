@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010318_MOBILE_WAITING_FORCE_FULL_WIDTH: stretch full timing ancestry so headers/options use entire card width. */
     /* V1010317_MOBILE_WAITING_TIMING_FILL_ALIGN: mobile timing headers left-aligned and 3 buttons fill width evenly. */
     /* V1010316_MOBILE_WAITING_TIMING_PC_LIKE: compact PC-like Paint/Hunt timing cards on mobile. */
     /* V1010315_MOBILE_WAITING_TIMING_CONTAINED: keep Paint/Hunt headers and buttons entirely inside their frames. */
@@ -21645,13 +21646,16 @@ export class GameScene extends Phaser.Scene {
         }
 
         /*
-         * V1010317_MOBILE_WAITING_TIMING_FILL_ALIGN: final mobile timing polish.
+         * V1010318_MOBILE_WAITING_FORCE_FULL_WIDTH: final full-width mobile timing composition.
          *
-         * Keep v316 heights untouched.
-         * Only fix horizontal composition:
-         * - title stays left
-         * - current selected seconds stays right
-         * - three option buttons evenly fill the whole card width
+         * IMPORTANT:
+         * Do not change any v316/v317 vertical sizes.
+         *
+         * The previous attempt only stretched .ch-waiting-time-options.
+         * Old CSS still centered the PARENT grid items, so 100% meant 100%
+         * of a narrow intrinsic content track. Stretch the entire ancestry:
+         *
+         * timing -> section -> title/options -> buttons
          */
         const waitingTiming =
             this.waitingRoomRoot
@@ -21679,6 +21683,16 @@ export class GameScene extends Phaser.Scene {
                 'important',
             );
             waitingTiming.style.setProperty(
+                'width',
+                '100%',
+                'important',
+            );
+            waitingTiming.style.setProperty(
+                'min-width',
+                '0',
+                'important',
+            );
+            waitingTiming.style.setProperty(
                 'height',
                 '94px',
                 'important',
@@ -21694,8 +21708,23 @@ export class GameScene extends Phaser.Scene {
                 'important',
             );
             waitingTiming.style.setProperty(
+                'justify-items',
+                'stretch',
+                'important',
+            );
+            waitingTiming.style.setProperty(
+                'align-items',
+                'stretch',
+                'important',
+            );
+            waitingTiming.style.setProperty(
                 'overflow',
                 'hidden',
+                'important',
+            );
+            waitingTiming.style.setProperty(
+                'box-sizing',
+                'border-box',
                 'important',
             );
         }
@@ -21725,6 +21754,16 @@ export class GameScene extends Phaser.Scene {
                             'important',
                         );
                         section.style.setProperty(
+                            'width',
+                            '100%',
+                            'important',
+                        );
+                        section.style.setProperty(
+                            'min-width',
+                            '0',
+                            'important',
+                        );
+                        section.style.setProperty(
                             'height',
                             '45px',
                             'important',
@@ -21740,8 +21779,28 @@ export class GameScene extends Phaser.Scene {
                             'important',
                         );
                         section.style.setProperty(
+                            'justify-self',
+                            'stretch',
+                            'important',
+                        );
+                        section.style.setProperty(
+                            'justify-items',
+                            'stretch',
+                            'important',
+                        );
+                        section.style.setProperty(
+                            'align-items',
+                            'stretch',
+                            'important',
+                        );
+                        section.style.setProperty(
                             'padding',
                             '2px 6px',
+                            'important',
+                        );
+                        section.style.setProperty(
+                            'margin',
+                            '0',
                             'important',
                         );
                         section.style.setProperty(
@@ -21780,6 +21839,11 @@ export class GameScene extends Phaser.Scene {
                         'important',
                     );
                     title.style.setProperty(
+                        'justify-items',
+                        'stretch',
+                        'important',
+                    );
+                    title.style.setProperty(
                         'column-gap',
                         '6px',
                         'important',
@@ -21788,6 +21852,21 @@ export class GameScene extends Phaser.Scene {
                     if (
                         this.mobileControlsEnabled
                     ) {
+                        title.style.setProperty(
+                            'width',
+                            '100%',
+                            'important',
+                        );
+                        title.style.setProperty(
+                            'min-width',
+                            '0',
+                            'important',
+                        );
+                        title.style.setProperty(
+                            'justify-self',
+                            'stretch',
+                            'important',
+                        );
                         title.style.setProperty(
                             'height',
                             '14px',
@@ -21837,8 +21916,23 @@ export class GameScene extends Phaser.Scene {
 
                     if (label) {
                         label.style.setProperty(
+                            'display',
+                            'block',
+                            'important',
+                        );
+                        label.style.setProperty(
+                            'width',
+                            '100%',
+                            'important',
+                        );
+                        label.style.setProperty(
+                            'min-width',
+                            '0',
+                            'important',
+                        );
+                        label.style.setProperty(
                             'justify-self',
-                            'start',
+                            'stretch',
                             'important',
                         );
                         label.style.setProperty(
@@ -21913,6 +22007,26 @@ export class GameScene extends Phaser.Scene {
                             'important',
                         );
                         options.style.setProperty(
+                            'min-width',
+                            '0',
+                            'important',
+                        );
+                        options.style.setProperty(
+                            'max-width',
+                            'none',
+                            'important',
+                        );
+                        options.style.setProperty(
+                            'justify-self',
+                            'stretch',
+                            'important',
+                        );
+                        options.style.setProperty(
+                            'justify-items',
+                            'stretch',
+                            'important',
+                        );
+                        options.style.setProperty(
                             'height',
                             '26px',
                             'important',
@@ -21983,6 +22097,16 @@ export class GameScene extends Phaser.Scene {
                         button.style.setProperty(
                             'min-width',
                             '0',
+                            'important',
+                        );
+                        button.style.setProperty(
+                            'max-width',
+                            'none',
+                            'important',
+                        );
+                        button.style.setProperty(
+                            'justify-self',
+                            'stretch',
                             'important',
                         );
                         button.style.setProperty(
