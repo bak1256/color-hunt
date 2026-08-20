@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010348_AVATAR_EDITOR_PAINT_PARITY: avatar editor uses paint-only one-finger gesture and game-parity tools. */
     /* V1010347_PAINT_TOOL_UX_UNIFICATION: unified brush/pipette/line UX for Hider paint + lobby avatar editor. */
     /* V1010344B_HIDER_SELF_PAINT_HUNT_SETTLE: preserve the owner's Hider camouflage through Hunt transition. */
     /* V1010343_URGENT_HUNTER_INPUT_JITTER_EYEDROPPER: Hunter input/focus recovery + eyedropper hardening. */
@@ -16932,7 +16933,7 @@ export class GameScene extends Phaser.Scene {
                             ? '1 finger: paint · 2 fingers: zoom · ●/■ brush · 💧 eyedropper · ╱ line'
                             : getLanguage() === 'zh'
                                 ? '单指涂色 · 双指缩放 · ●/■画笔 · 💧吸管 · ╱直线'
-                                : '한 손가락: 색칠 · 두 손가락: 확대 · ●/■ 브러시 · 💧 스포이드 · ╱ 직선'
+                                : '한 손가락: 배경부터 드래그해 색칠 · 두 손가락: 확대 · ●/■ 브러시 · 💧 스포이드 · ╱ 직선'
                 )
                 : (
                     getLanguage() === 'ja'
@@ -17046,32 +17047,63 @@ export class GameScene extends Phaser.Scene {
          * V1010347_PAINT_TOOL_UX_UNIFICATION / AVATAR_TOOL_ART
          * Same clear brush/pipette visual language as Hider painting.
          */
+        /*
+         * V1010348_AVATAR_EDITOR_PAINT_PARITY / GAME_PARITY_TOOL_CURSOR
+         *
+         * Same orientation as Hider game/practice:
+         * paint/sample TIP = upper-left, HANDLE = lower-right.
+         * Explicit coordinates avoid the old SVG rotate direction mismatch.
+         */
         const brushCursorSvg =
-            `<svg viewBox="0 0 48 48" width="42" height="42" aria-hidden="true">
-                <g transform="rotate(-36 24 24)" stroke-linejoin="round">
-                    <rect x="21" y="2" width="7" height="25" rx="2.5"
-                        fill="#c98a4b" stroke="#3f3025" stroke-width="2.4"/>
-                    <rect x="18" y="24" width="13" height="7" rx="1.5"
-                        fill="#e7edf0" stroke="#3f4a50" stroke-width="2.2"/>
-                    <path d="M18 31h13l-2 9c-1 4-8 6-13 4 3-4 3-8 2-13z"
-                        fill="#f5eee2" stroke="#3f3025" stroke-width="2.3"/>
-                    <path d="M18 39c4 1 7 .6 11-1"
-                        fill="none" stroke="#ffffff" stroke-width="2"/>
-                </g>
+            `<svg viewBox="0 0 48 48" width="44" height="44" aria-hidden="true">
+                <!-- wooden handle: ferrule -> lower-right grip -->
+                <path d="M23 23 L43 43"
+                    fill="none" stroke="#3c2d22" stroke-width="10"
+                    stroke-linecap="round"/>
+                <path d="M23 23 L43 43"
+                    fill="none" stroke="#c98245" stroke-width="6"
+                    stroke-linecap="round"/>
+                <!-- metal ferrule -->
+                <path d="M14 14 L25 25"
+                    fill="none" stroke="#3f4a50" stroke-width="11"
+                    stroke-linecap="square"/>
+                <path d="M14 14 L25 25"
+                    fill="none" stroke="#e8edf0" stroke-width="7"
+                    stroke-linecap="square"/>
+                <!-- bristles point exactly toward upper-left paint target -->
+                <path d="M5 5 L18 11 L11 18 Z"
+                    fill="#f5eee2" stroke="#3c2d22" stroke-width="2.2"
+                    stroke-linejoin="round"/>
             </svg>`;
 
         const dropperCursorSvg =
-            `<svg viewBox="0 0 48 48" width="42" height="42" aria-hidden="true">
-                <g transform="rotate(-42 24 24)" stroke-linejoin="round">
-                    <rect x="20" y="2" width="9" height="11" rx="2"
-                        fill="#b9d1dc" stroke="#304b54" stroke-width="2.5"/>
-                    <rect x="17" y="11" width="15" height="7" rx="2"
-                        fill="#dce9ef" stroke="#304b54" stroke-width="2.5"/>
-                    <path d="M20 18h9v13l-4.5 10-4.5-10z"
-                        fill="#eef8fb" stroke="#304b54" stroke-width="2.5"/>
-                    <path d="M24.5 41v4"
-                        fill="none" stroke="#304b54" stroke-width="2.5" stroke-linecap="round"/>
-                </g>
+            `<svg viewBox="0 0 48 48" width="44" height="44" aria-hidden="true">
+                <!-- glass barrel toward lower-right handle -->
+                <path d="M18 18 L42 42"
+                    fill="none" stroke="#304b54" stroke-width="13"
+                    stroke-linecap="round"/>
+                <path d="M18 18 L42 42"
+                    fill="none" stroke="#e7eef2" stroke-width="8"
+                    stroke-linecap="round"/>
+                <!-- inner sampled-color tube -->
+                <path d="M21 21 L38 38"
+                    fill="none" stroke="#3b82f6" stroke-width="3.5"
+                    stroke-linecap="round"/>
+                <!-- ferrule / shoulder -->
+                <path d="M14 14 L23 23"
+                    fill="none" stroke="#9db6c2" stroke-width="12"
+                    stroke-linecap="square"/>
+                <!-- sampling tip points upper-left -->
+                <path d="M5 5 L18 10 L10 18 Z"
+                    fill="#eef8fb" stroke="#304b54" stroke-width="2.4"
+                    stroke-linejoin="round"/>
+                <!-- non-circular top cap makes handle identity obvious -->
+                <path d="M36 36 L45 45"
+                    fill="none" stroke="#304b54" stroke-width="15"
+                    stroke-linecap="butt"/>
+                <path d="M37 37 L44 44"
+                    fill="none" stroke="#b9d1dc" stroke-width="9"
+                    stroke-linecap="butt"/>
             </svg>`;
 
         floatingTool.innerHTML =
@@ -17203,14 +17235,12 @@ export class GameScene extends Phaser.Scene {
          * prevents device-dependent first-open offsets on mobile browsers.
          */
         let editorViewportTouched = false;
-        let panning = false;
-        let panPointerId = -1;
-        let panStartScreen:
-            { x: number; y: number } |
-            undefined;
-        let panStartOffset:
-            { x: number; y: number } |
-            undefined;
+
+        /*
+         * V1010348_AVATAR_EDITOR_PAINT_PARITY / NO_BACKGROUND_PAN
+         * One-finger background drag is paint-only. The avatar never moves.
+         * Two-finger pinch remains the only viewport manipulation gesture.
+         */
 
         /*
          * v0.10.10.124:
@@ -18276,12 +18306,11 @@ export class GameScene extends Phaser.Scene {
 
                 if (!pinchActive) {
                     pinchActive = true;
-                    panning = false;
-                    panPointerId = -1;
-                    panStartScreen =
-                        undefined;
-                    panStartOffset =
-                        undefined;
+                    /*
+                     * V1010348_AVATAR_EDITOR_PAINT_PARITY / PINCH_OWNS_VIEW
+                     * Finish the current paint gesture when two fingers take
+                     * ownership; there is no one-finger pan state anymore.
+                     */
                     finishStroke();
                 }
 
@@ -18491,37 +18520,11 @@ export class GameScene extends Phaser.Scene {
                 }
 
                 /*
-                 * Dragging EMPTY background pans the avatar. A touch that
-                 * starts on the actual body remains a paint gesture.
+                 * V1010348_AVATAR_EDITOR_PAINT_PARITY / BACKGROUND_STARTS_PAINT
+                 * Do NOT reject a pointer that starts outside the avatar.
+                 * The stroke may enter the body later. Raster writes remain
+                 * clipped by insideBody(), exactly like Hider paint.
                  */
-                if (
-                    this.mobileControlsEnabled &&
-                    !insideBody(
-                        downLogical.x,
-                        downLogical.y,
-                    )
-                ) {
-                    panning = true;
-                    panPointerId =
-                        event.pointerId;
-                    panStartScreen = {
-                        x: event.clientX,
-                        y: event.clientY,
-                    };
-                    panStartOffset = {
-                        x: editorPanX,
-                        y: editorPanY,
-                    };
-                    drawing = false;
-                    paintStarted = false;
-                    pendingPointerId = -1;
-                    pendingStartScreen =
-                        undefined;
-                    hoverPoint = undefined;
-                    replay();
-                    return;
-                }
-
                 drawing = true;
                 paintStarted = false;
                 pendingPointerId =
@@ -18548,58 +18551,10 @@ export class GameScene extends Phaser.Scene {
                     event.clientY,
                 );
 
-                if (
-                    panning &&
-                    panPointerId ===
-                        event.pointerId &&
-                    panStartScreen &&
-                    panStartOffset &&
-                    activePointers.size < 2
-                ) {
-                    event.preventDefault();
-
-                    const rect =
-                        canvas.getBoundingClientRect();
-
-                    const canvasScaleX =
-                        canvas.width /
-                        Math.max(1, rect.width);
-                    const canvasScaleY =
-                        canvas.height /
-                        Math.max(1, rect.height);
-
-                    editorPanX =
-                        panStartOffset.x +
-                        (
-                            event.clientX -
-                            panStartScreen.x
-                        ) * canvasScaleX;
-
-                    editorPanY =
-                        panStartOffset.y +
-                        (
-                            event.clientY -
-                            panStartScreen.y
-                        ) * canvasScaleY;
-
-                    editorPanX =
-                        Phaser.Math.Clamp(
-                            editorPanX,
-                            -canvas.width * 0.38,
-                            canvas.width * 0.38,
-                        );
-                    editorPanY =
-                        Phaser.Math.Clamp(
-                            editorPanY,
-                            -canvas.height * 0.38,
-                            canvas.height * 0.38,
-                        );
-
-                    hoverPoint = undefined;
-                    replay();
-                    return;
-                }
-
+                /*
+                 * V1010348_AVATAR_EDITOR_PAINT_PARITY: one-finger pointermove always remains a paint
+                 * preview/stroke path; no avatar translation path exists.
+                 */
                 hoverPoint =
                     canvasToLogical(
                         event.clientX,
@@ -18756,20 +18711,6 @@ export class GameScene extends Phaser.Scene {
                 );
 
                 if (
-                    panPointerId ===
-                        event.pointerId
-                ) {
-                    panning = false;
-                    panPointerId = -1;
-                    panStartScreen =
-                        undefined;
-                    panStartOffset =
-                        undefined;
-                    hoverPoint = undefined;
-                    replay();
-                }
-
-                if (
                     activePointers.size <
                     2
                 ) {
@@ -18843,20 +18784,22 @@ export class GameScene extends Phaser.Scene {
 
         const circleSvg =
             `<svg viewBox="0 0 32 32" aria-hidden="true">
-                <circle cx="16" cy="15" r="8"/>
-                <path d="M6 26L13 19"/>
+                <path d="M15 15L28 28" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round"/>
+                <path d="M9 9L17 17" fill="none" stroke="currentColor" stroke-width="7"/>
+                <path d="M3 3L12 7L7 12Z" fill="currentColor"/>
             </svg>`;
 
         const squareSvg =
             `<svg viewBox="0 0 32 32" aria-hidden="true">
-                <rect x="8" y="7" width="16" height="16" rx="2"/>
-                <path d="M5 27L12 20"/>
+                <path d="M15 15L28 28" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round"/>
+                <rect x="6" y="6" width="10" height="10" transform="rotate(45 11 11)" fill="none" stroke="currentColor" stroke-width="3"/>
             </svg>`;
 
         const dropperSvg =
             `<svg viewBox="0 0 32 32" aria-hidden="true">
-                <path d="M20 5l7 7-4 4-2-2-9 9-5 2 2-5 9-9-2-2z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M7 25h8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
+                <path d="M12 12L28 28" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="butt"/>
+                <path d="M8 8L18 18" fill="none" stroke="currentColor" stroke-width="6"/>
+                <path d="M2 2L10 6L6 10Z" fill="currentColor"/>
             </svg>`;
 
         const lineSvg =
