@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010301_LOBBY_WAITING_JOYSTICK_POLISH: deterministic lobby SVG icons, flush full-height waiting dock, reliable captured mobile MOVE joystick. */
     /* V1010300_CLIENT_MOBILE_UI_GHOST_GAS_FIX: mobile UI proportions, single status dot, GAS reset, zero-player room filter. */
     /* V1010299_UI_LAYOUT_BGM_HOTFIX: restore lobby icons, stable status dot, rebuild mobile waiting room, anchor gameplay BGM inside canvas. */
     /* V1010298_UNIFIED_BGM_MOBILE_WAITING_LOBBY_POLISH: unified BGM, full mobile waiting room, visible room status, lock icons. */
@@ -2806,19 +2807,82 @@ export class GameScene extends Phaser.Scene {
                     this.resetMobileMoveControl();
                 }
 
+                /*
+                 * Do not let an AIM/FIRE/FART bookkeeping residue steal a new
+                 * MOVE touch on the left half of the screen.
+                 */
+                if (
+                    pointer.x <
+                        this.gameWidth *
+                            0.5 &&
+                    this.mobileMovePointerId <
+                        0
+                ) {
+                    this.mobilePinchActive =
+                        false;
+                    this.mobilePinchDistance =
+                        0;
+                }
+
                 if (
                     this.mobileMoveBase?.visible &&
                     moveDistance <=
                         this.mobileJoystickRadius *
-                        1.55
+                        1.8
                 ) {
                     this.mobileMovePointerId =
                         pointer.id;
+
+                    /*
+                     * V1010301_LOBBY_WAITING_JOYSTICK_POLISH: own the native touch until release.
+                     * Without capture, mobile Safari/WebView can hand the
+                     * finger to chat/DOM overlays when it drifts outside the
+                     * joystick circle, making MOVE appear randomly dead.
+                     */
+                    const nativeEvent =
+                        pointer.event as
+                            PointerEvent |
+                            undefined;
+
+                    if (
+                        nativeEvent &&
+                        Number.isFinite(
+                            nativeEvent.pointerId,
+                        )
+                    ) {
+                        try {
+                            if (
+                                !this.game.canvas
+                                    .hasPointerCapture(
+                                        nativeEvent
+                                            .pointerId,
+                                    )
+                            ) {
+                                this.game.canvas
+                                    .setPointerCapture(
+                                        nativeEvent
+                                            .pointerId,
+                                    );
+                            }
+                        } catch {
+                            // Older WebViews may not support capture.
+                        }
+                    }
+
+                    this.mobileTouchPoints.set(
+                        pointer.id,
+                        new Phaser.Math.Vector2(
+                            pointer.x,
+                            pointer.y,
+                        ),
+                    );
+
                     this.updateMobileJoystick(
                         'move',
                         pointer.x,
                         pointer.y,
                     );
+
                     this.mobilePinchDistance = 0;
                     return;
                 }
@@ -2896,11 +2960,22 @@ export class GameScene extends Phaser.Scene {
                 if (
                     !this.mobileTouchPoints.has(
                         pointer.id,
-                    )
+                    ) &&
+                    pointer.id !==
+                        this.mobileMovePointerId &&
+                    pointer.id !==
+                        this.mobileAimPointerId &&
+                    pointer.id !==
+                        this.mobileFirePointerId &&
+                    pointer.id !==
+                        this.mobileFartPointerId
                 ) {
                     return;
                 }
 
+                /*
+                 * V1010301_LOBBY_WAITING_JOYSTICK_POLISH: rehydrate the touch map for an already-owned control.
+                 */
                 this.mobileTouchPoints.set(
                     pointer.id,
                     new Phaser.Math.Vector2(
@@ -2961,6 +3036,36 @@ export class GameScene extends Phaser.Scene {
                 pointer:
                     Phaser.Input.Pointer,
             ): void => {
+                const nativeEvent =
+                    pointer.event as
+                        PointerEvent |
+                        undefined;
+
+                if (
+                    nativeEvent &&
+                    Number.isFinite(
+                        nativeEvent.pointerId,
+                    )
+                ) {
+                    try {
+                        if (
+                            this.game.canvas
+                                .hasPointerCapture(
+                                    nativeEvent
+                                        .pointerId,
+                                )
+                        ) {
+                            this.game.canvas
+                                .releasePointerCapture(
+                                    nativeEvent
+                                        .pointerId,
+                                );
+                        }
+                    } catch {
+                        // Safe fallback for embedded mobile WebViews.
+                    }
+                }
+
                 this.mobileTouchPoints.delete(
                     pointer.id,
                 );
@@ -3785,9 +3890,20 @@ export class GameScene extends Phaser.Scene {
                 ),
             );
 
+        /*
+         * V1010301_LOBBY_WAITING_JOYSTICK_POLISH: keep the knob center slightly inside the outer frame so the
+         * knob itself never visually crosses the ring.
+         */
+        const knobTravelRadius =
+            Math.max(
+                1,
+                this.mobileJoystickRadius -
+                    12,
+            );
+
         const clampedLength =
             Math.min(
-                this.mobileJoystickRadius,
+                knobTravelRadius,
                 length,
             );
 
@@ -19408,7 +19524,9 @@ export class GameScene extends Phaser.Scene {
                     </div>
 
                     <button type="button" class="ch-lobby-action ch-lobby-action--public">
-                        <span class="ch-lobby-action-icon" aria-hidden="true">＋</span>
+                        <span class="ch-lobby-action-icon" aria-hidden="true"><svg class="ch-lobby-action-svg" viewBox="0 0 32 32" aria-hidden="true">
+    <path d="M16 6v20M6 16h20"/>
+</svg></span>
                         <span>
                             <strong>${tr('공개방 만들기')}</strong>
                             <small>${tr('누구나 참여할 수 있는 방을 만들어요')}</small>
@@ -19416,7 +19534,12 @@ export class GameScene extends Phaser.Scene {
                     </button>
 
                     <button type="button" class="ch-lobby-action ch-lobby-action--private">
-                        <span class="ch-lobby-action-icon" aria-hidden="true">🔒</span>
+                        <span class="ch-lobby-action-icon" aria-hidden="true"><svg class="ch-lobby-action-svg" viewBox="0 0 32 32" aria-hidden="true">
+    <rect x="7" y="14" width="18" height="13" rx="3"/>
+    <path d="M11 14V10a5 5 0 0 1 10 0v4"/>
+    <circle cx="16" cy="20" r="1.5"/>
+    <path d="M16 21.5v2.5"/>
+</svg></span>
                         <span>
                             <strong>${tr('비공개방 만들기')}</strong>
                             <small>${tr('비밀번호를 설정해 방을 만들어요')}</small>
@@ -19424,7 +19547,12 @@ export class GameScene extends Phaser.Scene {
                     </button>
 
                     <button type="button" class="ch-lobby-action ch-lobby-action--join">
-                        <span class="ch-lobby-action-icon" aria-hidden="true">🔓</span>
+                        <span class="ch-lobby-action-icon" aria-hidden="true"><svg class="ch-lobby-action-svg" viewBox="0 0 32 32" aria-hidden="true">
+    <rect x="7" y="14" width="18" height="13" rx="3"/>
+    <path d="M21 14V10a5 5 0 0 0-9.5-2.2"/>
+    <circle cx="16" cy="20" r="1.5"/>
+    <path d="M16 21.5v2.5"/>
+</svg></span>
                         <span>
                             <strong>${tr('비공개방 참가')}</strong>
                             <small>${tr('초대코드를 입력해 방에 참여해요')}</small>
@@ -19893,8 +20021,8 @@ export class GameScene extends Phaser.Scene {
                     rect.height *
                         (
                             landscapeCanvas
-                                ? 0.985
-                                : 0.985
+                                ? 0.995
+                                : 0.995
                         ),
                 );
 
@@ -19902,7 +20030,9 @@ export class GameScene extends Phaser.Scene {
                 Math.max(
                     0.45,
                     Math.min(
-                        1,
+                        landscapeCanvas
+                            ? 1.58
+                            : 1.18,
                         targetWidth /
                             designWidth,
                         targetHeight /
@@ -19916,7 +20046,7 @@ export class GameScene extends Phaser.Scene {
                 designHeight * scale;
 
             const mobileRightInset =
-                2;
+                0;
 
             const left =
                 rect.right -
@@ -19955,6 +20085,43 @@ export class GameScene extends Phaser.Scene {
                 scale.toFixed(5),
             );
 
+            /*
+             * V1010301_LOBBY_WAITING_JOYSTICK_POLISH: direct inline geometry is authoritative.
+             * This bypasses old external CSS offsets that left a visible gap
+             * on the right and prevented full-height mobile use.
+             */
+            Object.assign(
+                this.waitingRoomRoot.style,
+                {
+                    position:
+                        'fixed',
+                    left:
+                        `${left.toFixed(
+                            2,
+                        )}px`,
+                    top:
+                        `${top.toFixed(
+                            2,
+                        )}px`,
+                    right:
+                        'auto',
+                    bottom:
+                        'auto',
+                    width:
+                        `${designWidth}px`,
+                    height:
+                        `${designHeight}px`,
+                    transform:
+                        `scale(${scale.toFixed(
+                            5,
+                        )})`,
+                    transformOrigin:
+                        'top left',
+                    margin:
+                        '0',
+                },
+            );
+
             return;
         }
 
@@ -19963,6 +20130,25 @@ export class GameScene extends Phaser.Scene {
         );
         this.waitingRoomRoot.style.removeProperty(
             '--waiting-uniform-scale',
+        );
+
+        [
+            'position',
+            'left',
+            'top',
+            'right',
+            'bottom',
+            'width',
+            'height',
+            'transform',
+            'transform-origin',
+            'margin',
+        ].forEach(
+            (property) =>
+                this.waitingRoomRoot
+                    ?.style.removeProperty(
+                        property,
+                    ),
         );
 
         const widthRatio = 0.285;
@@ -25028,6 +25214,67 @@ export class GameScene extends Phaser.Scene {
                         font-size: 10px !important;
                         line-height: 1 !important;
                         white-space: nowrap !important;
+                        overflow: hidden !important;
+                        text-overflow: ellipsis !important;
+                    }
+
+                    /*
+                     * V1010301_LOBBY_WAITING_JOYSTICK_POLISH: the action BUTTON keeps its original stylesheet.
+                     * Only its icon cell is normalized. No emoji metrics,
+                     * no stretched padlock, no frame overflow.
+                     */
+                    .ch-lobby-action {
+                        overflow: hidden !important;
+                        min-width: 0 !important;
+                    }
+
+                    .ch-lobby-action > span:last-child {
+                        min-width: 0 !important;
+                        overflow: hidden !important;
+                    }
+
+                    .ch-lobby-action-icon {
+                        display: inline-flex !important;
+                        align-items: center !important;
+                        justify-content: center !important;
+                        box-sizing: border-box !important;
+                        width: 44px !important;
+                        min-width: 44px !important;
+                        max-width: 44px !important;
+                        height: 44px !important;
+                        min-height: 44px !important;
+                        max-height: 44px !important;
+                        aspect-ratio: 1 / 1 !important;
+                        flex: 0 0 44px !important;
+                        padding: 6px !important;
+                        overflow: hidden !important;
+                        line-height: 1 !important;
+                        font-size: 0 !important;
+                    }
+
+                    .ch-lobby-action-svg {
+                        display: block !important;
+                        width: 100% !important;
+                        height: 100% !important;
+                        max-width: 30px !important;
+                        max-height: 30px !important;
+                        overflow: visible !important;
+                        fill: none !important;
+                        stroke: currentColor !important;
+                        stroke-width: 2.5 !important;
+                        stroke-linecap: round !important;
+                        stroke-linejoin: round !important;
+                        vector-effect: non-scaling-stroke !important;
+                    }
+
+                    .ch-lobby-action--public .ch-lobby-action-svg {
+                        stroke-width: 2.8 !important;
+                    }
+
+                    .ch-lobby-action strong,
+                    .ch-lobby-action small {
+                        display: block !important;
+                        max-width: 100% !important;
                         overflow: hidden !important;
                         text-overflow: ellipsis !important;
                     }
