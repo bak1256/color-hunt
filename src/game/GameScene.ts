@@ -79,6 +79,11 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010343_URGENT_HUNTER_INPUT_JITTER_EYEDROPPER: Hunter input/focus recovery + eyedropper hardening. */
+    private gameplayDocumentWasFocused =
+        typeof document === 'undefined'
+            ? true
+            : document.hasFocus();
     /* V1010341_CLIENT_GAMEPLAY_STABILITY_SAFE: Hunt input + chat stability. */
     /* V1010338_CRITICAL_GAMEPLAY_TRIPLE_FIX: eyedropper no-fill + Hunt final paint snapshot. */
     /* V1010337_DESKTOP_TITLE_PROFILE_BALANCE: desktop translated title fits; profile top/bottom padding balanced. */
@@ -16049,6 +16054,46 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
+        /*
+         * V1010343_URGENT_HUNTER_INPUT_JITTER_EYEDROPPER / FOREGROUND_INPUT_RECOVERY
+         *
+         * The reported bug self-heals after leaving the browser and returning.
+         * Reproduce that recovery intentionally on the actual focus edge.
+         */
+        const gameplayDocumentFocused =
+            typeof document === 'undefined'
+                ? true
+                : document.hasFocus();
+
+        if (
+            this.phase === 'hunt' &&
+            this.networkPlayerManager
+                .isLocalHunter() &&
+            gameplayDocumentFocused &&
+            !this.gameplayDocumentWasFocused
+        ) {
+            this.input.enabled = true;
+
+            if (this.input.keyboard) {
+                this.input.keyboard.enabled =
+                    true;
+                this.input.keyboard.resetKeys();
+            }
+
+            this.resetMobileMoveControl();
+            this.mobileAimPointerId = -1;
+            this.mobileFirePointerId = -1;
+            this.mobileFartPointerId = -1;
+            this.mobileTouchPoints.clear();
+
+            if (!this.isReloading) {
+                this.canShoot = true;
+            }
+        }
+
+        this.gameplayDocumentWasFocused =
+            gameplayDocumentFocused;
+
         let directionX = 0;
         let directionY = 0;
 
@@ -29937,15 +29982,23 @@ export class GameScene extends Phaser.Scene {
 
         if (phase === 'hunt') {
             /*
-             * V1010341_CLIENT_GAMEPLAY_STABILITY_SAFE / HUNT_INPUT_RELEASE
-             * Aim can still work while a DOM input owns keyboard focus.
+             * V1010343_URGENT_HUNTER_INPUT_JITTER_EYEDROPPER / HUNT_INPUT_HARD_RESET
+             *
+             * Hunt must start from a clean browser/Phaser input state.
+             * A stale DOM focus, held-key cache or lost pointer-up can leave
+             * aim visuals alive while FIRE / SPACE / movement are effectively
+             * dead until the browser loses and regains focus.
              */
+            const huntActiveElement =
+                document.activeElement;
+
             if (
-                this.chatInput &&
-                document.activeElement ===
-                    this.chatInput
+                huntActiveElement instanceof
+                    HTMLElement &&
+                huntActiveElement !==
+                    document.body
             ) {
-                this.chatInput.blur();
+                huntActiveElement.blur();
             }
 
             this.input.enabled = true;
@@ -29953,6 +30006,38 @@ export class GameScene extends Phaser.Scene {
             if (this.input.keyboard) {
                 this.input.keyboard.enabled =
                     true;
+
+                /*
+                 * Clear keys that remained "down" across Paint -> Hunt.
+                 * The next physical keydown is then authoritative.
+                 */
+                this.input.keyboard.resetKeys();
+            }
+
+            /*
+             * Clear stale mobile/browser pointer ownership as well.
+             * Safe on desktop because these ids are simply reset to idle.
+             */
+            this.resetMobileMoveControl();
+            this.mobileAimPointerId = -1;
+            this.mobileFirePointerId = -1;
+            this.mobileFartPointerId = -1;
+            this.mobileTouchPoints.clear();
+
+            /*
+             * A new Hunt must never inherit a previous local shot/input lock.
+             * Server still owns ammo/heat/fart legality.
+             */
+            if (
+                this.networkPlayerManager
+                    .isLocalHunter() ||
+                multiplayerClient
+                    .getLocalPlayer()
+                    ?.role === 'hunter'
+            ) {
+                this.isReloading = false;
+                this.canShoot = true;
+                this.lastFartUseAt = 0;
             }
 
             /*
@@ -32002,6 +32087,14 @@ export class GameScene extends Phaser.Scene {
             undefined;
         this.straightLineModeActive = false;
         this.clearStraightLinePreview();
+
+        /*
+         * V1010343_URGENT_HUNTER_INPUT_JITTER_EYEDROPPER / EYEDROPPER_STATE_RESET
+         * Enter the pipette from a completely neutral paint-pointer state.
+         */
+        this.mobilePinchActive = false;
+        this.mobilePinchDistance = 0;
+        this.mobileTouchPoints.clear();
 
         this.eyedropperArmed = true;
         this.eyedropperPointerId = -1;

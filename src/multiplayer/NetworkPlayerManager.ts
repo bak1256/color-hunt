@@ -47,6 +47,7 @@ type NetworkPlayerView = {
 };
 
 export class NetworkPlayerManager {
+  /* V1010343_URGENT_HUNTER_INPUT_JITTER_EYEDROPPER: protect active local Hunter prediction from delayed echo jitter. */
   /* V1010341_CLIENT_GAMEPLAY_STABILITY_SAFE: movement + paint rendering stability. */
   /* V1010339C_CRITICAL_ROUND_STABILITY_CLIENT: preserve exact thin-brush remote density. */
   /* V1010338_CRITICAL_GAMEPLAY_TRIPLE_FIX: remote Hunter smoothing + remote paint raster continuity. */
@@ -116,8 +117,18 @@ export class NetworkPlayerManager {
   private localWasMoving = false;
   private lastAuthoritativeSyncAt = 0;
   private readonly authoritativeSyncIntervalMs = 16;
-  private readonly localMoveReconcileGraceMs = 180;
-  private readonly localHardCorrectionDistance = 32;
+  /*
+   * V1010343_URGENT_HUNTER_INPUT_JITTER_EYEDROPPER / LOCAL_PREDICTION_GRACE
+   * During active input, delayed server echoes must not fight the locally
+   * predicted Hunter. 650ms comfortably covers transient mobile/room jitter.
+   */
+  private readonly localMoveReconcileGraceMs = 650;
+  /*
+   * V1010343_URGENT_HUNTER_INPUT_JITTER_EYEDROPPER / LOCAL_HARD_CORRECTION
+   * Small/medium delayed server differences are not a reason to yank the
+   * camera/player backwards while the Hunter is actively controlling.
+   */
+  private readonly localHardCorrectionDistance = 128;
 
   constructor(
     scene: Phaser.Scene,
