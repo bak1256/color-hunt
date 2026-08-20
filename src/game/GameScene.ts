@@ -28386,6 +28386,12 @@ export class GameScene extends Phaser.Scene {
                     /*
                      * Desktop waiting layout reserves footer height explicitly.
                      */
+                    /*
+                     * V1010342_REMOVE_WAITING_START_GAP
+                     * PC waiting room: do not let the timing row absorb all
+                     * remaining height. This removes the dead space directly
+                     * above the Game Start button without changing mobile.
+                     */
                     .colorhunt-waiting-room:not(.ch-uniform-mobile-scale)
                     .ch-waiting-shell {
                         display: grid !important;
@@ -28394,9 +28400,10 @@ export class GameScene extends Phaser.Scene {
                             auto
                             auto
                             auto
-                            minmax(0, 1fr)
+                            auto
                             auto
                             42px !important;
+                        align-content: start !important;
                         height: 100% !important;
                         overflow: hidden !important;
                     }
