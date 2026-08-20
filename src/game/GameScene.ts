@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010331_MAIN_LOBBY_GUIDE_WRAP: allow main-lobby guide subtitle to wrap to two lines without changing the stable frame. */
     /* V1010330_MAIN_LOBBY_UNIFORM_AUTHORING_FRAME: one fixed 960x510 lobby layout uniformly scales inside Phaser canvas. */
     /* V1010329B_FIX_DUPLICATE_HANDLER_CLOSE: remove accidental duplicate handleMobileViewportChange closure from v329. */
     /* V1010329_CLEAN_MAIN_LOBBY_CANVAS_ANCHOR: Phaser owns canvas; lobby follows rendered canvas rectangle only. */
@@ -19887,7 +19888,7 @@ export class GameScene extends Phaser.Scene {
         set(
             guideCopy,
             'grid-template-rows',
-            '20px 16px',
+            '20px minmax(28px, auto)',
         );
         set(guideCopy, 'align-content', 'center');
         set(guideCopy, 'row-gap', '2px');
@@ -19913,15 +19914,19 @@ export class GameScene extends Phaser.Scene {
                 ) ??
             null;
 
-        set(guideSubtitle, 'display', 'block');
+        set(guideSubtitle, 'display', '-webkit-box');
         set(guideSubtitle, 'font-size', '10px');
-        set(guideSubtitle, 'line-height', '16px');
-        set(guideSubtitle, 'height', '16px');
-        set(guideSubtitle, 'min-height', '16px');
-        set(guideSubtitle, 'max-height', '16px');
-        set(guideSubtitle, 'white-space', 'nowrap');
+        set(guideSubtitle, 'line-height', '14px');
+        set(guideSubtitle, 'height', 'auto');
+        set(guideSubtitle, 'min-height', '28px');
+        set(guideSubtitle, 'max-height', '28px');
+        set(guideSubtitle, 'white-space', 'normal');
         set(guideSubtitle, 'overflow', 'hidden');
         set(guideSubtitle, 'text-overflow', 'clip');
+        set(guideSubtitle, '-webkit-box-orient', 'vertical');
+        set(guideSubtitle, '-webkit-line-clamp', '2');
+        set(guideSubtitle, 'overflow-wrap', 'anywhere');
+        set(guideSubtitle, 'word-break', 'keep-all');
 
         const language =
             root.querySelector<HTMLElement>(
