@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010350_AVATAR_EDITOR_FULL_PAINT_PARITY: avatar editor shares game/practice tool geometry and paint semantics. */
     /* V1010349_PAINT_BANNER_TOOL_ART_JOYSTICK_CENTER: background-only timer translucency + detailed paint tools + move-release recenter. */
     /* V1010348_AVATAR_EDITOR_PAINT_PARITY: avatar editor uses paint-only one-finger gesture and game-parity tools. */
     /* V1010347_PAINT_TOOL_UX_UNIFICATION: unified brush/pipette/line UX for Hider paint + lobby avatar editor. */
@@ -17085,9 +17086,9 @@ export class GameScene extends Phaser.Scene {
                 top:
                     '0',
                 width:
-                    '38px',
+                    '92px',
                 height:
-                    '38px',
+                    '102px',
                 display:
                     'none',
                 alignItems:
@@ -17098,8 +17099,12 @@ export class GameScene extends Phaser.Scene {
                     'none',
                 zIndex:
                     '20',
+                /*
+                 * V1010350_AVATAR_EDITOR_FULL_PAINT_PARITY: floating element's lower-right GRIP follows finger.
+                 * Its upper-left TIP is therefore the real paint/sample point.
+                 */
                 transform:
-                    'translate(-50%, -118%)',
+                    'translate(-84px, -94px)',
                 filter:
                     'drop-shadow(0 2px 2px rgba(0,0,0,.32))',
             },
@@ -17116,64 +17121,145 @@ export class GameScene extends Phaser.Scene {
          * paint/sample TIP = upper-left, HANDLE = lower-right.
          * Explicit coordinates avoid the old SVG rotate direction mismatch.
          */
+        /*
+         * V1010350_AVATAR_EDITOR_FULL_PAINT_PARITY / SAME_TOOL_GEOMETRY
+         *
+         * Exactly the same interaction metaphor as game/practice:
+         *   TIP = upper-left actual paint/sample position
+         *   GRIP = lower-right finger position
+         *
+         * SVG viewBox is deliberately 92x102 so the visual tip-to-grip
+         * distance mirrors the in-game ~72x82px relationship.
+         */
         const brushCursorSvg =
-            `<svg viewBox="0 0 48 48" width="44" height="44" aria-hidden="true">
-                <!-- wooden handle: ferrule -> lower-right grip -->
-                <path d="M23 23 L43 43"
-                    fill="none" stroke="#3c2d22" stroke-width="10"
-                    stroke-linecap="round"/>
-                <path d="M23 23 L43 43"
-                    fill="none" stroke="#c98245" stroke-width="6"
-                    stroke-linecap="round"/>
-                <!-- metal ferrule -->
-                <path d="M14 14 L25 25"
-                    fill="none" stroke="#3f4a50" stroke-width="11"
-                    stroke-linecap="square"/>
-                <path d="M14 14 L25 25"
-                    fill="none" stroke="#e8edf0" stroke-width="7"
-                    stroke-linecap="square"/>
-                <!-- bristles point exactly toward upper-left paint target -->
-                <path d="M5 5 L18 11 L11 18 Z"
-                    fill="#f5eee2" stroke="#3c2d22" stroke-width="2.2"
+            `<svg viewBox="0 0 92 102" width="92" height="102" aria-hidden="true">
+                <!-- selected-color bristle head: ACTUAL paint tip at 7,7 -->
+                <path d="M7 7 L26 16 L16 28 Z"
+                    fill="#f5eee2" stroke="#34281f" stroke-width="3"
                     stroke-linejoin="round"/>
+                <path d="M8 8 L23 17 L16 24 Z"
+                    fill="currentColor" fill-opacity="0.92"/>
+
+                <!-- metal ferrule -->
+                <path d="M20 21 L38 39"
+                    fill="none" stroke="#43505a" stroke-width="16"
+                    stroke-linecap="square"/>
+                <path d="M20 21 L38 39"
+                    fill="none" stroke="#dde6eb" stroke-width="11"
+                    stroke-linecap="square"/>
+                <path d="M22 21 L37 36"
+                    fill="none" stroke="#ffffff" stroke-width="2.5"
+                    stroke-linecap="round"/>
+
+                <!-- real wooden handle -->
+                <path d="M35 36 L79 88"
+                    fill="none" stroke="#34281f" stroke-width="16"
+                    stroke-linecap="round"/>
+                <path d="M35 36 L79 88"
+                    fill="none" stroke="#b86f36" stroke-width="10"
+                    stroke-linecap="round"/>
+                <path d="M38 38 L76 83"
+                    fill="none" stroke="#f2c184" stroke-width="2.8"
+                    stroke-linecap="round"/>
+
+                <!-- flat butt cap; finger holds here, no confusing circle -->
+                <path d="M72 89 L84 79"
+                    fill="none" stroke="#34281f" stroke-width="12"
+                    stroke-linecap="butt"/>
             </svg>`;
 
         const dropperCursorSvg =
-            `<svg viewBox="0 0 48 48" width="44" height="44" aria-hidden="true">
-                <!-- glass barrel toward lower-right handle -->
-                <path d="M18 18 L42 42"
-                    fill="none" stroke="#304b54" stroke-width="13"
-                    stroke-linecap="round"/>
-                <path d="M18 18 L42 42"
-                    fill="none" stroke="#e7eef2" stroke-width="8"
-                    stroke-linecap="round"/>
-                <!-- inner sampled-color tube -->
-                <path d="M21 21 L38 38"
-                    fill="none" stroke="#3b82f6" stroke-width="3.5"
-                    stroke-linecap="round"/>
-                <!-- ferrule / shoulder -->
-                <path d="M14 14 L23 23"
-                    fill="none" stroke="#9db6c2" stroke-width="12"
-                    stroke-linecap="square"/>
-                <!-- sampling tip points upper-left -->
-                <path d="M5 5 L18 10 L10 18 Z"
-                    fill="#eef8fb" stroke="#304b54" stroke-width="2.4"
+            `<svg viewBox="0 0 92 102" width="92" height="102" aria-hidden="true">
+                <!-- exact sampling tip at 7,7 -->
+                <path d="M7 7 L27 15 L15 28 Z"
+                    fill="#eef8fb" stroke="#26363d" stroke-width="3"
                     stroke-linejoin="round"/>
-                <!-- non-circular top cap makes handle identity obvious -->
-                <path d="M36 36 L45 45"
-                    fill="none" stroke="#304b54" stroke-width="15"
+
+                <!-- glass shoulder/barrel -->
+                <path d="M21 21 L67 73"
+                    fill="none" stroke="#304b54" stroke-width="17"
+                    stroke-linecap="round"/>
+                <path d="M21 21 L67 73"
+                    fill="none" stroke="#d9edf4" stroke-width="11"
+                    stroke-linecap="round"/>
+                <path d="M25 25 L63 69"
+                    fill="none" stroke="currentColor" stroke-width="4.5"
+                    stroke-linecap="round"/>
+                <path d="M24 20 L65 67"
+                    fill="none" stroke="#ffffff" stroke-opacity="0.85"
+                    stroke-width="2.4" stroke-linecap="round"/>
+
+                <!-- recognizable rubber bulb / handle -->
+                <path d="M62 69 L80 90"
+                    fill="none" stroke="#26363d" stroke-width="23"
+                    stroke-linecap="round"/>
+                <path d="M62 69 L80 90"
+                    fill="none" stroke="#8fa6b0" stroke-width="15"
+                    stroke-linecap="round"/>
+
+                <!-- flat bulb end cap, finger grip -->
+                <path d="M72 95 L88 81"
+                    fill="none" stroke="#26363d" stroke-width="14"
                     stroke-linecap="butt"/>
-                <path d="M37 37 L44 44"
-                    fill="none" stroke="#b9d1dc" stroke-width="9"
+                <path d="M74 92 L85 83"
+                    fill="none" stroke="#aec3cb" stroke-width="8"
                     stroke-linecap="butt"/>
             </svg>`;
-
         floatingTool.innerHTML =
             brushCursorSvg;
 
         canvasFrame.appendChild(
             floatingTool,
         );
+
+        /*
+         * V1010350_AVATAR_EDITOR_FULL_PAINT_PARITY / TOOL_TIP_COORDINATE
+         *
+         * On mobile, the finger holds the lower-right grip exactly like
+         * game/practice. Paint/sample happens at the upper-left tool tip.
+         *
+         * Desktop keeps direct cursor semantics because no floating finger
+         * obstruction exists there.
+         */
+        const getAvatarToolTipClient =
+            (
+                clientX: number,
+                clientY: number,
+            ): {
+                x: number;
+                y: number;
+            } => {
+                if (
+                    !this.mobileControlsEnabled
+                ) {
+                    return {
+                        x: clientX,
+                        y: clientY,
+                    };
+                }
+
+                return {
+                    x: clientX - 72,
+                    y: clientY - 82,
+                };
+            };
+
+        const avatarToolTipToLogical =
+            (
+                clientX: number,
+                clientY: number,
+            ): NetworkPaintPoint => {
+                const tip =
+                    getAvatarToolTipClient(
+                        clientX,
+                        clientY,
+                    );
+
+                return canvasToLogical(
+                    tip.x,
+                    tip.y,
+                );
+            };
 
         const updateFloatingTool =
             (
@@ -17205,6 +17291,17 @@ export class GameScene extends Phaser.Scene {
                     eyedropperArmed
                         ? dropperCursorSvg
                         : brushCursorSvg;
+
+                /*
+                 * V1010350_AVATAR_EDITOR_FULL_PAINT_PARITY: currentColor feeds brush bristles and pipette liquid.
+                 */
+                floatingTool.style.color =
+                    `#${selectedColor
+                        .toString(16)
+                        .padStart(
+                            6,
+                            '0',
+                        )}`;
 
                 floatingTool.style.display =
                     'flex';
@@ -18462,8 +18559,14 @@ export class GameScene extends Phaser.Scene {
                     return;
                 }
 
+                /*
+                 * V1010350_AVATAR_EDITOR_FULL_PAINT_PARITY / BACKGROUND_DRAG_START
+                 * This may be outside the character body. KEEP IT.
+                 * When the drag crosses into the body, insideBody() clipping
+                 * paints only the body pixels.
+                 */
                 const downLogical =
-                    canvasToLogical(
+                    avatarToolTipToLogical(
                         event.clientX,
                         event.clientY,
                     );
@@ -18473,11 +18576,17 @@ export class GameScene extends Phaser.Scene {
                         const rect =
                             canvas.getBoundingClientRect();
 
+                        const sampleTip =
+                            getAvatarToolTipClient(
+                                event.clientX,
+                                event.clientY,
+                            );
+
                         const px =
                             Phaser.Math.Clamp(
                                 Math.floor(
                                     (
-                                        event.clientX -
+                                        sampleTip.x -
                                         rect.left
                                     ) /
                                     Math.max(
@@ -18495,7 +18604,7 @@ export class GameScene extends Phaser.Scene {
                             Phaser.Math.Clamp(
                                 Math.floor(
                                     (
-                                        event.clientY -
+                                        sampleTip.y -
                                         rect.top
                                     ) /
                                     Math.max(
@@ -18600,7 +18709,13 @@ export class GameScene extends Phaser.Scene {
                 hoverPoint =
                     downLogical;
 
-                currentPoints = [];
+                /*
+                 * V1010350_AVATAR_EDITOR_FULL_PAINT_PARITY: seed the stroke immediately, even on empty
+                 * background. drawBodyPixel() clips it to the avatar later.
+                 */
+                currentPoints = [
+                    downLogical,
+                ];
                 replay();
             },
         );
@@ -18618,7 +18733,7 @@ export class GameScene extends Phaser.Scene {
                  * preview/stroke path; no avatar translation path exists.
                  */
                 hoverPoint =
-                    canvasToLogical(
+                    avatarToolTipToLogical(
                         event.clientX,
                         event.clientY,
                     );
@@ -18683,7 +18798,7 @@ export class GameScene extends Phaser.Scene {
                     paintStarted = true;
 
                     const startPoint =
-                        canvasToLogical(
+                        avatarToolTipToLogical(
                             pendingStartScreen.x,
                             pendingStartScreen.y,
                         );
@@ -18703,13 +18818,24 @@ export class GameScene extends Phaser.Scene {
                             true;
                     }
 
-                    currentPoints = [
-                        startPoint,
-                    ];
+                    /*
+                     * V1010350_AVATAR_EDITOR_FULL_PAINT_PARITY / KEEP_BACKGROUND_ORIGIN
+                     * Keep the pointerdown seed when it began outside the body.
+                     * This lets expandSegmentPoints() bridge cleanly across the
+                     * body edge instead of starting only after entry.
+                     */
+                    if (
+                        currentPoints.length ===
+                            0
+                    ) {
+                        currentPoints = [
+                            startPoint,
+                        ];
+                    }
                 }
 
                 const point =
-                    canvasToLogical(
+                    avatarToolTipToLogical(
                         event.clientX,
                         event.clientY,
                     );
@@ -18766,8 +18892,6 @@ export class GameScene extends Phaser.Scene {
             (
                 event: PointerEvent,
             ): void => {
-                hideFloatingTool();
-
                 activePointers.delete(
                     event.pointerId,
                 );
@@ -18785,6 +18909,42 @@ export class GameScene extends Phaser.Scene {
                         event.pointerId
                 ) {
                     finishStroke();
+                }
+
+                /*
+                 * V1010350_AVATAR_EDITOR_FULL_PAINT_PARITY / RELEASE_CENTER_TOOL
+                 * After drawing/sampling, put the active tool at canvas center.
+                 */
+                if (
+                    this.mobileControlsEnabled &&
+                    activePointers.size ===
+                        0
+                ) {
+                    hoverPoint = {
+                        x: 40,
+                        y: 60,
+                    };
+
+                    floatingTool.innerHTML =
+                        eyedropperArmed
+                            ? dropperCursorSvg
+                            : brushCursorSvg;
+
+                    floatingTool.style.left =
+                        '50%';
+                    floatingTool.style.top =
+                        '50%';
+                    floatingTool.style.color =
+                        `#${selectedColor
+                            .toString(16)
+                            .padStart(
+                                6,
+                                '0',
+                            )}`;
+                    floatingTool.style.display =
+                        'flex';
+
+                    replay();
                 }
             };
 
@@ -18844,24 +19004,33 @@ export class GameScene extends Phaser.Scene {
             },
         );
 
+        /*
+         * V1010350_AVATAR_EDITOR_FULL_PAINT_PARITY / TOOL_BUTTON_PARITY_ART
+         * Buttons use the same recognizable handle/ferrule/tip direction.
+         */
         const circleSvg =
             `<svg viewBox="0 0 32 32" aria-hidden="true">
-                <path d="M15 15L28 28" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round"/>
-                <path d="M9 9L17 17" fill="none" stroke="currentColor" stroke-width="7"/>
-                <path d="M3 3L12 7L7 12Z" fill="currentColor"/>
+                <path d="M10 10L28 28" stroke="#3b2b20" stroke-width="8" stroke-linecap="round"/>
+                <path d="M10 10L28 28" stroke="#b86f36" stroke-width="5" stroke-linecap="round"/>
+                <path d="M7 7L14 14" stroke="#dde6eb" stroke-width="7"/>
+                <path d="M2 2L10 6L6 10Z" fill="currentColor" stroke="#34281f" stroke-width="1.5"/>
             </svg>`;
 
         const squareSvg =
             `<svg viewBox="0 0 32 32" aria-hidden="true">
-                <path d="M15 15L28 28" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round"/>
-                <rect x="6" y="6" width="10" height="10" transform="rotate(45 11 11)" fill="none" stroke="currentColor" stroke-width="3"/>
+                <path d="M10 10L28 28" stroke="#3b2b20" stroke-width="8" stroke-linecap="round"/>
+                <path d="M10 10L28 28" stroke="#b86f36" stroke-width="5" stroke-linecap="round"/>
+                <path d="M7 7L14 14" stroke="#dde6eb" stroke-width="7"/>
+                <rect x="2" y="2" width="8" height="8" fill="currentColor" stroke="#34281f" stroke-width="1.5"/>
             </svg>`;
 
         const dropperSvg =
             `<svg viewBox="0 0 32 32" aria-hidden="true">
-                <path d="M12 12L28 28" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="butt"/>
-                <path d="M8 8L18 18" fill="none" stroke="currentColor" stroke-width="6"/>
-                <path d="M2 2L10 6L6 10Z" fill="currentColor"/>
+                <path d="M7 7L25 27" stroke="#304b54" stroke-width="9" stroke-linecap="round"/>
+                <path d="M7 7L25 27" stroke="#d9edf4" stroke-width="6" stroke-linecap="round"/>
+                <path d="M10 10L22 23" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+                <path d="M23 24L29 30" stroke="#8fa6b0" stroke-width="10" stroke-linecap="round"/>
+                <path d="M2 2L10 6L6 10Z" fill="#eef8fb" stroke="#26363d" stroke-width="1.5"/>
             </svg>`;
 
         const lineSvg =
