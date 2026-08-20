@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010344B_HIDER_SELF_PAINT_HUNT_SETTLE: preserve the owner's Hider camouflage through Hunt transition. */
     /* V1010343_URGENT_HUNTER_INPUT_JITTER_EYEDROPPER: Hunter input/focus recovery + eyedropper hardening. */
     private gameplayDocumentWasFocused =
         typeof document === 'undefined'
@@ -30154,6 +30155,54 @@ export class GameScene extends Phaser.Scene {
 
             this.startHunt();
             this.startGameplayCamera();
+
+            /*
+             * V1010344B_HIDER_SELF_PAINT_HUNT_SETTLE
+             *
+             * Opponents can already have the correct camouflage while the
+             * owner's local RenderTexture is blank after Paint -> Hunt.
+             *
+             * Replay localPaintHistory locally only. broadcast=false means
+             * zero paint_stroke network traffic and no server state changes.
+             *
+             * Multiple short settle passes protect against late Hunt
+             * normalization / visibility callbacks overwriting the local
+             * texture during the transition.
+             */
+            if (
+                this.networkPlayerManager
+                    .isLocalHider() &&
+                this.localPaintHistory.length > 0
+            ) {
+                [0, 120, 360].forEach(
+                    (delay) => {
+                        this.time.delayedCall(
+                            delay,
+                            () => {
+                                if (
+                                    this.phase !== 'hunt' ||
+                                    !this.networkPlayerManager
+                                        .isLocalHider() ||
+                                    this.localPaintHistory
+                                        .length < 1
+                                ) {
+                                    return;
+                                }
+
+                                this.rebuildLocalPaintFromHistory(
+                                    false,
+                                );
+
+                                this.networkPlayerManager
+                                    .normalizeLocalPlayerForGameplay();
+
+                                this.networkPlayerManager
+                                    .restoreAllPlayerVisibility();
+                            },
+                        );
+                    },
+                );
+            }
 
             this.phaseEndTime =
                 this.time.now +
