@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010361_HIDER_FART_REACTION_LINES_I18N: fart detection text is voiced as the Hider's smell reaction in KO/JA/EN/ZH; mechanics unchanged. */
     /* V1010360_AVATAR_EDITOR_FINAL_TIP_SAMPLE_PREVIEW: pipette commits pointerup color; persistent brush footprint always previews exact paint. */
     /* V1010359B_AVATAR_EDITOR_EYEDROPPER_COLOR_PERSIST_FINAL: larger pipette chip and explicit sampled-color persistence across tool switches. */
     /* V1010358_AVATAR_EDITOR_PERSISTENT_TOOLS: editor tool remains at last tip; eyedropper stays selected after sampling. */
@@ -42217,12 +42218,12 @@ export class GameScene extends Phaser.Scene {
                     p.y - 58,
                     (
                         getLanguage() === 'ja'
-                            ? '❗ いたぞ!'
+                            ? '🤢 うわっ、くさっ！！'
                             : getLanguage() === 'en'
-                                ? '❗ FOUND ONE!'
+                                ? '🤢 UGH, IT STINKS!!'
                                 : getLanguage() === 'zh'
-                                    ? '❗ 有人!'
-                                    : '❗ 찾았다!'
+                                    ? '🤢 呃，好臭！！'
+                                    : '🤢 으악, 구려!!'
                     ),
                     {
                         fontSize:
@@ -42480,13 +42481,13 @@ export class GameScene extends Phaser.Scene {
 
             const comboLabels = {
                 ko:
-                    '💩❗ 지렸지만… 찾았다!!',
+                    '💩🤢 으악!! 이건 방귀가 아니잖아!!',
                 ja:
-                    '💩❗ 漏らしたけど…見つけた!!',
+                    '💩🤢 うわっ！！これ、オナラじゃないだろ！！',
                 en:
-                    '💩❗ POOPED… BUT FOUND ONE!!',
+                    '💩🤢 UGH!! THAT\'S NOT A FART!!',
                 zh:
-                    '💩❗ 拉裤子了…但找到了!!',
+                    '💩🤢 呃！！这根本不是屁吧！！',
             } as const;
 
             const p =
