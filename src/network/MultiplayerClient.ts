@@ -333,7 +333,6 @@ export type PaintReadyStateHandler = (
 ) => void;
 
 export class MultiplayerClient {
-  /* V1010378_READY_SNAPSHOT_HOTFIX: final camouflage payload is essential and is not dropped by transient recovery UI state. */
   /* V1010377_FINAL_CAMOUFLAGE_SNAPSHOT: Hunt receives immutable final camouflage PNGs instead of historical paint replay. */
   /* V1010375_READY_GO_SETTLING: receives the server's short Paint->Hunt settling deadline separately from normal phases. */
   /* V1010374_PAINT_FLOOD_FRAME_BUDGET: dense paint is not queued into an unstable/reconnecting transport. */
@@ -4100,19 +4099,13 @@ this.manualReconnectInFlight = false;
   ): void {
     if (
       !this.room ||
+      !this.isGameplayTransportStable() ||
       !dataUrl.startsWith(
         "data:image/png;base64,",
       )
     ) {
       return;
     }
-
-    /*
-     * V1010378_READY_SNAPSHOT_HOTFIX
-     * Final camouflage is an essential convergence payload. Do not silently
-     * discard it because connectionIssueNotified is still true for a moment.
-     * Colyseus will either send it on the current Room or its bounded queue.
-     */
 
     this.room.send(
       "final_camouflage_snapshot",

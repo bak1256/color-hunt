@@ -79,7 +79,6 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
-    /* V1010378_READY_SNAPSHOT_HOTFIX: settling hides READY permanently and final PNG convergence retries safely. */
     /* V1010377_FINAL_CAMOUFLAGE_SNAPSHOT: READY captures one final camouflage PNG; Hunt never replays historical paint. */
     /* V1010376_REMOTE_PAINT_DEFER_LOBBY_SAFETY: remote Paint is deferred until READY->GO and round paint is isolated from Lobby avatars. */
     /* V1010375_READY_GO_SETTLING: full-screen localized READY -> GO uses the server quiet window to flush final paint before Hunt. */
@@ -969,7 +968,6 @@ export class GameScene extends Phaser.Scene {
         const visible =
             this.isMultiplayerSession() &&
             this.phase === 'paint' &&
-            !this.huntSettlingActive &&
             (
                 role === 'hider' ||
                 role === 'hunter'
@@ -30953,34 +30951,14 @@ export class GameScene extends Phaser.Scene {
                         return;
                     }
 
+                    multiplayerClient
+                        .sendFinalCamouflageSnapshot(
+                            dataUrl,
+                        );
+
                     /*
-                     * V1010378_READY_SNAPSHOT_HOTFIX / FINAL_PNG_RETRY
-                     * Send the same immutable PNG a handful of times while
-                     * READY->GO is active. This is tiny compared with the old
-                     * thousands-of-strokes replay and makes transient socket
-                     * recovery converge without leaving opponents white.
+                     * V1010377_UNUSED_BUILD_CLEANUP: send completion needs no persistent flag.
                      */
-                    [0, 260, 700, 1250].forEach(
-                        (delay) => {
-                            this.time.delayedCall(
-                                delay,
-                                () => {
-                                    if (
-                                        (
-                                            this.phase === 'paint' &&
-                                            this.huntSettlingActive
-                                        ) ||
-                                        this.phase === 'hunt'
-                                    ) {
-                                        multiplayerClient
-                                            .sendFinalCamouflageSnapshot(
-                                                dataUrl,
-                                            );
-                                    }
-                                },
-                            );
-                        },
-                    );
                 },
             );
 
@@ -31429,21 +31407,8 @@ export class GameScene extends Phaser.Scene {
             this.networkPlayerManager
                 .discardRemotePaintBacklog();
 
-            [0, 300, 900, 1800].forEach(
-                (delay) => {
-                    this.time.delayedCall(
-                        delay,
-                        () => {
-                            if (
-                                this.phase === 'hunt'
-                            ) {
-                                multiplayerClient
-                                    .requestFinalCamouflageSnapshots();
-                            }
-                        },
-                    );
-                },
-            );
+            multiplayerClient
+                .requestFinalCamouflageSnapshots();
 
             /*
              * V1010375_READY_GO_SETTLING / HUNT_RELEASE
