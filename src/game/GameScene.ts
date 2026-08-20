@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010356E_AVATAR_EDITOR_PRECISION_TOOLS_EXACT: exact-source avatar editor tool tip/scale/preview polish. */
     /* V1010354_AVATAR_EDITOR_CAMO_SAMPLER_BACKGROUND: larger avatar sampler canvas with real eyedropper-readable camo background. */
     /* V1010353_AVATAR_EDITOR_MOBILE_TOOL_HALF_SIZE: mobile avatar-editor tool visual scale = 50%. */
     /* V1010352_AVATAR_EDITOR_EYEDROPPER_MASK: avatar-editor pipette respects the actual avatar body mask. */
@@ -17228,6 +17229,17 @@ export class GameScene extends Phaser.Scene {
          * Desktop keeps direct cursor semantics because no floating finger
          * obstruction exists there.
          */
+        /*
+         * V1010356E_AVATAR_EDITOR_PRECISION_TOOLS_EXACT: avatar editor mobile tool is 0.75x (1.5x the old 0.5x).
+         * SVG tip is (7,7), while the finger grips around (80,90).
+         * These offsets make the logical paint/sample point equal the VISIBLE tip.
+         */
+        const avatarMobileToolScale = 0.75;
+        const avatarMobileToolTipOffsetX =
+            (80 - 7) * avatarMobileToolScale;
+        const avatarMobileToolTipOffsetY =
+            (90 - 7) * avatarMobileToolScale;
+
         const getAvatarToolTipClient =
             (
                 clientX: number,
@@ -17246,8 +17258,8 @@ export class GameScene extends Phaser.Scene {
                 }
 
                 return {
-                    x: clientX - 72,
-                    y: clientY - 82,
+                    x: clientX - avatarMobileToolTipOffsetX,
+                    y: clientY - avatarMobileToolTipOffsetY,
                 };
             };
 
@@ -17286,13 +17298,16 @@ export class GameScene extends Phaser.Scene {
                     canvasFrame
                         .getBoundingClientRect();
 
+                /* Put SVG grip under the finger; SVG tip then lands exactly on paint/sample point. */
                 floatingTool.style.left =
                     `${clientX -
-                        frameRect.left}px`;
+                        frameRect.left -
+                        80 * avatarMobileToolScale}px`;
 
                 floatingTool.style.top =
                     `${clientY -
-                        frameRect.top}px`;
+                        frameRect.top -
+                        90 * avatarMobileToolScale}px`;
 
                 floatingTool.innerHTML =
                     eyedropperArmed
@@ -17319,7 +17334,7 @@ export class GameScene extends Phaser.Scene {
                     '0 0';
                 floatingTool.style.transform =
                     this.mobileControlsEnabled
-                        ? 'scale(0.5)'
+                        ? `scale(${avatarMobileToolScale})`
                         : '';
 
                 floatingTool.style.display =
@@ -18379,19 +18394,27 @@ export class GameScene extends Phaser.Scene {
                 /*
                  * V1010347_PAINT_TOOL_UX_UNIFICATION / AVATAR_ZOOM_RELEASE_CENTER
                  */
-                hoverPoint = {
-                    x: 40,
-                    y: 60,
-                };
+                const rect =
+                    canvas.getBoundingClientRect();
+                const centerClientX =
+                    rect.left + rect.width / 2;
+                const centerClientY =
+                    rect.top + rect.height / 2;
+
+                hoverPoint =
+                    canvasToLogical(
+                        centerClientX,
+                        centerClientY,
+                    );
 
                 floatingTool.innerHTML =
                     eyedropperArmed
                         ? dropperCursorSvg
                         : brushCursorSvg;
                 floatingTool.style.left =
-                    '50%';
+                    `calc(50% - ${80 * avatarMobileToolScale}px)`;
                 floatingTool.style.top =
-                    '50%';
+                    `calc(50% - ${90 * avatarMobileToolScale}px)`;
                 floatingTool.style.display =
                     this.mobileControlsEnabled
                         ? 'flex'
@@ -18449,17 +18472,20 @@ export class GameScene extends Phaser.Scene {
                     'circle';
                 straightLineStart =
                     undefined;
-                hoverPoint = {
-                    x: 40,
-                    y: 60,
-                };
+                const rect =
+                    canvas.getBoundingClientRect();
+                hoverPoint =
+                    canvasToLogical(
+                        rect.left + rect.width / 2,
+                        rect.top + rect.height / 2,
+                    );
 
                 floatingTool.innerHTML =
                     brushCursorSvg;
                 floatingTool.style.left =
-                    '50%';
+                    `calc(50% - ${80 * avatarMobileToolScale}px)`;
                 floatingTool.style.top =
-                    '50%';
+                    `calc(50% - ${90 * avatarMobileToolScale}px)`;
                 floatingTool.style.display =
                     this.mobileControlsEnabled
                         ? 'flex'
@@ -19547,7 +19573,8 @@ export class GameScene extends Phaser.Scene {
 
         const undo =
             makeButton(
-                tr('되돌리기'),
+                '↶ ' +
+                    tr('되돌리기'),
                 '#78966f',
                 () => {
                     finishStroke();
@@ -19568,7 +19595,12 @@ export class GameScene extends Phaser.Scene {
         const redo =
             makeButton(
                 '↷ ' +
-                    tr('다시'),
+                    getAvatarToolLabel(
+                        '다시 실행',
+                        'やり直し',
+                        'Redo',
+                        '重做',
+                    ),
                 '#6d8f9e',
                 () => {
                     finishStroke();
