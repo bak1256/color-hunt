@@ -47,6 +47,7 @@ type NetworkPlayerView = {
 };
 
 export class NetworkPlayerManager {
+  /* V1010373_RECONNECT_SINGLE_AUTHORITY_GAMEPLAY_LOCK: stale reconnect echoes cannot move the local actor; prediction is rebased once after recovery. */
   /* V1010370_LARGE_ROOM_TRANSPORT_BUDGET: movement snapshots/fallback authority ~=15Hz for 3-10 player rooms; local prediction unchanged. */
   /* V1010364_P0_MULTIPLAYER_STABILITY: cap movement transport to 20Hz while keeping local rendering frame-rate smooth. */
   /* V1010346_MOVEMENT_JITTER_MAX_HARDENING: local prediction, remote damping, delta and network cadence hardening. */
@@ -84,6 +85,46 @@ export class NetworkPlayerManager {
   getLocalSessionId():
     string | undefined {
     return this.getEffectiveLocalSessionId();
+  }
+
+  /*
+   * V1010373_RECONNECT_SINGLE_AUTHORITY_GAMEPLAY_LOCK / LOCAL_PREDICTION_RESET
+   * Called once when a recovered Room becomes authoritative. Adopt the
+   * currently rendered position as the new prediction origin and discard old
+   * movement echoes/history from the dead transport.
+   */
+  resetLocalPredictionAfterRecovery(): void {
+    const sessionId =
+      this.getEffectiveLocalSessionId();
+
+    const view =
+      sessionId
+        ? this.players.get(
+            sessionId,
+          )
+        : undefined;
+
+    if (view) {
+      this.localX =
+        view.container.x;
+      this.localY =
+        view.container.y;
+      view.targetX =
+        view.container.x;
+      view.targetY =
+        view.container.y;
+    }
+
+    this.localMovementInitialized =
+      Boolean(view);
+    this.lastLocalMoveInputAt =
+      0;
+    this.localWasMoving =
+      false;
+    this.lastSendTime =
+      this.scene.time.now;
+    this.recentSentPositions =
+      [];
   }
 
 
@@ -1078,6 +1119,20 @@ export class NetworkPlayerManager {
       this.getEffectiveLocalSessionId() &&
       !view.customizationMode
     ) {
+      /*
+       * V1010373_RECONNECT_SINGLE_AUTHORITY_GAMEPLAY_LOCK / STALE_LOCAL_ECHO_GUARD
+       *
+       * A half-dead Room may still replay delayed Schema x/y while SDK
+       * reconnect/fresh handoff is underway. Never let those echoes drag the
+       * local Hunter and camera around. Role/alive/name above are still kept.
+       */
+      if (
+        !multiplayerClient
+          .isGameplayTransportStable()
+      ) {
+        return;
+      }
+
       /*
        * Lobby movement uses local prediction. The server still receives
        * coordinates, but its delayed echo must never rewind the local avatar.

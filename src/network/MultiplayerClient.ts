@@ -320,6 +320,7 @@ export type PaintReadyStateHandler = (
 ) => void;
 
 export class MultiplayerClient {
+  /* V1010373_RECONNECT_SINGLE_AUTHORITY_GAMEPLAY_LOCK: reconnect has one transport owner; gameplay sends pause until the authoritative Room is stable. */
   /* V1010372_SEAT_EXPIRED_FRESH_REJOIN: terminal 524 reconnect seats immediately fall back to bounded fresh clientKey rejoin. */
   /* V1010367_CLIENT_RECONNECT_SNAPSHOT_CONVERGENCE: throttle heavy paint snapshots and converge reconnect state before gameplay rebuild. */
   /* V1010364_P0_MULTIPLAYER_STABILITY: reduce high-frequency aim transport; preserve large-turn bypass. */
@@ -505,6 +506,24 @@ this.phaseChangedHandlers.forEach(
   private lastRoomPingAt = 0;
 
   private connectionIssueNotified = false;
+
+  /*
+   * V1010373_RECONNECT_SINGLE_AUTHORITY_GAMEPLAY_LOCK / TRANSPORT_GATE
+   * Gameplay traffic is legal only while ONE current Room owns a healthy
+   * transport. Recovery/snapshot messages still use their dedicated methods.
+   */
+  isGameplayTransportStable(): boolean {
+    const room =
+      this.room;
+
+    return Boolean(
+      room &&
+      !this.connectionIssueNotified &&
+      !this.manualReconnectInFlight &&
+      !this.freshRejoinInFlight &&
+      !room.reconnection.isReconnecting,
+    );
+  }
 
   private manualReconnectInFlight = false;
 
@@ -1669,20 +1688,28 @@ this.room = room;
      * Mobile network handoffs can happen before Colyseus' default
      * 5000ms minUptime. Allow recovery after 500ms instead.
      */
-    room.reconnection.minUptime = 250;
-    room.reconnection.maxRetries = 60;
-    room.reconnection.delay = 50;
-    room.reconnection.minDelay = 50;
-    room.reconnection.maxDelay = 350;
-    room.reconnection.maxEnqueuedMessages = 40;
+    /*
+     * V1010373_RECONNECT_SINGLE_AUTHORITY_GAMEPLAY_LOCK / RECONNECT_BACKOFF
+     *
+     * The old 50-350ms / 60 retry profile can hammer both browser and server
+     * during a multi-client wobble. Keep automatic token recovery, but spread
+     * attempts over a sensible window. Terminal 524 still escalates
+     * immediately through v372.
+     */
+    room.reconnection.minUptime = 500;
+    room.reconnection.maxRetries = 18;
+    room.reconnection.delay = 120;
+    room.reconnection.minDelay = 120;
+    room.reconnection.maxDelay = 1200;
+    room.reconnection.maxEnqueuedMessages = 12;
     room.reconnection.backoff =
       (
         attempt: number,
         _delay: number,
       ) =>
         Math.min(
-          350,
-          50 + attempt * 35,
+          1200,
+          120 + attempt * 80,
         );
 
     this.roomHealthCleanup?.();
@@ -3158,6 +3185,7 @@ this.manualReconnectInFlight = false;
   ): void {
     if (
       !this.room ||
+      !this.isGameplayTransportStable() ||
       !Number.isFinite(x) ||
       !Number.isFinite(y)
     ) {
@@ -3207,6 +3235,7 @@ this.manualReconnectInFlight = false;
      */
     if (
       !this.room ||
+      !this.isGameplayTransportStable() ||
       !Number.isFinite(angle)
     ) {
       return;
@@ -3263,6 +3292,12 @@ this.manualReconnectInFlight = false;
   sendFireShot(
     angle: number,
   ): void {
+    if (
+      !this.isGameplayTransportStable()
+    ) {
+      return;
+    }
+
     this.room?.send(
       "fire_shot",
       {
@@ -3272,7 +3307,19 @@ this.manualReconnectInFlight = false;
   }
 
   sendFart(): void {
-    this.room?.send('fart_use', { pressedAt: Date.now() });
+    if (
+      !this.isGameplayTransportStable()
+    ) {
+      return;
+    }
+
+    this.room?.send(
+      'fart_use',
+      {
+        pressedAt:
+          Date.now(),
+      },
+    );
   }
 
   sendMapSelection(

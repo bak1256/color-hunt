@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010373_RECONNECT_SINGLE_AUTHORITY_GAMEPLAY_LOCK: reconnect freezes local gameplay until one authoritative Room/player/paint state owns the Scene again. */
     /* V1010371_ROOM_CREATE_RECOVERY: coalesce lobby polling and guarantee room-create failure recovery instead of infinite busy UI. */
     /* V1010370_LARGE_ROOM_TRANSPORT_BUDGET: common PC/mobile large-room transport budget; paint keeps every point but sends fewer messages. */
     /* V1010369_MOBILE_NETWORK_VISUAL_GUARD_BUDGET: mobile per-player visibility/name self-heal loops run at 4Hz; gameplay simulation remains full-rate. */
@@ -541,6 +542,17 @@ export class GameScene extends Phaser.Scene {
         0;
 
     private recoveryPaintSnapshotGeneration =
+        0;
+
+    /*
+     * V1010373_RECONNECT_SINGLE_AUTHORITY_GAMEPLAY_LOCK / SCENE_GAMEPLAY_LOCK
+     * Do not allow WASD/aim/fire/fart to keep mutating a local Hunter while
+     * Room ownership or reconnect snapshots are unsettled.
+     */
+    private reconnectGameplayLocked =
+        false;
+
+    private reconnectGameplayUnlockNotBefore =
         0;
 
     private knownAliveState =
@@ -9966,6 +9978,32 @@ export class GameScene extends Phaser.Scene {
         this.networkUnsubscribers.push(
             multiplayerClient.onConnectionDrop(
                 () => {
+                    /*
+                     * V1010373_RECONNECT_SINGLE_AUTHORITY_GAMEPLAY_LOCK / DROP_LOCK
+                     */
+                    this.reconnectGameplayLocked =
+                        true;
+
+                    this.reconnectGameplayUnlockNotBefore =
+                        this.time.now +
+                        250;
+
+                    if (
+                        this.input.keyboard
+                    ) {
+                        this.input.keyboard
+                            .resetKeys();
+                    }
+
+                    this.resetMobileMoveControl();
+                    this.mobileAimPointerId =
+                        -1;
+                    this.mobileFirePointerId =
+                        -1;
+                    this.mobileFartPointerId =
+                        -1;
+                    this.mobileTouchPoints.clear();
+
                     if (
                         this.phase === 'paint' ||
                         this.phase === 'hunt' ||
@@ -9994,6 +10032,21 @@ export class GameScene extends Phaser.Scene {
                 () => {
                     this.attachJoinRejectedListener();
                     this.attachRoleDisconnectCountdownListener();
+
+                    /*
+                     * V1010373_RECONNECT_SINGLE_AUTHORITY_GAMEPLAY_LOCK / RECOVERED_STILL_LOCKED
+                     * Transport callback means the socket came back; it does
+                     * NOT yet mean local PlayerState/paint/camera have converged.
+                     */
+                    this.reconnectGameplayLocked =
+                        true;
+
+                    this.reconnectGameplayUnlockNotBefore =
+                        Math.max(
+                            this.reconnectGameplayUnlockNotBefore,
+                            this.time.now +
+                                180,
+                        );
 
                     /*
                      * V1010367_CLIENT_RECONNECT_SNAPSHOT_CONVERGENCE / RECOVERY_START
@@ -16319,6 +16372,74 @@ export class GameScene extends Phaser.Scene {
         );
     }
 
+    private canUseRecoveredGameplayNow(): boolean {
+        if (
+            !this.reconnectGameplayLocked
+        ) {
+            return multiplayerClient
+                .isGameplayTransportStable();
+        }
+
+        if (
+            this.time.now <
+                this.reconnectGameplayUnlockNotBefore ||
+            !multiplayerClient
+                .isGameplayTransportStable() ||
+            this.recoveryPaintSnapshotPending
+        ) {
+            return false;
+        }
+
+        const room =
+            multiplayerClient
+                .getRoom();
+
+        if (!room) {
+            return false;
+        }
+
+        const localPlayer =
+            multiplayerClient
+                .getLocalPlayer();
+
+        if (
+            !localPlayer ||
+            !this.networkPlayerManager
+                .hasPlayer(
+                    room.sessionId,
+                )
+        ) {
+            return false;
+        }
+
+        /*
+         * V1010373_RECONNECT_SINGLE_AUTHORITY_GAMEPLAY_LOCK / AUTHORITATIVE_UNLOCK
+         * Rebase prediction exactly once so pre-drop echoes/input cannot
+         * immediately create another hard correction or camera shake.
+         */
+        this.networkPlayerManager
+            .resetLocalPredictionAfterRecovery();
+
+        if (this.input.keyboard) {
+            this.input.keyboard
+                .resetKeys();
+        }
+
+        this.resetMobileMoveControl();
+        this.mobileAimPointerId =
+            -1;
+        this.mobileFirePointerId =
+            -1;
+        this.mobileFartPointerId =
+            -1;
+        this.mobileTouchPoints.clear();
+
+        this.reconnectGameplayLocked =
+            false;
+
+        return true;
+    }
+
     private updateNetworkPlayers(
         delta: number,
     ): void {
@@ -16391,6 +16512,21 @@ export class GameScene extends Phaser.Scene {
             !this.isMultiplayerSession() ||
             !this.networkPlayerManager
         ) {
+            return;
+        }
+
+        if (
+            !this.canUseRecoveredGameplayNow()
+        ) {
+            /*
+             * V1010373_RECONNECT_SINGLE_AUTHORITY_GAMEPLAY_LOCK / RECOVERY_FRAME
+             * Keep existing actor visuals alive, but do not run local
+             * authoritative reconciliation or movement/input this frame.
+             */
+            this.networkPlayerManager
+                .update(
+                    delta,
+                );
             return;
         }
 
