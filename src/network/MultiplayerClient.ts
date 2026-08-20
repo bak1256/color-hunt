@@ -289,6 +289,10 @@ export type PhaseChangedHandler = (
   phaseEndsAt: number,
 ) => void;
 
+export type HuntSettlingHandler = (
+  remainingMs: number,
+) => void;
+
 export type StartGameErrorHandler = (
   message: string,
 ) => void;
@@ -320,6 +324,7 @@ export type PaintReadyStateHandler = (
 ) => void;
 
 export class MultiplayerClient {
+  /* V1010375_READY_GO_SETTLING: receives the server's short Paint->Hunt settling deadline separately from normal phases. */
   /* V1010374_PAINT_FLOOD_FRAME_BUDGET: dense paint is not queued into an unstable/reconnecting transport. */
   /* V1010373_RECONNECT_SINGLE_AUTHORITY_GAMEPLAY_LOCK: reconnect has one transport owner; gameplay sends pause until the authoritative Room is stable. */
   /* V1010372_SEAT_EXPIRED_FRESH_REJOIN: terminal 524 reconnect seats immediately fall back to bounded fresh clientKey rejoin. */
@@ -645,6 +650,12 @@ this.phaseChangedHandlers.forEach(
 
   private readonly phaseChangedHandlers =
     new Set<PhaseChangedHandler>();
+
+  /*
+   * V1010375_READY_GO_SETTLING: server-authoritative Paint->Hunt quiet window.
+   */
+  private readonly huntSettlingHandlers =
+    new Set<HuntSettlingHandler>();
 
   private readonly startGameErrorHandlers =
     new Set<StartGameErrorHandler>();
@@ -2658,6 +2669,37 @@ this.manualReconnectInFlight = false;
     );
 
     room.onMessage<{
+      endsAt?: number;
+      serverNow?: number;
+    }>(
+      "hunt_settling",
+      (payload) => {
+        const endsAt =
+          Number(payload?.endsAt ?? 0);
+        const serverNow =
+          Number(payload?.serverNow ?? 0);
+
+        const remainingMs =
+          Number.isFinite(endsAt) &&
+          Number.isFinite(serverNow)
+            ? Math.max(
+                0,
+                endsAt - serverNow,
+              )
+            : 1700;
+
+        this.huntSettlingHandlers
+          .forEach(
+            (handler) => {
+              handler(
+                remainingMs,
+              );
+            },
+          );
+      },
+    );
+
+    room.onMessage<{
       phase?: NetworkGamePhase;
       phaseEndsAt?: number;
       serverNow?: number;
@@ -3973,6 +4015,18 @@ this.manualReconnectInFlight = false;
       this.shotFiredHandlers.delete(
         handler,
       );
+    };
+  }
+
+  onHuntSettling(
+    handler: HuntSettlingHandler,
+  ): () => void {
+    this.huntSettlingHandlers
+      .add(handler);
+
+    return () => {
+      this.huntSettlingHandlers
+        .delete(handler);
     };
   }
 

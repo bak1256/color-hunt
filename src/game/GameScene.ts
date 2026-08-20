@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010375_READY_GO_SETTLING: full-screen localized READY -> GO uses the server quiet window to flush final paint before Hunt. */
     /* V1010374_PAINT_FLOOD_FRAME_BUDGET: dense multiplayer paint uses larger transport chunks and frame-budgeted remote raster replay. */
     /* V1010373_RECONNECT_SINGLE_AUTHORITY_GAMEPLAY_LOCK: reconnect freezes local gameplay until one authoritative Room/player/paint state owns the Scene again. */
     /* V1010371_ROOM_CREATE_RECOVERY: coalesce lobby polling and guarantee room-create failure recovery instead of infinite busy UI. */
@@ -555,6 +556,24 @@ export class GameScene extends Phaser.Scene {
 
     private reconnectGameplayUnlockNotBefore =
         0;
+
+    /*
+     * V1010375_READY_GO_SETTLING
+     * Full-screen READY -> GO overlay. Paint input is frozen while normal
+     * Scene/network updates continue, allowing v374 remote paint queue to
+     * drain before Hunt initialization.
+     */
+    private huntSettlingActive =
+        false;
+
+    private huntSettlingOverlay?:
+        Phaser.GameObjects.Container;
+
+    private huntSettlingText?:
+        Phaser.GameObjects.Text;
+
+    private huntSettlingGoEvent?:
+        Phaser.Time.TimerEvent;
 
     private knownAliveState =
         new Map<string, boolean>();
@@ -9654,6 +9673,18 @@ export class GameScene extends Phaser.Scene {
             multiplayerClient.onShotFired(
                 (shot: NetworkShotFired) => {
                     this.applyNetworkShot(shot);
+                },
+            ),
+        );
+
+        this.networkUnsubscribers.push(
+            multiplayerClient.onHuntSettling(
+                (
+                    remainingMs,
+                ) => {
+                    this.beginHuntSettlingOverlay(
+                        remainingMs,
+                    );
                 },
             ),
         );
@@ -30800,6 +30831,171 @@ export class GameScene extends Phaser.Scene {
 
     }
 
+    private clearHuntSettlingOverlay(): void {
+        this.huntSettlingGoEvent
+            ?.remove(false);
+        this.huntSettlingGoEvent =
+            undefined;
+
+        this.huntSettlingOverlay
+            ?.destroy(true);
+        this.huntSettlingOverlay =
+            undefined;
+        this.huntSettlingText =
+            undefined;
+
+        this.huntSettlingActive =
+            false;
+    }
+
+    private beginHuntSettlingOverlay(
+        remainingMs: number,
+    ): void {
+        if (
+            this.phase !== 'paint'
+        ) {
+            return;
+        }
+
+        /*
+         * V1010375_READY_GO_SETTLING / FINAL_STROKE_FLUSH
+         * Commit the user's final stroke before freezing paint input.
+         */
+        this.finishActivePaintStroke();
+
+        this.huntSettlingActive =
+            true;
+        this.input.enabled =
+            false;
+
+        this.huntSettlingGoEvent
+            ?.remove(false);
+        this.huntSettlingOverlay
+            ?.destroy(true);
+
+        const language =
+            getLanguage();
+
+        const readyLabels = {
+            ko: '준비!',
+            ja: 'よーい！',
+            en: 'READY!',
+            zh: '准备！',
+        } as const;
+
+        const goLabels = {
+            ko: '땅!',
+            ja: 'スタート！',
+            en: 'GO!',
+            zh: '开始！',
+        } as const;
+
+        const shade =
+            this.add.rectangle(
+                this.gameWidth * 0.5,
+                this.gameHeight * 0.5,
+                this.gameWidth,
+                this.gameHeight,
+                0x10251b,
+                0.46,
+            )
+                .setScrollFactor(0)
+                .setDepth(50000);
+
+        const text =
+            this.add.text(
+                this.gameWidth * 0.5,
+                this.gameHeight * 0.5,
+                readyLabels[language],
+                {
+                    fontFamily:
+                        'Arial, sans-serif',
+                    fontSize:
+                        this.mobileControlsEnabled
+                            ? '58px'
+                            : '76px',
+                    fontStyle:
+                        'bold',
+                    color:
+                        '#fff7d6',
+                    stroke:
+                        '#173c2a',
+                    strokeThickness:
+                        10,
+                    align:
+                        'center',
+                },
+            )
+                .setOrigin(0.5)
+                .setScrollFactor(0)
+                .setDepth(50001);
+
+        this.huntSettlingOverlay =
+            this.add.container(
+                0,
+                0,
+                [
+                    shade,
+                    text,
+                ],
+            )
+                .setScrollFactor(0)
+                .setDepth(50000);
+
+        this.huntSettlingText =
+            text;
+
+        /*
+         * ~1.2s READY + final ~0.5s GO.
+         * NetworkPlayerManager.update() continues beneath the overlay, so
+         * v374's paint queue keeps draining during the whole quiet window.
+         */
+        const safeRemainingMs =
+            Phaser.Math.Clamp(
+                Number.isFinite(
+                    remainingMs,
+                )
+                    ? remainingMs
+                    : 1700,
+                900,
+                2400,
+            );
+
+        const goDelay =
+            Math.max(
+                350,
+                safeRemainingMs -
+                    500,
+            );
+
+        this.huntSettlingGoEvent =
+            this.time.delayedCall(
+                goDelay,
+                () => {
+                    if (
+                        !this.huntSettlingActive ||
+                        this.phase !== 'paint'
+                    ) {
+                        return;
+                    }
+
+                    this.huntSettlingText
+                        ?.setText(
+                            goLabels[
+                                getLanguage()
+                            ],
+                        )
+                        .setScale(1.12);
+
+                    this.cameras.main
+                        .shake(
+                            70,
+                            0.0015,
+                        );
+                },
+            );
+    }
+
     private applyNetworkPhase(
         phase: string,
         phaseEndsAt: number,
@@ -30837,6 +31033,9 @@ export class GameScene extends Phaser.Scene {
         }
 
         if (phase === 'lobby') {
+            this.clearHuntSettlingOverlay();
+            this.input.enabled = true;
+
             /*
              * V1010300_CLIENT_MOBILE_UI_GHOST_GAS_FIX: GAS belongs to one Hunt only.
              * Never carry the previous Hunter's pressure into Lobby/next round.
@@ -31073,6 +31272,12 @@ export class GameScene extends Phaser.Scene {
         }
 
         if (phase === 'hunt') {
+            /*
+             * V1010375_READY_GO_SETTLING / HUNT_RELEASE
+             * Hunt's authoritative phase packet ends the quiet window.
+             */
+            this.clearHuntSettlingOverlay();
+
             /*
              * V1010343_URGENT_HUNTER_INPUT_JITTER_EYEDROPPER / HUNT_INPUT_HARD_RESET
              *
