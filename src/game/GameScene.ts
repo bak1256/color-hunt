@@ -79,6 +79,8 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010386F_PRACTICE_BOTH_ARROWS: merged v386e dock guard + guaranteed left/right Practice map arrows. */
+    /* V1010386E_DOCK_VISIBILITY_GUARD: paint dock is hard-hidden outside the actual Paint phase. */
     /* V1010386D_REAL_LAYOUT_FIX: force actual DOM palette one-row tools/full-width slider and large Practice thumbnail via runtime !important styles. */
     /* V1010386_EXPLICIT_LINE_TOOL: slower Hunter/avatar brush hold, explicit line tool, larger centered Practice map picker. */
     /* V1010384E_AVATAR_EDITOR_OPEN_FIX: fix PC/mobile avatar editor initialization crash. */
@@ -8103,6 +8105,17 @@ export class GameScene extends Phaser.Scene {
             root,
         );
 
+        /*
+         * Start hard-hidden. Phase transition code explicitly reveals this
+         * only after Paint begins.
+         */
+        root.hidden = true;
+        root.style.setProperty(
+            'display',
+            'none',
+            'important',
+        );
+
         root.addEventListener(
             'pointerdown',
             (
@@ -8147,18 +8160,47 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
+        /*
+         * V1010386E_DOCK_VISIBILITY_GUARD:
+         * The paint dock belongs ONLY to the in-game Paint phase.
+         * Lobby/practice selection/room browser must never expose it.
+         *
+         * Avatar customization has its own editor palette and does not use
+         * this dock.
+         */
+        const canShowPaintDock =
+            visible &&
+            this.phase === 'paint';
+
         this.mobilePaintDock.hidden =
-            !visible;
+            !canShowPaintDock;
+
+        this.mobilePaintDock.style.setProperty(
+            'display',
+            canShowPaintDock
+                ? 'grid'
+                : 'none',
+            'important',
+        );
 
         if (
             this.mobilePaintModeButton
         ) {
             this.mobilePaintModeButton.hidden =
-                !visible ||
+                !canShowPaintDock ||
                 !this.mobileControlsEnabled;
+
+            this.mobilePaintModeButton.style.setProperty(
+                'display',
+                canShowPaintDock &&
+                    this.mobileControlsEnabled
+                    ? ''
+                    : 'none',
+                'important',
+            );
         }
 
-        if (visible) {
+        if (canShowPaintDock) {
             this.syncMobilePaintDockUi();
             this.updateMobilePaintDockPosition();
             this.syncMobilePaintModeUi();
@@ -12767,6 +12809,16 @@ export class GameScene extends Phaser.Scene {
                 'important',
             );
             mapPreview.style.setProperty(
+                'position',
+                'relative',
+                'important',
+            );
+            mapPreview.style.setProperty(
+                'z-index',
+                '1',
+                'important',
+            );
+            mapPreview.style.setProperty(
                 'border-radius',
                 '14px',
                 'important',
@@ -12788,6 +12840,49 @@ export class GameScene extends Phaser.Scene {
                 arrow,
                 index,
             ) => {
+                /*
+                 * V1010386F_PRACTICE_BOTH_ARROWS:
+                 * Old compact CSS positioned one of the arrows absolutely over
+                 * the preview. Reset all positioning so LEFT and RIGHT occupy
+                 * their own grid columns and remain visible.
+                 */
+                arrow.hidden = false;
+
+                arrow.style.setProperty(
+                    'display',
+                    'flex',
+                    'important',
+                );
+                arrow.style.setProperty(
+                    'position',
+                    'relative',
+                    'important',
+                );
+                arrow.style.setProperty(
+                    'left',
+                    'auto',
+                    'important',
+                );
+                arrow.style.setProperty(
+                    'right',
+                    'auto',
+                    'important',
+                );
+                arrow.style.setProperty(
+                    'top',
+                    'auto',
+                    'important',
+                );
+                arrow.style.setProperty(
+                    'bottom',
+                    'auto',
+                    'important',
+                );
+                arrow.style.setProperty(
+                    'transform',
+                    'none',
+                    'important',
+                );
                 arrow.style.setProperty(
                     'grid-column',
                     index === 0
@@ -12806,6 +12901,11 @@ export class GameScene extends Phaser.Scene {
                     'important',
                 );
                 arrow.style.setProperty(
+                    'min-width',
+                    '56px',
+                    'important',
+                );
+                arrow.style.setProperty(
                     'height',
                     '82px',
                     'important',
@@ -12816,8 +12916,38 @@ export class GameScene extends Phaser.Scene {
                     'important',
                 );
                 arrow.style.setProperty(
+                    'align-items',
+                    'center',
+                    'important',
+                );
+                arrow.style.setProperty(
+                    'justify-content',
+                    'center',
+                    'important',
+                );
+                arrow.style.setProperty(
                     'justify-self',
                     'center',
+                    'important',
+                );
+                arrow.style.setProperty(
+                    'opacity',
+                    '1',
+                    'important',
+                );
+                arrow.style.setProperty(
+                    'visibility',
+                    'visible',
+                    'important',
+                );
+                arrow.style.setProperty(
+                    'z-index',
+                    '4',
+                    'important',
+                );
+                arrow.style.setProperty(
+                    'pointer-events',
+                    'auto',
                     'important',
                 );
             },
