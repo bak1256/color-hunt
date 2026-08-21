@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010384C_FINGER_EYEDROPPER_HANDOFF: preserve final sampler position and make the next finger touch paint immediately. */
     /* V1010384B_FINGER_EYEDROPPER_TOUCHEND_RETURN: touch fallback returns sampler to last Circle/Square brush on finger-up. */
     /* V1010384_BRUSH_HOLD_TO_PAINT_RESTORE: restore mobile precision-brush hold-to-paint and clean avatar-editor mode ghosts. */
     /* V1010382_FINGER_EYEDROPPER_SQUARE: use a larger square color swatch above the finger for clearer sampling. */
@@ -34390,12 +34391,110 @@ export class GameScene extends Phaser.Scene {
         }
 
         /*
-         * Finger mode also returns to the last circle/square brush immediately
-         * after pointer-up. This keeps sampling a one-shot action and avoids
-         * trapping first-time users in eyedropper mode.
+         * V1010384C_FINGER_EYEDROPPER_HANDOFF:
+         *
+         * Finger eyedropper is a one-shot action, but returning through the
+         * generic activateMobileBrushTool() used to call the normal idle-brush
+         * positioning path. That made the Circle/Square preview jump away from
+         * the exact sampled point at finger-up.
+         *
+         * Finger mode therefore performs a lightweight handoff:
+         * - keep the final sampled world point
+         * - restore the previous Circle/Square brush
+         * - keep its preview exactly at that point
+         * - clear every eyedropper/pending pointer state so the VERY NEXT touch
+         *   can paint immediately.
          */
-        this.activateMobileBrushTool(
-            this.mobileBrushShapeBeforeEyedropper,
+        const sampledTarget =
+            this.mobileLastBrushTargetWorld
+                ?.clone();
+
+        this.stopMobileNativeEyedropperDrag();
+
+        this.finishActivePaintStroke();
+        this.isPainting = false;
+
+        this.releaseMobilePaintPointer();
+        this.cancelMobilePaintHoldTimers();
+
+        this.mobilePendingPaintPointerId =
+            -1;
+        this.mobilePendingPaintStartScreen =
+            undefined;
+        this.mobilePendingPaintStartWorld =
+            undefined;
+        this.mobilePaintDotCommitted =
+            false;
+
+        this.eyedropperPointerId = -1;
+        this.eyedropperArmed = false;
+
+        this.mobilePinchDistance = 0;
+        this.mobilePinchActive = false;
+        this.mobileNativePinchActive = false;
+
+        this.hideEyedropperMagnifier();
+        this.hideMobilePaintPrecisionGuide();
+
+        this.brushShape =
+            this.mobileBrushShapeBeforeEyedropper;
+
+        this.createBrushTexture();
+        this.updatePaintHud();
+        this.highlightBrushShape(
+            this.brushShape,
+        );
+        this.updateEyedropperButtonUi();
+
+        if (
+            sampledTarget &&
+            this.paintPreview
+        ) {
+            this.mobileLastBrushTargetWorld =
+                sampledTarget.clone();
+
+            this.paintPreview
+                .setPosition(
+                    sampledTarget.x,
+                    sampledTarget.y,
+                );
+
+            this.redrawPaintPreview();
+
+            this.paintPreview
+                .setAlpha(0.30)
+                .setVisible(true);
+        }
+
+        /*
+         * Native capture handlers run before Phaser's normal touch-end cleanup.
+         * Clear stale touch ownership in a microtask AFTER this event finishes.
+         * That removes the "first touch after eyedropper does nothing" feeling.
+         */
+        queueMicrotask(
+            () => {
+                if (
+                    this.eyedropperArmed ||
+                    this.mobilePaintInputMode !==
+                        'finger'
+                ) {
+                    return;
+                }
+
+                this.mobileTouchPoints.clear();
+                this.mobilePinchDistance = 0;
+                this.mobilePinchActive = false;
+                this.mobileNativePinchActive = false;
+
+                this.mobilePendingPaintPointerId =
+                    -1;
+                this.mobilePendingPaintStartScreen =
+                    undefined;
+                this.mobilePendingPaintStartWorld =
+                    undefined;
+                this.mobilePaintDotCommitted =
+                    false;
+            },
         );
     }
 
@@ -39621,8 +39720,18 @@ export class GameScene extends Phaser.Scene {
                         this.finishActivePaintStroke();
                     }
 
-                    this.releaseMobilePaintPointer();
-                    this.stopMobileNativeEyedropperDrag();
+                    /*
+                     * Finger-mode completion above already released/reset the
+                     * paint pointer and preserved the exact sampled preview.
+                     * Brush mode still uses the normal cleanup below.
+                     */
+                    if (
+                        this.mobilePaintInputMode ===
+                            'brush'
+                    ) {
+                        this.releaseMobilePaintPointer();
+                        this.stopMobileNativeEyedropperDrag();
+                    }
 
                     /*
                      * V101023832_STABLE_MOBILE_PINCH_OWNERSHIP
@@ -39830,8 +39939,13 @@ export class GameScene extends Phaser.Scene {
                     this.finishActivePaintStroke();
                 }
 
-                this.releaseMobilePaintPointer();
-                this.stopMobileNativeEyedropperDrag();
+                if (
+                    this.mobilePaintInputMode ===
+                        'brush'
+                ) {
+                    this.releaseMobilePaintPointer();
+                    this.stopMobileNativeEyedropperDrag();
+                }
             };
 
         window.addEventListener(
