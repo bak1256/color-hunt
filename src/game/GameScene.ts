@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010386C_PALETTE_LAYOUT_POLISH: single-row tool buttons on PC/mobile and full-width bottom brush slider on desktop. */
     /* V1010386_EXPLICIT_LINE_TOOL: slower Hunter/avatar brush hold, explicit line tool, larger centered Practice map picker. */
     /* V1010384E_AVATAR_EDITOR_OPEN_FIX: fix PC/mobile avatar editor initialization crash. */
     /* V1010384D_EYEDROPPER_NEXT_TOUCH_IMMEDIATE: first valid finger touch after sampling stamps paint immediately. */
@@ -11461,7 +11462,7 @@ export class GameScene extends Phaser.Scene {
                         color: '#294232',
                         fontFamily:
                             'ui-monospace, SFMono-Regular, Consolas, monospace',
-                        fontSize: '14px',
+                        fontSize: '13px',
                         boxShadow:
                             'inset 0 1px 2px rgba(62,91,66,.06)',
                     },
@@ -19741,7 +19742,7 @@ export class GameScene extends Phaser.Scene {
             controls.style,
             {
                 display: 'flex',
-                flexWrap: 'wrap',
+                flexWrap: 'nowrap',
                 gap: '6px',
                 justifyContent: 'center',
                 marginTop: '4px',
@@ -21378,7 +21379,7 @@ export class GameScene extends Phaser.Scene {
                 flexDirection: 'row',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: '10px',
+                gap: '7px',
             },
         );
 
@@ -33547,9 +33548,9 @@ export class GameScene extends Phaser.Scene {
 
         const panel = this.add
             .rectangle(
-                380,
-                this.gameHeight - 64,
-                740,
+                390,
+                this.gameHeight - 68,
+                760,
                 this.mobileControlsEnabled
                     ? 126
                     : 110,
@@ -33833,8 +33834,8 @@ export class GameScene extends Phaser.Scene {
 
         this.straightLineToolButton =
             this.add.text(
-                475,
-                this.gameHeight - 78,
+                462,
+                this.gameHeight - 82,
                 this.mobileControlsEnabled
                     ? `╱\n${tr('직선')}`
                     : `╱ ${tr('직선')}`,
@@ -33859,10 +33860,10 @@ export class GameScene extends Phaser.Scene {
                 .setOrigin(0.5)
                 .setFixedSize(
                     this.mobileControlsEnabled
-                        ? 70
-                        : 68,
+                        ? 64
+                        : 58,
                     this.mobileControlsEnabled
-                        ? 48
+                        ? 46
                         : 28,
                 )
                 .setAlign('center')
@@ -33905,8 +33906,8 @@ export class GameScene extends Phaser.Scene {
          */
         this.eyedropperButton =
             this.add.text(
-                550,
-                this.gameHeight - 78,
+                526,
+                this.gameHeight - 82,
                 this.mobileControlsEnabled
                     ? `💧\n${tr('스포이드')}`
                     : `◉ ${tr('스포이드')}`,
@@ -34005,8 +34006,8 @@ export class GameScene extends Phaser.Scene {
 
         this.undoPaintButton =
             this.add.text(
-                625,
-                this.gameHeight - 78,
+                590,
+                this.gameHeight - 82,
                 `↶ ${tr('되돌리기')}`,
                 {
                     fontFamily:
@@ -34080,8 +34081,8 @@ export class GameScene extends Phaser.Scene {
 
         this.redoPaintButton =
             this.add.text(
-                700,
-                this.gameHeight - 78,
+                654,
+                this.gameHeight - 82,
                 `↷ ${tr('다시 실행')}`,
                 {
                     fontFamily:
