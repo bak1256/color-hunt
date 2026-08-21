@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010384E_AVATAR_EDITOR_OPEN_FIX: fix PC/mobile avatar editor initialization crash. */
     /* V1010384D_EYEDROPPER_NEXT_TOUCH_IMMEDIATE: first valid finger touch after sampling stamps paint immediately. */
     /* V1010384C_FINGER_EYEDROPPER_HANDOFF: preserve final sampler position and make the next finger touch paint immediately. */
     /* V1010384B_FINGER_EYEDROPPER_TOUCHEND_RETURN: touch fallback returns sampler to last Circle/Square brush on finger-up. */
@@ -18532,8 +18533,14 @@ export class GameScene extends Phaser.Scene {
                         'none';
                     floatingTool.innerHTML =
                         brushCursorSvg;
-                    avatarEyedropperPointerId =
-                        -1;
+
+                    /*
+                     * V1010384E_AVATAR_EDITOR_OPEN_FIX:
+                     * syncAvatarModeButton() runs once during editor creation,
+                     * before avatarEyedropperPointerId is initialized later in
+                     * this function. Touching it here caused a TDZ ReferenceError
+                     * and aborted opening the editor on both PC and mobile.
+                     */
                 }
             };
 
