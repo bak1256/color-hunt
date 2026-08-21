@@ -24525,6 +24525,265 @@ export class GameScene extends Phaser.Scene {
             );
         }
 
+        /*
+         * V1010391_LOBBY_PROFILE_FOCUS:
+         * Make "My Character" the visual hero of the right panel.
+         *
+         * - The redundant bottom guide card is gone.
+         * - Avatar preview becomes substantially larger and close to 1:1.
+         * - Edit button becomes narrower but taller.
+         * - Final override lives here so legacy v33x profile sizing cannot
+         *   shrink it again on desktop or mobile.
+         */
+        {
+            const isCoarse =
+                window.matchMedia(
+                    '(pointer: coarse)',
+                ).matches;
+
+            const force =
+                (
+                    element:
+                        HTMLElement |
+                        null,
+                    property:
+                        string,
+                    value:
+                        string,
+                ): void => {
+                    element?.style.setProperty(
+                        property,
+                        value,
+                        'important',
+                    );
+                };
+
+            const actions =
+                root.querySelector<HTMLElement>(
+                    '.ch-lobby-actions',
+                );
+
+            const profile =
+                root.querySelector<HTMLElement>(
+                    '.ch-lobby-profile-card',
+                );
+
+            const avatarFrame =
+                profile
+                    ?.querySelector<HTMLElement>(
+                        '.ch-lobby-avatar-frame',
+                    ) ??
+                null;
+
+            const avatarImage =
+                avatarFrame
+                    ?.querySelector<HTMLImageElement>(
+                        'img',
+                    ) ??
+                null;
+
+            const profileCopy =
+                profile
+                    ?.querySelector<HTMLElement>(
+                        '.ch-lobby-profile-copy',
+                    ) ??
+                null;
+
+            const editButton =
+                profile
+                    ?.querySelector<HTMLButtonElement>(
+                        '.ch-lobby-avatar-edit',
+                    ) ??
+                null;
+
+            /*
+             * With the guide removed there are now six rows:
+             * title / profile / public / private / join / practice.
+             * Give the reclaimed vertical budget to the profile.
+             */
+            force(
+                actions,
+                'grid-template-rows',
+                isCoarse
+                    ? '44px 112px 56px 56px 56px minmax(54px, 1fr)'
+                    : '54px 124px 48px 48px 48px minmax(46px, 1fr)',
+            );
+
+            force(
+                profile,
+                'height',
+                isCoarse
+                    ? '112px'
+                    : '124px',
+            );
+            force(
+                profile,
+                'min-height',
+                isCoarse
+                    ? '112px'
+                    : '124px',
+            );
+            force(
+                profile,
+                'max-height',
+                isCoarse
+                    ? '112px'
+                    : '124px',
+            );
+            force(profile, 'display', 'grid');
+            force(
+                profile,
+                'grid-template-columns',
+                isCoarse
+                    ? '92px minmax(0, 1fr)'
+                    : '104px minmax(0, 1fr)',
+            );
+            force(profile, 'align-items', 'center');
+            force(profile, 'column-gap', '12px');
+            force(
+                profile,
+                'padding',
+                isCoarse
+                    ? '8px 10px'
+                    : '10px 12px',
+            );
+            force(profile, 'overflow', 'hidden');
+            force(profile, 'box-sizing', 'border-box');
+
+            const avatarSize =
+                isCoarse
+                    ? '88px'
+                    : '100px';
+
+            force(avatarFrame, 'width', avatarSize);
+            force(avatarFrame, 'height', avatarSize);
+            force(avatarFrame, 'min-width', avatarSize);
+            force(avatarFrame, 'min-height', avatarSize);
+            force(avatarFrame, 'max-width', avatarSize);
+            force(avatarFrame, 'max-height', avatarSize);
+            force(avatarFrame, 'aspect-ratio', '1 / 1');
+            force(avatarFrame, 'margin', '0');
+            force(avatarFrame, 'padding', '4px');
+            force(avatarFrame, 'box-sizing', 'border-box');
+
+            if (avatarImage) {
+                avatarImage.style.setProperty(
+                    'width',
+                    '100%',
+                    'important',
+                );
+                avatarImage.style.setProperty(
+                    'height',
+                    '100%',
+                    'important',
+                );
+                avatarImage.style.setProperty(
+                    'object-fit',
+                    'contain',
+                    'important',
+                );
+                avatarImage.style.setProperty(
+                    'image-rendering',
+                    'pixelated',
+                    'important',
+                );
+            }
+
+            force(profileCopy, 'display', 'flex');
+            force(
+                profileCopy,
+                'flex-direction',
+                'column',
+            );
+            force(
+                profileCopy,
+                'align-items',
+                'flex-start',
+            );
+            force(
+                profileCopy,
+                'justify-content',
+                'center',
+            );
+            force(profileCopy, 'gap', '8px');
+            force(profileCopy, 'min-width', '0');
+
+            const profileTitle =
+                profileCopy
+                    ?.querySelector<HTMLElement>(
+                        'strong',
+                    ) ??
+                null;
+
+            force(
+                profileTitle,
+                'font-size',
+                isCoarse
+                    ? '16px'
+                    : '18px',
+            );
+            force(profileTitle, 'line-height', '1.1');
+            force(profileTitle, 'white-space', 'nowrap');
+
+            /*
+             * Narrower horizontally, taller vertically:
+             * this gives the enlarged avatar more visual ownership without
+             * sacrificing tap/click accessibility.
+             */
+            force(
+                editButton,
+                'width',
+                isCoarse
+                    ? '78%'
+                    : '72%',
+            );
+            force(
+                editButton,
+                'max-width',
+                isCoarse
+                    ? '190px'
+                    : '210px',
+            );
+            force(
+                editButton,
+                'min-width',
+                isCoarse
+                    ? '118px'
+                    : '132px',
+            );
+            force(
+                editButton,
+                'height',
+                isCoarse
+                    ? '44px'
+                    : '46px',
+            );
+            force(
+                editButton,
+                'min-height',
+                isCoarse
+                    ? '44px'
+                    : '46px',
+            );
+            force(
+                editButton,
+                'padding',
+                '6px 12px',
+            );
+            force(editButton, 'line-height', '1.15');
+            force(
+                editButton,
+                'white-space',
+                'normal',
+            );
+            force(
+                editButton,
+                'text-align',
+                'center',
+            );
+            force(editButton, 'box-sizing', 'border-box');
+        }
+
     }
 
     private createMainLobbyDom(): void {
@@ -24757,13 +25016,9 @@ export class GameScene extends Phaser.Scene {
                         </span>
                     </button>
 
-                    <div class="ch-lobby-guide">
-                        <div class="ch-lobby-guide-mascot">🍄</div>
-                        <div>
-                            <strong>${tr('위장하고, 숨고, 찾아내세요!')}</strong>
-                            <span>${tr('카멜레온이 되어 색을 칠하고 헌터로부터 도망쳐 살아남아요!')}</span>
-                        </div>
-                    </div>
+                    <!-- V1010391_LOBBY_PROFILE_FOCUS:
+                         redundant camouflage guide removed; reclaimed space goes
+                         to the player's avatar/profile card. -->
                 </section>
 
                 <footer class="ch-lobby-language">
