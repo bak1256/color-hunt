@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010380_PRACTICE_CARD_EN_FIT: joystick-safe paint toggle + full English practice title/subtitle on desktop/mobile. */
     /* V1010379_FART_COACH_HUNT_ONLY: contextual fart hint + strict Hunt-only cleanup on mobile/desktop. */
     /* V1010378_MOBILE_PAINT_READY_POLISH: joystick-safe paint toggle, larger finger sampler, Paint-only READY ownership. */
     /* V1010377_MOBILE_PAINT_FART_COACH_POLISH: joystick-safe mode toggle, one-shot pipette, moving pointed coaches. */
@@ -8473,8 +8474,8 @@ export class GameScene extends Phaser.Scene {
                 `${Math.round(
                     rect.left +
                     Math.max(
-                        158,
-                        rect.width * 0.16,
+                        132,
+                        rect.width * 0.135,
                     ),
                 )}px`;
 
@@ -21847,13 +21848,20 @@ export class GameScene extends Phaser.Scene {
         set(
             practiceCopy,
             'grid-template-rows',
-            '20px 16px',
+            getLanguage() === 'en'
+                ? '18px 20px'
+                : '20px 16px',
         );
         set(practiceCopy, 'align-items', 'center');
         set(practiceCopy, 'column-gap', '6px');
         set(practiceCopy, 'row-gap', '1px');
         set(practiceCopy, 'min-width', '0');
-        set(practiceCopy, 'overflow', 'hidden');
+        set(practiceCopy, 'overflow', 'visible');
+
+        const practiceCardLanguage =
+            getLanguage();
+        const practiceEnglish =
+            practiceCardLanguage === 'en';
 
         const practiceBadge =
             practice
@@ -21862,8 +21870,15 @@ export class GameScene extends Phaser.Scene {
                 ) ??
             null;
 
-        set(practiceBadge, 'font-size', '10px');
+        set(
+            practiceBadge,
+            'font-size',
+            practiceEnglish
+                ? '8px'
+                : '10px',
+        );
         set(practiceBadge, 'white-space', 'nowrap');
+        set(practiceBadge, 'line-height', '1');
 
         const practiceStrong =
             practice
@@ -21872,9 +21887,24 @@ export class GameScene extends Phaser.Scene {
                 ) ??
             null;
 
-        set(practiceStrong, 'font-size', '17px');
-        set(practiceStrong, 'line-height', '20px');
+        set(
+            practiceStrong,
+            'font-size',
+            practiceEnglish
+                ? '13px'
+                : '17px',
+        );
+        set(
+            practiceStrong,
+            'line-height',
+            practiceEnglish
+                ? '16px'
+                : '20px',
+        );
         set(practiceStrong, 'white-space', 'nowrap');
+        set(practiceStrong, 'overflow', 'visible');
+        set(practiceStrong, 'text-overflow', 'clip');
+        set(practiceStrong, 'letter-spacing', practiceEnglish ? '-0.02em' : '');
 
         const practiceSmall =
             practice
@@ -21884,10 +21914,70 @@ export class GameScene extends Phaser.Scene {
             null;
 
         set(practiceSmall, 'grid-column', '1 / -1');
-        set(practiceSmall, 'font-size', '10px');
-        set(practiceSmall, 'line-height', '16px');
-        set(practiceSmall, 'white-space', 'nowrap');
-        set(practiceSmall, 'overflow', 'hidden');
+        set(
+            practiceSmall,
+            'font-size',
+            practiceEnglish
+                ? '8px'
+                : '10px',
+        );
+        set(
+            practiceSmall,
+            'line-height',
+            practiceEnglish
+                ? '9px'
+                : '16px',
+        );
+        set(
+            practiceSmall,
+            'white-space',
+            practiceEnglish
+                ? 'normal'
+                : 'nowrap',
+        );
+        set(
+            practiceSmall,
+            'overflow',
+            practiceEnglish
+                ? 'visible'
+                : 'hidden',
+        );
+        set(practiceSmall, 'text-overflow', 'clip');
+        set(
+            practiceSmall,
+            'display',
+            practiceEnglish
+                ? '-webkit-box'
+                : 'block',
+        );
+        set(
+            practiceSmall,
+            '-webkit-box-orient',
+            practiceEnglish
+                ? 'vertical'
+                : '',
+        );
+        set(
+            practiceSmall,
+            '-webkit-line-clamp',
+            practiceEnglish
+                ? '2'
+                : '',
+        );
+        set(
+            practiceSmall,
+            'overflow-wrap',
+            practiceEnglish
+                ? 'normal'
+                : '',
+        );
+        set(
+            practiceSmall,
+            'word-break',
+            practiceEnglish
+                ? 'normal'
+                : '',
+        );
 
         const guide =
             root.querySelector<HTMLElement>(
