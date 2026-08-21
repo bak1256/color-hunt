@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010370_ATOMIC_HUNT_VISUAL_HANDOFF: preserve live paint textures through Paint -> Hunt without replay/snap pulses. */
     /* V1010363_POOP_SLOW_TEXT_SPACING: move poop slowdown explanation slightly below the under-Hunter countdown gauge. */
     /* V1010362_POOP_DEBUFF_5S_GAUGE: poop slowdown lasts 5s; Hunter-underfoot countdown gauge mirrors authoritative deadline. */
     /* V1010361_HIDER_FART_REACTION_LINES_I18N: fart detection text is voiced as the Hider's smell reaction in KO/JA/EN/ZH; mechanics unchanged. */
@@ -30621,70 +30622,25 @@ export class GameScene extends Phaser.Scene {
             this.finishActivePaintStroke();
             this.isPainting = false;
 
-            if (
-                this.networkPlayerManager
-                    .isLocalHider() &&
-                this.localPaintHistory.length > 0
-            ) {
-                /*
-                 * V1010338_CRITICAL_GAMEPLAY_TRIPLE_FIX / HUNT_PAINT_FINAL_SNAPSHOT
-                 *
-                 * Server rejects ordinary paint_stroke after phase becomes Hunt.
-                 * Do NOT try to rebroadcast final camouflage through that path.
-                 *
-                 * 1) Rebuild the local raster exactly from complete history.
-                 * 2) Send the complete history through restore_local_paint,
-                 *    which is explicitly accepted during Hunt and replaces the
-                 *    authoritative round snapshot for this Hider.
-                 */
-                this.rebuildLocalPaintFromHistory(
-                    false,
-                );
-
-                /*
-                 * V1010369_HUNT_START_PAINT_STABILITY:
-                 *
-                 * Normal Paint -> Hunt is NOT a reconnect recovery path.
-                 * Every connected client has already received paint_stroke
-                 * updates during Paint, and the server has already accumulated
-                 * the authoritative round history.
-                 *
-                 * Requesting round_paint_state here caused the whole room's
-                 * camouflage to be replayed again immediately at Hunt start.
-                 * That produced the visible 1-3 second rewind/flicker and extra
-                 * render pressure on mobile.
-                 *
-                 * Therefore: zero network paint snapshot requests on a healthy
-                 * phase transition. round_paint_state is reserved for actual
-                 * reconnect/recovery only.
-                 */
-            }
-
+            /*
+             * V1010370_ATOMIC_HUNT_VISUAL_HANDOFF:
+             *
+             * Healthy Paint -> Hunt must preserve the exact raster currently on
+             * screen. Do NOT rebuild local paint, replay network paint, snap every
+             * Hider to a neutral pose, or broadly toggle visibility before Hunt
+             * owns the scene.
+             *
+             * The last active stroke was already flushed by
+             * finishActivePaintStroke(). Existing RenderTextures are carried
+             * forward unchanged.
+             */
             this.clearStatus();
-
 
             this.phaseText
                 .setText('')
                 .setVisible(false);
 
-            this.networkPlayerManager
-                .syncLobbyPositionsFromState();
-
-            this.networkPlayerManager
-                .normalizeLocalPlayerForGameplay();
-
-            /*
-             * Paint -> Hunt 전환 프레임에서 이전 걷기 pose/sub-pixel 좌표가
-             * 남아 있으면 픽셀 위장이 몸체와 어긋나 보입니다.
-             * 모든 Hider를 즉시 neutral pose + 동일 픽셀 기준으로 고정합니다.
-             */
-            this.networkPlayerManager
-                .stabilizeHidersForHunt();
-
             this.resetPaintWorldZoom();
-
-            this.networkPlayerManager
-                .restoreAllPlayerVisibility();
 
             this.setHunterPaintBlind(false);
             this.setPaintPaletteVisible(false);
@@ -30701,44 +30657,10 @@ export class GameScene extends Phaser.Scene {
             this.startGameplayCamera();
 
             /*
-             * V1010369_HUNT_START_PAINT_STABILITY:
-             *
-             * Keep exactly ONE local-only settle pass for the Hider owner.
-             * Rebuilding the same RenderTexture at 0/120/360ms can itself look
-             * like a short flash on slower devices. One post-transition pass is
-             * sufficient now that network snapshot replay is removed.
+             * V1010370_ATOMIC_HUNT_VISUAL_HANDOFF:
+             * No post-Hunt paint rebuild/visibility pulse. The frame that enters
+             * Hunt is also the final camouflage frame.
              */
-            if (
-                this.networkPlayerManager
-                    .isLocalHider() &&
-                this.localPaintHistory.length > 0
-            ) {
-                this.time.delayedCall(
-                    0,
-                    () => {
-                        if (
-                            this.phase !== 'hunt' ||
-                            !this.networkPlayerManager
-                                .isLocalHider() ||
-                            this.localPaintHistory
-                                .length < 1
-                        ) {
-                            return;
-                        }
-
-                        this.rebuildLocalPaintFromHistory(
-                            false,
-                        );
-
-                        this.networkPlayerManager
-                            .normalizeLocalPlayerForGameplay();
-
-                        this.networkPlayerManager
-                            .restoreAllPlayerVisibility();
-                    },
-                );
-            }
-
             this.phaseEndTime =
                 this.time.now +
                 remainingMs;
@@ -43663,6 +43585,14 @@ export class GameScene extends Phaser.Scene {
         this.syncPhaseMusic();
 
         if (this.isMultiplayerSession()) {
+            /*
+             * V1010370_ATOMIC_HUNT_VISUAL_HANDOFF:
+             * Reveal the already-painted network actors exactly once, only after
+             * Hunt owns the scene. This avoids visible pre-Hunt visibility pulses.
+             */
+            this.networkPlayerManager
+                .restoreAllPlayerVisibility();
+
             this.hideLegacySinglePlayerActors();
 
             this.hiders.forEach(

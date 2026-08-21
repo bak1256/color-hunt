@@ -47,6 +47,7 @@ type NetworkPlayerView = {
 };
 
 export class NetworkPlayerManager {
+  /* V1010370_ATOMIC_HUNT_VISUAL_HANDOFF: local normalization never reveals/toggles the whole room. */
   /* V1010346_MOVEMENT_JITTER_MAX_HARDENING: local prediction, remote damping, delta and network cadence hardening. */
   /* V1010343_URGENT_HUNTER_INPUT_JITTER_EYEDROPPER: protect active local Hunter prediction from delayed echo jitter. */
   /* V1010341_CLIENT_GAMEPLAY_STABILITY_SAFE: movement + paint rendering stability. */
@@ -3427,8 +3428,11 @@ export class NetworkPlayerManager {
         .setScale(1);
     }
 
-    this.restoreAllPlayerVisibility();
-
+    /*
+     * V1010370_ATOMIC_HUNT_VISUAL_HANDOFF:
+     * Normalizing ONE local player must never toggle visibility for the entire
+     * room. GameScene performs the single atomic reveal after phase='hunt'.
+     */
     this.syncPaintLayerPosition(view);
   }
 
