@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010379_FART_COACH_HUNT_ONLY: contextual fart hint + strict Hunt-only cleanup on mobile/desktop. */
     /* V1010378_MOBILE_PAINT_READY_POLISH: joystick-safe paint toggle, larger finger sampler, Paint-only READY ownership. */
     /* V1010377_MOBILE_PAINT_FART_COACH_POLISH: joystick-safe mode toggle, one-shot pipette, moving pointed coaches. */
     /* V1010376_FART_DISCOVERY_COACH: Hunter fart skill callouts + larger mobile FIRE/GAS labels. */
@@ -14154,10 +14155,10 @@ export class GameScene extends Phaser.Scene {
     private getHunterFartCoachCopy(): string {
         return (
             {
-                ko: '💨 방구를 껴서 하이더를 찾아보자!',
-                ja: '💨 おなら探知でハイダーを見つけよう！',
-                en: '💨 Use your fart detector to find Hiders!',
-                zh: '💨 用放屁探测来找出躲藏者吧！',
+                ko: '💨 수상하다면 방구 탐지!',
+                ja: '💨 怪しいと思ったら、おなら探知！',
+                en: '💨 Suspicious? Use fart detection!',
+                zh: '💨 觉得可疑？用放屁探测！',
             } as const
         )[getLanguage()];
     }
@@ -14277,9 +14278,32 @@ export class GameScene extends Phaser.Scene {
         const placeBubble =
             (): void => {
                 if (
-                    !bubble.isConnected ||
+                    !bubble.isConnected
+                ) {
+                    return;
+                }
+
+                if (
                     this.phase !== 'hunt'
                 ) {
+                    bubble.remove();
+
+                    if (
+                        this.hunterFartCoachBubble ===
+                        bubble
+                    ) {
+                        this.hunterFartCoachBubble =
+                            undefined;
+                    }
+
+                    if (
+                        this.mobileFartCoachBubble ===
+                        bubble
+                    ) {
+                        this.mobileFartCoachBubble =
+                            undefined;
+                    }
+
                     return;
                 }
 
@@ -14410,6 +14434,13 @@ export class GameScene extends Phaser.Scene {
                     if (
                         !bubble.isConnected
                     ) {
+                        return;
+                    }
+
+                    if (
+                        this.phase !== 'hunt'
+                    ) {
+                        bubble.remove();
                         return;
                     }
 
@@ -31600,6 +31631,18 @@ export class GameScene extends Phaser.Scene {
         phaseEndsAt: number,
     ): void {
         this.phaseExpiredSince = 0;
+
+        /*
+         * V1010379_FART_COACH_HUNT_ONLY:
+         * The fart tutorial is valid ONLY during Hunt. Kill it before handling
+         * victory / finished / lobby so mobile and desktop cannot show the
+         * delayed coach after the round has already ended.
+         */
+        if (
+            phase !== 'hunt'
+        ) {
+            this.destroyHunterFartCoach();
+        }
 
         const remainingMs =
             Math.max(
