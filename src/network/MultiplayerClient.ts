@@ -1318,7 +1318,11 @@ private async attemptFreshRejoin(
           this.deliveredPhase = "";
           this.requestLobbySnapshot();
           this.requestPaintReadyState();
-          this.requestRoundPaintState();
+          /*
+           * V1010366_RECONNECT_PAINT_CHUNK_FIX:
+           * attachRoom recovery already requested the authoritative paint once.
+           * Avoid a second replay wave as soon as the replacement session appears.
+           */
           this.clearConnectionIssue();
           return;
         }
@@ -2057,11 +2061,15 @@ this.manualReconnectInFlight = false;
         this.requestLobbySnapshot();
         this.requestPaintReadyState();
         this.requestAvatarPresets();
-        this.requestRoundPaintState();
 
         /*
-         * V1010295_ALL_PHASE_RECONNECT: repeated pulses are cheap and make same-phase recovery
-         * deterministic on suspended mobile browsers.
+         * V1010366_RECONNECT_PAINT_CHUNK_FIX:
+         * The server's onReconnect already pushes one authoritative, chunked
+         * paint recovery stream. Do not request the same large round snapshot
+         * four more times; repeated replay waves made every actor's camouflage
+         * appear to rewind/flicker and stalled mobile rendering.
+         *
+         * Keep lightweight phase/READY pulses only.
          */
         [120, 420, 1100].forEach(
           (delay) => {
@@ -2074,7 +2082,6 @@ this.manualReconnectInFlight = false;
                 this.deliveredPhase = "";
                 this.requestLobbySnapshot();
                 this.requestPaintReadyState();
-                this.requestRoundPaintState();
               },
               delay,
             );
