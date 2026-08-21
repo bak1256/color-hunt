@@ -22844,10 +22844,17 @@ export class GameScene extends Phaser.Scene {
                             'canvas',
                         );
 
-                    const cropX = 18;
-                    const cropY = 27;
-                    const cropWidth = 44;
-                    const cropHeight = 68;
+                    /*
+                     * V1010395_LOBBY_AVATAR_FULL_BODY:
+                     * Keep the preview large, but include the complete authored
+                     * silhouette from the top of the head through both feet.
+                     * Wider/taller safety margins prevent hair, hands or feet
+                     * from being cropped on PC and mobile.
+                     */
+                    const cropX = 16;
+                    const cropY = 24;
+                    const cropWidth = 48;
+                    const cropHeight = 76;
 
                     cropCanvas.width =
                         cropWidth;
@@ -24833,7 +24840,7 @@ export class GameScene extends Phaser.Scene {
                  */
                 avatarImage.style.setProperty(
                     'transform',
-                    'translateY(0) scale(.94)',
+                    'translateY(0) scale(.90)',
                     'important',
                 );
                 avatarImage.style.setProperty(
