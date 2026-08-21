@@ -18945,13 +18945,16 @@ export class GameScene extends Phaser.Scene {
                         .toString(16)
                         .padStart(6, '0')}`;
 
-                stroke.points.forEach(
-                    (point) => {
-                        const radius =
-                            stroke.size <= 1
-                                ? 0
-                                : stroke.size;
+                const radius =
+                    stroke.size <= 1
+                        ? 0
+                        : stroke.size;
 
+                const stampPoint =
+                    (
+                        pointX: number,
+                        pointY: number,
+                    ): void => {
                         for (
                             let oy = -radius;
                             oy <= radius;
@@ -18975,19 +18978,94 @@ export class GameScene extends Phaser.Scene {
 
                                 drawPixel(
                                     Math.round(
-                                        point.x +
+                                        pointX +
                                         ox,
                                     ),
                                     Math.round(
-                                        point.y +
+                                        pointY +
                                         oy,
                                     ),
                                     color,
                                 );
                             }
                         }
-                    },
-                );
+                    };
+
+                /*
+                 * V1010393_LOBBY_AVATAR_CONTINUOUS_PREVIEW:
+                 * Stored avatar strokes are intentionally compacted, so simply
+                 * painting one stamp per stored point creates visible holes in
+                 * the lobby card. Reconstruct every segment exactly like a real
+                 * continuous brush stroke.
+                 */
+                for (
+                    let pointIndex = 0;
+                    pointIndex <
+                    stroke.points.length;
+                    pointIndex += 1
+                ) {
+                    const point =
+                        stroke.points[
+                            pointIndex
+                        ];
+
+                    if (pointIndex === 0) {
+                        stampPoint(
+                            point.x,
+                            point.y,
+                        );
+                        continue;
+                    }
+
+                    const previous =
+                        stroke.points[
+                            pointIndex - 1
+                        ];
+
+                    const dx =
+                        point.x -
+                        previous.x;
+                    const dy =
+                        point.y -
+                        previous.y;
+                    const distance =
+                        Math.hypot(
+                            dx,
+                            dy,
+                        );
+
+                    /*
+                     * <= 0.45 logical pixels leaves no raster gaps even for the
+                     * smallest 1px brush. Larger brushes naturally overlap.
+                     */
+                    const steps =
+                        Math.max(
+                            1,
+                            Math.ceil(
+                                distance /
+                                0.45,
+                            ),
+                        );
+
+                    for (
+                        let step = 1;
+                        step <= steps;
+                        step += 1
+                    ) {
+                        const t =
+                            step /
+                            steps;
+
+                        stampPoint(
+                            previous.x +
+                                dx *
+                                    t,
+                            previous.y +
+                                dy *
+                                    t,
+                        );
+                    }
+                }
             },
         );
 
@@ -22748,6 +22826,68 @@ export class GameScene extends Phaser.Scene {
                 source instanceof
                     HTMLCanvasElement
             ) {
+                /*
+                 * V1010393_LOBBY_AVATAR_TIGHT_PREVIEW_CROP:
+                 * The source texture is 80x120 while the body occupies only the
+                 * middle portion. Exporting the full transparent canvas made the
+                 * avatar tiny inside the enlarged square card.
+                 *
+                 * Keep a small safety margin around every body part and crop
+                 * only for the lobby preview texture.
+                 */
+                if (
+                    textureKey ===
+                        'lobby-avatar-preview'
+                ) {
+                    const cropCanvas =
+                        document.createElement(
+                            'canvas',
+                        );
+
+                    const cropX = 20;
+                    const cropY = 31;
+                    const cropWidth = 40;
+                    const cropHeight = 62;
+
+                    cropCanvas.width =
+                        cropWidth;
+                    cropCanvas.height =
+                        cropHeight;
+
+                    const cropContext =
+                        cropCanvas.getContext(
+                            '2d',
+                        );
+
+                    if (cropContext) {
+                        cropContext.imageSmoothingEnabled =
+                            false;
+
+                        cropContext.clearRect(
+                            0,
+                            0,
+                            cropWidth,
+                            cropHeight,
+                        );
+
+                        cropContext.drawImage(
+                            source,
+                            cropX,
+                            cropY,
+                            cropWidth,
+                            cropHeight,
+                            0,
+                            0,
+                            cropWidth,
+                            cropHeight,
+                        );
+
+                        return cropCanvas.toDataURL(
+                            'image/png',
+                        );
+                    }
+                }
+
                 return source.toDataURL(
                     'image/png',
                 );
@@ -24693,17 +24833,17 @@ export class GameScene extends Phaser.Scene {
                  */
                 avatarImage.style.setProperty(
                     'transform',
-                    'translateY(-10%) scale(.92)',
+                    'translateY(-2%) scale(1.06)',
                     'important',
                 );
                 avatarImage.style.setProperty(
                     'transform-origin',
-                    '50% 50%',
+                    '50% 100%',
                     'important',
                 );
                 avatarImage.style.setProperty(
                     'object-position',
-                    '50% 45%',
+                    '50% 50%',
                     'important',
                 );
                 avatarImage.style.setProperty(
