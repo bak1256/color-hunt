@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010386L_MAP_NAME_THUMB_CENTER: practice map name centers on thumbnail column. */
     /* V1010386K_RESPONSIVE_PRACTICE_CAROUSEL: both arrows always visible; thumbnail yields width; map name truly centered. */
     /* V1010386J_CURRENT_MODE_TOGGLE: paint toggle shows current mode + explicit switch action. */
     /* V1010386I_PRECISION_BRUSH_UX: outside-body hold arming, destination-mode labels, Precision Brush naming, translucent controls hint. */
@@ -13172,7 +13173,7 @@ export class GameScene extends Phaser.Scene {
         if (mapName) {
             mapName.style.setProperty(
                 'grid-column',
-                '1 / -1',
+                '2',
                 'important',
             );
             mapName.style.setProperty(
@@ -13198,6 +13199,11 @@ export class GameScene extends Phaser.Scene {
             mapName.style.setProperty(
                 'justify-self',
                 'stretch',
+                'important',
+            );
+            mapName.style.setProperty(
+                'align-self',
+                'center',
                 'important',
             );
             mapName.style.setProperty(
