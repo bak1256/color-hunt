@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010375_MOBILE_FINGER_FIRST_PAINT: finger-first mobile paint + optional precision brush, mirrored in avatar editor. */
     /* V1010374_INVITE_GONE_ROOM_GUARD: stale invite links return to lobby instead of hanging on join. */
     /* V1010371_LOBBY_READY_BARRIER: waiting-room START/READY role switch with live counter. */
     /* V1010370_ATOMIC_HUNT_VISUAL_HANDOFF: preserve live paint textures through Paint -> Hunt without replay/snap pulses. */
@@ -4376,6 +4377,17 @@ export class GameScene extends Phaser.Scene {
     private controlsHelpButton?: HTMLButtonElement;
     private controlsHelpViewportHandler?: () => void;
     private mobilePaintDock?: HTMLDivElement;
+    /*
+     * V1010375_MOBILE_FINGER_FIRST_PAINT:
+     * Mobile defaults to direct finger painting. Brush mode preserves the
+     * precision offset tool for users who explicitly want it.
+     */
+    private mobilePaintInputMode:
+        'finger' |
+        'brush' = 'finger';
+    private mobilePaintModeButton?: HTMLButtonElement;
+    private mobileBrushSizePreviewTimer?: number;
+
     private mobilePaintSizeInput?: HTMLInputElement;
     private mobilePaintSizeValue?: HTMLSpanElement;
     private mobilePaintToolButtons =
@@ -4642,6 +4654,8 @@ export class GameScene extends Phaser.Scene {
     private mobilePendingPaintStartScreen?: Phaser.Math.Vector2;
     private mobilePendingPaintStartWorld?: Phaser.Math.Vector2;
     private eyedropperArmed = false;
+    private mobileBrushShapeBeforeEyedropper:
+        BrushShape = 'circle';
     private eyedropperButton?: Phaser.GameObjects.Text;
     private eyedropperPointerId = -1;
     private eyedropperMagnifier?: Phaser.GameObjects.Image;
@@ -7417,6 +7431,81 @@ export class GameScene extends Phaser.Scene {
                 : 'colorhunt-paint-dock colorhunt-paint-dock--desktop';
         root.hidden = true;
 
+        const modeButton =
+            document.createElement(
+                'button',
+            );
+
+        modeButton.type = 'button';
+        modeButton.className =
+            'colorhunt-paint-mode-toggle';
+
+        Object.assign(
+            modeButton.style,
+            {
+                position: 'fixed',
+                zIndex: '2140',
+                minWidth: '126px',
+                minHeight: '46px',
+                padding: '7px 12px',
+                border: '2px solid #5c8f66',
+                borderRadius: '13px',
+                background: '#fff4d6',
+                color: '#26352b',
+                boxShadow:
+                    '0 4px 14px rgba(35,59,42,.22)',
+                fontFamily:
+                    'Arial, sans-serif',
+                fontWeight: '900',
+                fontSize: '13px',
+                lineHeight: '1.15',
+                whiteSpace: 'pre-line',
+                textAlign: 'center',
+                cursor: 'pointer',
+                touchAction: 'manipulation',
+            },
+        );
+
+        modeButton.addEventListener(
+            'pointerdown',
+            (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+
+                this.mobilePaintInputMode =
+                    this.mobilePaintInputMode ===
+                        'finger'
+                        ? 'brush'
+                        : 'finger';
+
+                this.finishActivePaintStroke();
+                this.isPainting = false;
+                this.releaseMobilePaintPointer();
+                this.cancelMobilePaintHoldTimers();
+                this.hideMobilePaintPrecisionGuide();
+                this.hideEyedropperMagnifier();
+                this.paintPreview
+                    ?.setVisible(false);
+
+                this.syncMobilePaintModeUi();
+
+                if (
+                    this.mobilePaintInputMode ===
+                        'brush'
+                ) {
+                    this.showMobileBrushFirstUseCoach();
+                    this.showMobileIdleBrushGuide();
+                }
+            },
+        );
+
+        document.body.appendChild(
+            modeButton,
+        );
+
+        this.mobilePaintModeButton =
+            modeButton;
+
         const colors =
             document.createElement(
                 'div',
@@ -7691,21 +7780,64 @@ export class GameScene extends Phaser.Scene {
                  * intentionally return to ROUND brush and show the footprint at
                  * screen center where the timer/HUD cannot hide it.
                  */
-                if (this.eyedropperArmed) {
+                if (
+                    this.eyedropperArmed &&
+                    this.mobilePaintInputMode ===
+                        'brush'
+                ) {
                     this.activateMobileBrushTool(
                         'circle',
                     );
                 }
 
                 this.syncMobilePaintDockUi();
-                this.centerMobilePaintToolGuide();
 
-                window.requestAnimationFrame(
-                    () => {
-                        this.centerMobilePaintToolGuide();
-                    },
-                );
+                if (
+                    this.mobilePaintInputMode ===
+                        'finger'
+                ) {
+                    this.showFingerBrushSizePreview();
+                } else {
+                    this.centerMobilePaintToolGuide();
+
+                    window.requestAnimationFrame(
+                        () => {
+                            this.centerMobilePaintToolGuide();
+                        },
+                    );
+                }
             },
+        );
+
+        const finishSizePreview =
+            (): void => {
+                if (
+                    this.mobilePaintInputMode ===
+                        'finger'
+                ) {
+                    window.clearTimeout(
+                        this.mobileBrushSizePreviewTimer,
+                    );
+
+                    this.mobileBrushSizePreviewTimer =
+                        window.setTimeout(
+                            () => {
+                                this.paintPreview
+                                    ?.setVisible(false);
+                                this.hideMobilePaintPrecisionGuide();
+                            },
+                            180,
+                        );
+                }
+            };
+
+        sizeInput.addEventListener(
+            'pointerup',
+            finishSizePreview,
+        );
+        sizeInput.addEventListener(
+            'change',
+            finishSizePreview,
         );
 
         sizeWrap.append(
@@ -7755,14 +7887,33 @@ export class GameScene extends Phaser.Scene {
         this.mobilePaintDock.hidden =
             !visible;
 
+        if (
+            this.mobilePaintModeButton
+        ) {
+            this.mobilePaintModeButton.hidden =
+                !visible ||
+                !this.mobileControlsEnabled;
+        }
+
         if (visible) {
             this.syncMobilePaintDockUi();
             this.updateMobilePaintDockPosition();
-            this.showMobileIdleBrushGuide();
-            this.time.delayedCall(
-                0,
-                () => this.showMobileIdleBrushGuide(),
-            );
+            this.syncMobilePaintModeUi();
+
+            if (
+                this.mobilePaintInputMode ===
+                    'brush'
+            ) {
+                this.showMobileIdleBrushGuide();
+                this.time.delayedCall(
+                    0,
+                    () => this.showMobileIdleBrushGuide(),
+                );
+            } else {
+                this.paintPreview
+                    ?.setVisible(false);
+                this.hideMobilePaintPrecisionGuide();
+            }
         }
     }
 
@@ -7829,6 +7980,237 @@ export class GameScene extends Phaser.Scene {
                 `${this.brushSize}px`;
         }
     }
+
+    private syncMobilePaintModeUi(): void {
+        if (
+            !this.mobilePaintModeButton
+        ) {
+            return;
+        }
+
+        const language =
+            getLanguage();
+
+        const fingerLabel =
+            language === 'ja'
+                ? '☝ 指で\n描く'
+                : language === 'en'
+                    ? '☝ Finger\nPaint'
+                    : language === 'zh'
+                        ? '☝ 手指\n绘制'
+                        : '☝ 손가락\n그리기';
+
+        const brushLabel =
+            language === 'ja'
+                ? '🖌 ブラシで\n描く'
+                : language === 'en'
+                    ? '🖌 Brush\nPaint'
+                    : language === 'zh'
+                        ? '🖌 画笔\n绘制'
+                        : '🖌 붓으로\n그리기';
+
+        this.mobilePaintModeButton
+            .textContent =
+            this.mobilePaintInputMode ===
+                'finger'
+                ? `${fingerLabel}  ↔`
+                : `↔  ${brushLabel}`;
+
+        this.mobilePaintModeButton
+            .style.background =
+            this.mobilePaintInputMode ===
+                'finger'
+                ? '#dff7e6'
+                : '#fff4d6';
+    }
+
+    private showFingerBrushSizePreview(): void {
+        if (
+            !this.mobileControlsEnabled ||
+            this.phase !== 'paint' ||
+            this.mobilePaintInputMode !==
+                'finger' ||
+            !this.paintPreview
+        ) {
+            return;
+        }
+
+        window.clearTimeout(
+            this.mobileBrushSizePreviewTimer,
+        );
+
+        const center =
+            new Phaser.Math.Vector2();
+
+        this.cameras.main.getWorldPoint(
+            this.gameWidth * 0.5,
+            this.gameHeight * 0.5,
+            center,
+        );
+
+        this.paintPreview
+            .setPosition(
+                center.x,
+                center.y,
+            );
+
+        this.redrawPaintPreview();
+
+        this.paintPreview
+            .setAlpha(0.46)
+            .setVisible(true);
+
+        this.hideMobilePaintPrecisionGuide();
+
+        this.mobileBrushSizePreviewTimer =
+            window.setTimeout(
+                () => {
+                    if (
+                        this.mobilePaintInputMode ===
+                            'finger'
+                    ) {
+                        this.paintPreview
+                            ?.setVisible(false);
+                    }
+                },
+                520,
+            );
+    }
+
+    private showMobileBrushFirstUseCoach(): void {
+        if (
+            !this.mobileControlsEnabled ||
+            this.mobilePaintInputMode !==
+                'brush'
+        ) {
+            return;
+        }
+
+        const key =
+            'colorhunt-brush-coach-v1';
+
+        if (
+            localStorage.getItem(key) ===
+                '1'
+        ) {
+            return;
+        }
+
+        localStorage.setItem(
+            key,
+            '1',
+        );
+
+        const root =
+            document.createElement(
+                'div',
+            );
+
+        root.className =
+            'colorhunt-brush-coach';
+
+        const language =
+            getLanguage();
+
+        const tip =
+            language === 'ja'
+                ? 'ここで塗る'
+                : language === 'en'
+                    ? 'Paints here'
+                    : language === 'zh'
+                        ? '这里上色'
+                        : '칠해지는 곳';
+
+        const grip =
+            language === 'ja'
+                ? 'ここを持つ'
+                : language === 'en'
+                    ? 'Hold here'
+                    : language === 'zh'
+                        ? '这里握住'
+                        : '잡는 곳';
+
+        root.innerHTML =
+            `<span class="ch-brush-coach-tip">${tip}</span>` +
+            `<span class="ch-brush-coach-grip">${grip}</span>`;
+
+        Object.assign(
+            root.style,
+            {
+                position: 'fixed',
+                left: '50%',
+                top: '47%',
+                width: '220px',
+                height: '120px',
+                transform:
+                    'translate(-50%, -50%) rotate(-8deg)',
+                zIndex: '3500',
+                pointerEvents: 'none',
+                fontFamily:
+                    'Arial, sans-serif',
+                fontWeight: '900',
+                color: '#26352b',
+            },
+        );
+
+        const spans =
+            root.querySelectorAll(
+                'span',
+            );
+
+        spans.forEach(
+            (span) => {
+                Object.assign(
+                    (span as HTMLElement)
+                        .style,
+                    {
+                        position: 'absolute',
+                        padding: '7px 10px',
+                        borderRadius: '12px',
+                        background:
+                            'rgba(255,249,233,.96)',
+                        border:
+                            '2px solid #5c8f66',
+                        boxShadow:
+                            '0 4px 12px rgba(0,0,0,.15)',
+                        whiteSpace: 'nowrap',
+                        fontSize: '13px',
+                    },
+                );
+            },
+        );
+
+        const tipEl =
+            root.querySelector<HTMLElement>(
+                '.ch-brush-coach-tip',
+            );
+        const gripEl =
+            root.querySelector<HTMLElement>(
+                '.ch-brush-coach-grip',
+            );
+
+        if (tipEl) {
+            tipEl.style.left = '0';
+            tipEl.style.top = '0';
+        }
+
+        if (gripEl) {
+            gripEl.style.right = '0';
+            gripEl.style.bottom = '0';
+        }
+
+        document.body.appendChild(
+            root,
+        );
+
+        window.setTimeout(
+            () => {
+                root.remove();
+            },
+            3400,
+        );
+    }
+
 
     /*
      * V1010347_PAINT_TOOL_UX_UNIFICATION / CENTER_TOOL_GUIDE
@@ -7926,13 +8308,49 @@ export class GameScene extends Phaser.Scene {
                     ),
                 )}px`,
             );
+
+        if (
+            this.mobilePaintModeButton &&
+            this.mobileControlsEnabled
+        ) {
+            /*
+             * Same visual weight as READY, but on the left side of the local
+             * character area. Paint camera keeps the local avatar near center.
+             */
+            this.mobilePaintModeButton.style.left =
+                `${Math.round(
+                    rect.left +
+                    Math.max(
+                        10,
+                        rect.width * 0.12,
+                    ),
+                )}px`;
+
+            this.mobilePaintModeButton.style.top =
+                `${Math.round(
+                    rect.top +
+                    rect.height * 0.48,
+                )}px`;
+
+            this.mobilePaintModeButton.style.transform =
+                'translateY(-50%)';
+        }
     }
 
     private destroyMobilePaintDock(): void {
         this.mobilePaintDock
             ?.remove();
 
+        this.mobilePaintModeButton
+            ?.remove();
+
+        window.clearTimeout(
+            this.mobileBrushSizePreviewTimer,
+        );
+
         this.mobilePaintDock =
+            undefined;
+        this.mobilePaintModeButton =
             undefined;
         this.mobilePaintSizeInput =
             undefined;
@@ -17366,6 +17784,10 @@ export class GameScene extends Phaser.Scene {
          * Recreate that UX inside the DOM avatar editor so the finger never
          * hides the actual tool position.
          */
+        let avatarPaintInputMode:
+            'finger' |
+            'brush' = 'finger';
+
         const floatingTool =
             document.createElement(
                 'div',
@@ -17516,6 +17938,101 @@ export class GameScene extends Phaser.Scene {
             floatingTool,
         );
 
+        const avatarModeButton =
+            document.createElement(
+                'button',
+            );
+
+        avatarModeButton.type =
+            'button';
+
+        Object.assign(
+            avatarModeButton.style,
+            {
+                position: 'absolute',
+                left: '8px',
+                top: '8px',
+                zIndex: '24',
+                minWidth: '108px',
+                minHeight: '40px',
+                padding: '6px 9px',
+                border: '2px solid #5c8f66',
+                borderRadius: '11px',
+                background: '#dff7e6',
+                color: '#26352b',
+                fontWeight: '900',
+                fontSize: '12px',
+                lineHeight: '1.15',
+                whiteSpace: 'pre-line',
+                touchAction: 'manipulation',
+            },
+        );
+
+        const syncAvatarModeButton =
+            (): void => {
+                const language =
+                    getLanguage();
+
+                avatarModeButton.textContent =
+                    avatarPaintInputMode ===
+                        'finger'
+                        ? (
+                            language === 'ja'
+                                ? '☝ 指で描く ↔'
+                                : language === 'en'
+                                    ? '☝ Finger Paint ↔'
+                                    : language === 'zh'
+                                        ? '☝ 手指绘制 ↔'
+                                        : '☝ 손가락 그리기 ↔'
+                        )
+                        : (
+                            language === 'ja'
+                                ? '↔ 🖌 ブラシ'
+                                : language === 'en'
+                                    ? '↔ 🖌 Brush'
+                                    : language === 'zh'
+                                        ? '↔ 🖌 画笔'
+                                        : '↔ 🖌 붓으로 그리기'
+                        );
+
+                avatarModeButton.style
+                    .background =
+                    avatarPaintInputMode ===
+                        'finger'
+                        ? '#dff7e6'
+                        : '#fff4d6';
+
+                if (
+                    avatarPaintInputMode ===
+                        'finger'
+                ) {
+                    floatingTool.style.display =
+                        'none';
+                }
+            };
+
+        avatarModeButton.addEventListener(
+            'pointerdown',
+            (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+
+                avatarPaintInputMode =
+                    avatarPaintInputMode ===
+                        'finger'
+                        ? 'brush'
+                        : 'finger';
+
+                syncAvatarModeButton();
+            },
+        );
+
+        canvasFrame.appendChild(
+            avatarModeButton,
+        );
+
+        syncAvatarModeButton();
+
         /*
          * V1010350_AVATAR_EDITOR_FULL_PAINT_PARITY / TOOL_TIP_COORDINATE
          *
@@ -17545,7 +18062,9 @@ export class GameScene extends Phaser.Scene {
                 y: number;
             } => {
                 if (
-                    !this.mobileControlsEnabled
+                    !this.mobileControlsEnabled ||
+                    avatarPaintInputMode ===
+                        'finger'
                 ) {
                     return {
                         x: clientX,
@@ -17582,7 +18101,9 @@ export class GameScene extends Phaser.Scene {
                 clientY: number,
             ): void => {
                 if (
-                    !this.mobileControlsEnabled
+                    !this.mobileControlsEnabled ||
+                    avatarPaintInputMode ===
+                        'finger'
                 ) {
                     floatingTool.style
                         .display =
@@ -32969,6 +33490,9 @@ export class GameScene extends Phaser.Scene {
         this.mobilePinchDistance = 0;
         this.mobileTouchPoints.clear();
 
+        this.mobileBrushShapeBeforeEyedropper =
+            this.brushShape;
+
         this.eyedropperArmed = true;
         this.eyedropperPointerId = -1;
 
@@ -33028,6 +33552,25 @@ export class GameScene extends Phaser.Scene {
         this.updateEyedropperButtonUi();
 
         this.showMobileIdleBrushGuide();
+    }
+
+    private finishMobileEyedropperSelection(): void {
+        if (
+            this.mobilePaintInputMode ===
+                'brush'
+        ) {
+            this.activateMobileBrushTool(
+                this.mobileBrushShapeBeforeEyedropper,
+            );
+            return;
+        }
+
+        /*
+         * Finger mode keeps the eyedropper armed for repeated direct samples.
+         * The user can explicitly choose circle/square to return to painting.
+         */
+        this.updateEyedropperButtonUi();
+        this.hideMobilePaintPrecisionGuide();
     }
 
     private updateEyedropperButtonUi(): void {
@@ -34239,7 +34782,11 @@ export class GameScene extends Phaser.Scene {
     private getPaintInputWorldPoint(
         pointer: Phaser.Input.Pointer,
     ): Phaser.Math.Vector2 {
-        if (!this.mobileControlsEnabled) {
+        if (
+            !this.mobileControlsEnabled ||
+            this.mobilePaintInputMode ===
+                'finger'
+        ) {
             return this.getPointerWorldPoint(
                 pointer,
             );
@@ -34394,6 +34941,43 @@ export class GameScene extends Phaser.Scene {
             this.getPaintPreviewWorldPoint(
                 pointer,
             );
+
+        if (
+            this.mobilePaintInputMode ===
+                'finger'
+        ) {
+            this.mobileLastBrushTargetWorld =
+                target.clone();
+
+            this.paintPreview
+                ?.setPosition(
+                    target.x,
+                    target.y,
+                );
+
+            this.redrawPaintPreview();
+
+            /*
+             * Direct finger mode intentionally has no persistent brush/tool art.
+             * While actively touching, the paint stamp itself may briefly show
+             * beneath the finger; it disappears again on release.
+             */
+            this.paintPreview
+                ?.setAlpha(0.22)
+                .setVisible(
+                    pointer.isDown,
+                );
+
+            this.mobilePaintPrecisionHandle
+                ?.clear()
+                .setVisible(false);
+            this.mobilePaintPrecisionRing
+                ?.setVisible(false);
+            this.mobilePaintPrecisionCrosshair
+                ?.clear()
+                .setVisible(false);
+            return;
+        }
 
         this.mobileLastBrushTargetWorld =
             target.clone();
@@ -34619,6 +35203,8 @@ export class GameScene extends Phaser.Scene {
     private showMobileIdleBrushGuide(): void {
         if (
             !this.mobileControlsEnabled ||
+            this.mobilePaintInputMode !==
+                'brush' ||
             this.phase !== 'paint' ||
             this.eyedropperArmed ||
             this.isPainting ||
@@ -36546,9 +37132,7 @@ export class GameScene extends Phaser.Scene {
                      * until Circle/Square is explicitly selected.
                      */
                     this.eyedropperPointerId = -1;
-                    this.updateEyedropperButtonUi();
-                    this.hideMobilePaintPrecisionGuide();
-                    this.showMobileIdleEyedropperGuide();
+                    this.finishMobileEyedropperSelection();
 
                     this.isPainting = false;
                     this.finishActivePaintStroke();
@@ -37562,6 +38146,8 @@ export class GameScene extends Phaser.Scene {
     private showMobileIdleEyedropperGuide(): void {
         if (
             !this.mobileControlsEnabled ||
+            this.mobilePaintInputMode ===
+                'finger' ||
             this.phase !== 'paint' ||
             !this.eyedropperArmed
         ) {
@@ -37625,6 +38211,48 @@ export class GameScene extends Phaser.Scene {
 
         const zoom =
             Math.max(0.01, this.cameras.main.zoom);
+
+        if (
+            this.mobilePaintInputMode ===
+                'finger'
+        ) {
+            /*
+             * Finger eyedropper: only a lightweight sampled-color chip beside
+             * the fingertip. No fake pipette body obscures the sampled pixel.
+             */
+            guide
+                .clear()
+                .fillStyle(
+                    0x172027,
+                    0.94,
+                )
+                .fillCircle(
+                    grip.x + 24 / zoom,
+                    grip.y - 28 / zoom,
+                    17 / zoom,
+                )
+                .fillStyle(
+                    previewColor,
+                    1,
+                )
+                .fillCircle(
+                    grip.x + 24 / zoom,
+                    grip.y - 28 / zoom,
+                    12 / zoom,
+                )
+                .lineStyle(
+                    2 / zoom,
+                    0xffffff,
+                    0.94,
+                )
+                .strokeCircle(
+                    grip.x + 24 / zoom,
+                    grip.y - 28 / zoom,
+                    12 / zoom,
+                )
+                .setVisible(true);
+            return;
+        }
         const dx = grip.x - target.x;
         const dy = grip.y - target.y;
         const length = Math.max(0.001, Math.hypot(dx, dy));
@@ -37864,8 +38492,14 @@ export class GameScene extends Phaser.Scene {
             new Phaser.Math.Vector2();
 
         this.cameras.main.getWorldPoint(
-            screenX - 72,
-            screenY - 82,
+            this.mobilePaintInputMode ===
+                'finger'
+                ? screenX
+                : screenX - 72,
+            this.mobilePaintInputMode ===
+                'finger'
+                ? screenY
+                : screenY - 82,
             target,
         );
 
@@ -38089,9 +38723,7 @@ export class GameScene extends Phaser.Scene {
                         this.eyedropperPointerId =
                             -1;
 
-                        this.updateEyedropperButtonUi();
-                        this.hideMobilePaintPrecisionGuide();
-                        this.showMobileIdleEyedropperGuide();
+                        this.finishMobileEyedropperSelection();
 
                         this.isPainting = false;
                         this.finishActivePaintStroke();
