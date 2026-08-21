@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010377_MOBILE_PAINT_FART_COACH_POLISH: joystick-safe mode toggle, one-shot pipette, moving pointed coaches. */
     /* V1010376_FART_DISCOVERY_COACH: Hunter fart skill callouts + larger mobile FIRE/GAS labels. */
     /* V1010375_MOBILE_FINGER_FIRST_PAINT: finger-first mobile paint + optional precision brush, mirrored in avatar editor. */
     /* V1010374_INVITE_GONE_ROOM_GUARD: stale invite links return to lobby instead of hanging on join. */
@@ -8096,7 +8097,7 @@ export class GameScene extends Phaser.Scene {
         }
 
         const key =
-            'colorhunt-brush-coach-v1';
+            'colorhunt-brush-coach-v2';
 
         if (
             localStorage.getItem(key) ===
@@ -8110,18 +8111,10 @@ export class GameScene extends Phaser.Scene {
             '1',
         );
 
-        const root =
-            document.createElement(
-                'div',
-            );
-
-        root.className =
-            'colorhunt-brush-coach';
-
         const language =
             getLanguage();
 
-        const tip =
+        const tipText =
             language === 'ja'
                 ? 'ここで塗る'
                 : language === 'en'
@@ -8130,7 +8123,7 @@ export class GameScene extends Phaser.Scene {
                         ? '这里上色'
                         : '칠해지는 곳';
 
-        const grip =
+        const gripText =
             language === 'ja'
                 ? 'ここを持つ'
                 : language === 'en'
@@ -8139,84 +8132,228 @@ export class GameScene extends Phaser.Scene {
                         ? '这里握住'
                         : '잡는 곳';
 
-        root.innerHTML =
-            `<span class="ch-brush-coach-tip">${tip}</span>` +
-            `<span class="ch-brush-coach-grip">${grip}</span>`;
-
-        Object.assign(
-            root.style,
-            {
-                position: 'fixed',
-                left: '50%',
-                top: '47%',
-                width: '220px',
-                height: '120px',
-                transform:
-                    'translate(-50%, -50%) rotate(-8deg)',
-                zIndex: '3500',
-                pointerEvents: 'none',
-                fontFamily:
-                    'Arial, sans-serif',
-                fontWeight: '900',
-                color: '#26352b',
-            },
-        );
-
-        const spans =
-            root.querySelectorAll(
-                'span',
+        const tipBubble =
+            document.createElement(
+                'div',
+            );
+        const gripBubble =
+            document.createElement(
+                'div',
             );
 
-        spans.forEach(
-            (span) => {
+        const applyBubbleStyle =
+            (
+                element:
+                    HTMLDivElement,
+                direction:
+                    'down' |
+                    'up',
+            ): void => {
                 Object.assign(
-                    (span as HTMLElement)
-                        .style,
+                    element.style,
                     {
-                        position: 'absolute',
-                        padding: '7px 10px',
-                        borderRadius: '12px',
-                        background:
-                            'rgba(255,249,233,.96)',
+                        position: 'fixed',
+                        zIndex: '3600',
+                        padding: '8px 11px',
                         border:
                             '2px solid #5c8f66',
+                        borderRadius: '13px',
+                        background:
+                            'rgba(255,249,233,.98)',
+                        color: '#26352b',
                         boxShadow:
-                            '0 4px 12px rgba(0,0,0,.15)',
+                            '0 4px 12px rgba(0,0,0,.16)',
                         whiteSpace: 'nowrap',
+                        fontFamily:
+                            'Arial, sans-serif',
+                        fontWeight: '900',
                         fontSize: '13px',
+                        lineHeight: '1.2',
+                        pointerEvents: 'none',
                     },
                 );
-            },
+
+                const pointer =
+                    document.createElement(
+                        'span',
+                    );
+
+                Object.assign(
+                    pointer.style,
+                    {
+                        position: 'absolute',
+                        left: '50%',
+                        width: '0',
+                        height: '0',
+                        borderLeft:
+                            '7px solid transparent',
+                        borderRight:
+                            '7px solid transparent',
+                        transform:
+                            'translateX(-50%)',
+                    },
+                );
+
+                if (
+                    direction === 'down'
+                ) {
+                    pointer.style.bottom =
+                        '-9px';
+                    pointer.style.borderTop =
+                        '9px solid #5c8f66';
+                } else {
+                    pointer.style.top =
+                        '-9px';
+                    pointer.style.borderBottom =
+                        '9px solid #5c8f66';
+                }
+
+                element.appendChild(
+                    pointer,
+                );
+            };
+
+        tipBubble.textContent =
+            tipText;
+        gripBubble.textContent =
+            gripText;
+
+        applyBubbleStyle(
+            tipBubble,
+            'down',
+        );
+        applyBubbleStyle(
+            gripBubble,
+            'up',
         );
 
-        const tipEl =
-            root.querySelector<HTMLElement>(
-                '.ch-brush-coach-tip',
-            );
-        const gripEl =
-            root.querySelector<HTMLElement>(
-                '.ch-brush-coach-grip',
-            );
-
-        if (tipEl) {
-            tipEl.style.left = '0';
-            tipEl.style.top = '0';
-        }
-
-        if (gripEl) {
-            gripEl.style.right = '0';
-            gripEl.style.bottom = '0';
-        }
-
-        document.body.appendChild(
-            root,
+        document.body.append(
+            tipBubble,
+            gripBubble,
         );
 
-        window.setTimeout(
-            () => {
-                root.remove();
-            },
-            3400,
+        const startedAt =
+            performance.now();
+
+        const follow =
+            (): void => {
+                if (
+                    !tipBubble.isConnected ||
+                    !gripBubble.isConnected
+                ) {
+                    return;
+                }
+
+                if (
+                    this.phase !== 'paint' ||
+                    this.mobilePaintInputMode !==
+                        'brush' ||
+                    performance.now() -
+                        startedAt >
+                        3600
+                ) {
+                    tipBubble.remove();
+                    gripBubble.remove();
+                    return;
+                }
+
+                const rect =
+                    this.game.canvas
+                        .getBoundingClientRect();
+
+                const camera =
+                    this.cameras.main;
+
+                const tipWorld =
+                    this.mobileLastBrushTargetWorld ??
+                    new Phaser.Math.Vector2(
+                        camera.worldView.centerX,
+                        camera.worldView.centerY,
+                    );
+
+                const gripWorld =
+                    new Phaser.Math.Vector2(
+                        tipWorld.x + 70,
+                        tipWorld.y + 78,
+                    );
+
+                const tipScreenX =
+                    rect.left +
+                    (
+                        tipWorld.x -
+                        camera.worldView.x
+                    ) *
+                    camera.zoom *
+                    (
+                        rect.width /
+                        this.gameWidth
+                    );
+
+                const tipScreenY =
+                    rect.top +
+                    (
+                        tipWorld.y -
+                        camera.worldView.y
+                    ) *
+                    camera.zoom *
+                    (
+                        rect.height /
+                        this.gameHeight
+                    );
+
+                const gripScreenX =
+                    rect.left +
+                    (
+                        gripWorld.x -
+                        camera.worldView.x
+                    ) *
+                    camera.zoom *
+                    (
+                        rect.width /
+                        this.gameWidth
+                    );
+
+                const gripScreenY =
+                    rect.top +
+                    (
+                        gripWorld.y -
+                        camera.worldView.y
+                    ) *
+                    camera.zoom *
+                    (
+                        rect.height /
+                        this.gameHeight
+                    );
+
+                tipBubble.style.left =
+                    `${Math.round(
+                        tipScreenX,
+                    )}px`;
+                tipBubble.style.top =
+                    `${Math.round(
+                        tipScreenY - 48,
+                    )}px`;
+                tipBubble.style.transform =
+                    'translate(-50%, -100%)';
+
+                gripBubble.style.left =
+                    `${Math.round(
+                        gripScreenX,
+                    )}px`;
+                gripBubble.style.top =
+                    `${Math.round(
+                        gripScreenY + 36,
+                    )}px`;
+                gripBubble.style.transform =
+                    'translate(-50%, 0)';
+
+                requestAnimationFrame(
+                    follow,
+                );
+            };
+
+        requestAnimationFrame(
+            follow,
         );
     }
 
@@ -8330,8 +8467,8 @@ export class GameScene extends Phaser.Scene {
                 `${Math.round(
                     rect.left +
                     Math.max(
-                        10,
-                        rect.width * 0.12,
+                        190,
+                        rect.width * 0.19,
                     ),
                 )}px`;
 
@@ -14064,14 +14201,24 @@ export class GameScene extends Phaser.Scene {
             {
                 position: 'fixed',
                 zIndex: '7600',
-                maxWidth: '290px',
+                maxWidth:
+                    this.mobileControlsEnabled
+                        ? '390px'
+                        : '430px',
+                minWidth:
+                    this.mobileControlsEnabled
+                        ? '250px'
+                        : '300px',
                 boxSizing: 'border-box',
-                padding: '10px 14px',
+                padding:
+                    this.mobileControlsEnabled
+                        ? '12px 18px'
+                        : '13px 20px',
                 border:
                     '2px solid #2f8f72',
-                borderRadius: '15px',
+                borderRadius: '17px',
                 background:
-                    'rgba(248,255,240,.97)',
+                    'rgba(248,255,240,.98)',
                 color: '#21493c',
                 boxShadow:
                     '0 6px 18px rgba(16,50,38,.24)',
@@ -14080,16 +14227,34 @@ export class GameScene extends Phaser.Scene {
                 fontWeight: '900',
                 fontSize:
                     this.mobileControlsEnabled
-                        ? '15px'
-                        : '14px',
-                lineHeight: '1.35',
+                        ? '17px'
+                        : '16px',
+                lineHeight: '1.3',
                 textAlign: 'center',
                 pointerEvents: 'none',
                 opacity: '1',
                 transition:
                     'opacity 500ms ease, transform 500ms ease',
-                whiteSpace: 'normal',
+                whiteSpace: 'nowrap',
             },
+        );
+
+        const pointer =
+            document.createElement(
+                'span',
+            );
+
+        Object.assign(
+            pointer.style,
+            {
+                position: 'absolute',
+                width: '0',
+                height: '0',
+            },
+        );
+
+        bubble.appendChild(
+            pointer,
         );
 
         document.body.appendChild(
@@ -14127,12 +14292,6 @@ export class GameScene extends Phaser.Scene {
                 if (
                     this.mobileControlsEnabled
                 ) {
-                    /*
-                     * GAS logical position:
-                     * x = 896, y = 238 in the 960x540 authoring space.
-                     * Put the bubble immediately to its LEFT so FIRE/GAS stay
-                     * visible and tappable.
-                     */
                     const gasX =
                         rect.left +
                         (this.gameWidth - 64) *
@@ -14149,14 +14308,31 @@ export class GameScene extends Phaser.Scene {
                     bubble.style.left =
                         `${Math.round(
                             gasX -
-                            12,
+                            18,
                         )}px`;
                     bubble.style.top =
                         `${Math.round(
-                            gasY,
+                            gasY -
+                            6,
                         )}px`;
                     bubble.style.transform =
                         'translate(-100%, -50%)';
+
+                    Object.assign(
+                        pointer.style,
+                        {
+                            right: '-12px',
+                            top: '50%',
+                            borderTop:
+                                '9px solid transparent',
+                            borderBottom:
+                                '9px solid transparent',
+                            borderLeft:
+                                '12px solid #2f8f72',
+                            transform:
+                                'translateY(-50%)',
+                        },
+                    );
                 } else {
                     /*
                      * Desktop bottom controls hint is centered near the bottom.
@@ -14170,7 +14346,7 @@ export class GameScene extends Phaser.Scene {
                         bubble.style.left =
                             `${Math.round(
                                 hintRect.right +
-                                12,
+                                18,
                             )}px`;
                         bubble.style.top =
                             `${Math.round(
@@ -14180,6 +14356,22 @@ export class GameScene extends Phaser.Scene {
                             )}px`;
                         bubble.style.transform =
                             'translateY(-50%)';
+
+                        Object.assign(
+                            pointer.style,
+                            {
+                                left: '-12px',
+                                top: '50%',
+                                borderTop:
+                                    '9px solid transparent',
+                                borderBottom:
+                                    '9px solid transparent',
+                                borderRight:
+                                    '12px solid #2f8f72',
+                                transform:
+                                    'translateY(-50%)',
+                            },
+                        );
                     } else {
                         bubble.style.left =
                             `${Math.round(
@@ -33816,11 +34008,13 @@ export class GameScene extends Phaser.Scene {
         }
 
         /*
-         * Finger mode keeps the eyedropper armed for repeated direct samples.
-         * The user can explicitly choose circle/square to return to painting.
+         * Finger mode also returns to the last circle/square brush immediately
+         * after pointer-up. This keeps sampling a one-shot action and avoids
+         * trapping first-time users in eyedropper mode.
          */
-        this.updateEyedropperButtonUi();
-        this.hideMobilePaintPrecisionGuide();
+        this.activateMobileBrushTool(
+            this.mobileBrushShapeBeforeEyedropper,
+        );
     }
 
     private updateEyedropperButtonUi(): void {
@@ -38477,28 +38671,28 @@ export class GameScene extends Phaser.Scene {
                     0.94,
                 )
                 .fillCircle(
-                    grip.x + 24 / zoom,
-                    grip.y - 28 / zoom,
-                    17 / zoom,
+                    grip.x + 34 / zoom,
+                    grip.y - 62 / zoom,
+                    25 / zoom,
                 )
                 .fillStyle(
                     previewColor,
                     1,
                 )
                 .fillCircle(
-                    grip.x + 24 / zoom,
-                    grip.y - 28 / zoom,
-                    12 / zoom,
+                    grip.x + 34 / zoom,
+                    grip.y - 62 / zoom,
+                    18 / zoom,
                 )
                 .lineStyle(
-                    2 / zoom,
+                    3 / zoom,
                     0xffffff,
-                    0.94,
+                    0.96,
                 )
                 .strokeCircle(
-                    grip.x + 24 / zoom,
-                    grip.y - 28 / zoom,
-                    12 / zoom,
+                    grip.x + 34 / zoom,
+                    grip.y - 62 / zoom,
+                    18 / zoom,
                 )
                 .setVisible(true);
             return;
