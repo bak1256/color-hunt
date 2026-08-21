@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010378_MOBILE_PAINT_READY_POLISH: joystick-safe paint toggle, larger finger sampler, Paint-only READY ownership. */
     /* V1010377_MOBILE_PAINT_FART_COACH_POLISH: joystick-safe mode toggle, one-shot pipette, moving pointed coaches. */
     /* V1010376_FART_DISCOVERY_COACH: Hunter fart skill callouts + larger mobile FIRE/GAS labels. */
     /* V1010375_MOBILE_FINGER_FIRST_PAINT: finger-first mobile paint + optional precision brush, mirrored in avatar editor. */
@@ -911,6 +912,10 @@ export class GameScene extends Phaser.Scene {
 
         button.hidden =
             !visible;
+        button.style.display =
+            visible
+                ? ''
+                : 'none';
 
         if (!visible) {
             return;
@@ -8467,8 +8472,8 @@ export class GameScene extends Phaser.Scene {
                 `${Math.round(
                     rect.left +
                     Math.max(
-                        190,
-                        rect.width * 0.19,
+                        158,
+                        rect.width * 0.16,
                     ),
                 )}px`;
 
@@ -31624,9 +31629,42 @@ export class GameScene extends Phaser.Scene {
             this.paintReadyHiderCount = 0;
             this.paintReadyButton
                 ?.setVisible(false);
+
+            /*
+             * V1010378_PAINT_READY_PHASE_OWNERSHIP:
+             * The visible READY control is DOM-backed. Hiding only the legacy
+             * Phaser text leaves a stale "Hider ready" button after a forced
+             * disconnect / Finished -> Lobby transition.
+             *
+             * READY belongs to Paint only. Every other phase hard-hides it.
+             */
+            if (
+                this.paintReadyDomButton
+            ) {
+                this.paintReadyDomButton.hidden =
+                    true;
+                this.paintReadyDomButton.style
+                    .display =
+                    'none';
+            }
         }
 
         if (phase === 'lobby') {
+            /*
+             * V1010378_PAINT_READY_PHASE_OWNERSHIP:
+             * Lobby can be reached through several recovery/end-of-round paths.
+             * Make stale Paint READY impossible regardless of callback order.
+             */
+            if (
+                this.paintReadyDomButton
+            ) {
+                this.paintReadyDomButton.hidden =
+                    true;
+                this.paintReadyDomButton.style
+                    .display =
+                    'none';
+            }
+
             /*
              * V1010300_CLIENT_MOBILE_UI_GHOST_GAS_FIX: GAS belongs to one Hunt only.
              * Never carry the previous Hunter's pressure into Lobby/next round.
@@ -38671,28 +38709,28 @@ export class GameScene extends Phaser.Scene {
                     0.94,
                 )
                 .fillCircle(
-                    grip.x + 34 / zoom,
-                    grip.y - 62 / zoom,
-                    25 / zoom,
+                    grip.x + 40 / zoom,
+                    grip.y - 94 / zoom,
+                    35 / zoom,
                 )
                 .fillStyle(
                     previewColor,
                     1,
                 )
                 .fillCircle(
-                    grip.x + 34 / zoom,
-                    grip.y - 62 / zoom,
-                    18 / zoom,
+                    grip.x + 40 / zoom,
+                    grip.y - 94 / zoom,
+                    26 / zoom,
                 )
                 .lineStyle(
-                    3 / zoom,
+                    4 / zoom,
                     0xffffff,
-                    0.96,
+                    0.97,
                 )
                 .strokeCircle(
-                    grip.x + 34 / zoom,
-                    grip.y - 62 / zoom,
-                    18 / zoom,
+                    grip.x + 40 / zoom,
+                    grip.y - 94 / zoom,
+                    26 / zoom,
                 )
                 .setVisible(true);
             return;
