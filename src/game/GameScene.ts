@@ -79,6 +79,8 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010382_FINGER_EYEDROPPER_SQUARE: use a larger square color swatch above the finger for clearer sampling. */
+    /* V1010381_PAINT_TOGGLE_LEFT_GAP: move mobile paint-mode toggle farther left to clear max-zoom avatar without touching joystick. */
     /* V1010380_PRACTICE_CARD_EN_FIT: joystick-safe paint toggle + full English practice title/subtitle on desktop/mobile. */
     /* V1010379_FART_COACH_HUNT_ONLY: contextual fart hint + strict Hunt-only cleanup on mobile/desktop. */
     /* V1010378_MOBILE_PAINT_READY_POLISH: joystick-safe paint toggle, larger finger sampler, Paint-only READY ownership. */
@@ -8474,8 +8476,8 @@ export class GameScene extends Phaser.Scene {
                 `${Math.round(
                     rect.left +
                     Math.max(
-                        132,
-                        rect.width * 0.135,
+                        105,
+                        rect.width * 0.10,
                     ),
                 )}px`;
 
@@ -38835,35 +38837,56 @@ export class GameScene extends Phaser.Scene {
              * Finger eyedropper: only a lightweight sampled-color chip beside
              * the fingertip. No fake pipette body obscures the sampled pixel.
              */
+            const previewX =
+                grip.x + 40 / zoom;
+            const previewY =
+                grip.y - 94 / zoom;
+            const outerSize =
+                64 / zoom;
+            const innerSize =
+                48 / zoom;
+
             guide
                 .clear()
                 .fillStyle(
                     0x172027,
                     0.94,
                 )
-                .fillCircle(
-                    grip.x + 40 / zoom,
-                    grip.y - 94 / zoom,
-                    35 / zoom,
+                .fillRoundedRect(
+                    previewX -
+                        outerSize / 2,
+                    previewY -
+                        outerSize / 2,
+                    outerSize,
+                    outerSize,
+                    10 / zoom,
                 )
                 .fillStyle(
                     previewColor,
                     1,
                 )
-                .fillCircle(
-                    grip.x + 40 / zoom,
-                    grip.y - 94 / zoom,
-                    26 / zoom,
+                .fillRoundedRect(
+                    previewX -
+                        innerSize / 2,
+                    previewY -
+                        innerSize / 2,
+                    innerSize,
+                    innerSize,
+                    7 / zoom,
                 )
                 .lineStyle(
                     4 / zoom,
                     0xffffff,
                     0.97,
                 )
-                .strokeCircle(
-                    grip.x + 40 / zoom,
-                    grip.y - 94 / zoom,
-                    26 / zoom,
+                .strokeRoundedRect(
+                    previewX -
+                        innerSize / 2,
+                    previewY -
+                        innerSize / 2,
+                    innerSize,
+                    innerSize,
+                    7 / zoom,
                 )
                 .setVisible(true);
             return;
