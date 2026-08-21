@@ -212,6 +212,7 @@ export type NetworkLobbySnapshot = {
   phase?: NetworkGamePhase;
   phaseEndsAt?: number;
   serverNow?: number;
+  lobbyReadyState?: LobbyReadyState;
   paintReadyState?: PaintReadyState;
   players: Array<
     NetworkPlayerState & {
@@ -308,6 +309,20 @@ export type RoundAbortedHandler = (
   message: string,
 ) => void;
 
+export type LobbyReadyState = {
+  readySessionIds: string[];
+  readyCount: number;
+  totalCount: number;
+  allReady: boolean;
+  canStart: boolean;
+  livePlayerCount: number;
+  hasDisconnectedPlayers: boolean;
+};
+
+export type LobbyReadyStateHandler = (
+  state: LobbyReadyState,
+) => void;
+
 export type PaintReadyState = {
   readySessionIds: string[];
   hiderCount: number;
@@ -320,6 +335,7 @@ export type PaintReadyStateHandler = (
 ) => void;
 
 export class MultiplayerClient {
+  /* V1010371_LOBBY_READY_BARRIER: authoritative lobby READY state and host handoff UI support. */
   /* V1010345_CONNECTION_STABILITY_HARDENING: same-session recovery wins; fresh handoff is final fallback. */
   /* V1010341_CLIENT_GAMEPLAY_STABILITY_SAFE: reconnect/background/tab stability. */
   /* V1010340C_MULTIPLAYER_TRANSPORT_HARDENING_FINAL: aim traffic and hidden-tab movement hardening. */
@@ -545,8 +561,21 @@ this.phaseChangedHandlers.forEach(
   private readonly roundAbortedHandlers =
     new Set<RoundAbortedHandler>();
 
+  private readonly lobbyReadyStateHandlers =
+    new Set<LobbyReadyStateHandler>();
+
   private readonly paintReadyStateHandlers =
     new Set<PaintReadyStateHandler>();
+
+  private lobbyReadyState: LobbyReadyState = {
+    readySessionIds: [],
+    readyCount: 0,
+    totalCount: 0,
+    allReady: false,
+    canStart: false,
+    livePlayerCount: 0,
+    hasDisconnectedPlayers: false,
+  };
 
   private paintReadyState: PaintReadyState = {
     readySessionIds: [],
@@ -881,6 +910,73 @@ this.phaseChangedHandlers.forEach(
     return rooms;
   }
 
+  private applyLobbyReadyState(
+    payload:
+      Partial<LobbyReadyState> |
+      undefined,
+  ): void {
+    const readySessionIds =
+      Array.isArray(
+        payload?.readySessionIds,
+      )
+        ? payload!.readySessionIds!.map(
+            String,
+          )
+        : [];
+
+    const readyCount =
+      Number(
+        payload?.readyCount ??
+        readySessionIds.length,
+      );
+
+    const totalCount =
+      Number(
+        payload?.totalCount ?? 0,
+      );
+
+    this.lobbyReadyState = {
+      readySessionIds,
+      readyCount:
+        Number.isFinite(readyCount)
+          ? Math.max(0, readyCount)
+          : 0,
+      totalCount:
+        Number.isFinite(totalCount)
+          ? Math.max(0, totalCount)
+          : 0,
+      allReady:
+        Boolean(
+          payload?.allReady,
+        ),
+      canStart:
+        Boolean(
+          payload?.canStart,
+        ),
+      livePlayerCount:
+        Math.max(
+          0,
+          Number(
+            payload?.livePlayerCount ??
+            0,
+          ) || 0,
+        ),
+      hasDisconnectedPlayers:
+        Boolean(
+          payload?.hasDisconnectedPlayers,
+        ),
+    };
+
+    this.lobbyReadyStateHandlers
+      .forEach(
+        (handler) => {
+          handler(
+            this.lobbyReadyState,
+          );
+        },
+      );
+  }
+
   private applyLobbySnapshot(
     snapshot:
       NetworkLobbySnapshot,
@@ -977,6 +1073,12 @@ this.phaseChangedHandlers.forEach(
         Number.isFinite(localEndsAt)
           ? localEndsAt
           : 0,
+      );
+    }
+
+    if (snapshot.lobbyReadyState) {
+      this.applyLobbyReadyState(
+        snapshot.lobbyReadyState,
       );
     }
 
@@ -2647,6 +2749,15 @@ this.manualReconnectInFlight = false;
       },
     );
 
+    room.onMessage<LobbyReadyState>(
+      "lobby_ready_state",
+      (payload) => {
+        this.applyLobbyReadyState(
+          payload,
+        );
+      },
+    );
+
     room.onMessage<PaintReadyState>(
       "paint_ready_state",
       (payload) => {
@@ -3205,6 +3316,26 @@ this.manualReconnectInFlight = false;
 
   getPaintReadyState(): PaintReadyState {
     return this.paintReadyState;
+  }
+
+  sendLobbyReady(
+    ready: boolean,
+  ): void {
+    this.room?.send(
+      "lobby_ready",
+      { ready },
+    );
+  }
+
+  requestLobbyReadyState(): void {
+    this.room?.send(
+      "request_lobby_ready_state",
+      {},
+    );
+  }
+
+  getLobbyReadyState(): LobbyReadyState {
+    return this.lobbyReadyState;
   }
 
   sendStartGame(): void {
@@ -3766,6 +3897,19 @@ this.manualReconnectInFlight = false;
 
     return () => {
       this.phaseChangedHandlers
+        .delete(handler);
+    };
+  }
+
+  onLobbyReadyState(
+    handler:
+      LobbyReadyStateHandler,
+  ): () => void {
+    this.lobbyReadyStateHandlers
+      .add(handler);
+
+    return () => {
+      this.lobbyReadyStateHandlers
         .delete(handler);
     };
   }

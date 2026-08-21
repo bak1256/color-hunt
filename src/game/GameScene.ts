@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010371_LOBBY_READY_BARRIER: waiting-room START/READY role switch with live counter. */
     /* V1010370_ATOMIC_HUNT_VISUAL_HANDOFF: preserve live paint textures through Paint -> Hunt without replay/snap pulses. */
     /* V1010363_POOP_SLOW_TEXT_SPACING: move poop slowdown explanation slightly below the under-Hunter countdown gauge. */
     /* V1010362_POOP_DEBUFF_5S_GAUGE: poop slowdown lasts 5s; Hunter-underfoot countdown gauge mirrors authoritative deadline. */
@@ -8728,6 +8729,19 @@ export class GameScene extends Phaser.Scene {
                     this.showChatNotice(
                         localized,
                     );
+                },
+            ),
+        );
+
+        this.networkUnsubscribers.push(
+            multiplayerClient.onLobbyReadyState(
+                () => {
+                    if (
+                        this.phase === 'lobby'
+                    ) {
+                        this.updateWaitingRoomDom();
+                        this.updateLobbyUi();
+                    }
                 },
             ),
         );
@@ -22703,6 +22717,9 @@ export class GameScene extends Phaser.Scene {
         this.waitingRoomMapText =
             root.querySelector('.ch-waiting-map-text') ?? undefined;
 
+        multiplayerClient
+            .requestLobbyReadyState();
+
         this.waitingRoomPaintButtons =
             Array.from(
                 root.querySelectorAll<HTMLButtonElement>(
@@ -22783,11 +22800,49 @@ export class GameScene extends Phaser.Scene {
                 'click',
                 () => {
                     if (
-                        multiplayerClient.isHost() &&
-                        multiplayerClient.getPhase() === 'lobby'
+                        multiplayerClient.getPhase() !==
+                        'lobby'
                     ) {
-                        multiplayerClient.sendStartGame();
+                        return;
                     }
+
+                    if (
+                        multiplayerClient.isHost()
+                    ) {
+                        const readyState =
+                            multiplayerClient
+                                .getLobbyReadyState();
+
+                        if (
+                            readyState.canStart
+                        ) {
+                            multiplayerClient
+                                .sendStartGame();
+                        }
+                        return;
+                    }
+
+                    const readyState =
+                        multiplayerClient
+                            .getLobbyReadyState();
+
+                    const localSessionId =
+                        multiplayerClient
+                            .getSessionId();
+
+                    const localReady =
+                        Boolean(
+                            localSessionId &&
+                            readyState.readySessionIds
+                                .includes(
+                                    localSessionId,
+                                ),
+                        );
+
+                    multiplayerClient
+                        .sendLobbyReady(
+                            !localReady,
+                        );
                 },
             );
 
@@ -23900,13 +23955,59 @@ export class GameScene extends Phaser.Scene {
             this.waitingRoomRoot.querySelector<
                 HTMLButtonElement
             >('.ch-waiting-start');
+
         if (start) {
-            start.disabled =
-                !isHost;
-            start.classList.toggle(
-                'is-disabled',
-                !isHost,
-            );
+            const readyState =
+                multiplayerClient
+                    .getLobbyReadyState();
+
+            const localSessionId =
+                multiplayerClient
+                    .getSessionId();
+
+            const localReady =
+                Boolean(
+                    localSessionId &&
+                    readyState.readySessionIds
+                        .includes(
+                            localSessionId,
+                        ),
+                );
+
+            const progress =
+                `${readyState.readyCount}/${readyState.totalCount}`;
+
+            if (isHost) {
+                start.textContent =
+                    `▶ ${tr('게임 시작')} · ${progress}`;
+
+                start.disabled =
+                    !readyState.canStart;
+
+                start.classList.toggle(
+                    'is-disabled',
+                    !readyState.canStart,
+                );
+                start.classList.remove(
+                    'is-ready',
+                );
+            } else {
+                start.textContent =
+                    localReady
+                        ? `✓ ${tr('준비 취소')} · ${progress}`
+                        : `✓ ${tr('준비완료')} · ${progress}`;
+
+                start.disabled =
+                    false;
+
+                start.classList.remove(
+                    'is-disabled',
+                );
+                start.classList.toggle(
+                    'is-ready',
+                    localReady,
+                );
+            }
         }
 
         this.waitingRoomRoot
