@@ -24850,7 +24850,7 @@ export class GameScene extends Phaser.Scene {
                  */
                 avatarImage.style.setProperty(
                     'transform',
-                    'translateY(-13%) scale(.9438)',
+                    'translateY(-20%) scale(1.009866)',
                     'important',
                 );
                 avatarImage.style.setProperty(
