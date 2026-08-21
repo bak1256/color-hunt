@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010386M_MAP_NAME_HARD_CENTER: reset legacy offsets and center Practice map name under thumbnail. */
     /* V1010386L_MAP_NAME_THUMB_CENTER: practice map name centers on thumbnail column. */
     /* V1010386K_RESPONSIVE_PRACTICE_CAROUSEL: both arrows always visible; thumbnail yields width; map name truly centered. */
     /* V1010386J_CURRENT_MODE_TOGGLE: paint toggle shows current mode + explicit switch action. */
@@ -13171,6 +13172,42 @@ export class GameScene extends Phaser.Scene {
         );
 
         if (mapName) {
+            /*
+             * V1010386M_MAP_NAME_HARD_CENTER:
+             * Some legacy Practice CSS still applies positional offsets to the
+             * name. Reset them all, then let CSS Grid center the label exactly
+             * under thumbnail column 2.
+             */
+            mapName.style.setProperty(
+                'position',
+                'relative',
+                'important',
+            );
+            mapName.style.setProperty(
+                'left',
+                'auto',
+                'important',
+            );
+            mapName.style.setProperty(
+                'right',
+                'auto',
+                'important',
+            );
+            mapName.style.setProperty(
+                'top',
+                'auto',
+                'important',
+            );
+            mapName.style.setProperty(
+                'bottom',
+                'auto',
+                'important',
+            );
+            mapName.style.setProperty(
+                'transform',
+                'none',
+                'important',
+            );
             mapName.style.setProperty(
                 'grid-column',
                 '2',
@@ -13197,6 +13234,11 @@ export class GameScene extends Phaser.Scene {
                 'important',
             );
             mapName.style.setProperty(
+                'max-width',
+                'none',
+                'important',
+            );
+            mapName.style.setProperty(
                 'justify-self',
                 'stretch',
                 'important',
@@ -13208,6 +13250,11 @@ export class GameScene extends Phaser.Scene {
             );
             mapName.style.setProperty(
                 'text-align',
+                'center',
+                'important',
+            );
+            mapName.style.setProperty(
+                'justify-content',
                 'center',
                 'important',
             );
@@ -13231,6 +13278,16 @@ export class GameScene extends Phaser.Scene {
             mapName.style.setProperty(
                 'margin',
                 '2px 0 0',
+                'important',
+            );
+            mapName.style.setProperty(
+                'margin-left',
+                '0',
+                'important',
+            );
+            mapName.style.setProperty(
+                'margin-right',
+                '0',
                 'important',
             );
             mapName.style.setProperty(
