@@ -18945,10 +18945,48 @@ export class GameScene extends Phaser.Scene {
                         .toString(16)
                         .padStart(6, '0')}`;
 
-                const radius =
-                    stroke.size <= 1
-                        ? 0
-                        : stroke.size;
+                /*
+                 * V1010394_LOBBY_AVATAR_BRUSH_THICKNESS_FIX
+                 *
+                 * stroke.size is the brush DIAMETER in the avatar editor.
+                 * The lobby preview previously treated it as a radius, so a
+                 * 4px brush became roughly 9px wide here.
+                 *
+                 * Use the exact same pixel footprint math as the editor.
+                 */
+                const diameter =
+                    Math.max(
+                        1,
+                        Math.round(
+                            stroke.size,
+                        ),
+                    );
+
+                const minOffset =
+                    -Math.floor(
+                        diameter /
+                            2,
+                    );
+
+                const maxOffset =
+                    minOffset +
+                    diameter -
+                    1;
+
+                const centerOffset =
+                    (
+                        minOffset +
+                        maxOffset
+                    ) /
+                    2;
+
+                const circleRadius =
+                    Math.max(
+                        0.5,
+                        diameter /
+                            2 -
+                            0.25,
+                    );
 
                 const stampPoint =
                     (
@@ -18956,24 +18994,34 @@ export class GameScene extends Phaser.Scene {
                         pointY: number,
                     ): void => {
                         for (
-                            let oy = -radius;
-                            oy <= radius;
+                            let oy = minOffset;
+                            oy <= maxOffset;
                             oy += 1
                         ) {
                             for (
-                                let ox = -radius;
-                                ox <= radius;
+                                let ox = minOffset;
+                                ox <= maxOffset;
                                 ox += 1
                             ) {
                                 if (
                                     stroke.shape !==
-                                        'square' &&
-                                    ox * ox +
-                                        oy * oy >
-                                        radius *
-                                            radius
+                                        'square'
                                 ) {
-                                    continue;
+                                    const dx =
+                                        ox -
+                                        centerOffset;
+                                    const dy =
+                                        oy -
+                                        centerOffset;
+
+                                    if (
+                                        dx * dx +
+                                            dy * dy >
+                                        circleRadius *
+                                            circleRadius
+                                    ) {
+                                        continue;
+                                    }
                                 }
 
                                 drawPixel(
