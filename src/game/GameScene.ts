@@ -22546,19 +22546,73 @@ export class GameScene extends Phaser.Scene {
             },
         );
 
-        if (this.mobileControlsEnabled) {
-            avatarModeButton.style.display =
-                'block';
-            avatarModeButton.style.left =
-                'auto';
-            avatarModeButton.style.right =
-                'calc(100% + 8px)';
-            avatarModeButton.style.top =
-                '8px';
-            avatarModeButton.style.minWidth =
-                '126px';
+        /*
+         * V1010390_AVATAR_EDITOR_MOBILE_GUIDE_RAIL:
+         * The previous mobile controls lived at right: calc(100% + 8px),
+         * which visually placed them left of the canvas but also outside the
+         * modal's clipping boundary. Use a REAL flex rail instead, so both the
+         * mode toggle and precision instructions always remain inside the
+         * editor and can never be cut off.
+         */
+        const mobileAvatarInputRail =
+            document.createElement('div');
 
-            canvasStage.append(
+        Object.assign(
+            mobileAvatarInputRail.style,
+            {
+                display:
+                    this.mobileControlsEnabled
+                        ? 'flex'
+                        : 'none',
+                flexDirection: 'column',
+                alignItems: 'stretch',
+                justifyContent: 'flex-start',
+                gap: '8px',
+                width: '132px',
+                minWidth: '132px',
+                maxWidth: '132px',
+                alignSelf: 'center',
+                boxSizing: 'border-box',
+                overflow: 'visible',
+                flex: '0 0 132px',
+            },
+        );
+
+        if (this.mobileControlsEnabled) {
+            Object.assign(
+                avatarModeButton.style,
+                {
+                    display: 'block',
+                    position: 'relative',
+                    left: 'auto',
+                    right: 'auto',
+                    top: 'auto',
+                    bottom: 'auto',
+                    width: '132px',
+                    minWidth: '132px',
+                    maxWidth: '132px',
+                    margin: '0',
+                    boxSizing: 'border-box',
+                },
+            );
+
+            Object.assign(
+                avatarPrecisionHint.style,
+                {
+                    position: 'relative',
+                    left: 'auto',
+                    right: 'auto',
+                    top: 'auto',
+                    bottom: 'auto',
+                    width: '132px',
+                    minWidth: '132px',
+                    maxWidth: '132px',
+                    margin: '0',
+                    boxSizing: 'border-box',
+                },
+            );
+
+            mobileAvatarInputRail.append(
                 avatarModeButton,
                 avatarPrecisionHint,
             );
@@ -22568,10 +22622,18 @@ export class GameScene extends Phaser.Scene {
             canvasFrame,
         );
 
-        editorBody.append(
-            canvasStage,
-            sideControls,
-        );
+        if (this.mobileControlsEnabled) {
+            editorBody.append(
+                mobileAvatarInputRail,
+                canvasStage,
+                sideControls,
+            );
+        } else {
+            editorBody.append(
+                canvasStage,
+                sideControls,
+            );
+        }
 
         syncAvatarPrecisionHint();
 
