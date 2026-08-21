@@ -79,33 +79,6 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
-    /* V1010386M_MAP_NAME_HARD_CENTER: reset legacy offsets and center Practice map name under thumbnail. */
-    /* V1010386L_MAP_NAME_THUMB_CENTER: practice map name centers on thumbnail column. */
-    /* V1010386K_RESPONSIVE_PRACTICE_CAROUSEL: both arrows always visible; thumbnail yields width; map name truly centered. */
-    /* V1010386J_CURRENT_MODE_TOGGLE: paint toggle shows current mode + explicit switch action. */
-    /* V1010386I_PRECISION_BRUSH_UX: outside-body hold arming, destination-mode labels, Precision Brush naming, translucent controls hint. */
-    /* V1010386H_UNIFIED_MOBILE_HOLD: Hunter and Hider mobile precision brush both use 520ms hold-to-paint. */
-    /* V1010386G_INPUT_FEEL_POLISH: Practice arrows outside thumbnail, 520ms Hunter/avatar brush hold, one-shot line tool. */
-    /* V1010386F_PRACTICE_BOTH_ARROWS: merged v386e dock guard + guaranteed left/right Practice map arrows. */
-    /* V1010386E_DOCK_VISIBILITY_GUARD: paint dock is hard-hidden outside the actual Paint phase. */
-    /* V1010386D_REAL_LAYOUT_FIX: force actual DOM palette one-row tools/full-width slider and large Practice thumbnail via runtime !important styles. */
-    /* V1010386_EXPLICIT_LINE_TOOL: slower Hunter/avatar brush hold, explicit line tool, larger centered Practice map picker. */
-    /* V1010384E_AVATAR_EDITOR_OPEN_FIX: fix PC/mobile avatar editor initialization crash. */
-    /* V1010384D_EYEDROPPER_NEXT_TOUCH_IMMEDIATE: first valid finger touch after sampling stamps paint immediately. */
-    /* V1010384C_FINGER_EYEDROPPER_HANDOFF: preserve final sampler position and make the next finger touch paint immediately. */
-    /* V1010384B_FINGER_EYEDROPPER_TOUCHEND_RETURN: touch fallback returns sampler to last Circle/Square brush on finger-up. */
-    /* V1010384_BRUSH_HOLD_TO_PAINT_RESTORE: restore mobile precision-brush hold-to-paint and clean avatar-editor mode ghosts. */
-    /* V1010382_FINGER_EYEDROPPER_SQUARE: use a larger square color swatch above the finger for clearer sampling. */
-    /* V1010381_PAINT_TOGGLE_LEFT_GAP: move mobile paint-mode toggle farther left to clear max-zoom avatar without touching joystick. */
-    /* V1010380_PRACTICE_CARD_EN_FIT: joystick-safe paint toggle + full English practice title/subtitle on desktop/mobile. */
-    /* V1010379_FART_COACH_HUNT_ONLY: contextual fart hint + strict Hunt-only cleanup on mobile/desktop. */
-    /* V1010378_MOBILE_PAINT_READY_POLISH: joystick-safe paint toggle, larger finger sampler, Paint-only READY ownership. */
-    /* V1010377_MOBILE_PAINT_FART_COACH_POLISH: joystick-safe mode toggle, one-shot pipette, moving pointed coaches. */
-    /* V1010376_FART_DISCOVERY_COACH: Hunter fart skill callouts + larger mobile FIRE/GAS labels. */
-    /* V1010375_MOBILE_FINGER_FIRST_PAINT: finger-first mobile paint + optional precision brush, mirrored in avatar editor. */
-    /* V1010374_INVITE_GONE_ROOM_GUARD: stale invite links return to lobby instead of hanging on join. */
-    /* V1010371_LOBBY_READY_BARRIER: waiting-room START/READY role switch with live counter. */
-    /* V1010370_ATOMIC_HUNT_VISUAL_HANDOFF: preserve live paint textures through Paint -> Hunt without replay/snap pulses. */
     /* V1010363_POOP_SLOW_TEXT_SPACING: move poop slowdown explanation slightly below the under-Hunter countdown gauge. */
     /* V1010362_POOP_DEBUFF_5S_GAUGE: poop slowdown lasts 5s; Hunter-underfoot countdown gauge mirrors authoritative deadline. */
     /* V1010361_HIDER_FART_REACTION_LINES_I18N: fart detection text is voiced as the Hider's smell reaction in KO/JA/EN/ZH; mechanics unchanged. */
@@ -701,7 +674,7 @@ export class GameScene extends Phaser.Scene {
                 {
                     fontFamily:
                         'monospace',
-                    fontSize: '21px',
+                    fontSize: '16px',
                     fontStyle: 'bold',
                     color: '#ffffff',
                     backgroundColor:
@@ -932,10 +905,6 @@ export class GameScene extends Phaser.Scene {
 
         button.hidden =
             !visible;
-        button.style.display =
-            visible
-                ? ''
-                : 'none';
 
         if (!visible) {
             return;
@@ -2485,7 +2454,7 @@ export class GameScene extends Phaser.Scene {
                 mobileFartLabelCopy(),
                 {
                     fontFamily: 'monospace',
-                    fontSize: '18px',
+                    fontSize: '13px',
                     fontStyle: 'bold',
                     color: '#ffffff',
                     stroke: '#124737',
@@ -4404,18 +4373,6 @@ export class GameScene extends Phaser.Scene {
     private controlsHelpButton?: HTMLButtonElement;
     private controlsHelpViewportHandler?: () => void;
     private mobilePaintDock?: HTMLDivElement;
-    /*
-     * V1010375_MOBILE_FINGER_FIRST_PAINT:
-     * Mobile defaults to direct finger painting. Brush mode preserves the
-     * precision offset tool for users who explicitly want it.
-     */
-    private mobilePaintInputMode:
-        'finger' |
-        'brush' = 'finger';
-    private mobilePaintModeButton?: HTMLButtonElement;
-    private mobilePrecisionBrushHint?: HTMLDivElement;
-    private mobileBrushSizePreviewTimer?: number;
-
     private mobilePaintSizeInput?: HTMLInputElement;
     private mobilePaintSizeValue?: HTMLSpanElement;
     private mobilePaintToolButtons =
@@ -4470,7 +4427,7 @@ export class GameScene extends Phaser.Scene {
     private readonly selectableMaps = [
         'random',
         ...Array.from(
-            { length: 11 },
+            { length: 16 },
             (_, index) =>
                 `map${index + 1}`,
         ),
@@ -4560,13 +4517,6 @@ export class GameScene extends Phaser.Scene {
     private straightLineStartWorld?: Phaser.Math.Vector2;
     private straightLinePreview?: Phaser.GameObjects.Graphics;
     private straightLineModeActive = false;
-    /*
-     * V1010386_EXPLICIT_LINE_TOOL:
-     * Straight-line drawing is selected explicitly from the toolbar.
-     * Long-hold no longer changes a freehand brush gesture into a line.
-     */
-    private straightLineToolSelected = false;
-    private straightLineToolButton?: Phaser.GameObjects.Text;
     private undoPaintButton?: Phaser.GameObjects.Text;
     private redoPaintButton?: Phaser.GameObjects.Text;
     private mobilePaintPrecisionRing?: Phaser.GameObjects.Arc;
@@ -4576,12 +4526,6 @@ export class GameScene extends Phaser.Scene {
     private mobilePaintHoldDotEvent?: Phaser.Time.TimerEvent;
     private mobilePaintLineModeEvent?: Phaser.Time.TimerEvent;
     private mobilePaintDotCommitted = false;
-    /*
-     * V1010386I_OUTSIDE_HOLD_ARM:
-     * A precision-brush hold can arm outside the avatar. After that, the first
-     * legal body pixel entered by the brush starts painting immediately.
-     */
-    private mobilePaintHoldArmed = false;
     private spectatorButton?: Phaser.GameObjects.Text;
     private spectatorStatusText?: Phaser.GameObjects.Text;
     private spectatorSessionId = '';
@@ -4681,13 +4625,6 @@ export class GameScene extends Phaser.Scene {
     private mobileNativePinchClickGuard?: (event: MouseEvent) => void;
 
     private mobilePendingPaintPointerId = -1;
-    /*
-     * V1010384D_EYEDROPPER_NEXT_TOUCH_IMMEDIATE:
-     * After finger eyedropper sampling, consume exactly one immediate paint
-     * touch so the workflow feels continuous.
-     */
-    private mobileFingerImmediatePaintNextTouch =
-        false;
 
     /*
      * v0.10.10.174
@@ -4702,8 +4639,6 @@ export class GameScene extends Phaser.Scene {
     private mobilePendingPaintStartScreen?: Phaser.Math.Vector2;
     private mobilePendingPaintStartWorld?: Phaser.Math.Vector2;
     private eyedropperArmed = false;
-    private mobileBrushShapeBeforeEyedropper:
-        BrushShape = 'circle';
     private eyedropperButton?: Phaser.GameObjects.Text;
     private eyedropperPointerId = -1;
     private eyedropperMagnifier?: Phaser.GameObjects.Image;
@@ -4767,14 +4702,6 @@ export class GameScene extends Phaser.Scene {
 
     /* V1010258_HUNTER_CONTROLS_HINT_EXACT: desktop Hunter controls hint shared by Practice / multiplayer Hunt. */
     private hunterControlsBottomHint?: HTMLDivElement;
-    /*
-     * V1010376_FART_DISCOVERY_COACH:
-     * Temporary speech bubbles teach first-time Hunters that SPACE / the green
-     * fart button is an actual detection skill, not decoration.
-     */
-    private hunterFartCoachBubble?: HTMLDivElement;
-    private mobileFartCoachBubble?: HTMLDivElement;
-    private fartCoachTimer?: number;
     private hunterControlsHintMoveStartedAt = 0;
 
     private practiceRevealConfirmButton?: HTMLButtonElement;
@@ -4907,7 +4834,7 @@ export class GameScene extends Phaser.Scene {
 
         for (
             let index = 1;
-            index <= 11;
+            index <= 16;
             index += 1
         ) {
             this.load.image(
@@ -7421,7 +7348,7 @@ export class GameScene extends Phaser.Scene {
                 mobileLobby: '대기실 · 버튼 터치 · 채팅칸 터치',
                 mobilePaint: '색칠 · 손가락으로 칠하기 · 핀치 확대/축소 · 아래 도구로 붓 변경',
                 mobileStraight: '직선 · 브러시를 길게 누르면 주황색 이펙트와 함께 직선 모드가 켜집니다',
-                mobileHunt: '사냥 · 왼쪽 이동 · 오른쪽 조준 · FIRE 발사 · 💨 방구 탐지',
+                mobileHunt: '사냥 · 왼쪽 이동 · 오른쪽 조준 · FIRE 발사',
             },
             ja: {
                 button: '？ 操作方法',
@@ -7434,7 +7361,7 @@ export class GameScene extends Phaser.Scene {
                 mobileLobby: 'ロビー · ボタン操作 · 入力欄タップでチャット',
                 mobilePaint: 'ペイント · 指で塗る · ピンチズーム · 下のツールでブラシ変更',
                 mobileStraight: '直線 · ブラシを長押しするとオレンジの合図で直線モードになります',
-                mobileHunt: 'ハント · 左で移動 · 右で照準 · FIREで射撃 · 💨 おなら探知',
+                mobileHunt: 'ハント · 左で移動 · 右で照準 · FIREで射撃',
             },
             en: {
                 button: '？ Controls',
@@ -7447,7 +7374,7 @@ export class GameScene extends Phaser.Scene {
                 mobileLobby: 'Lobby · Tap buttons · Tap chat field to type',
                 mobilePaint: 'Paint · Paint with one finger · Pinch to zoom · Bottom tools change brush',
                 mobileStraight: 'Straight line · Long-press the brush until the orange cue appears, then drag',
-                mobileHunt: 'Hunt · Left move · Right aim · FIRE shoots · 💨 Fart detect',
+                mobileHunt: 'Hunt · Left move · Right aim · FIRE shoots',
             },
             zh: {
                 button: '？ 操作说明',
@@ -7460,7 +7387,7 @@ export class GameScene extends Phaser.Scene {
                 mobileLobby: '大厅：点击屏幕按钮 · 点击聊天输入框聊天',
                 mobilePaint: '涂色 · 单指涂色 · 双指缩放 · 使用底部工具切换画笔',
                 mobileStraight: '直线 · 长按画笔，出现橙色提示后拖动即可画直线',
-                mobileHunt: '狩猎：左侧移动 · 右侧瞄准 · FIRE按钮射击 · 💨 放屁探测',
+                mobileHunt: '狩猎：左侧移动 · 右侧瞄准 · FIRE按钮射击',
             },
         } as const;
 
@@ -7486,129 +7413,6 @@ export class GameScene extends Phaser.Scene {
                 ? 'colorhunt-paint-dock colorhunt-paint-dock--mobile'
                 : 'colorhunt-paint-dock colorhunt-paint-dock--desktop';
         root.hidden = true;
-
-        const modeButton =
-            document.createElement(
-                'button',
-            );
-
-        modeButton.type = 'button';
-        modeButton.className =
-            'colorhunt-paint-mode-toggle';
-
-        Object.assign(
-            modeButton.style,
-            {
-                position: 'fixed',
-                zIndex: '2140',
-                minWidth: '126px',
-                minHeight: '46px',
-                padding: '7px 12px',
-                border: '2px solid #5c8f66',
-                borderRadius: '13px',
-                background: 'rgba(255,244,214,.66)',
-                color: '#26352b',
-                boxShadow:
-                    '0 4px 14px rgba(35,59,42,.22)',
-                fontFamily:
-                    'Arial, sans-serif',
-                fontWeight: '900',
-                fontSize: '13px',
-                lineHeight: '1.15',
-                whiteSpace: 'pre-line',
-                textAlign: 'center',
-                cursor: 'pointer',
-                touchAction: 'manipulation',
-            },
-        );
-
-        modeButton.addEventListener(
-            'pointerdown',
-            (event) => {
-                event.preventDefault();
-                event.stopPropagation();
-
-                this.mobilePaintInputMode =
-                    this.mobilePaintInputMode ===
-                        'finger'
-                        ? 'brush'
-                        : 'finger';
-
-                this.finishActivePaintStroke();
-                this.isPainting = false;
-                this.releaseMobilePaintPointer();
-                this.cancelMobilePaintHoldTimers();
-                this.hideMobilePaintPrecisionGuide();
-                this.hideEyedropperMagnifier();
-                this.paintPreview
-                    ?.setVisible(false);
-
-                this.syncMobilePaintModeUi();
-
-                if (
-                    this.mobilePaintInputMode ===
-                        'brush'
-                ) {
-                    this.showMobileBrushFirstUseCoach();
-                    this.showMobileIdleBrushGuide();
-                }
-            },
-        );
-
-        document.body.appendChild(
-            modeButton,
-        );
-
-        this.mobilePaintModeButton =
-            modeButton;
-
-        const precisionHint =
-            document.createElement(
-                'div',
-            );
-
-        precisionHint.className =
-            'colorhunt-precision-brush-hint';
-
-        Object.assign(
-            precisionHint.style,
-            {
-                position: 'fixed',
-                zIndex: '2138',
-                padding: '7px 11px',
-                border:
-                    '1.5px solid rgba(92,143,102,.78)',
-                borderRadius: '11px',
-                background:
-                    'rgba(248,255,240,.60)',
-                color: '#26352b',
-                boxShadow:
-                    '0 3px 10px rgba(35,59,42,.12)',
-                fontFamily:
-                    'Arial, sans-serif',
-                fontWeight: '900',
-                fontSize: '12px',
-                lineHeight: '1.35',
-                whiteSpace: 'pre-line',
-                textAlign: 'left',
-                pointerEvents: 'none',
-                backdropFilter:
-                    'blur(2px)',
-                WebkitBackdropFilter:
-                    'blur(2px)',
-            },
-        );
-
-        precisionHint.hidden = true;
-        precisionHint.style.display =
-            'none';
-
-        document.body.appendChild(
-            precisionHint,
-        );
-
-        this.mobilePrecisionBrushHint =
-            precisionHint;
 
         const colors =
             document.createElement(
@@ -7692,92 +7496,6 @@ export class GameScene extends Phaser.Scene {
         tools.className =
             'colorhunt-paint-dock__tools';
 
-        /*
-         * V1010386D_REAL_PAINT_DOCK_LAYOUT:
-         * This DOM dock is the palette actually visible on PC/mobile.
-         * Force the layout inline with !important so older stylesheet rules
-         * cannot wrap REDO onto a second row.
-         */
-        root.style.setProperty(
-            'display',
-            'grid',
-            'important',
-        );
-        root.style.setProperty(
-            'grid-template-columns',
-            'minmax(250px, 38%) minmax(0, 1fr)',
-            'important',
-        );
-        root.style.setProperty(
-            'grid-template-rows',
-            'auto auto',
-            'important',
-        );
-        root.style.setProperty(
-            'column-gap',
-            '12px',
-            'important',
-        );
-        root.style.setProperty(
-            'row-gap',
-            '8px',
-            'important',
-        );
-        root.style.setProperty(
-            'align-items',
-            'center',
-            'important',
-        );
-
-        colors.style.setProperty(
-            'grid-column',
-            '1',
-            'important',
-        );
-        colors.style.setProperty(
-            'grid-row',
-            '1',
-            'important',
-        );
-
-        tools.style.setProperty(
-            'grid-column',
-            '2',
-            'important',
-        );
-        tools.style.setProperty(
-            'grid-row',
-            '1',
-            'important',
-        );
-        tools.style.setProperty(
-            'display',
-            'grid',
-            'important',
-        );
-        tools.style.setProperty(
-            'grid-template-columns',
-            'repeat(6, minmax(0, 1fr))',
-            'important',
-        );
-        tools.style.setProperty(
-            'gap',
-            this.mobileControlsEnabled
-                ? '6px'
-                : '5px',
-            'important',
-        );
-        tools.style.setProperty(
-            'width',
-            '100%',
-            'important',
-        );
-        tools.style.setProperty(
-            'min-width',
-            '0',
-            'important',
-        );
-
         const makeTool =
             (
                 key: string,
@@ -7795,46 +7513,6 @@ export class GameScene extends Phaser.Scene {
                     'colorhunt-paint-tool';
                 button.dataset.tool =
                     key;
-
-                button.style.setProperty(
-                    'min-width',
-                    '0',
-                    'important',
-                );
-                button.style.setProperty(
-                    'width',
-                    '100%',
-                    'important',
-                );
-                button.style.setProperty(
-                    'max-width',
-                    'none',
-                    'important',
-                );
-                button.style.setProperty(
-                    'box-sizing',
-                    'border-box',
-                    'important',
-                );
-                button.style.setProperty(
-                    'padding',
-                    this.mobileControlsEnabled
-                        ? '7px 3px'
-                        : '6px 3px',
-                    'important',
-                );
-                button.style.setProperty(
-                    'font-size',
-                    this.mobileControlsEnabled
-                        ? '12px'
-                        : '10px',
-                    'important',
-                );
-                button.style.setProperty(
-                    'white-space',
-                    'nowrap',
-                    'important',
-                );
                 button.innerHTML =
                     `<span class="colorhunt-paint-tool__icon">${svg}</span>` +
                     `<span>${label}</span>`;
@@ -7870,9 +7548,6 @@ export class GameScene extends Phaser.Scene {
         const squareSvg =
             `<svg viewBox="0 0 32 32" aria-hidden="true"><rect x="8" y="8" width="16" height="16" rx="2"/><path d="M5 27L12 20"/></svg>`;
 
-        const lineSvg =
-            `<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M7 25L25 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><circle cx="7" cy="25" r="2.5"/><circle cx="25" cy="7" r="2.5"/></svg>`;
-
         const dropperSvg =
             `<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M20 5l7 7-4 4-2-2-9 9-5 2 2-5 9-9-2-2z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 25h8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>`;
 
@@ -7887,8 +7562,6 @@ export class GameScene extends Phaser.Scene {
             tr('원형'),
             circleSvg,
             () => {
-                this.straightLineToolSelected =
-                    false;
                 this.activateMobileBrushTool(
                     'circle',
                 );
@@ -7900,28 +7573,9 @@ export class GameScene extends Phaser.Scene {
             tr('사각형'),
             squareSvg,
             () => {
-                this.straightLineToolSelected =
-                    false;
                 this.activateMobileBrushTool(
                     'square',
                 );
-            },
-        );
-
-        makeTool(
-            'line',
-            tr('직선'),
-            lineSvg,
-            () => {
-                this.finishActivePaintStroke();
-                this.isPainting = false;
-                this.eyedropperArmed = false;
-                this.eyedropperPointerId = -1;
-                this.straightLineToolSelected = true;
-                this.straightLineModeActive = false;
-                this.clearStraightLinePreview();
-                this.hideEyedropperMagnifier();
-                this.updateEyedropperButtonUi();
             },
         );
 
@@ -7947,8 +7601,6 @@ export class GameScene extends Phaser.Scene {
                  * Re-tapping it keeps the eyedropper selected and cannot
                  * accidentally resurrect a brush-only pointer state.
                  */
-                this.straightLineToolSelected =
-                    false;
                 this.activateMobileEyedropperTool();
 
                 /*
@@ -7990,52 +7642,6 @@ export class GameScene extends Phaser.Scene {
         sizeWrap.className =
             'colorhunt-paint-size';
 
-        sizeWrap.style.setProperty(
-            'grid-column',
-            '1 / -1',
-            'important',
-        );
-        sizeWrap.style.setProperty(
-            'grid-row',
-            '2',
-            'important',
-        );
-        sizeWrap.style.setProperty(
-            'display',
-            'grid',
-            'important',
-        );
-        sizeWrap.style.setProperty(
-            'grid-template-columns',
-            '76px minmax(0, 1fr) 52px',
-            'important',
-        );
-        sizeWrap.style.setProperty(
-            'align-items',
-            'center',
-            'important',
-        );
-        sizeWrap.style.setProperty(
-            'gap',
-            '10px',
-            'important',
-        );
-        sizeWrap.style.setProperty(
-            'width',
-            '100%',
-            'important',
-        );
-        sizeWrap.style.setProperty(
-            'margin',
-            '0',
-            'important',
-        );
-        sizeWrap.style.setProperty(
-            'box-sizing',
-            'border-box',
-            'important',
-        );
-
         const sizeTitle =
             document.createElement(
                 'span',
@@ -8055,16 +7661,6 @@ export class GameScene extends Phaser.Scene {
                 'input',
             );
         sizeInput.type = 'range';
-        sizeInput.style.setProperty(
-            'width',
-            '100%',
-            'important',
-        );
-        sizeInput.style.setProperty(
-            'min-width',
-            '0',
-            'important',
-        );
         sizeInput.min = '1';
         sizeInput.max = '20';
         sizeInput.step = '1';
@@ -8092,64 +7688,21 @@ export class GameScene extends Phaser.Scene {
                  * intentionally return to ROUND brush and show the footprint at
                  * screen center where the timer/HUD cannot hide it.
                  */
-                if (
-                    this.eyedropperArmed &&
-                    this.mobilePaintInputMode ===
-                        'brush'
-                ) {
+                if (this.eyedropperArmed) {
                     this.activateMobileBrushTool(
                         'circle',
                     );
                 }
 
                 this.syncMobilePaintDockUi();
+                this.centerMobilePaintToolGuide();
 
-                if (
-                    this.mobilePaintInputMode ===
-                        'finger'
-                ) {
-                    this.showFingerBrushSizePreview();
-                } else {
-                    this.centerMobilePaintToolGuide();
-
-                    window.requestAnimationFrame(
-                        () => {
-                            this.centerMobilePaintToolGuide();
-                        },
-                    );
-                }
+                window.requestAnimationFrame(
+                    () => {
+                        this.centerMobilePaintToolGuide();
+                    },
+                );
             },
-        );
-
-        const finishSizePreview =
-            (): void => {
-                if (
-                    this.mobilePaintInputMode ===
-                        'finger'
-                ) {
-                    window.clearTimeout(
-                        this.mobileBrushSizePreviewTimer,
-                    );
-
-                    this.mobileBrushSizePreviewTimer =
-                        window.setTimeout(
-                            () => {
-                                this.paintPreview
-                                    ?.setVisible(false);
-                                this.hideMobilePaintPrecisionGuide();
-                            },
-                            180,
-                        );
-                }
-            };
-
-        sizeInput.addEventListener(
-            'pointerup',
-            finishSizePreview,
-        );
-        sizeInput.addEventListener(
-            'change',
-            finishSizePreview,
         );
 
         sizeWrap.append(
@@ -8167,17 +7720,6 @@ export class GameScene extends Phaser.Scene {
             root,
         );
 
-        /*
-         * Start hard-hidden. Phase transition code explicitly reveals this
-         * only after Paint begins.
-         */
-        root.hidden = true;
-        root.style.setProperty(
-            'display',
-            'none',
-            'important',
-        );
-
         root.addEventListener(
             'pointerdown',
             (
@@ -8186,21 +7728,6 @@ export class GameScene extends Phaser.Scene {
                 event.stopPropagation();
             },
         );
-
-        /*
-         * Keep the six-button row intact even on narrower landscape phones.
-         * The color block yields width first; tools never wrap.
-         */
-        if (
-            this.mobileControlsEnabled &&
-            window.innerWidth < 900
-        ) {
-            root.style.setProperty(
-                'grid-template-columns',
-                'minmax(220px, 36%) minmax(0, 1fr)',
-                'important',
-            );
-        }
 
         this.mobilePaintDock =
             root;
@@ -8222,82 +7749,17 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
-        /*
-         * V1010386E_DOCK_VISIBILITY_GUARD:
-         * The paint dock belongs ONLY to the in-game Paint phase.
-         * Lobby/practice selection/room browser must never expose it.
-         *
-         * Avatar customization has its own editor palette and does not use
-         * this dock.
-         */
-        const canShowPaintDock =
-            visible &&
-            this.phase === 'paint';
-
         this.mobilePaintDock.hidden =
-            !canShowPaintDock;
+            !visible;
 
-        this.mobilePaintDock.style.setProperty(
-            'display',
-            canShowPaintDock
-                ? 'grid'
-                : 'none',
-            'important',
-        );
-
-        if (
-            this.mobilePaintModeButton
-        ) {
-            this.mobilePaintModeButton.hidden =
-                !canShowPaintDock ||
-                !this.mobileControlsEnabled;
-
-            this.mobilePaintModeButton.style.setProperty(
-                'display',
-                canShowPaintDock &&
-                    this.mobileControlsEnabled
-                    ? ''
-                    : 'none',
-                'important',
-            );
-        }
-
-        if (
-            this.mobilePrecisionBrushHint
-        ) {
-            const showPrecisionHint =
-                canShowPaintDock &&
-                this.mobileControlsEnabled &&
-                this.mobilePaintInputMode ===
-                    'brush';
-
-            this.mobilePrecisionBrushHint.hidden =
-                !showPrecisionHint;
-            this.mobilePrecisionBrushHint.style.display =
-                showPrecisionHint
-                    ? 'block'
-                    : 'none';
-        }
-
-        if (canShowPaintDock) {
+        if (visible) {
             this.syncMobilePaintDockUi();
             this.updateMobilePaintDockPosition();
-            this.syncMobilePaintModeUi();
-
-            if (
-                this.mobilePaintInputMode ===
-                    'brush'
-            ) {
-                this.showMobileIdleBrushGuide();
-                this.time.delayedCall(
-                    0,
-                    () => this.showMobileIdleBrushGuide(),
-                );
-            } else {
-                this.paintPreview
-                    ?.setVisible(false);
-                this.hideMobilePaintPrecisionGuide();
-            }
+            this.showMobileIdleBrushGuide();
+            this.time.delayedCall(
+                0,
+                () => this.showMobileIdleBrushGuide(),
+            );
         }
     }
 
@@ -8328,7 +7790,6 @@ export class GameScene extends Phaser.Scene {
             ?.classList.toggle(
                 'is-active',
                 !this.eyedropperArmed &&
-                    !this.straightLineToolSelected &&
                     this.brushShape ===
                         'circle',
             );
@@ -8338,16 +7799,8 @@ export class GameScene extends Phaser.Scene {
             ?.classList.toggle(
                 'is-active',
                 !this.eyedropperArmed &&
-                    !this.straightLineToolSelected &&
                     this.brushShape ===
                         'square',
-            );
-
-        this.mobilePaintToolButtons
-            .get('line')
-            ?.classList.toggle(
-                'is-active',
-                this.straightLineToolSelected,
             );
 
         this.mobilePaintToolButtons
@@ -8373,407 +7826,6 @@ export class GameScene extends Phaser.Scene {
                 `${this.brushSize}px`;
         }
     }
-
-    private syncMobilePaintModeUi(): void {
-        if (
-            !this.mobilePaintModeButton
-        ) {
-            return;
-        }
-
-        const language =
-            getLanguage();
-
-        const currentFingerLabel =
-            language === 'ja'
-                ? '☝ 指で描く\n↔ 切替'
-                : language === 'en'
-                    ? '☝ Finger Paint\n↔ Switch'
-                    : language === 'zh'
-                        ? '☝ 手指绘制\n↔ 切换'
-                        : '☝ 손가락 그리기\n↔ 전환';
-
-        const currentPrecisionBrushLabel =
-            language === 'ja'
-                ? '🖌 精密ブラシ\n↔ 切替'
-                : language === 'en'
-                    ? '🖌 Precision Brush\n↔ Switch'
-                    : language === 'zh'
-                        ? '🖌 精细画笔\n↔ 切换'
-                        : '🖌 정밀붓 그리기\n↔ 전환';
-
-        /*
-         * V1010386J_CURRENT_MODE_TOGGLE:
-         * Always show the CURRENT paint mode; second line makes the action explicit.
-         */
-        this.mobilePaintModeButton
-            .textContent =
-            this.mobilePaintInputMode ===
-                'finger'
-                ? currentFingerLabel
-                : currentPrecisionBrushLabel;
-
-        this.mobilePaintModeButton
-            .style.background =
-            this.mobilePaintInputMode ===
-                'finger'
-                ? 'rgba(223,247,230,.66)'
-                : 'rgba(255,244,214,.66)';
-
-        if (
-            this.mobilePrecisionBrushHint
-        ) {
-            const hint =
-                language === 'ja'
-                    ? 'ドラッグ：ブラシ移動\n長押し：色塗り開始'
-                    : language === 'en'
-                        ? 'Drag: Move brush\nHold: Start painting'
-                        : language === 'zh'
-                            ? '拖动：移动画笔\n长按：开始上色'
-                            : '드래그: 붓 이동\n꾹 누르기: 색칠 시작';
-
-            this.mobilePrecisionBrushHint
-                .textContent =
-                hint;
-
-            const visible =
-                this.mobileControlsEnabled &&
-                this.phase === 'paint' &&
-                this.mobilePaintInputMode ===
-                    'brush';
-
-            this.mobilePrecisionBrushHint.hidden =
-                !visible;
-            this.mobilePrecisionBrushHint.style.display =
-                visible
-                    ? 'block'
-                    : 'none';
-        }
-    }
-
-    private showFingerBrushSizePreview(): void {
-        if (
-            !this.mobileControlsEnabled ||
-            this.phase !== 'paint' ||
-            this.mobilePaintInputMode !==
-                'finger' ||
-            !this.paintPreview
-        ) {
-            return;
-        }
-
-        window.clearTimeout(
-            this.mobileBrushSizePreviewTimer,
-        );
-
-        const center =
-            new Phaser.Math.Vector2();
-
-        this.cameras.main.getWorldPoint(
-            this.gameWidth * 0.5,
-            this.gameHeight * 0.5,
-            center,
-        );
-
-        this.paintPreview
-            .setPosition(
-                center.x,
-                center.y,
-            );
-
-        this.redrawPaintPreview();
-
-        this.paintPreview
-            .setAlpha(0.46)
-            .setVisible(true);
-
-        this.hideMobilePaintPrecisionGuide();
-
-        this.mobileBrushSizePreviewTimer =
-            window.setTimeout(
-                () => {
-                    if (
-                        this.mobilePaintInputMode ===
-                            'finger'
-                    ) {
-                        this.paintPreview
-                            ?.setVisible(false);
-                    }
-                },
-                520,
-            );
-    }
-
-    private showMobileBrushFirstUseCoach(): void {
-        if (
-            !this.mobileControlsEnabled ||
-            this.mobilePaintInputMode !==
-                'brush'
-        ) {
-            return;
-        }
-
-        const key =
-            'colorhunt-brush-coach-v2';
-
-        if (
-            localStorage.getItem(key) ===
-                '1'
-        ) {
-            return;
-        }
-
-        localStorage.setItem(
-            key,
-            '1',
-        );
-
-        const language =
-            getLanguage();
-
-        const tipText =
-            language === 'ja'
-                ? 'ここで塗る'
-                : language === 'en'
-                    ? 'Paints here'
-                    : language === 'zh'
-                        ? '这里上色'
-                        : '칠해지는 곳';
-
-        const gripText =
-            language === 'ja'
-                ? 'ここを持つ'
-                : language === 'en'
-                    ? 'Hold here'
-                    : language === 'zh'
-                        ? '这里握住'
-                        : '잡는 곳';
-
-        const tipBubble =
-            document.createElement(
-                'div',
-            );
-        const gripBubble =
-            document.createElement(
-                'div',
-            );
-
-        const applyBubbleStyle =
-            (
-                element:
-                    HTMLDivElement,
-                direction:
-                    'down' |
-                    'up',
-            ): void => {
-                Object.assign(
-                    element.style,
-                    {
-                        position: 'fixed',
-                        zIndex: '3600',
-                        padding: '8px 11px',
-                        border:
-                            '2px solid #5c8f66',
-                        borderRadius: '13px',
-                        background:
-                            'rgba(255,249,233,.98)',
-                        color: '#26352b',
-                        boxShadow:
-                            '0 4px 12px rgba(0,0,0,.16)',
-                        whiteSpace: 'nowrap',
-                        fontFamily:
-                            'Arial, sans-serif',
-                        fontWeight: '900',
-                        fontSize: '13px',
-                        lineHeight: '1.2',
-                        pointerEvents: 'none',
-                    },
-                );
-
-                const pointer =
-                    document.createElement(
-                        'span',
-                    );
-
-                Object.assign(
-                    pointer.style,
-                    {
-                        position: 'absolute',
-                        left: '50%',
-                        width: '0',
-                        height: '0',
-                        borderLeft:
-                            '7px solid transparent',
-                        borderRight:
-                            '7px solid transparent',
-                        transform:
-                            'translateX(-50%)',
-                    },
-                );
-
-                if (
-                    direction === 'down'
-                ) {
-                    pointer.style.bottom =
-                        '-9px';
-                    pointer.style.borderTop =
-                        '9px solid #5c8f66';
-                } else {
-                    pointer.style.top =
-                        '-9px';
-                    pointer.style.borderBottom =
-                        '9px solid #5c8f66';
-                }
-
-                element.appendChild(
-                    pointer,
-                );
-            };
-
-        tipBubble.textContent =
-            tipText;
-        gripBubble.textContent =
-            gripText;
-
-        applyBubbleStyle(
-            tipBubble,
-            'down',
-        );
-        applyBubbleStyle(
-            gripBubble,
-            'up',
-        );
-
-        document.body.append(
-            tipBubble,
-            gripBubble,
-        );
-
-        const startedAt =
-            performance.now();
-
-        const follow =
-            (): void => {
-                if (
-                    !tipBubble.isConnected ||
-                    !gripBubble.isConnected
-                ) {
-                    return;
-                }
-
-                if (
-                    this.phase !== 'paint' ||
-                    this.mobilePaintInputMode !==
-                        'brush' ||
-                    performance.now() -
-                        startedAt >
-                        3600
-                ) {
-                    tipBubble.remove();
-                    gripBubble.remove();
-                    return;
-                }
-
-                const rect =
-                    this.game.canvas
-                        .getBoundingClientRect();
-
-                const camera =
-                    this.cameras.main;
-
-                const tipWorld =
-                    this.mobileLastBrushTargetWorld ??
-                    new Phaser.Math.Vector2(
-                        camera.worldView.centerX,
-                        camera.worldView.centerY,
-                    );
-
-                const gripWorld =
-                    new Phaser.Math.Vector2(
-                        tipWorld.x + 70,
-                        tipWorld.y + 78,
-                    );
-
-                const tipScreenX =
-                    rect.left +
-                    (
-                        tipWorld.x -
-                        camera.worldView.x
-                    ) *
-                    camera.zoom *
-                    (
-                        rect.width /
-                        this.gameWidth
-                    );
-
-                const tipScreenY =
-                    rect.top +
-                    (
-                        tipWorld.y -
-                        camera.worldView.y
-                    ) *
-                    camera.zoom *
-                    (
-                        rect.height /
-                        this.gameHeight
-                    );
-
-                const gripScreenX =
-                    rect.left +
-                    (
-                        gripWorld.x -
-                        camera.worldView.x
-                    ) *
-                    camera.zoom *
-                    (
-                        rect.width /
-                        this.gameWidth
-                    );
-
-                const gripScreenY =
-                    rect.top +
-                    (
-                        gripWorld.y -
-                        camera.worldView.y
-                    ) *
-                    camera.zoom *
-                    (
-                        rect.height /
-                        this.gameHeight
-                    );
-
-                tipBubble.style.left =
-                    `${Math.round(
-                        tipScreenX,
-                    )}px`;
-                tipBubble.style.top =
-                    `${Math.round(
-                        tipScreenY - 48,
-                    )}px`;
-                tipBubble.style.transform =
-                    'translate(-50%, -100%)';
-
-                gripBubble.style.left =
-                    `${Math.round(
-                        gripScreenX,
-                    )}px`;
-                gripBubble.style.top =
-                    `${Math.round(
-                        gripScreenY + 36,
-                    )}px`;
-                gripBubble.style.transform =
-                    'translate(-50%, 0)';
-
-                requestAnimationFrame(
-                    follow,
-                );
-            };
-
-        requestAnimationFrame(
-            follow,
-        );
-    }
-
 
     /*
      * V1010347_PAINT_TOOL_UX_UNIFICATION / CENTER_TOOL_GUIDE
@@ -8871,79 +7923,13 @@ export class GameScene extends Phaser.Scene {
                     ),
                 )}px`,
             );
-
-        if (
-            this.mobilePaintModeButton &&
-            this.mobileControlsEnabled
-        ) {
-            /*
-             * Same visual weight as READY, but on the left side of the local
-             * character area. Paint camera keeps the local avatar near center.
-             */
-            this.mobilePaintModeButton.style.left =
-                `${Math.round(
-                    rect.left +
-                    Math.max(
-                        110,
-                        rect.width * 0.10 + 5,
-                    ),
-                )}px`;
-
-            this.mobilePaintModeButton.style.top =
-                `${Math.round(
-                    rect.top +
-                    rect.height * 0.48,
-                )}px`;
-
-            this.mobilePaintModeButton.style.transform =
-                'translateY(-50%)';
-
-            if (
-                this.mobilePrecisionBrushHint
-            ) {
-                const buttonRect =
-                    this.mobilePaintModeButton
-                        .getBoundingClientRect();
-
-                const dockRect =
-                    this.mobilePaintDock
-                        .getBoundingClientRect();
-
-                this.mobilePrecisionBrushHint.style.left =
-                    `${Math.round(
-                        buttonRect.left,
-                    )}px`;
-
-                this.mobilePrecisionBrushHint.style.top =
-                    `${Math.round(
-                        Math.max(
-                            buttonRect.bottom + 8,
-                            dockRect.top - 60,
-                        ),
-                    )}px`;
-            }
-        }
     }
 
     private destroyMobilePaintDock(): void {
         this.mobilePaintDock
             ?.remove();
 
-        this.mobilePaintModeButton
-            ?.remove();
-
-        this.mobilePrecisionBrushHint
-            ?.remove();
-
-        window.clearTimeout(
-            this.mobileBrushSizePreviewTimer,
-        );
-
         this.mobilePaintDock =
-            undefined;
-        this.mobilePaintModeButton =
-            undefined;
-        this.mobilePrecisionBrushHint =
             undefined;
         this.mobilePaintSizeInput =
             undefined;
@@ -9746,19 +8732,6 @@ export class GameScene extends Phaser.Scene {
         );
 
         this.networkUnsubscribers.push(
-            multiplayerClient.onLobbyReadyState(
-                () => {
-                    if (
-                        this.phase === 'lobby'
-                    ) {
-                        this.updateWaitingRoomDom();
-                        this.updateLobbyUi();
-                    }
-                },
-            ),
-        );
-
-        this.networkUnsubscribers.push(
             multiplayerClient.onPlayerAdded(
                 (
                     sessionId: string,
@@ -10170,23 +9143,27 @@ export class GameScene extends Phaser.Scene {
                         );
 
                     /*
-                     * V1010367_STOP_RECONNECT_PAINT_FEEDBACK_LOOP:
-                     *
-                     * round_paint_state is already the authoritative recovery
-                     * stream. Never request another round_paint_state merely
-                     * because one of its chunks contained the local Hunter.
-                     *
-                     * The previous recovery code created a feedback loop:
-                     *   receive chunk -> request snapshot -> receive chunk ->
-                     *   request snapshot ...
-                     * which replayed camouflage over and over, made colors look
-                     * like they were rewinding/flickering, stalled rendering,
-                     * and could destabilize the freshly reconnected transport.
-                     *
-                     * recoveredLocalHunterPaint is intentionally NOT echoed or
-                     * re-requested here.
+                     * This payload is sourced from the same data that just
+                     * succeeded locally, so it no longer depends on whether
+                     * localPaintHistory survived the reconnect.
                      */
-                    void recoveredLocalHunterPaint;
+                    if (
+                        recoveredLocalHunterPaint
+                            .length >
+                            0 &&
+                        this.networkPlayerManager
+                            .isLocalHunter()
+                    ) {
+                        this.time.delayedCall(
+                            250,
+                            () => {
+                                multiplayerClient
+                                    .sendReconnectPaintSnapshot(
+                                        recoveredLocalHunterPaint,
+                                    );
+                            },
+                        );
+                    }
 
                     if (
                         pending.length >
@@ -10830,13 +9807,10 @@ export class GameScene extends Phaser.Scene {
                                 this.localPaintHistory.length > 0 &&
                                 multiplayerClient.isConnected()
                             ) {
-                                /*
-                                 * V1010364_MAX_PAYLOAD_RECONNECT_LOOP_FIX:
-                                 * Recovery must pull the server snapshot instead
-                                 * of pushing an unbounded local paint history.
-                                 */
                                 multiplayerClient
-                                    .requestRoundPaintState();
+                                    .sendReconnectPaintSnapshot(
+                                        this.localPaintHistory,
+                                    );
                             }
                         },
                     );
@@ -11112,205 +10086,6 @@ export class GameScene extends Phaser.Scene {
         }
     }
 
-    private showInviteRoomGoneModal(): void {
-        this.closeMenuModal();
-
-        const copy =
-            (
-                {
-                    ko: {
-                        title: '🚪 방이 사라졌습니다',
-                        body: '초대받은 방이 이미 종료되었거나 존재하지 않습니다.\n메인 로비에서 다른 방을 선택해주세요.',
-                        button: '로비로 돌아가기',
-                    },
-                    ja: {
-                        title: '🚪 ルームが終了しました',
-                        body: '招待されたルームはすでに終了したか、存在しません。\nメインロビーから別のルームを選んでください。',
-                        button: 'ロビーへ戻る',
-                    },
-                    en: {
-                        title: '🚪 Room no longer exists',
-                        body: 'This invited room has already closed or no longer exists.\nPlease choose another room from the main lobby.',
-                        button: 'Back to Lobby',
-                    },
-                    zh: {
-                        title: '🚪 房间已不存在',
-                        body: '邀请的房间已经结束或不存在。\n请返回大厅选择其他房间。',
-                        button: '返回大厅',
-                    },
-                } as const
-            )[getLanguage()];
-
-        const overlay =
-            document.createElement(
-                'div',
-            );
-
-        Object.assign(
-            overlay.style,
-            {
-                position: 'fixed',
-                inset: '0',
-                zIndex: '10050',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '18px',
-                boxSizing: 'border-box',
-                background:
-                    'rgba(30, 48, 35, .38)',
-                backdropFilter:
-                    'blur(5px)',
-                WebkitBackdropFilter:
-                    'blur(5px)',
-            },
-        );
-
-        const card =
-            document.createElement(
-                'div',
-            );
-
-        Object.assign(
-            card.style,
-            {
-                width:
-                    'min(460px, calc(100vw - 30px))',
-                boxSizing: 'border-box',
-                padding: '24px 24px 22px',
-                border:
-                    '2px solid #70a978',
-                borderRadius: '20px',
-                background: '#fff9e9',
-                color: '#284333',
-                textAlign: 'center',
-                boxShadow:
-                    '0 16px 48px rgba(20,42,28,.28)',
-                fontFamily:
-                    'Arial, sans-serif',
-            },
-        );
-
-        const title =
-            document.createElement(
-                'div',
-            );
-
-        Object.assign(
-            title.style,
-            {
-                fontSize: '22px',
-                fontWeight: '900',
-                lineHeight: '1.25',
-                marginBottom: '12px',
-            },
-        );
-
-        title.textContent =
-            copy.title;
-
-        const body =
-            document.createElement(
-                'div',
-            );
-
-        Object.assign(
-            body.style,
-            {
-                whiteSpace: 'pre-line',
-                fontSize: '14px',
-                lineHeight: '1.6',
-                opacity: '0.86',
-                marginBottom: '18px',
-            },
-        );
-
-        body.textContent =
-            copy.body;
-
-        const button =
-            document.createElement(
-                'button',
-            );
-
-        button.type = 'button';
-        button.textContent =
-            copy.button;
-
-        Object.assign(
-            button.style,
-            {
-                width: '100%',
-                minHeight: '44px',
-                border: '0',
-                borderRadius: '12px',
-                padding: '10px 16px',
-                background: '#4f9f68',
-                color: '#ffffff',
-                fontSize: '15px',
-                fontWeight: '900',
-                cursor: 'pointer',
-            },
-        );
-
-        const close = (): void => {
-            overlay.remove();
-            this.input.enabled =
-                true;
-
-            if (
-                this.input.keyboard
-            ) {
-                this.input.keyboard.enabled =
-                    true;
-            }
-        };
-
-        button.addEventListener(
-            'click',
-            close,
-        );
-
-        overlay.addEventListener(
-            'click',
-            (event) => {
-                if (
-                    event.target ===
-                    overlay
-                ) {
-                    close();
-                }
-            },
-        );
-
-        card.appendChild(
-            title,
-        );
-        card.appendChild(
-            body,
-        );
-        card.appendChild(
-            button,
-        );
-        overlay.appendChild(
-            card,
-        );
-        document.body.appendChild(
-            overlay,
-        );
-
-        this.input.enabled =
-            false;
-
-        if (
-            this.input.keyboard
-        ) {
-            this.input.keyboard.enabled =
-                false;
-        }
-    }
-
-
     private showInviteGameInProgressModal(): void {
         this.closeMenuModal();
 
@@ -11562,19 +10337,8 @@ export class GameScene extends Phaser.Scene {
                         roomId,
                     );
 
-            if (!status.exists) {
-                this.pendingInviteRoomId =
-                    '';
-                this.pendingInvitePrivate =
-                    false;
-
-                this.clearInviteRoomFromAddressBar();
-                this.showMainMenu();
-                this.showInviteRoomGoneModal();
-                return;
-            }
-
             if (
+                status.exists &&
                 status.phase !==
                     'lobby'
             ) {
@@ -12301,7 +11065,7 @@ export class GameScene extends Phaser.Scene {
 
         const mapOptions =
             Array.from(
-                { length: 11 },
+                { length: 16 },
                 (
                     _,
                     index,
@@ -12370,11 +11134,11 @@ export class GameScene extends Phaser.Scene {
                     <strong class="colorhunt-practice-map-title" style="display:block;font-size:clamp(18px,4.6vw,24px);line-height:1.2;font-weight:900;letter-spacing:-0.02em;">🗺️ ${tr('연습할 맵을 선택하세요')}</strong>
                     <p class="colorhunt-practice-map-description" style="margin:6px 0 0;font-size:clamp(13px,3.25vw,16px);line-height:1.45;font-weight:700;opacity:.86;">${tr('좌우 화살표로 연습할 맵을 고르세요. 선택한 맵에서 헌터·하이더 연습을 시작합니다.')}</p>
                 </div>
-                <div class="colorhunt-practice-map-picker" style="display:grid;grid-template-columns:56px minmax(210px,420px) 56px;grid-template-rows:auto auto;align-items:center;justify-content:center;gap:10px 14px;width:100%;margin:12px auto 4px;">
-                    <button type="button" class="colorhunt-practice-map-arrow" data-practice-map-prev aria-label="${tr('이전 맵')}" style="grid-column:1;grid-row:1;width:52px;height:72px;font-size:34px;justify-self:center;">‹</button>
-                    <img class="colorhunt-practice-map-preview" data-practice-map-preview src="/assets/backgrounds/${this.practiceMap}.png" alt="${tr('연습 맵 미리보기')}" style="grid-column:2;grid-row:1;width:min(48vw,420px);min-width:210px;max-width:420px;aspect-ratio:16/9;object-fit:cover;border-radius:14px;border:3px solid #6f9b6e;box-shadow:0 8px 22px rgba(38,69,43,.22);justify-self:center;">
-                    <button type="button" class="colorhunt-practice-map-arrow" data-practice-map-next aria-label="${tr('다음 맵')}" style="grid-column:3;grid-row:1;width:52px;height:72px;font-size:34px;justify-self:center;">›</button>
-                    <strong class="colorhunt-practice-map-name" data-practice-map-name style="grid-column:1 / 4;grid-row:2;text-align:center;font-size:18px;line-height:1.25;font-weight:900;margin-top:2px;">${this.getMapDisplayName(this.practiceMap)}</strong>
+                <div class="colorhunt-practice-map-picker">
+                    <button type="button" class="colorhunt-practice-map-arrow" data-practice-map-prev aria-label="${tr('이전 맵')}">‹</button>
+                    <img class="colorhunt-practice-map-preview" data-practice-map-preview src="/assets/backgrounds/${this.practiceMap}.png" alt="${tr('연습 맵 미리보기')}">
+                    <button type="button" class="colorhunt-practice-map-arrow" data-practice-map-next aria-label="${tr('다음 맵')}">›</button>
+                    <strong class="colorhunt-practice-map-name" data-practice-map-name>${this.getMapDisplayName(this.practiceMap)}</strong>
                 </div>
                 <select data-practice-map aria-label="${tr('연습 맵')}" hidden>
                     ${mapOptions}
@@ -12840,475 +11604,13 @@ export class GameScene extends Phaser.Scene {
                 '[data-practice-map-name]',
             );
 
-        const mapPicker =
-            card.querySelector<HTMLElement>(
-                '.colorhunt-practice-map-picker',
-            );
-
-        const mapArrows =
-            Array.from(
-                card.querySelectorAll<HTMLButtonElement>(
-                    '.colorhunt-practice-map-arrow',
-                ),
-            );
-
-        /*
-         * V1010386D_PRACTICE_MAP_VISIBILITY:
-         * The old stylesheet has compact Practice-map sizing rules. Inline
-         * markup alone was still being overridden, so force the final runtime
-         * layout with !important.
-         *
-         * Layout:
-         *          [ < ] [ LARGE MAP THUMBNAIL ] [ > ]
-         *                    MAP NAME
-         */
-        /*
-         * V1010386K_RESPONSIVE_PRACTICE_CAROUSEL:
-         * Keep BOTH arrows inside the available modal width at all times.
-         * The thumbnail yields width first instead of pushing an arrow offscreen.
-         *
-         *   [ < ]   [ responsive thumbnail ]   [ > ]
-         *                 MAP NAME
-         */
-        if (mapPicker) {
-            const compactMapPicker =
-                this.mobileControlsEnabled ||
-                window.innerWidth < 760;
-
-            mapPicker.style.setProperty(
-                'display',
-                'grid',
-                'important',
-            );
-            mapPicker.style.setProperty(
-                'grid-template-columns',
-                compactMapPicker
-                    ? '44px minmax(0, 1fr) 44px'
-                    : '56px minmax(0, 1fr) 56px',
-                'important',
-            );
-            mapPicker.style.setProperty(
-                'grid-template-rows',
-                'auto auto',
-                'important',
-            );
-            mapPicker.style.setProperty(
-                'align-items',
-                'center',
-                'important',
-            );
-            mapPicker.style.setProperty(
-                'justify-content',
-                'center',
-                'important',
-            );
-            mapPicker.style.setProperty(
-                'column-gap',
-                compactMapPicker
-                    ? '8px'
-                    : '14px',
-                'important',
-            );
-            mapPicker.style.setProperty(
-                'row-gap',
-                '10px',
-                'important',
-            );
-            mapPicker.style.setProperty(
-                'width',
-                compactMapPicker
-                    ? '100%'
-                    : 'min(100%, 700px)',
-                'important',
-            );
-            mapPicker.style.setProperty(
-                'max-width',
-                '100%',
-                'important',
-            );
-            mapPicker.style.setProperty(
-                'margin',
-                '14px auto 8px',
-                'important',
-            );
-            mapPicker.style.setProperty(
-                'padding',
-                compactMapPicker
-                    ? '0 4px'
-                    : '0 8px',
-                'important',
-            );
-            mapPicker.style.setProperty(
-                'box-sizing',
-                'border-box',
-                'important',
-            );
-            mapPicker.style.setProperty(
-                'position',
-                'relative',
-                'important',
-            );
-            mapPicker.style.setProperty(
-                'overflow',
-                'visible',
-                'important',
-            );
-        }
-
-        if (mapPreview) {
-            mapPreview.style.setProperty(
-                'grid-column',
-                '2',
-                'important',
-            );
-            mapPreview.style.setProperty(
-                'grid-row',
-                '1',
-                'important',
-            );
-            mapPreview.style.setProperty(
-                'width',
-                '100%',
-                'important',
-            );
-            mapPreview.style.setProperty(
-                'min-width',
-                '0',
-                'important',
-            );
-            mapPreview.style.setProperty(
-                'max-width',
-                '520px',
-                'important',
-            );
-            mapPreview.style.setProperty(
-                'height',
-                'auto',
-                'important',
-            );
-            mapPreview.style.setProperty(
-                'aspect-ratio',
-                '16 / 9',
-                'important',
-            );
-            mapPreview.style.setProperty(
-                'object-fit',
-                'cover',
-                'important',
-            );
-            mapPreview.style.setProperty(
-                'justify-self',
-                'center',
-                'important',
-            );
-            mapPreview.style.setProperty(
-                'position',
-                'relative',
-                'important',
-            );
-            mapPreview.style.setProperty(
-                'z-index',
-                '1',
-                'important',
-            );
-            mapPreview.style.setProperty(
-                'border-radius',
-                '14px',
-                'important',
-            );
-            mapPreview.style.setProperty(
-                'border',
-                '3px solid #6f9b6e',
-                'important',
-            );
-            mapPreview.style.setProperty(
-                'box-shadow',
-                '0 8px 22px rgba(38,69,43,.22)',
-                'important',
-            );
-            mapPreview.style.setProperty(
-                'box-sizing',
-                'border-box',
-                'important',
-            );
-        }
-
-        mapArrows.forEach(
-            (
-                arrow,
-                index,
-            ) => {
-                const compactMapPicker =
-                    this.mobileControlsEnabled ||
-                    window.innerWidth < 760;
-
-                arrow.hidden = false;
-
-                /*
-                 * Reset legacy absolute-position rules. Each arrow owns a
-                 * dedicated grid column, so neither can be pushed offscreen.
-                 */
-                arrow.style.setProperty(
-                    'display',
-                    'flex',
-                    'important',
-                );
-                arrow.style.setProperty(
-                    'position',
-                    'relative',
-                    'important',
-                );
-                arrow.style.setProperty(
-                    'left',
-                    'auto',
-                    'important',
-                );
-                arrow.style.setProperty(
-                    'right',
-                    'auto',
-                    'important',
-                );
-                arrow.style.setProperty(
-                    'top',
-                    'auto',
-                    'important',
-                );
-                arrow.style.setProperty(
-                    'bottom',
-                    'auto',
-                    'important',
-                );
-                arrow.style.setProperty(
-                    'transform',
-                    'none',
-                    'important',
-                );
-                arrow.style.setProperty(
-                    'grid-column',
-                    index === 0
-                        ? '1'
-                        : '3',
-                    'important',
-                );
-                arrow.style.setProperty(
-                    'grid-row',
-                    '1',
-                    'important',
-                );
-                arrow.style.setProperty(
-                    'width',
-                    compactMapPicker
-                        ? '42px'
-                        : '54px',
-                    'important',
-                );
-                arrow.style.setProperty(
-                    'min-width',
-                    compactMapPicker
-                        ? '42px'
-                        : '54px',
-                    'important',
-                );
-                arrow.style.setProperty(
-                    'height',
-                    compactMapPicker
-                        ? '68px'
-                        : '82px',
-                    'important',
-                );
-                arrow.style.setProperty(
-                    'font-size',
-                    compactMapPicker
-                        ? '30px'
-                        : '36px',
-                    'important',
-                );
-                arrow.style.setProperty(
-                    'align-items',
-                    'center',
-                    'important',
-                );
-                arrow.style.setProperty(
-                    'justify-content',
-                    'center',
-                    'important',
-                );
-                arrow.style.setProperty(
-                    'justify-self',
-                    'center',
-                    'important',
-                );
-                arrow.style.setProperty(
-                    'align-self',
-                    'center',
-                    'important',
-                );
-                arrow.style.setProperty(
-                    'opacity',
-                    '1',
-                    'important',
-                );
-                arrow.style.setProperty(
-                    'visibility',
-                    'visible',
-                    'important',
-                );
-                arrow.style.setProperty(
-                    'z-index',
-                    '4',
-                    'important',
-                );
-                arrow.style.setProperty(
-                    'pointer-events',
-                    'auto',
-                    'important',
-                );
-                arrow.style.setProperty(
-                    'box-sizing',
-                    'border-box',
-                    'important',
-                );
-            },
-        );
-
-        if (mapName) {
-            /*
-             * V1010386M_MAP_NAME_HARD_CENTER:
-             * Some legacy Practice CSS still applies positional offsets to the
-             * name. Reset them all, then let CSS Grid center the label exactly
-             * under thumbnail column 2.
-             */
-            mapName.style.setProperty(
-                'position',
-                'relative',
-                'important',
-            );
-            mapName.style.setProperty(
-                'left',
-                'auto',
-                'important',
-            );
-            mapName.style.setProperty(
-                'right',
-                'auto',
-                'important',
-            );
-            mapName.style.setProperty(
-                'top',
-                'auto',
-                'important',
-            );
-            mapName.style.setProperty(
-                'bottom',
-                'auto',
-                'important',
-            );
-            mapName.style.setProperty(
-                'transform',
-                'none',
-                'important',
-            );
-            mapName.style.setProperty(
-                'grid-column',
-                '2',
-                'important',
-            );
-            mapName.style.setProperty(
-                'grid-row',
-                '2',
-                'important',
-            );
-            mapName.style.setProperty(
-                'display',
-                'block',
-                'important',
-            );
-            mapName.style.setProperty(
-                'width',
-                '100%',
-                'important',
-            );
-            mapName.style.setProperty(
-                'min-width',
-                '0',
-                'important',
-            );
-            mapName.style.setProperty(
-                'max-width',
-                'none',
-                'important',
-            );
-            mapName.style.setProperty(
-                'justify-self',
-                'stretch',
-                'important',
-            );
-            mapName.style.setProperty(
-                'align-self',
-                'center',
-                'important',
-            );
-            mapName.style.setProperty(
-                'text-align',
-                'center',
-                'important',
-            );
-            mapName.style.setProperty(
-                'justify-content',
-                'center',
-                'important',
-            );
-            mapName.style.setProperty(
-                'font-size',
-                this.mobileControlsEnabled
-                    ? '17px'
-                    : '20px',
-                'important',
-            );
-            mapName.style.setProperty(
-                'line-height',
-                '1.25',
-                'important',
-            );
-            mapName.style.setProperty(
-                'font-weight',
-                '900',
-                'important',
-            );
-            mapName.style.setProperty(
-                'margin',
-                '2px 0 0',
-                'important',
-            );
-            mapName.style.setProperty(
-                'margin-left',
-                '0',
-                'important',
-            );
-            mapName.style.setProperty(
-                'margin-right',
-                '0',
-                'important',
-            );
-            mapName.style.setProperty(
-                'padding',
-                '0',
-                'important',
-            );
-            mapName.style.setProperty(
-                'box-sizing',
-                'border-box',
-                'important',
-            );
-        }
-
         const syncPracticeMapPreview = (): void => {
             const selected = mapSelect?.value ?? this.practiceMap;
-            if (mapPreview && /^map(?:[1-9]|1[01])$/.test(selected)) {
+            if (mapPreview && /^map(?:[1-9]|1[0-6])$/.test(selected)) {
                 mapPreview.src = `/assets/backgrounds/${selected}.png`;
                 mapPreview.alt = `${tr('연습 맵 미리보기')} · ${this.getMapDisplayName(selected)}`;
             }
-            if (mapName && /^map(?:[1-9]|1[01])$/.test(selected)) {
+            if (mapName && /^map(?:[1-9]|1[0-6])$/.test(selected)) {
                 mapName.textContent = this.getMapDisplayName(selected);
             }
         };
@@ -13651,7 +11953,7 @@ export class GameScene extends Phaser.Scene {
                     mapSelect?.value ??
                     'map1';
 
-                if (/^map(?:[1-9]|1[01])$/.test(selected)) {
+                if (/^map(?:[1-9]|1[0-6])$/.test(selected)) {
                     this.practiceMap = selected;
                     syncPracticeMapPreview();
                 }
@@ -15055,331 +13357,6 @@ export class GameScene extends Phaser.Scene {
         )[getLanguage()];
     }
 
-    private getHunterFartCoachCopy(): string {
-        return (
-            {
-                ko: '💨 수상하다면 방구 탐지!',
-                ja: '💨 怪しいと思ったら、おなら探知！',
-                en: '💨 Suspicious? Use fart detection!',
-                zh: '💨 觉得可疑？用放屁探测！',
-            } as const
-        )[getLanguage()];
-    }
-
-    private destroyHunterFartCoach(): void {
-        this.hunterFartCoachBubble
-            ?.remove();
-        this.mobileFartCoachBubble
-            ?.remove();
-
-        this.hunterFartCoachBubble =
-            undefined;
-        this.mobileFartCoachBubble =
-            undefined;
-
-        window.clearTimeout(
-            this.fartCoachTimer,
-        );
-        this.fartCoachTimer =
-            undefined;
-    }
-
-    private createHunterFartCoach(): void {
-        this.destroyHunterFartCoach();
-
-        if (
-            !this.isMultiplayerSession() ||
-            multiplayerClient
-                .getLocalPlayer()
-                ?.role !== 'hunter' ||
-            this.phase !== 'hunt'
-        ) {
-            return;
-        }
-
-        const bubble =
-            document.createElement(
-                'div',
-            );
-
-        bubble.textContent =
-            this.getHunterFartCoachCopy();
-
-        Object.assign(
-            bubble.style,
-            {
-                position: 'fixed',
-                zIndex: '7600',
-                maxWidth:
-                    this.mobileControlsEnabled
-                        ? '390px'
-                        : '430px',
-                minWidth:
-                    this.mobileControlsEnabled
-                        ? '250px'
-                        : '300px',
-                boxSizing: 'border-box',
-                padding:
-                    this.mobileControlsEnabled
-                        ? '12px 18px'
-                        : '13px 20px',
-                border:
-                    '2px solid #2f8f72',
-                borderRadius: '17px',
-                background:
-                    'rgba(248,255,240,.98)',
-                color: '#21493c',
-                boxShadow:
-                    '0 6px 18px rgba(16,50,38,.24)',
-                fontFamily:
-                    'Arial, sans-serif',
-                fontWeight: '900',
-                fontSize:
-                    this.mobileControlsEnabled
-                        ? '17px'
-                        : '16px',
-                lineHeight: '1.3',
-                textAlign: 'center',
-                pointerEvents: 'none',
-                opacity: '1',
-                transition:
-                    'opacity 500ms ease, transform 500ms ease',
-                whiteSpace: 'nowrap',
-            },
-        );
-
-        const pointer =
-            document.createElement(
-                'span',
-            );
-
-        Object.assign(
-            pointer.style,
-            {
-                position: 'absolute',
-                width: '0',
-                height: '0',
-            },
-        );
-
-        bubble.appendChild(
-            pointer,
-        );
-
-        document.body.appendChild(
-            bubble,
-        );
-
-        if (this.mobileControlsEnabled) {
-            this.mobileFartCoachBubble =
-                bubble;
-        } else {
-            this.hunterFartCoachBubble =
-                bubble;
-        }
-
-        const placeBubble =
-            (): void => {
-                if (
-                    !bubble.isConnected
-                ) {
-                    return;
-                }
-
-                if (
-                    this.phase !== 'hunt'
-                ) {
-                    bubble.remove();
-
-                    if (
-                        this.hunterFartCoachBubble ===
-                        bubble
-                    ) {
-                        this.hunterFartCoachBubble =
-                            undefined;
-                    }
-
-                    if (
-                        this.mobileFartCoachBubble ===
-                        bubble
-                    ) {
-                        this.mobileFartCoachBubble =
-                            undefined;
-                    }
-
-                    return;
-                }
-
-                const rect =
-                    this.game.canvas
-                        .getBoundingClientRect();
-
-                const scaleX =
-                    rect.width /
-                    this.gameWidth;
-                const scaleY =
-                    rect.height /
-                    this.gameHeight;
-
-                if (
-                    this.mobileControlsEnabled
-                ) {
-                    const gasX =
-                        rect.left +
-                        (this.gameWidth - 64) *
-                            scaleX;
-                    const gasY =
-                        rect.top +
-                        (
-                            this.gameHeight -
-                            190 -
-                            112
-                        ) *
-                            scaleY;
-
-                    bubble.style.left =
-                        `${Math.round(
-                            gasX -
-                            18,
-                        )}px`;
-                    bubble.style.top =
-                        `${Math.round(
-                            gasY -
-                            6,
-                        )}px`;
-                    bubble.style.transform =
-                        'translate(-100%, -50%)';
-
-                    Object.assign(
-                        pointer.style,
-                        {
-                            right: '-12px',
-                            top: '50%',
-                            borderTop:
-                                '9px solid transparent',
-                            borderBottom:
-                                '9px solid transparent',
-                            borderLeft:
-                                '12px solid #2f8f72',
-                            transform:
-                                'translateY(-50%)',
-                        },
-                    );
-                } else {
-                    /*
-                     * Desktop bottom controls hint is centered near the bottom.
-                     * Bubble sits on its RIGHT, visually pointing at SPACE.
-                     */
-                    const hintRect =
-                        this.hunterControlsBottomHint
-                            ?.getBoundingClientRect();
-
-                    if (hintRect) {
-                        bubble.style.left =
-                            `${Math.round(
-                                hintRect.right +
-                                18,
-                            )}px`;
-                        bubble.style.top =
-                            `${Math.round(
-                                hintRect.top +
-                                hintRect.height /
-                                    2,
-                            )}px`;
-                        bubble.style.transform =
-                            'translateY(-50%)';
-
-                        Object.assign(
-                            pointer.style,
-                            {
-                                left: '-12px',
-                                top: '50%',
-                                borderTop:
-                                    '9px solid transparent',
-                                borderBottom:
-                                    '9px solid transparent',
-                                borderRight:
-                                    '12px solid #2f8f72',
-                                transform:
-                                    'translateY(-50%)',
-                            },
-                        );
-                    } else {
-                        bubble.style.left =
-                            `${Math.round(
-                                rect.left +
-                                rect.width *
-                                    0.72,
-                            )}px`;
-                        bubble.style.top =
-                            `${Math.round(
-                                rect.bottom -
-                                66,
-                            )}px`;
-                        bubble.style.transform =
-                            'translateY(-50%)';
-                    }
-                }
-            };
-
-        placeBubble();
-        requestAnimationFrame(
-            placeBubble,
-        );
-        window.setTimeout(
-            placeBubble,
-            120,
-        );
-
-        this.fartCoachTimer =
-            window.setTimeout(
-                () => {
-                    if (
-                        !bubble.isConnected
-                    ) {
-                        return;
-                    }
-
-                    if (
-                        this.phase !== 'hunt'
-                    ) {
-                        bubble.remove();
-                        return;
-                    }
-
-                    bubble.style.opacity =
-                        '0';
-                    bubble.style.transform +=
-                        ' translateY(-4px)';
-
-                    window.setTimeout(
-                        () => {
-                            bubble.remove();
-
-                            if (
-                                this.hunterFartCoachBubble ===
-                                bubble
-                            ) {
-                                this.hunterFartCoachBubble =
-                                    undefined;
-                            }
-
-                            if (
-                                this.mobileFartCoachBubble ===
-                                bubble
-                            ) {
-                                this.mobileFartCoachBubble =
-                                    undefined;
-                            }
-                        },
-                        520,
-                    );
-                },
-                5200,
-            );
-    }
-
-
     private resetHunterControlsHintFade(): void {
         this.hunterControlsHintMoveStartedAt = 0;
     }
@@ -15447,7 +13424,6 @@ export class GameScene extends Phaser.Scene {
     private destroyHunterControlsBottomHint(): void {
         this.hunterControlsBottomHint?.remove();
         this.hunterControlsBottomHint = undefined;
-        this.destroyHunterFartCoach();
         this.resetHunterControlsHintFade();
     }
 
@@ -17428,61 +15404,6 @@ export class GameScene extends Phaser.Scene {
         );
 
         /*
-         * V1010374_INVITE_GONE_ROOM_GUARD:
-         * The room can disappear after the invite page was opened and even
-         * after the nickname modal appeared. Check again immediately before
-         * Colyseus joinById so a stale invite can never sit on "Joining..."
-         * forever.
-         */
-        try {
-            const status =
-                await multiplayerClient
-                    .getRoomStatus(
-                        roomId,
-                    );
-
-            if (!status.exists) {
-                this.pendingInviteRoomId =
-                    '';
-                this.pendingInvitePrivate =
-                    false;
-
-                this.clearInviteRoomFromAddressBar();
-                this.setModalBusy(
-                    false,
-                );
-                this.closeMenuModal();
-                this.showMainMenu();
-                this.showInviteRoomGoneModal();
-                return;
-            }
-
-            if (
-                status.phase !==
-                    'lobby'
-            ) {
-                this.pendingInviteRoomId =
-                    '';
-                this.pendingInvitePrivate =
-                    false;
-
-                this.clearInviteRoomFromAddressBar();
-                this.setModalBusy(
-                    false,
-                );
-                this.closeMenuModal();
-                this.showMainMenu();
-                this.showInviteGameInProgressModal();
-                return;
-            }
-        } catch (error) {
-            console.warn(
-                '[Color Hunt] final room-status check failed; using server join guard',
-                error,
-            );
-        }
-
-        /*
          * 페이지 reload를 제거합니다.
          * 기존 joinFromCleanBoot의 안정화된 snapshot/local-player 복구 로직은
          * 그대로 사용하되 현재 Scene에서 직접 실행합니다.
@@ -19165,36 +17086,6 @@ export class GameScene extends Phaser.Scene {
          * Recreate that UX inside the DOM avatar editor so the finger never
          * hides the actual tool position.
          */
-        let avatarPaintInputMode:
-            'finger' |
-            'brush' = 'finger';
-
-        /*
-         * V1010384_AVATAR_BRUSH_HOLD_TO_PAINT:
-         * Brush mode can be moved freely without painting. Holding still at
-         * the intended tip for a short moment arms painting.
-         */
-        let avatarBrushHoldTimer:
-            number |
-            undefined;
-        let avatarBrushHoldReady =
-            false;
-
-        const clearAvatarBrushHold =
-            (): void => {
-                if (
-                    avatarBrushHoldTimer !==
-                        undefined
-                ) {
-                    window.clearTimeout(
-                        avatarBrushHoldTimer,
-                    );
-                }
-
-                avatarBrushHoldTimer =
-                    undefined;
-            };
-
         const floatingTool =
             document.createElement(
                 'div',
@@ -19345,146 +17236,6 @@ export class GameScene extends Phaser.Scene {
             floatingTool,
         );
 
-        const avatarModeButton =
-            document.createElement(
-                'button',
-            );
-
-        avatarModeButton.type =
-            'button';
-
-        Object.assign(
-            avatarModeButton.style,
-            {
-                position: 'absolute',
-                left: '8px',
-                top: '8px',
-                zIndex: '24',
-                minWidth: '108px',
-                minHeight: '40px',
-                padding: '6px 9px',
-                border: '2px solid #5c8f66',
-                borderRadius: '11px',
-                background: 'rgba(223,247,230,.66)',
-                color: '#26352b',
-                fontWeight: '900',
-                fontSize: '12px',
-                lineHeight: '1.15',
-                whiteSpace: 'pre-line',
-                touchAction: 'manipulation',
-            },
-        );
-
-        const syncAvatarModeButton =
-            (): void => {
-                const language =
-                    getLanguage();
-
-                avatarModeButton.textContent =
-                    avatarPaintInputMode ===
-                        'finger'
-                        ? (
-                            language === 'ja'
-                                ? '☝ 指で描く\n↔ 切替'
-                                : language === 'en'
-                                    ? '☝ Finger Paint\n↔ Switch'
-                                    : language === 'zh'
-                                        ? '☝ 手指绘制\n↔ 切换'
-                                        : '☝ 손가락 그리기\n↔ 전환'
-                        )
-                        : (
-                            language === 'ja'
-                                ? '🖌 精密ブラシ\n↔ 切替'
-                                : language === 'en'
-                                    ? '🖌 Precision Brush\n↔ Switch'
-                                    : language === 'zh'
-                                        ? '🖌 精细画笔\n↔ 切换'
-                                        : '🖌 정밀붓 그리기\n↔ 전환'
-                        );
-
-                avatarModeButton.style
-                    .background =
-                    avatarPaintInputMode ===
-                        'finger'
-                        ? 'rgba(223,247,230,.66)'
-                        : 'rgba(255,244,214,.66)';
-
-                if (
-                    avatarPaintInputMode ===
-                        'finger'
-                ) {
-                    /*
-                     * Hard reset all visual/tool ownership when returning to
-                     * direct finger painting. No brush/dropper ghost may remain.
-                     */
-                    floatingTool.style.display =
-                        'none';
-                    floatingTool.innerHTML =
-                        brushCursorSvg;
-
-                    /*
-                     * V1010384E_AVATAR_EDITOR_OPEN_FIX:
-                     * syncAvatarModeButton() runs once during editor creation,
-                     * before avatarEyedropperPointerId is initialized later in
-                     * this function. Touching it here caused a TDZ ReferenceError
-                     * and aborted opening the editor on both PC and mobile.
-                     */
-                }
-            };
-
-        avatarModeButton.addEventListener(
-            'pointerdown',
-            (event) => {
-                event.preventDefault();
-                event.stopPropagation();
-
-                if (
-                    avatarBrushHoldTimer !==
-                        undefined
-                ) {
-                    window.clearTimeout(
-                        avatarBrushHoldTimer,
-                    );
-                    avatarBrushHoldTimer =
-                        undefined;
-                }
-
-                drawing = false;
-                paintStarted = false;
-                pendingPointerId = -1;
-                pendingStartScreen =
-                    undefined;
-                currentPoints = [];
-                avatarBrushHoldReady =
-                    false;
-
-                avatarPaintInputMode =
-                    avatarPaintInputMode ===
-                        'finger'
-                        ? 'brush'
-                        : 'finger';
-
-                /*
-                 * Pipette is never carried across mode changes. The selected
-                 * paint color and Circle/Square shape remain intact.
-                 */
-                eyedropperArmed =
-                    false;
-                avatarEyedropperPointerId =
-                    -1;
-
-                syncAvatarModeButton();
-                refreshToolStates();
-                replay();
-            },
-        );
-
-        canvasFrame.appendChild(
-            avatarModeButton,
-        );
-
-        syncAvatarModeButton();
-
         /*
          * V1010350_AVATAR_EDITOR_FULL_PAINT_PARITY / TOOL_TIP_COORDINATE
          *
@@ -19514,9 +17265,7 @@ export class GameScene extends Phaser.Scene {
                 y: number;
             } => {
                 if (
-                    !this.mobileControlsEnabled ||
-                    avatarPaintInputMode ===
-                        'finger'
+                    !this.mobileControlsEnabled
                 ) {
                     return {
                         x: clientX,
@@ -19553,9 +17302,7 @@ export class GameScene extends Phaser.Scene {
                 clientY: number,
             ): void => {
                 if (
-                    !this.mobileControlsEnabled ||
-                    avatarPaintInputMode ===
-                        'finger'
+                    !this.mobileControlsEnabled
                 ) {
                     floatingTool.style
                         .display =
@@ -20801,9 +18548,7 @@ export class GameScene extends Phaser.Scene {
                 floatingTool.style.top =
                     `calc(50% - ${90 * avatarMobileToolScale}px)`;
                 floatingTool.style.display =
-                    this.mobileControlsEnabled &&
-                    avatarPaintInputMode ===
-                        'brush'
+                    this.mobileControlsEnabled
                         ? 'flex'
                         : 'none';
 
@@ -20914,9 +18659,6 @@ export class GameScene extends Phaser.Scene {
 
                 drawing = false;
                 paintStarted = false;
-                clearAvatarBrushHold();
-                avatarBrushHoldReady =
-                    false;
                 straightLineStart =
                     undefined;
 
@@ -21143,55 +18885,6 @@ export class GameScene extends Phaser.Scene {
                 currentPoints = [
                     downLogical,
                 ];
-
-                clearAvatarBrushHold();
-                avatarBrushHoldReady =
-                    avatarPaintInputMode !==
-                        'brush' ||
-                    !this.mobileControlsEnabled;
-
-                if (
-                    this.mobileControlsEnabled &&
-                    avatarPaintInputMode ===
-                        'brush'
-                ) {
-                    avatarBrushHoldTimer =
-                        window.setTimeout(
-                            () => {
-                                if (
-                                    !drawing ||
-                                    pendingPointerId !==
-                                        event.pointerId ||
-                                    activePointers.size !==
-                                        1
-                                ) {
-                                    return;
-                                }
-
-                                avatarBrushHoldReady =
-                                    true;
-                                paintStarted =
-                                    true;
-
-                                const holdPoint =
-                                    avatarToolTipToLogical(
-                                        event.clientX,
-                                        event.clientY,
-                                    );
-
-                                currentPoints = [
-                                    holdPoint,
-                                ];
-
-                                straightLineStart =
-                                    holdPoint;
-
-                                replay();
-                            },
-                            520,
-                        );
-                }
-
                 replay();
             },
         );
@@ -21268,71 +18961,8 @@ export class GameScene extends Phaser.Scene {
                         );
 
                     /*
-                     * Precision brush parity with the in-game painter:
-                     * move freely first, hold at the desired location, then draw.
-                     */
-                    if (
-                        this.mobileControlsEnabled &&
-                        avatarPaintInputMode ===
-                            'brush' &&
-                        !avatarBrushHoldReady
-                    ) {
-                        if (moved >= 3) {
-                            pendingStartScreen = {
-                                x: event.clientX,
-                                y: event.clientY,
-                            };
-
-                            currentPoints = [
-                                avatarToolTipToLogical(
-                                    event.clientX,
-                                    event.clientY,
-                                ),
-                            ];
-
-                            clearAvatarBrushHold();
-
-                            avatarBrushHoldTimer =
-                                window.setTimeout(
-                                    () => {
-                                        if (
-                                            !drawing ||
-                                            pendingPointerId !==
-                                                event.pointerId ||
-                                            activePointers.size !==
-                                                1
-                                        ) {
-                                            return;
-                                        }
-
-                                        avatarBrushHoldReady =
-                                            true;
-                                        paintStarted =
-                                            true;
-
-                                        const holdPoint =
-                                            avatarToolTipToLogical(
-                                                event.clientX,
-                                                event.clientY,
-                                            );
-
-                                        currentPoints = [
-                                            holdPoint,
-                                        ];
-                                        straightLineStart =
-                                            holdPoint;
-                                        replay();
-                                    },
-                                    520,
-                                );
-                        }
-
-                        replay();
-                        return;
-                    }
-
-                    /*
-                     * Finger mode / desktop: movement starts painting normally.
+                     * Same safety philosophy as in-game mobile paint:
+                     * touch first = preview, actual paint after movement.
                      */
                     if (moved < 1) {
                         replay();
@@ -21479,24 +19109,6 @@ export class GameScene extends Phaser.Scene {
                     avatarEyedropperPointerId =
                         -1;
 
-                    /*
-                     * Eyedropper is a one-shot sampling action in the avatar
-                     * editor too. Return to the existing Circle/Square brush.
-                     */
-                    eyedropperArmed =
-                        false;
-
-                    floatingTool.innerHTML =
-                        brushCursorSvg;
-
-                    if (
-                        avatarPaintInputMode ===
-                            'finger'
-                    ) {
-                        floatingTool.style.display =
-                            'none';
-                    }
-
                     refreshToolStates();
                     replay();
                 }
@@ -21540,15 +19152,8 @@ export class GameScene extends Phaser.Scene {
                             ? dropperCursorSvg
                             : brushCursorSvg;
 
-                    /*
-                     * Finger mode owns no floating brush/pipette artwork.
-                     * This fixes stale visuals after repeatedly toggling modes.
-                     */
                     floatingTool.style.display =
-                        avatarPaintInputMode ===
-                            'brush'
-                            ? 'flex'
-                            : 'none';
+                        'flex';
 
                     replay();
                 }
@@ -21997,8 +19602,8 @@ export class GameScene extends Phaser.Scene {
         toolRow.append(
             circleTool,
             squareTool,
-            straightTool,
             eyedropperTool,
+            straightTool,
         );
 
         refreshToolStates();
@@ -22963,20 +20568,13 @@ export class GameScene extends Phaser.Scene {
         set(
             practiceCopy,
             'grid-template-rows',
-            getLanguage() === 'en'
-                ? '18px 20px'
-                : '20px 16px',
+            '20px 16px',
         );
         set(practiceCopy, 'align-items', 'center');
         set(practiceCopy, 'column-gap', '6px');
         set(practiceCopy, 'row-gap', '1px');
         set(practiceCopy, 'min-width', '0');
-        set(practiceCopy, 'overflow', 'visible');
-
-        const practiceCardLanguage =
-            getLanguage();
-        const practiceEnglish =
-            practiceCardLanguage === 'en';
+        set(practiceCopy, 'overflow', 'hidden');
 
         const practiceBadge =
             practice
@@ -22985,15 +20583,8 @@ export class GameScene extends Phaser.Scene {
                 ) ??
             null;
 
-        set(
-            practiceBadge,
-            'font-size',
-            practiceEnglish
-                ? '8px'
-                : '10px',
-        );
+        set(practiceBadge, 'font-size', '10px');
         set(practiceBadge, 'white-space', 'nowrap');
-        set(practiceBadge, 'line-height', '1');
 
         const practiceStrong =
             practice
@@ -23002,24 +20593,9 @@ export class GameScene extends Phaser.Scene {
                 ) ??
             null;
 
-        set(
-            practiceStrong,
-            'font-size',
-            practiceEnglish
-                ? '13px'
-                : '17px',
-        );
-        set(
-            practiceStrong,
-            'line-height',
-            practiceEnglish
-                ? '16px'
-                : '20px',
-        );
+        set(practiceStrong, 'font-size', '17px');
+        set(practiceStrong, 'line-height', '20px');
         set(practiceStrong, 'white-space', 'nowrap');
-        set(practiceStrong, 'overflow', 'visible');
-        set(practiceStrong, 'text-overflow', 'clip');
-        set(practiceStrong, 'letter-spacing', practiceEnglish ? '-0.02em' : '');
 
         const practiceSmall =
             practice
@@ -23029,70 +20605,10 @@ export class GameScene extends Phaser.Scene {
             null;
 
         set(practiceSmall, 'grid-column', '1 / -1');
-        set(
-            practiceSmall,
-            'font-size',
-            practiceEnglish
-                ? '8px'
-                : '10px',
-        );
-        set(
-            practiceSmall,
-            'line-height',
-            practiceEnglish
-                ? '9px'
-                : '16px',
-        );
-        set(
-            practiceSmall,
-            'white-space',
-            practiceEnglish
-                ? 'normal'
-                : 'nowrap',
-        );
-        set(
-            practiceSmall,
-            'overflow',
-            practiceEnglish
-                ? 'visible'
-                : 'hidden',
-        );
-        set(practiceSmall, 'text-overflow', 'clip');
-        set(
-            practiceSmall,
-            'display',
-            practiceEnglish
-                ? '-webkit-box'
-                : 'block',
-        );
-        set(
-            practiceSmall,
-            '-webkit-box-orient',
-            practiceEnglish
-                ? 'vertical'
-                : '',
-        );
-        set(
-            practiceSmall,
-            '-webkit-line-clamp',
-            practiceEnglish
-                ? '2'
-                : '',
-        );
-        set(
-            practiceSmall,
-            'overflow-wrap',
-            practiceEnglish
-                ? 'normal'
-                : '',
-        );
-        set(
-            practiceSmall,
-            'word-break',
-            practiceEnglish
-                ? 'normal'
-                : '',
-        );
+        set(practiceSmall, 'font-size', '10px');
+        set(practiceSmall, 'line-height', '16px');
+        set(practiceSmall, 'white-space', 'nowrap');
+        set(practiceSmall, 'overflow', 'hidden');
 
         const guide =
             root.querySelector<HTMLElement>(
@@ -25187,9 +22703,6 @@ export class GameScene extends Phaser.Scene {
         this.waitingRoomMapText =
             root.querySelector('.ch-waiting-map-text') ?? undefined;
 
-        multiplayerClient
-            .requestLobbyReadyState();
-
         this.waitingRoomPaintButtons =
             Array.from(
                 root.querySelectorAll<HTMLButtonElement>(
@@ -25270,49 +22783,11 @@ export class GameScene extends Phaser.Scene {
                 'click',
                 () => {
                     if (
-                        multiplayerClient.getPhase() !==
-                        'lobby'
+                        multiplayerClient.isHost() &&
+                        multiplayerClient.getPhase() === 'lobby'
                     ) {
-                        return;
+                        multiplayerClient.sendStartGame();
                     }
-
-                    if (
-                        multiplayerClient.isHost()
-                    ) {
-                        const readyState =
-                            multiplayerClient
-                                .getLobbyReadyState();
-
-                        if (
-                            readyState.canStart
-                        ) {
-                            multiplayerClient
-                                .sendStartGame();
-                        }
-                        return;
-                    }
-
-                    const readyState =
-                        multiplayerClient
-                            .getLobbyReadyState();
-
-                    const localSessionId =
-                        multiplayerClient
-                            .getSessionId();
-
-                    const localReady =
-                        Boolean(
-                            localSessionId &&
-                            readyState.readySessionIds
-                                .includes(
-                                    localSessionId,
-                                ),
-                        );
-
-                    multiplayerClient
-                        .sendLobbyReady(
-                            !localReady,
-                        );
                 },
             );
 
@@ -26425,59 +23900,13 @@ export class GameScene extends Phaser.Scene {
             this.waitingRoomRoot.querySelector<
                 HTMLButtonElement
             >('.ch-waiting-start');
-
         if (start) {
-            const readyState =
-                multiplayerClient
-                    .getLobbyReadyState();
-
-            const localSessionId =
-                multiplayerClient
-                    .getSessionId();
-
-            const localReady =
-                Boolean(
-                    localSessionId &&
-                    readyState.readySessionIds
-                        .includes(
-                            localSessionId,
-                        ),
-                );
-
-            const progress =
-                `${readyState.readyCount}/${readyState.totalCount}`;
-
-            if (isHost) {
-                start.textContent =
-                    `▶ ${tr('게임 시작')} · ${progress}`;
-
-                start.disabled =
-                    !readyState.canStart;
-
-                start.classList.toggle(
-                    'is-disabled',
-                    !readyState.canStart,
-                );
-                start.classList.remove(
-                    'is-ready',
-                );
-            } else {
-                start.textContent =
-                    localReady
-                        ? `✓ ${tr('준비 취소')} · ${progress}`
-                        : `✓ ${tr('준비완료')} · ${progress}`;
-
-                start.disabled =
-                    false;
-
-                start.classList.remove(
-                    'is-disabled',
-                );
-                start.classList.toggle(
-                    'is-ready',
-                    localReady,
-                );
-            }
+            start.disabled =
+                !isHost;
+            start.classList.toggle(
+                'is-disabled',
+                !isHost,
+            );
         }
 
         this.waitingRoomRoot
@@ -26664,7 +24093,7 @@ export class GameScene extends Phaser.Scene {
                     }
 
                     const match =
-                        /^map(?:[1-9]|1[01])$/
+                        /^map(?:[1-9]|1[0-6])$/
                             .exec(
                                 rawSelected,
                             );
@@ -27633,6 +25062,16 @@ export class GameScene extends Phaser.Scene {
                     '낙서 세상',
                 map11:
                     '무지개 세상',
+                map12:
+                    '여행의 나라',
+                map13:
+                    '디저트의 나라',
+                map14:
+                    '랜드마크의 나라',
+                map15:
+                    '대충의 나라',
+                map16:
+                    '스틱액션의 나라',
             };
 
         const key =
@@ -27651,7 +25090,7 @@ export class GameScene extends Phaser.Scene {
         mapName: string,
     ): string {
         const match =
-            /^map([1-9]|1[0-2])$/.exec(
+            /^map([1-9]|1[0-6])$/.exec(
                 mapName,
             );
 
@@ -32837,18 +30276,6 @@ export class GameScene extends Phaser.Scene {
     ): void {
         this.phaseExpiredSince = 0;
 
-        /*
-         * V1010379_FART_COACH_HUNT_ONLY:
-         * The fart tutorial is valid ONLY during Hunt. Kill it before handling
-         * victory / finished / lobby so mobile and desktop cannot show the
-         * delayed coach after the round has already ended.
-         */
-        if (
-            phase !== 'hunt'
-        ) {
-            this.destroyHunterFartCoach();
-        }
-
         const remainingMs =
             Math.max(
                 0,
@@ -32877,42 +30304,9 @@ export class GameScene extends Phaser.Scene {
             this.paintReadyHiderCount = 0;
             this.paintReadyButton
                 ?.setVisible(false);
-
-            /*
-             * V1010378_PAINT_READY_PHASE_OWNERSHIP:
-             * The visible READY control is DOM-backed. Hiding only the legacy
-             * Phaser text leaves a stale "Hider ready" button after a forced
-             * disconnect / Finished -> Lobby transition.
-             *
-             * READY belongs to Paint only. Every other phase hard-hides it.
-             */
-            if (
-                this.paintReadyDomButton
-            ) {
-                this.paintReadyDomButton.hidden =
-                    true;
-                this.paintReadyDomButton.style
-                    .display =
-                    'none';
-            }
         }
 
         if (phase === 'lobby') {
-            /*
-             * V1010378_PAINT_READY_PHASE_OWNERSHIP:
-             * Lobby can be reached through several recovery/end-of-round paths.
-             * Make stale Paint READY impossible regardless of callback order.
-             */
-            if (
-                this.paintReadyDomButton
-            ) {
-                this.paintReadyDomButton.hidden =
-                    true;
-                this.paintReadyDomButton.style
-                    .display =
-                    'none';
-            }
-
             /*
              * V1010300_CLIENT_MOBILE_UI_GHOST_GAS_FIX: GAS belongs to one Hunt only.
              * Never carry the previous Hunter's pressure into Lobby/next round.
@@ -33238,25 +30632,76 @@ export class GameScene extends Phaser.Scene {
             this.finishActivePaintStroke();
             this.isPainting = false;
 
-            /*
-             * V1010370_ATOMIC_HUNT_VISUAL_HANDOFF:
-             *
-             * Healthy Paint -> Hunt must preserve the exact raster currently on
-             * screen. Do NOT rebuild local paint, replay network paint, snap every
-             * Hider to a neutral pose, or broadly toggle visibility before Hunt
-             * owns the scene.
-             *
-             * The last active stroke was already flushed by
-             * finishActivePaintStroke(). Existing RenderTextures are carried
-             * forward unchanged.
-             */
+            if (
+                this.networkPlayerManager
+                    .isLocalHider() &&
+                this.localPaintHistory.length > 0
+            ) {
+                /*
+                 * V1010338_CRITICAL_GAMEPLAY_TRIPLE_FIX / HUNT_PAINT_FINAL_SNAPSHOT
+                 *
+                 * Server rejects ordinary paint_stroke after phase becomes Hunt.
+                 * Do NOT try to rebroadcast final camouflage through that path.
+                 *
+                 * 1) Rebuild the local raster exactly from complete history.
+                 * 2) Send the complete history through restore_local_paint,
+                 *    which is explicitly accepted during Hunt and replaces the
+                 *    authoritative round snapshot for this Hider.
+                 */
+                this.rebuildLocalPaintFromHistory(
+                    false,
+                );
+
+                multiplayerClient
+                    .sendReconnectPaintSnapshot(
+                        this.localPaintHistory,
+                    );
+
+                /*
+                 * Ask for one convergence snapshot after opponents/server had
+                 * time to process the replacement. This is cheap and prevents
+                 * an early Hunt render from staying on an older partial image.
+                 */
+                this.time.delayedCall(
+                    260,
+                    () => {
+                        if (
+                            this.phase ===
+                            'hunt' &&
+                            this.isMultiplayerSession()
+                        ) {
+                            multiplayerClient
+                                .requestRoundPaintState();
+                        }
+                    },
+                );
+            }
+
             this.clearStatus();
+
 
             this.phaseText
                 .setText('')
                 .setVisible(false);
 
+            this.networkPlayerManager
+                .syncLobbyPositionsFromState();
+
+            this.networkPlayerManager
+                .normalizeLocalPlayerForGameplay();
+
+            /*
+             * Paint -> Hunt 전환 프레임에서 이전 걷기 pose/sub-pixel 좌표가
+             * 남아 있으면 픽셀 위장이 몸체와 어긋나 보입니다.
+             * 모든 Hider를 즉시 neutral pose + 동일 픽셀 기준으로 고정합니다.
+             */
+            this.networkPlayerManager
+                .stabilizeHidersForHunt();
+
             this.resetPaintWorldZoom();
+
+            this.networkPlayerManager
+                .restoreAllPlayerVisibility();
 
             this.setHunterPaintBlind(false);
             this.setPaintPaletteVisible(false);
@@ -33273,10 +30718,53 @@ export class GameScene extends Phaser.Scene {
             this.startGameplayCamera();
 
             /*
-             * V1010370_ATOMIC_HUNT_VISUAL_HANDOFF:
-             * No post-Hunt paint rebuild/visibility pulse. The frame that enters
-             * Hunt is also the final camouflage frame.
+             * V1010344B_HIDER_SELF_PAINT_HUNT_SETTLE
+             *
+             * Opponents can already have the correct camouflage while the
+             * owner's local RenderTexture is blank after Paint -> Hunt.
+             *
+             * Replay localPaintHistory locally only. broadcast=false means
+             * zero paint_stroke network traffic and no server state changes.
+             *
+             * Multiple short settle passes protect against late Hunt
+             * normalization / visibility callbacks overwriting the local
+             * texture during the transition.
              */
+            if (
+                this.networkPlayerManager
+                    .isLocalHider() &&
+                this.localPaintHistory.length > 0
+            ) {
+                [0, 120, 360].forEach(
+                    (delay) => {
+                        this.time.delayedCall(
+                            delay,
+                            () => {
+                                if (
+                                    this.phase !== 'hunt' ||
+                                    !this.networkPlayerManager
+                                        .isLocalHider() ||
+                                    this.localPaintHistory
+                                        .length < 1
+                                ) {
+                                    return;
+                                }
+
+                                this.rebuildLocalPaintFromHistory(
+                                    false,
+                                );
+
+                                this.networkPlayerManager
+                                    .normalizeLocalPlayerForGameplay();
+
+                                this.networkPlayerManager
+                                    .restoreAllPlayerVisibility();
+                            },
+                        );
+                    },
+                );
+            }
+
             this.phaseEndTime =
                 this.time.now +
                 remainingMs;
@@ -34392,9 +31880,9 @@ export class GameScene extends Phaser.Scene {
 
         const panel = this.add
             .rectangle(
-                380,
+                345,
                 this.gameHeight - 64,
-                740,
+                670,
                 this.mobileControlsEnabled
                     ? 126
                     : 110,
@@ -34653,8 +32141,6 @@ export class GameScene extends Phaser.Scene {
                     () => {
                         this.eyedropperArmed =
                             false;
-                        this.straightLineToolSelected =
-                            false;
                         this.hideEyedropperMagnifier();
                         this.brushShape =
                             option.shape;
@@ -34676,81 +32162,13 @@ export class GameScene extends Phaser.Scene {
             },
         );
 
-        this.straightLineToolButton =
-            this.add.text(
-                475,
-                this.gameHeight - 78,
-                this.mobileControlsEnabled
-                    ? `╱\n${tr('직선')}`
-                    : `╱ ${tr('직선')}`,
-                {
-                    fontFamily: 'monospace',
-                    fontSize:
-                        this.mobileControlsEnabled
-                            ? '12px'
-                            : '10px',
-                    fontStyle: 'bold',
-                    color: '#26352b',
-                    backgroundColor: '#e9f0dc',
-                    padding: {
-                        x: 5,
-                        y:
-                            this.mobileControlsEnabled
-                                ? 3
-                                : 4,
-                    },
-                },
-            )
-                .setOrigin(0.5)
-                .setFixedSize(
-                    this.mobileControlsEnabled
-                        ? 70
-                        : 68,
-                    this.mobileControlsEnabled
-                        ? 48
-                        : 28,
-                )
-                .setAlign('center')
-                .setDepth(873)
-                .setVisible(false)
-                .setInteractive({
-                    useHandCursor: true,
-                });
-
-        this.straightLineToolButton.on(
-            'pointerdown',
-            (
-                pointer:
-                    Phaser.Input.Pointer,
-            ) => {
-                pointer.event
-                    ?.preventDefault?.();
-                pointer.event
-                    ?.stopPropagation?.();
-
-                this.finishActivePaintStroke();
-                this.isPainting = false;
-                this.eyedropperArmed = false;
-                this.eyedropperPointerId = -1;
-                this.straightLineToolSelected = true;
-                this.straightLineModeActive = false;
-                this.clearStraightLinePreview();
-                this.hideEyedropperMagnifier();
-                this.updateEyedropperButtonUi();
-                this.syncMobilePaintDockUi();
-            },
-        );
-
-        this.paletteObjects.push(
-            this.straightLineToolButton,
-        );
-
         /*
-         * Explicit line tool now occupies the third tool slot.
+         * Pixel brush is no longer exposed in the palette.  Its old third
+         * slot is now a touch-friendly eyedropper button.
          */
         this.eyedropperButton =
             this.add.text(
-                550,
+                475,
                 this.gameHeight - 78,
                 this.mobileControlsEnabled
                     ? `💧\n${tr('스포이드')}`
@@ -34802,8 +32220,6 @@ export class GameScene extends Phaser.Scene {
 
                 this.finishActivePaintStroke();
                 this.isPainting = false;
-                this.straightLineToolSelected =
-                    false;
                 this.eyedropperPointerId = -1;
 
                 const localIsHunter =
@@ -34850,7 +32266,7 @@ export class GameScene extends Phaser.Scene {
 
         this.undoPaintButton =
             this.add.text(
-                625,
+                555,
                 this.gameHeight - 78,
                 `↶ ${tr('되돌리기')}`,
                 {
@@ -34925,7 +32341,7 @@ export class GameScene extends Phaser.Scene {
 
         this.redoPaintButton =
             this.add.text(
-                700,
+                635,
                 this.gameHeight - 78,
                 `↷ ${tr('다시 실행')}`,
                 {
@@ -35261,8 +32677,6 @@ export class GameScene extends Phaser.Scene {
      * eyedropper graphic remains frozen at its old position.
      */
     private activateMobileEyedropperTool(): void {
-        this.mobileFingerImmediatePaintNextTouch =
-            false;
         this.stopMobileNativeEyedropperDrag();
 
         this.finishActivePaintStroke();
@@ -35292,9 +32706,6 @@ export class GameScene extends Phaser.Scene {
         this.mobilePinchDistance = 0;
         this.mobileTouchPoints.clear();
 
-        this.mobileBrushShapeBeforeEyedropper =
-            this.brushShape;
-
         this.eyedropperArmed = true;
         this.eyedropperPointerId = -1;
 
@@ -35322,8 +32733,6 @@ export class GameScene extends Phaser.Scene {
     private activateMobileBrushTool(
         shape: BrushShape,
     ): void {
-        this.mobileFingerImmediatePaintNextTouch =
-            false;
         this.stopMobileNativeEyedropperDrag();
 
         this.finishActivePaintStroke();
@@ -35356,132 +32765,6 @@ export class GameScene extends Phaser.Scene {
         this.updateEyedropperButtonUi();
 
         this.showMobileIdleBrushGuide();
-    }
-
-    private finishMobileEyedropperSelection(): void {
-        if (
-            this.mobilePaintInputMode ===
-                'brush'
-        ) {
-            this.activateMobileBrushTool(
-                this.mobileBrushShapeBeforeEyedropper,
-            );
-            return;
-        }
-
-        /*
-         * V1010384C_FINGER_EYEDROPPER_HANDOFF:
-         *
-         * Finger eyedropper is a one-shot action, but returning through the
-         * generic activateMobileBrushTool() used to call the normal idle-brush
-         * positioning path. That made the Circle/Square preview jump away from
-         * the exact sampled point at finger-up.
-         *
-         * Finger mode therefore performs a lightweight handoff:
-         * - keep the final sampled world point
-         * - restore the previous Circle/Square brush
-         * - keep its preview exactly at that point
-         * - clear every eyedropper/pending pointer state so the VERY NEXT touch
-         *   can paint immediately.
-         */
-        const sampledTarget =
-            this.mobileLastBrushTargetWorld
-                ?.clone();
-
-        this.stopMobileNativeEyedropperDrag();
-
-        this.finishActivePaintStroke();
-        this.isPainting = false;
-
-        this.releaseMobilePaintPointer();
-        this.cancelMobilePaintHoldTimers();
-
-        this.mobilePendingPaintPointerId =
-            -1;
-        this.mobilePendingPaintStartScreen =
-            undefined;
-        this.mobilePendingPaintStartWorld =
-            undefined;
-        this.mobilePaintDotCommitted =
-            false;
-
-        this.eyedropperPointerId = -1;
-        this.eyedropperArmed = false;
-
-        /*
-         * The sampler release itself never paints. The NEXT valid finger-down
-         * paints immediately instead of waiting for movement.
-         */
-        this.mobileFingerImmediatePaintNextTouch =
-            true;
-
-        this.mobilePinchDistance = 0;
-        this.mobilePinchActive = false;
-        this.mobileNativePinchActive = false;
-
-        this.hideEyedropperMagnifier();
-        this.hideMobilePaintPrecisionGuide();
-
-        this.brushShape =
-            this.mobileBrushShapeBeforeEyedropper;
-
-        this.createBrushTexture();
-        this.updatePaintHud();
-        this.highlightBrushShape(
-            this.brushShape,
-        );
-        this.updateEyedropperButtonUi();
-
-        if (
-            sampledTarget &&
-            this.paintPreview
-        ) {
-            this.mobileLastBrushTargetWorld =
-                sampledTarget.clone();
-
-            this.paintPreview
-                .setPosition(
-                    sampledTarget.x,
-                    sampledTarget.y,
-                );
-
-            this.redrawPaintPreview();
-
-            this.paintPreview
-                .setAlpha(0.30)
-                .setVisible(true);
-        }
-
-        /*
-         * Native capture handlers run before Phaser's normal touch-end cleanup.
-         * Clear stale touch ownership in a microtask AFTER this event finishes.
-         * That removes the "first touch after eyedropper does nothing" feeling.
-         */
-        queueMicrotask(
-            () => {
-                if (
-                    this.eyedropperArmed ||
-                    this.mobilePaintInputMode !==
-                        'finger'
-                ) {
-                    return;
-                }
-
-                this.mobileTouchPoints.clear();
-                this.mobilePinchDistance = 0;
-                this.mobilePinchActive = false;
-                this.mobileNativePinchActive = false;
-
-                this.mobilePendingPaintPointerId =
-                    -1;
-                this.mobilePendingPaintStartScreen =
-                    undefined;
-                this.mobilePendingPaintStartWorld =
-                    undefined;
-                this.mobilePaintDotCommitted =
-                    false;
-            },
-        );
     }
 
     private updateEyedropperButtonUi(): void {
@@ -36693,11 +33976,7 @@ export class GameScene extends Phaser.Scene {
     private getPaintInputWorldPoint(
         pointer: Phaser.Input.Pointer,
     ): Phaser.Math.Vector2 {
-        if (
-            !this.mobileControlsEnabled ||
-            this.mobilePaintInputMode ===
-                'finger'
-        ) {
+        if (!this.mobileControlsEnabled) {
             return this.getPointerWorldPoint(
                 pointer,
             );
@@ -36852,43 +34131,6 @@ export class GameScene extends Phaser.Scene {
             this.getPaintPreviewWorldPoint(
                 pointer,
             );
-
-        if (
-            this.mobilePaintInputMode ===
-                'finger'
-        ) {
-            this.mobileLastBrushTargetWorld =
-                target.clone();
-
-            this.paintPreview
-                ?.setPosition(
-                    target.x,
-                    target.y,
-                );
-
-            this.redrawPaintPreview();
-
-            /*
-             * Direct finger mode intentionally has no persistent brush/tool art.
-             * While actively touching, the paint stamp itself may briefly show
-             * beneath the finger; it disappears again on release.
-             */
-            this.paintPreview
-                ?.setAlpha(0.22)
-                .setVisible(
-                    pointer.isDown,
-                );
-
-            this.mobilePaintPrecisionHandle
-                ?.clear()
-                .setVisible(false);
-            this.mobilePaintPrecisionRing
-                ?.setVisible(false);
-            this.mobilePaintPrecisionCrosshair
-                ?.clear()
-                .setVisible(false);
-            return;
-        }
 
         this.mobileLastBrushTargetWorld =
             target.clone();
@@ -37114,8 +34356,6 @@ export class GameScene extends Phaser.Scene {
     private showMobileIdleBrushGuide(): void {
         if (
             !this.mobileControlsEnabled ||
-            this.mobilePaintInputMode !==
-                'brush' ||
             this.phase !== 'paint' ||
             this.eyedropperArmed ||
             this.isPainting ||
@@ -37364,6 +34604,101 @@ export class GameScene extends Phaser.Scene {
             .setVisible(true);
     }
 
+    private showMobileStraightLineReadyFx(
+        pointer: Phaser.Input.Pointer,
+    ): void {
+        if (
+            !this.mobileControlsEnabled ||
+            this.phase !== 'paint'
+        ) {
+            return;
+        }
+
+        const target =
+            this.getPaintPreviewWorldPoint(pointer);
+        const zoom =
+            Math.max(0.01, this.cameras.main.zoom);
+
+        const fx =
+            this.add.graphics()
+                .setDepth(6510);
+
+        fx.lineStyle(6 / zoom, 0xf59e0b, 1);
+        fx.strokeCircle(target.x, target.y, 32 / zoom);
+        fx.lineStyle(2 / zoom, 0xffffff, 1);
+        fx.strokeCircle(target.x, target.y, 43 / zoom);
+
+        const language = getLanguage();
+        const labelCopy = {
+            ko: '직선 모드 ON  ↔  드래그해서 직선 칠하기',
+            ja: '直線モード ON  ↔  ドラッグで直線',
+            en: 'LINE MODE ON  ↔  DRAG TO PAINT A LINE',
+            zh: '直线模式 ON  ↔  拖动绘制直线',
+        } as const;
+
+        /*
+         * Keep the message crisp: no scale tween. A thick black backing and
+         * high-resolution text make the state unmistakable on small phones.
+         */
+        const label =
+            this.add.text(
+                target.x,
+                target.y - 62 / zoom,
+                labelCopy[language] ?? labelCopy.en,
+                {
+                    fontFamily: 'Arial, sans-serif',
+                    /*
+                     * Render at a normal fixed font size, then cancel camera
+                     * zoom with object scale. This keeps the glyph texture
+                     * crisp even when the paint camera is heavily zoomed.
+                     */
+                    fontSize: '18px',
+                    fontStyle: 'bold',
+                    color: '#ffffff',
+                    backgroundColor: 'rgba(15, 23, 42, 0.96)',
+                    stroke: '#111827',
+                    strokeThickness: 2,
+                    padding: {
+                        x: 12,
+                        y: 8,
+                    },
+                },
+            )
+                .setOrigin(0.5)
+                .setDepth(6511)
+                .setScale(1 / zoom)
+                .setResolution(
+                    Math.max(
+                        2,
+                        Math.ceil(window.devicePixelRatio || 1),
+                    ),
+                );
+
+        try {
+            navigator.vibrate?.([35, 35, 55]);
+        } catch {
+            // Haptics are best-effort only.
+        }
+
+        this.tweens.add({
+            targets: fx,
+            alpha: 0,
+            scaleX: 1.2,
+            scaleY: 1.2,
+            duration: 520,
+            ease: 'Quad.easeOut',
+            onComplete: () => fx.destroy(),
+        });
+
+        this.tweens.add({
+            targets: label,
+            alpha: 0,
+            delay: 900,
+            duration: 260,
+            ease: 'Linear',
+            onComplete: () => label.destroy(),
+        });
+    }
 
     private hideMobilePaintPrecisionGuide(): void {
         this.mobilePaintPrecisionRing
@@ -37422,8 +34757,6 @@ export class GameScene extends Phaser.Scene {
             undefined;
 
         this.mobilePaintDotCommitted =
-            false;
-        this.mobilePaintHoldArmed =
             false;
 
         if (hidePreview) {
@@ -37669,18 +35002,11 @@ export class GameScene extends Phaser.Scene {
     ): void {
         this.cancelMobilePaintHoldTimers();
         this.mobilePaintDotCommitted = false;
-        this.mobilePaintHoldArmed = false;
 
-        /*
-         * Hunter precision brush needs a more deliberate hold so repositioning
-         * the tool does not accidentally paint. Hider keeps the existing feel.
-         */
-        const holdToPaintDelay =
-            520;
-
+        /* Short hold = one precise dot, even with a perfectly still finger. */
         this.mobilePaintHoldDotEvent =
             this.time.delayedCall(
-                holdToPaintDelay,
+                120,
                 () => {
                     if (
                         pointer.id !== this.mobilePendingPaintPointerId ||
@@ -37688,22 +35014,59 @@ export class GameScene extends Phaser.Scene {
                     ) {
                         return;
                     }
-                    this.mobilePaintHoldArmed =
-                        true;
                     this.commitMobilePendingDot();
                     this.showMobilePendingPaintPreview(pointer);
                 },
             );
 
         /*
-         * V1010386_EXPLICIT_LINE_TOOL:
-         * Long-hold only arms/starts normal brush painting. Straight lines are
-         * now a separate toolbar tool, preventing accidental line gestures.
+         * Longer hold arms straight-line mode. The orange handle/ring is the
+         * tactile visual acknowledgement; from here dragging aims a line and
+         * release commits it.
          */
-        this.mobilePaintLineModeEvent?.remove(false);
         this.mobilePaintLineModeEvent =
-            undefined;
+            this.time.delayedCall(
+                /*
+                 * v0.10.10.236.5:
+                 * Slightly faster than the old 650ms while still clearly
+                 * separated from the 120ms dot hold.
+                 */
+                560,
+                () => {
+                    if (
+                        pointer.id !== this.mobilePendingPaintPointerId ||
+                        !pointer.isDown ||
+                        !this.mobilePendingPaintStartScreen
+                    ) {
+                        return;
+                    }
 
+                    const moved =
+                        Phaser.Math.Distance.Between(
+                            this.mobilePendingPaintStartScreen.x,
+                            this.mobilePendingPaintStartScreen.y,
+                            pointer.x,
+                            pointer.y,
+                        );
+
+                    if (moved > 8) {
+                        return;
+                    }
+
+                    if (!this.commitMobilePendingDot()) {
+                        return;
+                    }
+
+                    this.straightLineModeActive = true;
+                    this.mobilePendingPaintPointerId = -1;
+                    this.mobilePaintHoldDotEvent?.remove(false);
+                    this.mobilePaintHoldDotEvent = undefined;
+                    this.mobilePaintLineModeEvent = undefined;
+                    this.updateMobilePaintPrecisionGuide(pointer);
+                    this.showMobileStraightLineReadyFx(pointer);
+                    this.updateStraightLinePreview(pointer);
+                },
+            );
     }
 
     private beginMobilePaintAfterDrag(
@@ -37732,59 +35095,13 @@ export class GameScene extends Phaser.Scene {
                 pointer.y,
             );
 
-        /*
-         * V1010384_BRUSH_HOLD_TO_PAINT_RESTORE:
-         *
-         * Precision BRUSH mode is a cursor-positioning tool first.
-         * Merely dragging the brush handle must NOT leave paint behind.
-         * The user moves the brush tip to the desired location, holds there
-         * briefly, then painting starts and subsequent drag paints normally.
-         *
-         * Direct FINGER mode keeps the fast drag-to-paint contract.
-         */
-        if (
-            this.mobilePaintInputMode ===
-                'brush' &&
-            !this.mobilePaintDotCommitted &&
-            !this.mobilePaintHoldArmed
-        ) {
-            if (movedScreenPixels >= 4) {
-                this.mobilePendingPaintStartScreen
-                    .set(
-                        pointer.x,
-                        pointer.y,
-                    );
-
-                this.mobilePendingPaintStartWorld =
-                    this.getPaintInputWorldPoint(
-                        pointer,
-                    );
-
-                /*
-                 * Restart the hold clock at the new brush-tip location.
-                 * As long as the user is moving, this keeps repositioning only.
-                 */
-                this.scheduleMobilePaintHoldModes(
-                    pointer,
-                );
-            }
-
-            this.showMobilePendingPaintPreview(
-                pointer,
-            );
-            this.updateMobilePaintPrecisionGuide(
-                pointer,
-            );
-            return true;
-        }
-
         /* Ignore normal finger tremor. A still/near-still hold becomes a dot. */
         if (movedScreenPixels < 6) {
             this.showMobilePendingPaintPreview(pointer);
             return true;
         }
 
-        /* Direct finger movement before long-hold threshold = freehand. */
+        /* Deliberate movement before the long-hold threshold = freehand. */
         this.mobilePaintLineModeEvent?.remove(false);
         this.mobilePaintLineModeEvent = undefined;
         this.mobilePaintHoldDotEvent?.remove(false);
@@ -37800,14 +35117,7 @@ export class GameScene extends Phaser.Scene {
          * held brush actually enters the body and make THAT first legal pixel
          * the stroke origin.
          */
-        if (
-            !this.mobilePaintDotCommitted &&
-            !(
-                this.mobilePaintInputMode ===
-                    'brush' &&
-                this.mobilePaintHoldArmed
-            )
-        ) {
+        if (!this.mobilePaintDotCommitted) {
             const startPoint =
                 this.networkPlayerManager
                     .paintLocalPlayer(
@@ -37876,8 +35186,6 @@ export class GameScene extends Phaser.Scene {
             this.straightLineStartWorld =
                 currentTarget.clone();
             this.mobilePaintDotCommitted = true;
-            this.mobilePaintHoldArmed =
-                false;
 
             if (this.practiceMode === 'hider') {
                 this.markPracticeHiderPaintStarted();
@@ -37997,8 +35305,6 @@ export class GameScene extends Phaser.Scene {
                 ) ||
                 object ===
                     this.eyedropperButton ||
-                object ===
-                    this.straightLineToolButton ||
                 object ===
                     this.undoPaintButton ||
                 object ===
@@ -38402,170 +35708,21 @@ export class GameScene extends Phaser.Scene {
                         );
 
                     if (
-                        this.straightLineToolSelected
-                    ) {
-                        this.finishActivePaintStroke();
-                        this.isPainting = false;
-                        this.clearStraightLinePreview();
-
-                        if (
-                            this.mobileControlsEnabled
-                        ) {
-                            this.captureMobilePaintPointer(
-                                pointer,
-                            );
-                        }
-
-                        const startPoint =
-                            this.networkPlayerManager
-                                .paintLocalPlayer(
-                                    paintTarget.x,
-                                    paintTarget.y,
-                                    this.brushTextureKey,
-                                    this.paintColor,
-                                    this.brushSize,
-                                    this.brushShape,
-                                );
-
-                        if (!startPoint) {
-                            if (
-                                this.mobileControlsEnabled
-                            ) {
-                                this.releaseMobilePaintPointer(
-                                    pointer,
-                                );
-                            }
-                            return;
-                        }
-
-                        this.playPaintSound();
-                        this.isPainting = true;
-                        this.activeStrokeTargetSessionId =
-                            this.networkPlayerManager
-                                .getLocalSessionId() ?? '';
-                        this.activeStrokePoints = [
-                            startPoint,
-                        ];
-                        this.currentStrokeHistoryPoints = [
-                            startPoint,
-                        ];
-                        this.straightLineStart = {
-                            x: startPoint.x,
-                            y: startPoint.y,
-                        };
-                        this.straightLineStartWorld =
-                            paintTarget.clone();
-                        this.straightLineModeActive =
-                            true;
-                        this.updateStraightLinePreview(
-                            pointer,
-                        );
-                        return;
-                    }
-
-                    if (
                         this.mobileControlsEnabled
                     ) {
                         /*
-                         * V1010384D_EYEDROPPER_NEXT_TOUCH_IMMEDIATE:
-                         * After a one-shot finger sample, the very next valid
-                         * finger-down stamps the first pixel immediately.
-                         */
-                        if (
-                            this.mobilePaintInputMode ===
-                                'finger' &&
-                            this.mobileFingerImmediatePaintNextTouch
-                        ) {
-                            this.mobileFingerImmediatePaintNextTouch =
-                                false;
-
-                            this.finishActivePaintStroke();
-                            this.isPainting = false;
-
-                            this.captureMobilePaintPointer(
-                                pointer,
-                            );
-
-                            const point =
-                                this.networkPlayerManager
-                                    .paintLocalPlayer(
-                                        paintTarget.x,
-                                        paintTarget.y,
-                                        this.brushTextureKey,
-                                        this.paintColor,
-                                        this.brushSize,
-                                        this.brushShape,
-                                    );
-
-                            if (point) {
-                                this.playPaintSound();
-                                this.isPainting = true;
-
-                                this.activeStrokeTargetSessionId =
-                                    this.networkPlayerManager
-                                        .getLocalSessionId() ?? '';
-
-                                this.activeStrokePoints = [
-                                    point,
-                                ];
-
-                                this.currentStrokeHistoryPoints = [
-                                    point,
-                                ];
-
-                                this.straightLineStart = {
-                                    x: point.x,
-                                    y: point.y,
-                                };
-
-                                this.straightLineStartWorld =
-                                    paintTarget.clone();
-
-                                this.mobilePendingPaintPointerId =
-                                    pointer.id;
-
-                                this.mobilePendingPaintStartScreen =
-                                    new Phaser.Math.Vector2(
-                                        pointer.x,
-                                        pointer.y,
-                                    );
-
-                                this.mobilePendingPaintStartWorld =
-                                    paintTarget.clone();
-
-                                /*
-                                 * POINTER_MOVE must continue this stroke
-                                 * immediately, not re-enter the pending gate.
-                                 */
-                                this.mobilePaintDotCommitted =
-                                    true;
-
-                                this.updateMobilePaintPrecisionGuide(
-                                    pointer,
-                                );
-                            } else {
-                                /*
-                                 * Touch outside the avatar does not consume the
-                                 * convenience; the next valid avatar touch is
-                                 * still immediate.
-                                 */
-                                this.mobileFingerImmediatePaintNextTouch =
-                                    true;
-                                this.releaseMobilePaintPointer();
-                                this.mobilePendingPaintPointerId =
-                                    -1;
-                            }
-
-                            return;
-                        }
-
-                        /*
-                         * Normal mobile safety mode:
-                         * first touch previews; movement begins paint.
+                         * Mobile safety mode:
+                         * first touch only previews. Painting begins after
+                         * the finger moves at least one screen pixel.
                          */
                         this.finishActivePaintStroke();
                         this.isPainting = false;
 
+                        /*
+                         * Capture NOW, while pointerdown still belongs to the
+                         * canvas. From this point until finger-up, crossing
+                         * over the DOM palette must not steal the drag.
+                         */
                         this.captureMobilePaintPointer(
                             pointer,
                         );
@@ -38582,6 +35739,7 @@ export class GameScene extends Phaser.Scene {
                         this.mobilePendingPaintStartWorld =
                             paintTarget.clone();
 
+                
                         this.showMobilePendingPaintPreview(
                             pointer,
                         );
@@ -39125,7 +36283,9 @@ export class GameScene extends Phaser.Scene {
                      * until Circle/Square is explicitly selected.
                      */
                     this.eyedropperPointerId = -1;
-                    this.finishMobileEyedropperSelection();
+                    this.updateEyedropperButtonUi();
+                    this.hideMobilePaintPrecisionGuide();
+                    this.showMobileIdleEyedropperGuide();
 
                     this.isPainting = false;
                     this.finishActivePaintStroke();
@@ -39155,9 +36315,6 @@ export class GameScene extends Phaser.Scene {
                     this.showMobileIdleBrushGuide();
                     return;
                 }
-
-                const completedExplicitLine =
-                    this.straightLineToolSelected;
 
                 if (
                     this.phase === 'paint' &&
@@ -39217,32 +36374,7 @@ export class GameScene extends Phaser.Scene {
                     undefined;
                 this.straightLineModeActive =
                     false;
-                if (
-                    this.straightLineToolSelected
-                ) {
-                    this.straightLineToolSelected =
-                        false;
-                    this.syncMobilePaintDockUi();
-                    this.highlightBrushShape(
-                        this.brushShape,
-                    );
-                }
                 this.clearStraightLinePreview();
-
-                /*
-                 * V1010386G_ONE_SHOT_LINE_TOOL:
-                 * A straight line is one deliberate gesture. After release,
-                 * return to the already-selected Circle/Square brush so the
-                 * next touch does not instantly start another line.
-                 */
-                if (completedExplicitLine) {
-                    this.straightLineToolSelected =
-                        false;
-                    this.syncMobilePaintDockUi();
-                    this.highlightBrushShape(
-                        this.brushShape,
-                    );
-                }
 
                 this.hideMobilePaintPrecisionGuide();
 
@@ -40167,8 +37299,6 @@ export class GameScene extends Phaser.Scene {
     private showMobileIdleEyedropperGuide(): void {
         if (
             !this.mobileControlsEnabled ||
-            this.mobilePaintInputMode ===
-                'finger' ||
             this.phase !== 'paint' ||
             !this.eyedropperArmed
         ) {
@@ -40232,69 +37362,6 @@ export class GameScene extends Phaser.Scene {
 
         const zoom =
             Math.max(0.01, this.cameras.main.zoom);
-
-        if (
-            this.mobilePaintInputMode ===
-                'finger'
-        ) {
-            /*
-             * Finger eyedropper: only a lightweight sampled-color chip beside
-             * the fingertip. No fake pipette body obscures the sampled pixel.
-             */
-            const previewX =
-                grip.x + 40 / zoom;
-            const previewY =
-                grip.y - 94 / zoom;
-            const outerSize =
-                64 / zoom;
-            const innerSize =
-                48 / zoom;
-
-            guide
-                .clear()
-                .fillStyle(
-                    0x172027,
-                    0.94,
-                )
-                .fillRoundedRect(
-                    previewX -
-                        outerSize / 2,
-                    previewY -
-                        outerSize / 2,
-                    outerSize,
-                    outerSize,
-                    10 / zoom,
-                )
-                .fillStyle(
-                    previewColor,
-                    1,
-                )
-                .fillRoundedRect(
-                    previewX -
-                        innerSize / 2,
-                    previewY -
-                        innerSize / 2,
-                    innerSize,
-                    innerSize,
-                    7 / zoom,
-                )
-                .lineStyle(
-                    4 / zoom,
-                    0xffffff,
-                    0.97,
-                )
-                .strokeRoundedRect(
-                    previewX -
-                        innerSize / 2,
-                    previewY -
-                        innerSize / 2,
-                    innerSize,
-                    innerSize,
-                    7 / zoom,
-                )
-                .setVisible(true);
-            return;
-        }
         const dx = grip.x - target.x;
         const dy = grip.y - target.y;
         const length = Math.max(0.001, Math.hypot(dx, dy));
@@ -40534,14 +37601,8 @@ export class GameScene extends Phaser.Scene {
             new Phaser.Math.Vector2();
 
         this.cameras.main.getWorldPoint(
-            this.mobilePaintInputMode ===
-                'finger'
-                ? screenX
-                : screenX - 72,
-            this.mobilePaintInputMode ===
-                'finger'
-                ? screenY
-                : screenY - 82,
+            screenX - 72,
+            screenY - 82,
             target,
         );
 
@@ -40765,24 +37826,16 @@ export class GameScene extends Phaser.Scene {
                         this.eyedropperPointerId =
                             -1;
 
-                        this.finishMobileEyedropperSelection();
+                        this.updateEyedropperButtonUi();
+                        this.hideMobilePaintPrecisionGuide();
+                        this.showMobileIdleEyedropperGuide();
 
                         this.isPainting = false;
                         this.finishActivePaintStroke();
                     }
 
-                    /*
-                     * Finger-mode completion above already released/reset the
-                     * paint pointer and preserved the exact sampled preview.
-                     * Brush mode still uses the normal cleanup below.
-                     */
-                    if (
-                        this.mobilePaintInputMode ===
-                            'brush'
-                    ) {
-                        this.releaseMobilePaintPointer();
-                        this.stopMobileNativeEyedropperDrag();
-                    }
+                    this.releaseMobilePaintPointer();
+                    this.stopMobileNativeEyedropperDrag();
 
                     /*
                      * V101023832_STABLE_MOBILE_PINCH_OWNERSHIP
@@ -40974,29 +38027,16 @@ export class GameScene extends Phaser.Scene {
                     this.eyedropperPointerId =
                         -1;
 
-                    /*
-                     * V1010384B_FINGER_EYEDROPPER_TOUCHEND_RETURN:
-                     * Android/iOS in-app browsers can finish the sampler through
-                     * the TouchEvent fallback rather than PointerEvent. This path
-                     * previously sampled the final color but left the eyedropper
-                     * armed, so the UI never returned to the last Circle/Square
-                     * brush after finger-up.
-                     *
-                     * Use the same one-shot completion path as PointerEvent.
-                     */
-                    this.finishMobileEyedropperSelection();
+                    this.updateEyedropperButtonUi();
+                    this.hideMobilePaintPrecisionGuide();
+                    this.showMobileIdleEyedropperGuide();
 
                     this.isPainting = false;
                     this.finishActivePaintStroke();
                 }
 
-                if (
-                    this.mobilePaintInputMode ===
-                        'brush'
-                ) {
-                    this.releaseMobilePaintPointer();
-                    this.stopMobileNativeEyedropperDrag();
-                }
+                this.releaseMobilePaintPointer();
+                this.stopMobileNativeEyedropperDrag();
             };
 
         window.addEventListener(
@@ -46649,14 +43689,6 @@ export class GameScene extends Phaser.Scene {
         this.syncPhaseMusic();
 
         if (this.isMultiplayerSession()) {
-            /*
-             * V1010370_ATOMIC_HUNT_VISUAL_HANDOFF:
-             * Reveal the already-painted network actors exactly once, only after
-             * Hunt owns the scene. This avoids visible pre-Hunt visibility pulses.
-             */
-            this.networkPlayerManager
-                .restoreAllPlayerVisibility();
-
             this.hideLegacySinglePlayerActors();
 
             this.hiders.forEach(
@@ -46760,7 +43792,6 @@ export class GameScene extends Phaser.Scene {
             localIsHunter
         ) {
             this.createHunterControlsBottomHint();
-            this.createHunterFartCoach();
         } else {
             this.destroyHunterControlsBottomHint();
         }
