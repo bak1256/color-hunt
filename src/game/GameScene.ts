@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010376_FART_DISCOVERY_COACH: Hunter fart skill callouts + larger mobile FIRE/GAS labels. */
     /* V1010375_MOBILE_FINGER_FIRST_PAINT: finger-first mobile paint + optional precision brush, mirrored in avatar editor. */
     /* V1010374_INVITE_GONE_ROOM_GUARD: stale invite links return to lobby instead of hanging on join. */
     /* V1010371_LOBBY_READY_BARRIER: waiting-room START/READY role switch with live counter. */
@@ -678,7 +679,7 @@ export class GameScene extends Phaser.Scene {
                 {
                     fontFamily:
                         'monospace',
-                    fontSize: '16px',
+                    fontSize: '21px',
                     fontStyle: 'bold',
                     color: '#ffffff',
                     backgroundColor:
@@ -2458,7 +2459,7 @@ export class GameScene extends Phaser.Scene {
                 mobileFartLabelCopy(),
                 {
                     fontFamily: 'monospace',
-                    fontSize: '13px',
+                    fontSize: '18px',
                     fontStyle: 'bold',
                     color: '#ffffff',
                     stroke: '#124737',
@@ -4719,6 +4720,14 @@ export class GameScene extends Phaser.Scene {
 
     /* V1010258_HUNTER_CONTROLS_HINT_EXACT: desktop Hunter controls hint shared by Practice / multiplayer Hunt. */
     private hunterControlsBottomHint?: HTMLDivElement;
+    /*
+     * V1010376_FART_DISCOVERY_COACH:
+     * Temporary speech bubbles teach first-time Hunters that SPACE / the green
+     * fart button is an actual detection skill, not decoration.
+     */
+    private hunterFartCoachBubble?: HTMLDivElement;
+    private mobileFartCoachBubble?: HTMLDivElement;
+    private fartCoachTimer?: number;
     private hunterControlsHintMoveStartedAt = 0;
 
     private practiceRevealConfirmButton?: HTMLButtonElement;
@@ -7365,7 +7374,7 @@ export class GameScene extends Phaser.Scene {
                 mobileLobby: '대기실 · 버튼 터치 · 채팅칸 터치',
                 mobilePaint: '색칠 · 손가락으로 칠하기 · 핀치 확대/축소 · 아래 도구로 붓 변경',
                 mobileStraight: '직선 · 브러시를 길게 누르면 주황색 이펙트와 함께 직선 모드가 켜집니다',
-                mobileHunt: '사냥 · 왼쪽 이동 · 오른쪽 조준 · FIRE 발사',
+                mobileHunt: '사냥 · 왼쪽 이동 · 오른쪽 조준 · FIRE 발사 · 💨 방구 탐지',
             },
             ja: {
                 button: '？ 操作方法',
@@ -7378,7 +7387,7 @@ export class GameScene extends Phaser.Scene {
                 mobileLobby: 'ロビー · ボタン操作 · 入力欄タップでチャット',
                 mobilePaint: 'ペイント · 指で塗る · ピンチズーム · 下のツールでブラシ変更',
                 mobileStraight: '直線 · ブラシを長押しするとオレンジの合図で直線モードになります',
-                mobileHunt: 'ハント · 左で移動 · 右で照準 · FIREで射撃',
+                mobileHunt: 'ハント · 左で移動 · 右で照準 · FIREで射撃 · 💨 おなら探知',
             },
             en: {
                 button: '？ Controls',
@@ -7391,7 +7400,7 @@ export class GameScene extends Phaser.Scene {
                 mobileLobby: 'Lobby · Tap buttons · Tap chat field to type',
                 mobilePaint: 'Paint · Paint with one finger · Pinch to zoom · Bottom tools change brush',
                 mobileStraight: 'Straight line · Long-press the brush until the orange cue appears, then drag',
-                mobileHunt: 'Hunt · Left move · Right aim · FIRE shoots',
+                mobileHunt: 'Hunt · Left move · Right aim · FIRE shoots · 💨 Fart detect',
             },
             zh: {
                 button: '？ 操作说明',
@@ -7404,7 +7413,7 @@ export class GameScene extends Phaser.Scene {
                 mobileLobby: '大厅：点击屏幕按钮 · 点击聊天输入框聊天',
                 mobilePaint: '涂色 · 单指涂色 · 双指缩放 · 使用底部工具切换画笔',
                 mobileStraight: '直线 · 长按画笔，出现橙色提示后拖动即可画直线',
-                mobileHunt: '狩猎：左侧移动 · 右侧瞄准 · FIRE按钮射击',
+                mobileHunt: '狩猎：左侧移动 · 右侧瞄准 · FIRE按钮射击 · 💨 放屁探测',
             },
         } as const;
 
@@ -14000,6 +14009,246 @@ export class GameScene extends Phaser.Scene {
         )[getLanguage()];
     }
 
+    private getHunterFartCoachCopy(): string {
+        return (
+            {
+                ko: '💨 방구를 껴서 하이더를 찾아보자!',
+                ja: '💨 おなら探知でハイダーを見つけよう！',
+                en: '💨 Use your fart detector to find Hiders!',
+                zh: '💨 用放屁探测来找出躲藏者吧！',
+            } as const
+        )[getLanguage()];
+    }
+
+    private destroyHunterFartCoach(): void {
+        this.hunterFartCoachBubble
+            ?.remove();
+        this.mobileFartCoachBubble
+            ?.remove();
+
+        this.hunterFartCoachBubble =
+            undefined;
+        this.mobileFartCoachBubble =
+            undefined;
+
+        window.clearTimeout(
+            this.fartCoachTimer,
+        );
+        this.fartCoachTimer =
+            undefined;
+    }
+
+    private createHunterFartCoach(): void {
+        this.destroyHunterFartCoach();
+
+        if (
+            !this.isMultiplayerSession() ||
+            multiplayerClient
+                .getLocalPlayer()
+                ?.role !== 'hunter' ||
+            this.phase !== 'hunt'
+        ) {
+            return;
+        }
+
+        const bubble =
+            document.createElement(
+                'div',
+            );
+
+        bubble.textContent =
+            this.getHunterFartCoachCopy();
+
+        Object.assign(
+            bubble.style,
+            {
+                position: 'fixed',
+                zIndex: '7600',
+                maxWidth: '290px',
+                boxSizing: 'border-box',
+                padding: '10px 14px',
+                border:
+                    '2px solid #2f8f72',
+                borderRadius: '15px',
+                background:
+                    'rgba(248,255,240,.97)',
+                color: '#21493c',
+                boxShadow:
+                    '0 6px 18px rgba(16,50,38,.24)',
+                fontFamily:
+                    'Arial, sans-serif',
+                fontWeight: '900',
+                fontSize:
+                    this.mobileControlsEnabled
+                        ? '15px'
+                        : '14px',
+                lineHeight: '1.35',
+                textAlign: 'center',
+                pointerEvents: 'none',
+                opacity: '1',
+                transition:
+                    'opacity 500ms ease, transform 500ms ease',
+                whiteSpace: 'normal',
+            },
+        );
+
+        document.body.appendChild(
+            bubble,
+        );
+
+        if (this.mobileControlsEnabled) {
+            this.mobileFartCoachBubble =
+                bubble;
+        } else {
+            this.hunterFartCoachBubble =
+                bubble;
+        }
+
+        const placeBubble =
+            (): void => {
+                if (
+                    !bubble.isConnected ||
+                    this.phase !== 'hunt'
+                ) {
+                    return;
+                }
+
+                const rect =
+                    this.game.canvas
+                        .getBoundingClientRect();
+
+                const scaleX =
+                    rect.width /
+                    this.gameWidth;
+                const scaleY =
+                    rect.height /
+                    this.gameHeight;
+
+                if (
+                    this.mobileControlsEnabled
+                ) {
+                    /*
+                     * GAS logical position:
+                     * x = 896, y = 238 in the 960x540 authoring space.
+                     * Put the bubble immediately to its LEFT so FIRE/GAS stay
+                     * visible and tappable.
+                     */
+                    const gasX =
+                        rect.left +
+                        (this.gameWidth - 64) *
+                            scaleX;
+                    const gasY =
+                        rect.top +
+                        (
+                            this.gameHeight -
+                            190 -
+                            112
+                        ) *
+                            scaleY;
+
+                    bubble.style.left =
+                        `${Math.round(
+                            gasX -
+                            12,
+                        )}px`;
+                    bubble.style.top =
+                        `${Math.round(
+                            gasY,
+                        )}px`;
+                    bubble.style.transform =
+                        'translate(-100%, -50%)';
+                } else {
+                    /*
+                     * Desktop bottom controls hint is centered near the bottom.
+                     * Bubble sits on its RIGHT, visually pointing at SPACE.
+                     */
+                    const hintRect =
+                        this.hunterControlsBottomHint
+                            ?.getBoundingClientRect();
+
+                    if (hintRect) {
+                        bubble.style.left =
+                            `${Math.round(
+                                hintRect.right +
+                                12,
+                            )}px`;
+                        bubble.style.top =
+                            `${Math.round(
+                                hintRect.top +
+                                hintRect.height /
+                                    2,
+                            )}px`;
+                        bubble.style.transform =
+                            'translateY(-50%)';
+                    } else {
+                        bubble.style.left =
+                            `${Math.round(
+                                rect.left +
+                                rect.width *
+                                    0.72,
+                            )}px`;
+                        bubble.style.top =
+                            `${Math.round(
+                                rect.bottom -
+                                66,
+                            )}px`;
+                        bubble.style.transform =
+                            'translateY(-50%)';
+                    }
+                }
+            };
+
+        placeBubble();
+        requestAnimationFrame(
+            placeBubble,
+        );
+        window.setTimeout(
+            placeBubble,
+            120,
+        );
+
+        this.fartCoachTimer =
+            window.setTimeout(
+                () => {
+                    if (
+                        !bubble.isConnected
+                    ) {
+                        return;
+                    }
+
+                    bubble.style.opacity =
+                        '0';
+                    bubble.style.transform +=
+                        ' translateY(-4px)';
+
+                    window.setTimeout(
+                        () => {
+                            bubble.remove();
+
+                            if (
+                                this.hunterFartCoachBubble ===
+                                bubble
+                            ) {
+                                this.hunterFartCoachBubble =
+                                    undefined;
+                            }
+
+                            if (
+                                this.mobileFartCoachBubble ===
+                                bubble
+                            ) {
+                                this.mobileFartCoachBubble =
+                                    undefined;
+                            }
+                        },
+                        520,
+                    );
+                },
+                5200,
+            );
+    }
+
+
     private resetHunterControlsHintFade(): void {
         this.hunterControlsHintMoveStartedAt = 0;
     }
@@ -14067,6 +14316,7 @@ export class GameScene extends Phaser.Scene {
     private destroyHunterControlsBottomHint(): void {
         this.hunterControlsBottomHint?.remove();
         this.hunterControlsBottomHint = undefined;
+        this.destroyHunterFartCoach();
         this.resetHunterControlsHintFade();
     }
 
@@ -44695,6 +44945,7 @@ export class GameScene extends Phaser.Scene {
             localIsHunter
         ) {
             this.createHunterControlsBottomHint();
+            this.createHunterFartCoach();
         } else {
             this.destroyHunterControlsBottomHint();
         }
