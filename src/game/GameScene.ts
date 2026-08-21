@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010384D_EYEDROPPER_NEXT_TOUCH_IMMEDIATE: first valid finger touch after sampling stamps paint immediately. */
     /* V1010384C_FINGER_EYEDROPPER_HANDOFF: preserve final sampler position and make the next finger touch paint immediately. */
     /* V1010384B_FINGER_EYEDROPPER_TOUCHEND_RETURN: touch fallback returns sampler to last Circle/Square brush on finger-up. */
     /* V1010384_BRUSH_HOLD_TO_PAINT_RESTORE: restore mobile precision-brush hold-to-paint and clean avatar-editor mode ghosts. */
@@ -4654,6 +4655,13 @@ export class GameScene extends Phaser.Scene {
     private mobileNativePinchClickGuard?: (event: MouseEvent) => void;
 
     private mobilePendingPaintPointerId = -1;
+    /*
+     * V1010384D_EYEDROPPER_NEXT_TOUCH_IMMEDIATE:
+     * After finger eyedropper sampling, consume exactly one immediate paint
+     * touch so the workflow feels continuous.
+     */
+    private mobileFingerImmediatePaintNextTouch =
+        false;
 
     /*
      * v0.10.10.174
@@ -34286,6 +34294,8 @@ export class GameScene extends Phaser.Scene {
      * eyedropper graphic remains frozen at its old position.
      */
     private activateMobileEyedropperTool(): void {
+        this.mobileFingerImmediatePaintNextTouch =
+            false;
         this.stopMobileNativeEyedropperDrag();
 
         this.finishActivePaintStroke();
@@ -34345,6 +34355,8 @@ export class GameScene extends Phaser.Scene {
     private activateMobileBrushTool(
         shape: BrushShape,
     ): void {
+        this.mobileFingerImmediatePaintNextTouch =
+            false;
         this.stopMobileNativeEyedropperDrag();
 
         this.finishActivePaintStroke();
@@ -34428,6 +34440,13 @@ export class GameScene extends Phaser.Scene {
 
         this.eyedropperPointerId = -1;
         this.eyedropperArmed = false;
+
+        /*
+         * The sampler release itself never paints. The NEXT valid finger-down
+         * paints immediately instead of waiting for movement.
+         */
+        this.mobileFingerImmediatePaintNextTouch =
+            true;
 
         this.mobilePinchDistance = 0;
         this.mobilePinchActive = false;
@@ -37530,18 +37549,105 @@ export class GameScene extends Phaser.Scene {
                         this.mobileControlsEnabled
                     ) {
                         /*
-                         * Mobile safety mode:
-                         * first touch only previews. Painting begins after
-                         * the finger moves at least one screen pixel.
+                         * V1010384D_EYEDROPPER_NEXT_TOUCH_IMMEDIATE:
+                         * After a one-shot finger sample, the very next valid
+                         * finger-down stamps the first pixel immediately.
+                         */
+                        if (
+                            this.mobilePaintInputMode ===
+                                'finger' &&
+                            this.mobileFingerImmediatePaintNextTouch
+                        ) {
+                            this.mobileFingerImmediatePaintNextTouch =
+                                false;
+
+                            this.finishActivePaintStroke();
+                            this.isPainting = false;
+
+                            this.captureMobilePaintPointer(
+                                pointer,
+                            );
+
+                            const point =
+                                this.networkPlayerManager
+                                    .paintLocalPlayer(
+                                        paintTarget.x,
+                                        paintTarget.y,
+                                        this.brushTextureKey,
+                                        this.paintColor,
+                                        this.brushSize,
+                                        this.brushShape,
+                                    );
+
+                            if (point) {
+                                this.playPaintSound();
+                                this.isPainting = true;
+
+                                this.activeStrokeTargetSessionId =
+                                    this.networkPlayerManager
+                                        .getLocalSessionId() ?? '';
+
+                                this.activeStrokePoints = [
+                                    point,
+                                ];
+
+                                this.currentStrokeHistoryPoints = [
+                                    point,
+                                ];
+
+                                this.straightLineStart = {
+                                    x: point.x,
+                                    y: point.y,
+                                };
+
+                                this.straightLineStartWorld =
+                                    paintTarget.clone();
+
+                                this.mobilePendingPaintPointerId =
+                                    pointer.id;
+
+                                this.mobilePendingPaintStartScreen =
+                                    new Phaser.Math.Vector2(
+                                        pointer.x,
+                                        pointer.y,
+                                    );
+
+                                this.mobilePendingPaintStartWorld =
+                                    paintTarget.clone();
+
+                                /*
+                                 * POINTER_MOVE must continue this stroke
+                                 * immediately, not re-enter the pending gate.
+                                 */
+                                this.mobilePaintDotCommitted =
+                                    true;
+
+                                this.updateMobilePaintPrecisionGuide(
+                                    pointer,
+                                );
+                            } else {
+                                /*
+                                 * Touch outside the avatar does not consume the
+                                 * convenience; the next valid avatar touch is
+                                 * still immediate.
+                                 */
+                                this.mobileFingerImmediatePaintNextTouch =
+                                    true;
+                                this.releaseMobilePaintPointer();
+                                this.mobilePendingPaintPointerId =
+                                    -1;
+                            }
+
+                            return;
+                        }
+
+                        /*
+                         * Normal mobile safety mode:
+                         * first touch previews; movement begins paint.
                          */
                         this.finishActivePaintStroke();
                         this.isPainting = false;
 
-                        /*
-                         * Capture NOW, while pointerdown still belongs to the
-                         * canvas. From this point until finger-up, crossing
-                         * over the DOM palette must not steal the drag.
-                         */
                         this.captureMobilePaintPointer(
                             pointer,
                         );
@@ -37558,7 +37664,6 @@ export class GameScene extends Phaser.Scene {
                         this.mobilePendingPaintStartWorld =
                             paintTarget.clone();
 
-                
                         this.showMobilePendingPaintPreview(
                             pointer,
                         );
