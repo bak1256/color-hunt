@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010386I_PRECISION_BRUSH_UX: outside-body hold arming, destination-mode labels, Precision Brush naming, translucent controls hint. */
     /* V1010386H_UNIFIED_MOBILE_HOLD: Hunter and Hider mobile precision brush both use 520ms hold-to-paint. */
     /* V1010386G_INPUT_FEEL_POLISH: Practice arrows outside thumbnail, 520ms Hunter/avatar brush hold, one-shot line tool. */
     /* V1010386F_PRACTICE_BOTH_ARROWS: merged v386e dock guard + guaranteed left/right Practice map arrows. */
@@ -4408,6 +4409,7 @@ export class GameScene extends Phaser.Scene {
         'finger' |
         'brush' = 'finger';
     private mobilePaintModeButton?: HTMLButtonElement;
+    private mobilePrecisionBrushHint?: HTMLDivElement;
     private mobileBrushSizePreviewTimer?: number;
 
     private mobilePaintSizeInput?: HTMLInputElement;
@@ -4570,6 +4572,12 @@ export class GameScene extends Phaser.Scene {
     private mobilePaintHoldDotEvent?: Phaser.Time.TimerEvent;
     private mobilePaintLineModeEvent?: Phaser.Time.TimerEvent;
     private mobilePaintDotCommitted = false;
+    /*
+     * V1010386I_OUTSIDE_HOLD_ARM:
+     * A precision-brush hold can arm outside the avatar. After that, the first
+     * legal body pixel entered by the brush starts painting immediately.
+     */
+    private mobilePaintHoldArmed = false;
     private spectatorButton?: Phaser.GameObjects.Text;
     private spectatorStatusText?: Phaser.GameObjects.Text;
     private spectatorSessionId = '';
@@ -7494,7 +7502,7 @@ export class GameScene extends Phaser.Scene {
                 padding: '7px 12px',
                 border: '2px solid #5c8f66',
                 borderRadius: '13px',
-                background: '#fff4d6',
+                background: 'rgba(255,244,214,.66)',
                 color: '#26352b',
                 boxShadow:
                     '0 4px 14px rgba(35,59,42,.22)',
@@ -7549,6 +7557,54 @@ export class GameScene extends Phaser.Scene {
 
         this.mobilePaintModeButton =
             modeButton;
+
+        const precisionHint =
+            document.createElement(
+                'div',
+            );
+
+        precisionHint.className =
+            'colorhunt-precision-brush-hint';
+
+        Object.assign(
+            precisionHint.style,
+            {
+                position: 'fixed',
+                zIndex: '2138',
+                padding: '7px 11px',
+                border:
+                    '1.5px solid rgba(92,143,102,.78)',
+                borderRadius: '11px',
+                background:
+                    'rgba(248,255,240,.60)',
+                color: '#26352b',
+                boxShadow:
+                    '0 3px 10px rgba(35,59,42,.12)',
+                fontFamily:
+                    'Arial, sans-serif',
+                fontWeight: '900',
+                fontSize: '12px',
+                lineHeight: '1.35',
+                whiteSpace: 'pre-line',
+                textAlign: 'left',
+                pointerEvents: 'none',
+                backdropFilter:
+                    'blur(2px)',
+                WebkitBackdropFilter:
+                    'blur(2px)',
+            },
+        );
+
+        precisionHint.hidden = true;
+        precisionHint.style.display =
+            'none';
+
+        document.body.appendChild(
+            precisionHint,
+        );
+
+        this.mobilePrecisionBrushHint =
+            precisionHint;
 
         const colors =
             document.createElement(
@@ -8202,6 +8258,23 @@ export class GameScene extends Phaser.Scene {
             );
         }
 
+        if (
+            this.mobilePrecisionBrushHint
+        ) {
+            const showPrecisionHint =
+                canShowPaintDock &&
+                this.mobileControlsEnabled &&
+                this.mobilePaintInputMode ===
+                    'brush';
+
+            this.mobilePrecisionBrushHint.hidden =
+                !showPrecisionHint;
+            this.mobilePrecisionBrushHint.style.display =
+                showPrecisionHint
+                    ? 'block'
+                    : 'none';
+        }
+
         if (canShowPaintDock) {
             this.syncMobilePaintDockUi();
             this.updateMobilePaintDockPosition();
@@ -8316,28 +8389,61 @@ export class GameScene extends Phaser.Scene {
                         ? '☝ 手指\n绘制'
                         : '☝ 손가락\n그리기';
 
-        const brushLabel =
+        const precisionBrushLabel =
             language === 'ja'
-                ? '🖌 ブラシで\n描く'
+                ? '🖌 精密ブラシで\n描く'
                 : language === 'en'
-                    ? '🖌 Brush\nPaint'
+                    ? '🖌 Precision\nBrush'
                     : language === 'zh'
-                        ? '🖌 画笔\n绘制'
-                        : '🖌 붓으로\n그리기';
+                        ? '🖌 精细画笔\n绘制'
+                        : '🖌 정밀붓\n그리기';
 
+        /*
+         * Show the destination mode, not the currently active mode.
+         */
         this.mobilePaintModeButton
             .textContent =
             this.mobilePaintInputMode ===
                 'finger'
-                ? `${fingerLabel}  ↔`
-                : `↔  ${brushLabel}`;
+                ? `${precisionBrushLabel}  ↔`
+                : `↔  ${fingerLabel}`;
 
         this.mobilePaintModeButton
             .style.background =
             this.mobilePaintInputMode ===
                 'finger'
-                ? '#dff7e6'
-                : '#fff4d6';
+                ? 'rgba(223,247,230,.66)'
+                : 'rgba(255,244,214,.66)';
+
+        if (
+            this.mobilePrecisionBrushHint
+        ) {
+            const hint =
+                language === 'ja'
+                    ? 'ドラッグ：ブラシ移動\n長押し：色塗り開始'
+                    : language === 'en'
+                        ? 'Drag: Move brush\nHold: Start painting'
+                        : language === 'zh'
+                            ? '拖动：移动画笔\n长按：开始上色'
+                            : '드래그: 붓 이동\n꾹 누르기: 색칠 시작';
+
+            this.mobilePrecisionBrushHint
+                .textContent =
+                hint;
+
+            const visible =
+                this.mobileControlsEnabled &&
+                this.phase === 'paint' &&
+                this.mobilePaintInputMode ===
+                    'brush';
+
+            this.mobilePrecisionBrushHint.hidden =
+                !visible;
+            this.mobilePrecisionBrushHint.style.display =
+                visible
+                    ? 'block'
+                    : 'none';
+        }
     }
 
     private showFingerBrushSizePreview(): void {
@@ -8786,6 +8892,31 @@ export class GameScene extends Phaser.Scene {
 
             this.mobilePaintModeButton.style.transform =
                 'translateY(-50%)';
+
+            if (
+                this.mobilePrecisionBrushHint
+            ) {
+                const buttonRect =
+                    this.mobilePaintModeButton
+                        .getBoundingClientRect();
+
+                const dockRect =
+                    this.mobilePaintDock
+                        .getBoundingClientRect();
+
+                this.mobilePrecisionBrushHint.style.left =
+                    `${Math.round(
+                        buttonRect.left,
+                    )}px`;
+
+                this.mobilePrecisionBrushHint.style.top =
+                    `${Math.round(
+                        Math.max(
+                            buttonRect.bottom + 8,
+                            dockRect.top - 60,
+                        ),
+                    )}px`;
+            }
         }
     }
 
@@ -8796,6 +8927,9 @@ export class GameScene extends Phaser.Scene {
         this.mobilePaintModeButton
             ?.remove();
 
+        this.mobilePrecisionBrushHint
+            ?.remove();
+
         window.clearTimeout(
             this.mobileBrushSizePreviewTimer,
         );
@@ -8803,6 +8937,8 @@ export class GameScene extends Phaser.Scene {
         this.mobilePaintDock =
             undefined;
         this.mobilePaintModeButton =
+            undefined;
+        this.mobilePrecisionBrushHint =
             undefined;
         this.mobilePaintSizeInput =
             undefined;
@@ -19105,7 +19241,7 @@ export class GameScene extends Phaser.Scene {
                 padding: '6px 9px',
                 border: '2px solid #5c8f66',
                 borderRadius: '11px',
-                background: '#dff7e6',
+                background: 'rgba(223,247,230,.66)',
                 color: '#26352b',
                 fontWeight: '900',
                 fontSize: '12px',
@@ -19125,29 +19261,29 @@ export class GameScene extends Phaser.Scene {
                         'finger'
                         ? (
                             language === 'ja'
-                                ? '☝ 指で描く ↔'
+                                ? '🖌 精密ブラシ ↔'
                                 : language === 'en'
-                                    ? '☝ Finger Paint ↔'
+                                    ? '🖌 Precision Brush ↔'
                                     : language === 'zh'
-                                        ? '☝ 手指绘制 ↔'
-                                        : '☝ 손가락 그리기 ↔'
+                                        ? '🖌 精细画笔 ↔'
+                                        : '🖌 정밀붓 그리기 ↔'
                         )
                         : (
                             language === 'ja'
-                                ? '↔ 🖌 ブラシ'
+                                ? '↔ ☝ 指で描く'
                                 : language === 'en'
-                                    ? '↔ 🖌 Brush'
+                                    ? '↔ ☝ Finger Paint'
                                     : language === 'zh'
-                                        ? '↔ 🖌 画笔'
-                                        : '↔ 🖌 붓으로 그리기'
+                                        ? '↔ ☝ 手指绘制'
+                                        : '↔ ☝ 손가락 그리기'
                         );
 
                 avatarModeButton.style
                     .background =
                     avatarPaintInputMode ===
                         'finger'
-                        ? '#dff7e6'
-                        : '#fff4d6';
+                        ? 'rgba(223,247,230,.66)'
+                        : 'rgba(255,244,214,.66)';
 
                 if (
                     avatarPaintInputMode ===
@@ -37163,6 +37299,8 @@ export class GameScene extends Phaser.Scene {
 
         this.mobilePaintDotCommitted =
             false;
+        this.mobilePaintHoldArmed =
+            false;
 
         if (hidePreview) {
             if (
@@ -37407,6 +37545,7 @@ export class GameScene extends Phaser.Scene {
     ): void {
         this.cancelMobilePaintHoldTimers();
         this.mobilePaintDotCommitted = false;
+        this.mobilePaintHoldArmed = false;
 
         /*
          * Hunter precision brush needs a more deliberate hold so repositioning
@@ -37425,6 +37564,8 @@ export class GameScene extends Phaser.Scene {
                     ) {
                         return;
                     }
+                    this.mobilePaintHoldArmed =
+                        true;
                     this.commitMobilePendingDot();
                     this.showMobilePendingPaintPreview(pointer);
                 },
@@ -37480,7 +37621,8 @@ export class GameScene extends Phaser.Scene {
         if (
             this.mobilePaintInputMode ===
                 'brush' &&
-            !this.mobilePaintDotCommitted
+            !this.mobilePaintDotCommitted &&
+            !this.mobilePaintHoldArmed
         ) {
             if (movedScreenPixels >= 4) {
                 this.mobilePendingPaintStartScreen
@@ -37534,7 +37676,14 @@ export class GameScene extends Phaser.Scene {
          * held brush actually enters the body and make THAT first legal pixel
          * the stroke origin.
          */
-        if (!this.mobilePaintDotCommitted) {
+        if (
+            !this.mobilePaintDotCommitted &&
+            !(
+                this.mobilePaintInputMode ===
+                    'brush' &&
+                this.mobilePaintHoldArmed
+            )
+        ) {
             const startPoint =
                 this.networkPlayerManager
                     .paintLocalPlayer(
@@ -37603,6 +37752,8 @@ export class GameScene extends Phaser.Scene {
             this.straightLineStartWorld =
                 currentTarget.clone();
             this.mobilePaintDotCommitted = true;
+            this.mobilePaintHoldArmed =
+                false;
 
             if (this.practiceMode === 'hider') {
                 this.markPracticeHiderPaintStarted();
