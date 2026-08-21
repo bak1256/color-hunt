@@ -9157,10 +9157,14 @@ export class GameScene extends Phaser.Scene {
                         this.time.delayedCall(
                             250,
                             () => {
+                                /*
+                                 * V1010364_MAX_PAYLOAD_RECONNECT_LOOP_FIX:
+                                 * The received round snapshot is already
+                                 * authoritative. Do not echo it back as one
+                                 * potentially oversized WebSocket payload.
+                                 */
                                 multiplayerClient
-                                    .sendReconnectPaintSnapshot(
-                                        recoveredLocalHunterPaint,
-                                    );
+                                    .requestRoundPaintState();
                             },
                         );
                     }
@@ -9807,10 +9811,13 @@ export class GameScene extends Phaser.Scene {
                                 this.localPaintHistory.length > 0 &&
                                 multiplayerClient.isConnected()
                             ) {
+                                /*
+                                 * V1010364_MAX_PAYLOAD_RECONNECT_LOOP_FIX:
+                                 * Recovery must pull the server snapshot instead
+                                 * of pushing an unbounded local paint history.
+                                 */
                                 multiplayerClient
-                                    .sendReconnectPaintSnapshot(
-                                        this.localPaintHistory,
-                                    );
+                                    .requestRoundPaintState();
                             }
                         },
                     );
@@ -30642,10 +30649,20 @@ export class GameScene extends Phaser.Scene {
                     false,
                 );
 
+                /*
+                 * V1010364_MAX_PAYLOAD_RECONNECT_LOOP_FIX:
+                 *
+                 * Do NOT resend the complete localPaintHistory here.
+                 * Dense camouflage can serialize into a WebSocket frame larger
+                 * than the server's max payload and force code 1006 reconnect
+                 * loops exactly at Paint -> Hunt.
+                 *
+                 * finishActivePaintStroke() above already flushes the pending
+                 * network chunk when the transport is alive. The server remains
+                 * authoritative for the accumulated round paint.
+                 */
                 multiplayerClient
-                    .sendReconnectPaintSnapshot(
-                        this.localPaintHistory,
-                    );
+                    .requestRoundPaintState();
 
                 /*
                  * Ask for one convergence snapshot after opponents/server had

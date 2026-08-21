@@ -3423,18 +3423,23 @@ this.manualReconnectInFlight = false;
      * WebSocket handoff. Ask the server to normalize these strokes to the
      * NEW sessionId and replay them only to opponents.
      */
+    /*
+     * V1010364_MAX_PAYLOAD_RECONNECT_LOOP_FIX:
+     * Never put an unbounded round history into one WebSocket frame.
+     * This is a last-resort compatibility path; normal recovery now pulls
+     * request_round_paint_state from the authoritative server.
+     */
+    const boundedStrokes = strokes
+      .slice(-120)
+      .map((stroke) => ({
+        ...stroke,
+        points: stroke.points.slice(-96),
+      }));
+
     this.room.send(
       "restore_local_paint",
       {
-        strokes:
-          /*
-           * V1010339C_CRITICAL_ROUND_STABILITY_CLIENT / FULL_ROUND_PAINT
-           * Dense full-body camouflage can exceed 240 strokes.
-           */
-          strokes.slice(
-            0,
-            500,
-          ),
+        strokes: boundedStrokes,
       },
     );
   }
