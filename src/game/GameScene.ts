@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010386G_INPUT_FEEL_POLISH: Practice arrows outside thumbnail, 520ms Hunter/avatar brush hold, one-shot line tool. */
     /* V1010386F_PRACTICE_BOTH_ARROWS: merged v386e dock guard + guaranteed left/right Practice map arrows. */
     /* V1010386E_DOCK_VISIBILITY_GUARD: paint dock is hard-hidden outside the actual Paint phase. */
     /* V1010386D_REAL_LAYOUT_FIX: force actual DOM palette one-row tools/full-width slider and large Practice thumbnail via runtime !important styles. */
@@ -12838,14 +12839,7 @@ export class GameScene extends Phaser.Scene {
         mapArrows.forEach(
             (
                 arrow,
-                index,
             ) => {
-                /*
-                 * V1010386F_PRACTICE_BOTH_ARROWS:
-                 * Old compact CSS positioned one of the arrows absolutely over
-                 * the preview. Reset all positioning so LEFT and RIGHT occupy
-                 * their own grid columns and remain visible.
-                 */
                 arrow.hidden = false;
 
                 arrow.style.setProperty(
@@ -12855,44 +12849,7 @@ export class GameScene extends Phaser.Scene {
                 );
                 arrow.style.setProperty(
                     'position',
-                    'relative',
-                    'important',
-                );
-                arrow.style.setProperty(
-                    'left',
-                    'auto',
-                    'important',
-                );
-                arrow.style.setProperty(
-                    'right',
-                    'auto',
-                    'important',
-                );
-                arrow.style.setProperty(
-                    'top',
-                    'auto',
-                    'important',
-                );
-                arrow.style.setProperty(
-                    'bottom',
-                    'auto',
-                    'important',
-                );
-                arrow.style.setProperty(
-                    'transform',
-                    'none',
-                    'important',
-                );
-                arrow.style.setProperty(
-                    'grid-column',
-                    index === 0
-                        ? '1'
-                        : '3',
-                    'important',
-                );
-                arrow.style.setProperty(
-                    'grid-row',
-                    '1',
+                    'absolute',
                     'important',
                 );
                 arrow.style.setProperty(
@@ -12926,11 +12883,6 @@ export class GameScene extends Phaser.Scene {
                     'important',
                 );
                 arrow.style.setProperty(
-                    'justify-self',
-                    'center',
-                    'important',
-                );
-                arrow.style.setProperty(
                     'opacity',
                     '1',
                     'important',
@@ -12942,13 +12894,101 @@ export class GameScene extends Phaser.Scene {
                 );
                 arrow.style.setProperty(
                     'z-index',
-                    '4',
+                    '5',
                     'important',
                 );
                 arrow.style.setProperty(
                     'pointer-events',
                     'auto',
                     'important',
+                );
+            },
+        );
+
+        const placePracticeMapArrows =
+            (): void => {
+                if (
+                    !mapPicker ||
+                    !mapPreview ||
+                    mapArrows.length < 2
+                ) {
+                    return;
+                }
+
+                mapPicker.style.setProperty(
+                    'position',
+                    'relative',
+                    'important',
+                );
+                mapPicker.style.setProperty(
+                    'overflow',
+                    'visible',
+                    'important',
+                );
+
+                const previewLeft =
+                    mapPreview.offsetLeft;
+                const previewWidth =
+                    mapPreview.offsetWidth;
+                const previewTop =
+                    mapPreview.offsetTop;
+                const previewHeight =
+                    mapPreview.offsetHeight;
+
+                const arrowWidth = 56;
+                const outsideGap = 18;
+                const centerY =
+                    previewTop +
+                    previewHeight / 2;
+
+                const leftArrow =
+                    mapArrows[0];
+                const rightArrow =
+                    mapArrows[1];
+
+                leftArrow.style.setProperty(
+                    'left',
+                    `${Math.round(
+                        previewLeft -
+                        arrowWidth -
+                        outsideGap,
+                    )}px`,
+                    'important',
+                );
+                leftArrow.style.setProperty(
+                    'top',
+                    `${Math.round(
+                        centerY -
+                        41,
+                    )}px`,
+                    'important',
+                );
+
+                rightArrow.style.setProperty(
+                    'left',
+                    `${Math.round(
+                        previewLeft +
+                        previewWidth +
+                        outsideGap,
+                    )}px`,
+                    'important',
+                );
+                rightArrow.style.setProperty(
+                    'top',
+                    `${Math.round(
+                        centerY -
+                        41,
+                    )}px`,
+                    'important',
+                );
+            };
+
+        requestAnimationFrame(
+            () => {
+                placePracticeMapArrows();
+
+                requestAnimationFrame(
+                    placePracticeMapArrows,
                 );
             },
         );
@@ -20887,7 +20927,7 @@ export class GameScene extends Phaser.Scene {
 
                                 replay();
                             },
-                            280,
+                            520,
                         );
                 }
 
@@ -21022,7 +21062,7 @@ export class GameScene extends Phaser.Scene {
                                             holdPoint;
                                         replay();
                                     },
-                                    130,
+                                    520,
                                 );
                         }
 
@@ -37375,7 +37415,7 @@ export class GameScene extends Phaser.Scene {
             this.isMultiplayerSession() &&
             this.networkPlayerManager
                 .canLocalControlHunter()
-                ? 280
+                ? 520
                 : 120;
 
         this.mobilePaintHoldDotEvent =
@@ -38844,6 +38884,9 @@ export class GameScene extends Phaser.Scene {
                     return;
                 }
 
+                const completedExplicitLine =
+                    this.straightLineToolSelected;
+
                 if (
                     this.phase === 'paint' &&
                     (
@@ -38902,7 +38945,32 @@ export class GameScene extends Phaser.Scene {
                     undefined;
                 this.straightLineModeActive =
                     false;
+                if (
+                    this.straightLineToolSelected
+                ) {
+                    this.straightLineToolSelected =
+                        false;
+                    this.syncMobilePaintDockUi();
+                    this.highlightBrushShape(
+                        this.brushShape,
+                    );
+                }
                 this.clearStraightLinePreview();
+
+                /*
+                 * V1010386G_ONE_SHOT_LINE_TOOL:
+                 * A straight line is one deliberate gesture. After release,
+                 * return to the already-selected Circle/Square brush so the
+                 * next touch does not instantly start another line.
+                 */
+                if (completedExplicitLine) {
+                    this.straightLineToolSelected =
+                        false;
+                    this.syncMobilePaintDockUi();
+                    this.highlightBrushShape(
+                        this.brushShape,
+                    );
+                }
 
                 this.hideMobilePaintPrecisionGuide();
 
