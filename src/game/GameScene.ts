@@ -9143,31 +9143,23 @@ export class GameScene extends Phaser.Scene {
                         );
 
                     /*
-                     * This payload is sourced from the same data that just
-                     * succeeded locally, so it no longer depends on whether
-                     * localPaintHistory survived the reconnect.
+                     * V1010367_STOP_RECONNECT_PAINT_FEEDBACK_LOOP:
+                     *
+                     * round_paint_state is already the authoritative recovery
+                     * stream. Never request another round_paint_state merely
+                     * because one of its chunks contained the local Hunter.
+                     *
+                     * The previous recovery code created a feedback loop:
+                     *   receive chunk -> request snapshot -> receive chunk ->
+                     *   request snapshot ...
+                     * which replayed camouflage over and over, made colors look
+                     * like they were rewinding/flickering, stalled rendering,
+                     * and could destabilize the freshly reconnected transport.
+                     *
+                     * recoveredLocalHunterPaint is intentionally NOT echoed or
+                     * re-requested here.
                      */
-                    if (
-                        recoveredLocalHunterPaint
-                            .length >
-                            0 &&
-                        this.networkPlayerManager
-                            .isLocalHunter()
-                    ) {
-                        this.time.delayedCall(
-                            250,
-                            () => {
-                                /*
-                                 * V1010364_MAX_PAYLOAD_RECONNECT_LOOP_FIX:
-                                 * The received round snapshot is already
-                                 * authoritative. Do not echo it back as one
-                                 * potentially oversized WebSocket payload.
-                                 */
-                                multiplayerClient
-                                    .requestRoundPaintState();
-                            },
-                        );
-                    }
+                    void recoveredLocalHunterPaint;
 
                     if (
                         pending.length >
