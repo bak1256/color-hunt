@@ -30642,38 +30642,22 @@ export class GameScene extends Phaser.Scene {
                 );
 
                 /*
-                 * V1010364_MAX_PAYLOAD_RECONNECT_LOOP_FIX:
+                 * V1010369_HUNT_START_PAINT_STABILITY:
                  *
-                 * Do NOT resend the complete localPaintHistory here.
-                 * Dense camouflage can serialize into a WebSocket frame larger
-                 * than the server's max payload and force code 1006 reconnect
-                 * loops exactly at Paint -> Hunt.
+                 * Normal Paint -> Hunt is NOT a reconnect recovery path.
+                 * Every connected client has already received paint_stroke
+                 * updates during Paint, and the server has already accumulated
+                 * the authoritative round history.
                  *
-                 * finishActivePaintStroke() above already flushes the pending
-                 * network chunk when the transport is alive. The server remains
-                 * authoritative for the accumulated round paint.
+                 * Requesting round_paint_state here caused the whole room's
+                 * camouflage to be replayed again immediately at Hunt start.
+                 * That produced the visible 1-3 second rewind/flicker and extra
+                 * render pressure on mobile.
+                 *
+                 * Therefore: zero network paint snapshot requests on a healthy
+                 * phase transition. round_paint_state is reserved for actual
+                 * reconnect/recovery only.
                  */
-                multiplayerClient
-                    .requestRoundPaintState();
-
-                /*
-                 * Ask for one convergence snapshot after opponents/server had
-                 * time to process the replacement. This is cheap and prevents
-                 * an early Hunt render from staying on an older partial image.
-                 */
-                this.time.delayedCall(
-                    260,
-                    () => {
-                        if (
-                            this.phase ===
-                            'hunt' &&
-                            this.isMultiplayerSession()
-                        ) {
-                            multiplayerClient
-                                .requestRoundPaintState();
-                        }
-                    },
-                );
             }
 
             this.clearStatus();
@@ -30717,49 +30701,40 @@ export class GameScene extends Phaser.Scene {
             this.startGameplayCamera();
 
             /*
-             * V1010344B_HIDER_SELF_PAINT_HUNT_SETTLE
+             * V1010369_HUNT_START_PAINT_STABILITY:
              *
-             * Opponents can already have the correct camouflage while the
-             * owner's local RenderTexture is blank after Paint -> Hunt.
-             *
-             * Replay localPaintHistory locally only. broadcast=false means
-             * zero paint_stroke network traffic and no server state changes.
-             *
-             * Multiple short settle passes protect against late Hunt
-             * normalization / visibility callbacks overwriting the local
-             * texture during the transition.
+             * Keep exactly ONE local-only settle pass for the Hider owner.
+             * Rebuilding the same RenderTexture at 0/120/360ms can itself look
+             * like a short flash on slower devices. One post-transition pass is
+             * sufficient now that network snapshot replay is removed.
              */
             if (
                 this.networkPlayerManager
                     .isLocalHider() &&
                 this.localPaintHistory.length > 0
             ) {
-                [0, 120, 360].forEach(
-                    (delay) => {
-                        this.time.delayedCall(
-                            delay,
-                            () => {
-                                if (
-                                    this.phase !== 'hunt' ||
-                                    !this.networkPlayerManager
-                                        .isLocalHider() ||
-                                    this.localPaintHistory
-                                        .length < 1
-                                ) {
-                                    return;
-                                }
+                this.time.delayedCall(
+                    0,
+                    () => {
+                        if (
+                            this.phase !== 'hunt' ||
+                            !this.networkPlayerManager
+                                .isLocalHider() ||
+                            this.localPaintHistory
+                                .length < 1
+                        ) {
+                            return;
+                        }
 
-                                this.rebuildLocalPaintFromHistory(
-                                    false,
-                                );
-
-                                this.networkPlayerManager
-                                    .normalizeLocalPlayerForGameplay();
-
-                                this.networkPlayerManager
-                                    .restoreAllPlayerVisibility();
-                            },
+                        this.rebuildLocalPaintFromHistory(
+                            false,
                         );
+
+                        this.networkPlayerManager
+                            .normalizeLocalPlayerForGameplay();
+
+                        this.networkPlayerManager
+                            .restoreAllPlayerVisibility();
                     },
                 );
             }
