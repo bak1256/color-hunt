@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010374_INVITE_GONE_ROOM_GUARD: stale invite links return to lobby instead of hanging on join. */
     /* V1010371_LOBBY_READY_BARRIER: waiting-room START/READY role switch with live counter. */
     /* V1010370_ATOMIC_HUNT_VISUAL_HANDOFF: preserve live paint textures through Paint -> Hunt without replay/snap pulses. */
     /* V1010363_POOP_SLOW_TEXT_SPACING: move poop slowdown explanation slightly below the under-Hunter countdown gauge. */
@@ -10100,6 +10101,205 @@ export class GameScene extends Phaser.Scene {
         }
     }
 
+    private showInviteRoomGoneModal(): void {
+        this.closeMenuModal();
+
+        const copy =
+            (
+                {
+                    ko: {
+                        title: '🚪 방이 사라졌습니다',
+                        body: '초대받은 방이 이미 종료되었거나 존재하지 않습니다.\n메인 로비에서 다른 방을 선택해주세요.',
+                        button: '로비로 돌아가기',
+                    },
+                    ja: {
+                        title: '🚪 ルームが終了しました',
+                        body: '招待されたルームはすでに終了したか、存在しません。\nメインロビーから別のルームを選んでください。',
+                        button: 'ロビーへ戻る',
+                    },
+                    en: {
+                        title: '🚪 Room no longer exists',
+                        body: 'This invited room has already closed or no longer exists.\nPlease choose another room from the main lobby.',
+                        button: 'Back to Lobby',
+                    },
+                    zh: {
+                        title: '🚪 房间已不存在',
+                        body: '邀请的房间已经结束或不存在。\n请返回大厅选择其他房间。',
+                        button: '返回大厅',
+                    },
+                } as const
+            )[getLanguage()];
+
+        const overlay =
+            document.createElement(
+                'div',
+            );
+
+        Object.assign(
+            overlay.style,
+            {
+                position: 'fixed',
+                inset: '0',
+                zIndex: '10050',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '18px',
+                boxSizing: 'border-box',
+                background:
+                    'rgba(30, 48, 35, .38)',
+                backdropFilter:
+                    'blur(5px)',
+                WebkitBackdropFilter:
+                    'blur(5px)',
+            },
+        );
+
+        const card =
+            document.createElement(
+                'div',
+            );
+
+        Object.assign(
+            card.style,
+            {
+                width:
+                    'min(460px, calc(100vw - 30px))',
+                boxSizing: 'border-box',
+                padding: '24px 24px 22px',
+                border:
+                    '2px solid #70a978',
+                borderRadius: '20px',
+                background: '#fff9e9',
+                color: '#284333',
+                textAlign: 'center',
+                boxShadow:
+                    '0 16px 48px rgba(20,42,28,.28)',
+                fontFamily:
+                    'Arial, sans-serif',
+            },
+        );
+
+        const title =
+            document.createElement(
+                'div',
+            );
+
+        Object.assign(
+            title.style,
+            {
+                fontSize: '22px',
+                fontWeight: '900',
+                lineHeight: '1.25',
+                marginBottom: '12px',
+            },
+        );
+
+        title.textContent =
+            copy.title;
+
+        const body =
+            document.createElement(
+                'div',
+            );
+
+        Object.assign(
+            body.style,
+            {
+                whiteSpace: 'pre-line',
+                fontSize: '14px',
+                lineHeight: '1.6',
+                opacity: '0.86',
+                marginBottom: '18px',
+            },
+        );
+
+        body.textContent =
+            copy.body;
+
+        const button =
+            document.createElement(
+                'button',
+            );
+
+        button.type = 'button';
+        button.textContent =
+            copy.button;
+
+        Object.assign(
+            button.style,
+            {
+                width: '100%',
+                minHeight: '44px',
+                border: '0',
+                borderRadius: '12px',
+                padding: '10px 16px',
+                background: '#4f9f68',
+                color: '#ffffff',
+                fontSize: '15px',
+                fontWeight: '900',
+                cursor: 'pointer',
+            },
+        );
+
+        const close = (): void => {
+            overlay.remove();
+            this.input.enabled =
+                true;
+
+            if (
+                this.input.keyboard
+            ) {
+                this.input.keyboard.enabled =
+                    true;
+            }
+        };
+
+        button.addEventListener(
+            'click',
+            close,
+        );
+
+        overlay.addEventListener(
+            'click',
+            (event) => {
+                if (
+                    event.target ===
+                    overlay
+                ) {
+                    close();
+                }
+            },
+        );
+
+        card.appendChild(
+            title,
+        );
+        card.appendChild(
+            body,
+        );
+        card.appendChild(
+            button,
+        );
+        overlay.appendChild(
+            card,
+        );
+        document.body.appendChild(
+            overlay,
+        );
+
+        this.input.enabled =
+            false;
+
+        if (
+            this.input.keyboard
+        ) {
+            this.input.keyboard.enabled =
+                false;
+        }
+    }
+
+
     private showInviteGameInProgressModal(): void {
         this.closeMenuModal();
 
@@ -10351,8 +10551,19 @@ export class GameScene extends Phaser.Scene {
                         roomId,
                     );
 
+            if (!status.exists) {
+                this.pendingInviteRoomId =
+                    '';
+                this.pendingInvitePrivate =
+                    false;
+
+                this.clearInviteRoomFromAddressBar();
+                this.showMainMenu();
+                this.showInviteRoomGoneModal();
+                return;
+            }
+
             if (
-                status.exists &&
                 status.phase !==
                     'lobby'
             ) {
@@ -15416,6 +15627,61 @@ export class GameScene extends Phaser.Scene {
             true,
             tr('방에 참가하는 중...'),
         );
+
+        /*
+         * V1010374_INVITE_GONE_ROOM_GUARD:
+         * The room can disappear after the invite page was opened and even
+         * after the nickname modal appeared. Check again immediately before
+         * Colyseus joinById so a stale invite can never sit on "Joining..."
+         * forever.
+         */
+        try {
+            const status =
+                await multiplayerClient
+                    .getRoomStatus(
+                        roomId,
+                    );
+
+            if (!status.exists) {
+                this.pendingInviteRoomId =
+                    '';
+                this.pendingInvitePrivate =
+                    false;
+
+                this.clearInviteRoomFromAddressBar();
+                this.setModalBusy(
+                    false,
+                );
+                this.closeMenuModal();
+                this.showMainMenu();
+                this.showInviteRoomGoneModal();
+                return;
+            }
+
+            if (
+                status.phase !==
+                    'lobby'
+            ) {
+                this.pendingInviteRoomId =
+                    '';
+                this.pendingInvitePrivate =
+                    false;
+
+                this.clearInviteRoomFromAddressBar();
+                this.setModalBusy(
+                    false,
+                );
+                this.closeMenuModal();
+                this.showMainMenu();
+                this.showInviteGameInProgressModal();
+                return;
+            }
+        } catch (error) {
+            console.warn(
+                '[Color Hunt] final room-status check failed; using server join guard',
+                error,
+            );
+        }
 
         /*
          * 페이지 reload를 제거합니다.
