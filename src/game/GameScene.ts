@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010386K_RESPONSIVE_PRACTICE_CAROUSEL: both arrows always visible; thumbnail yields width; map name truly centered. */
     /* V1010386J_CURRENT_MODE_TOGGLE: paint toggle shows current mode + explicit switch action. */
     /* V1010386I_PRECISION_BRUSH_UX: outside-body hold arming, destination-mode labels, Precision Brush naming, translucent controls hint. */
     /* V1010386H_UNIFIED_MOBILE_HOLD: Hunter and Hider mobile precision brush both use 520ms hold-to-paint. */
@@ -12859,7 +12860,19 @@ export class GameScene extends Phaser.Scene {
          *          [ < ] [ LARGE MAP THUMBNAIL ] [ > ]
          *                    MAP NAME
          */
+        /*
+         * V1010386K_RESPONSIVE_PRACTICE_CAROUSEL:
+         * Keep BOTH arrows inside the available modal width at all times.
+         * The thumbnail yields width first instead of pushing an arrow offscreen.
+         *
+         *   [ < ]   [ responsive thumbnail ]   [ > ]
+         *                 MAP NAME
+         */
         if (mapPicker) {
+            const compactMapPicker =
+                this.mobileControlsEnabled ||
+                window.innerWidth < 760;
+
             mapPicker.style.setProperty(
                 'display',
                 'grid',
@@ -12867,7 +12880,9 @@ export class GameScene extends Phaser.Scene {
             );
             mapPicker.style.setProperty(
                 'grid-template-columns',
-                '64px minmax(280px, 520px) 64px',
+                compactMapPicker
+                    ? '44px minmax(0, 1fr) 44px'
+                    : '56px minmax(0, 1fr) 56px',
                 'important',
             );
             mapPicker.style.setProperty(
@@ -12886,18 +12901,54 @@ export class GameScene extends Phaser.Scene {
                 'important',
             );
             mapPicker.style.setProperty(
-                'gap',
-                '10px 16px',
+                'column-gap',
+                compactMapPicker
+                    ? '8px'
+                    : '14px',
+                'important',
+            );
+            mapPicker.style.setProperty(
+                'row-gap',
+                '10px',
                 'important',
             );
             mapPicker.style.setProperty(
                 'width',
+                compactMapPicker
+                    ? '100%'
+                    : 'min(100%, 700px)',
+                'important',
+            );
+            mapPicker.style.setProperty(
+                'max-width',
                 '100%',
                 'important',
             );
             mapPicker.style.setProperty(
                 'margin',
                 '14px auto 8px',
+                'important',
+            );
+            mapPicker.style.setProperty(
+                'padding',
+                compactMapPicker
+                    ? '0 4px'
+                    : '0 8px',
+                'important',
+            );
+            mapPicker.style.setProperty(
+                'box-sizing',
+                'border-box',
+                'important',
+            );
+            mapPicker.style.setProperty(
+                'position',
+                'relative',
+                'important',
+            );
+            mapPicker.style.setProperty(
+                'overflow',
+                'visible',
                 'important',
             );
         }
@@ -12915,22 +12966,22 @@ export class GameScene extends Phaser.Scene {
             );
             mapPreview.style.setProperty(
                 'width',
-                'clamp(280px, 52vw, 520px)',
-                'important',
-            );
-            mapPreview.style.setProperty(
-                'height',
-                'auto',
+                '100%',
                 'important',
             );
             mapPreview.style.setProperty(
                 'min-width',
-                '280px',
+                '0',
                 'important',
             );
             mapPreview.style.setProperty(
                 'max-width',
                 '520px',
+                'important',
+            );
+            mapPreview.style.setProperty(
+                'height',
+                'auto',
                 'important',
             );
             mapPreview.style.setProperty(
@@ -12973,14 +13024,28 @@ export class GameScene extends Phaser.Scene {
                 '0 8px 22px rgba(38,69,43,.22)',
                 'important',
             );
+            mapPreview.style.setProperty(
+                'box-sizing',
+                'border-box',
+                'important',
+            );
         }
 
         mapArrows.forEach(
             (
                 arrow,
+                index,
             ) => {
+                const compactMapPicker =
+                    this.mobileControlsEnabled ||
+                    window.innerWidth < 760;
+
                 arrow.hidden = false;
 
+                /*
+                 * Reset legacy absolute-position rules. Each arrow owns a
+                 * dedicated grid column, so neither can be pushed offscreen.
+                 */
                 arrow.style.setProperty(
                     'display',
                     'flex',
@@ -12988,27 +13053,72 @@ export class GameScene extends Phaser.Scene {
                 );
                 arrow.style.setProperty(
                     'position',
-                    'absolute',
+                    'relative',
+                    'important',
+                );
+                arrow.style.setProperty(
+                    'left',
+                    'auto',
+                    'important',
+                );
+                arrow.style.setProperty(
+                    'right',
+                    'auto',
+                    'important',
+                );
+                arrow.style.setProperty(
+                    'top',
+                    'auto',
+                    'important',
+                );
+                arrow.style.setProperty(
+                    'bottom',
+                    'auto',
+                    'important',
+                );
+                arrow.style.setProperty(
+                    'transform',
+                    'none',
+                    'important',
+                );
+                arrow.style.setProperty(
+                    'grid-column',
+                    index === 0
+                        ? '1'
+                        : '3',
+                    'important',
+                );
+                arrow.style.setProperty(
+                    'grid-row',
+                    '1',
                     'important',
                 );
                 arrow.style.setProperty(
                     'width',
-                    '56px',
+                    compactMapPicker
+                        ? '42px'
+                        : '54px',
                     'important',
                 );
                 arrow.style.setProperty(
                     'min-width',
-                    '56px',
+                    compactMapPicker
+                        ? '42px'
+                        : '54px',
                     'important',
                 );
                 arrow.style.setProperty(
                     'height',
-                    '82px',
+                    compactMapPicker
+                        ? '68px'
+                        : '82px',
                     'important',
                 );
                 arrow.style.setProperty(
                     'font-size',
-                    '36px',
+                    compactMapPicker
+                        ? '30px'
+                        : '36px',
                     'important',
                 );
                 arrow.style.setProperty(
@@ -13018,6 +13128,16 @@ export class GameScene extends Phaser.Scene {
                 );
                 arrow.style.setProperty(
                     'justify-content',
+                    'center',
+                    'important',
+                );
+                arrow.style.setProperty(
+                    'justify-self',
+                    'center',
+                    'important',
+                );
+                arrow.style.setProperty(
+                    'align-self',
                     'center',
                     'important',
                 );
@@ -13033,7 +13153,7 @@ export class GameScene extends Phaser.Scene {
                 );
                 arrow.style.setProperty(
                     'z-index',
-                    '5',
+                    '4',
                     'important',
                 );
                 arrow.style.setProperty(
@@ -13041,93 +13161,10 @@ export class GameScene extends Phaser.Scene {
                     'auto',
                     'important',
                 );
-            },
-        );
-
-        const placePracticeMapArrows =
-            (): void => {
-                if (
-                    !mapPicker ||
-                    !mapPreview ||
-                    mapArrows.length < 2
-                ) {
-                    return;
-                }
-
-                mapPicker.style.setProperty(
-                    'position',
-                    'relative',
+                arrow.style.setProperty(
+                    'box-sizing',
+                    'border-box',
                     'important',
-                );
-                mapPicker.style.setProperty(
-                    'overflow',
-                    'visible',
-                    'important',
-                );
-
-                const previewLeft =
-                    mapPreview.offsetLeft;
-                const previewWidth =
-                    mapPreview.offsetWidth;
-                const previewTop =
-                    mapPreview.offsetTop;
-                const previewHeight =
-                    mapPreview.offsetHeight;
-
-                const arrowWidth = 56;
-                const outsideGap = 18;
-                const centerY =
-                    previewTop +
-                    previewHeight / 2;
-
-                const leftArrow =
-                    mapArrows[0];
-                const rightArrow =
-                    mapArrows[1];
-
-                leftArrow.style.setProperty(
-                    'left',
-                    `${Math.round(
-                        previewLeft -
-                        arrowWidth -
-                        outsideGap,
-                    )}px`,
-                    'important',
-                );
-                leftArrow.style.setProperty(
-                    'top',
-                    `${Math.round(
-                        centerY -
-                        41,
-                    )}px`,
-                    'important',
-                );
-
-                rightArrow.style.setProperty(
-                    'left',
-                    `${Math.round(
-                        previewLeft +
-                        previewWidth +
-                        outsideGap,
-                    )}px`,
-                    'important',
-                );
-                rightArrow.style.setProperty(
-                    'top',
-                    `${Math.round(
-                        centerY -
-                        41,
-                    )}px`,
-                    'important',
-                );
-            };
-
-        requestAnimationFrame(
-            () => {
-                placePracticeMapArrows();
-
-                requestAnimationFrame(
-                    placePracticeMapArrows,
                 );
             },
         );
@@ -13135,7 +13172,7 @@ export class GameScene extends Phaser.Scene {
         if (mapName) {
             mapName.style.setProperty(
                 'grid-column',
-                '1 / 4',
+                '1 / -1',
                 'important',
             );
             mapName.style.setProperty(
@@ -13154,13 +13191,25 @@ export class GameScene extends Phaser.Scene {
                 'important',
             );
             mapName.style.setProperty(
+                'min-width',
+                '0',
+                'important',
+            );
+            mapName.style.setProperty(
+                'justify-self',
+                'stretch',
+                'important',
+            );
+            mapName.style.setProperty(
                 'text-align',
                 'center',
                 'important',
             );
             mapName.style.setProperty(
                 'font-size',
-                '20px',
+                this.mobileControlsEnabled
+                    ? '17px'
+                    : '20px',
                 'important',
             );
             mapName.style.setProperty(
@@ -13174,8 +13223,18 @@ export class GameScene extends Phaser.Scene {
                 'important',
             );
             mapName.style.setProperty(
-                'margin-top',
-                '2px',
+                'margin',
+                '2px 0 0',
+                'important',
+            );
+            mapName.style.setProperty(
+                'padding',
+                '0',
+                'important',
+            );
+            mapName.style.setProperty(
+                'box-sizing',
+                'border-box',
                 'important',
             );
         }
