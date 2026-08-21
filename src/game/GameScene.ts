@@ -19345,6 +19345,35 @@ export class GameScene extends Phaser.Scene {
             floatingTool,
         );
 
+        /*
+         * V1010389_AVATAR_EDITOR_DESKTOP_EYEDROPPER_PREVIEW:
+         * Desktop has no floating brush artwork. While Eyedropper is armed,
+         * show a clear square color preview beside the mouse BEFORE click.
+         */
+        const desktopEyedropperPreview =
+            document.createElement('div');
+
+        Object.assign(
+            desktopEyedropperPreview.style,
+            {
+                position: 'absolute',
+                width: '36px',
+                height: '36px',
+                display: 'none',
+                pointerEvents: 'none',
+                zIndex: '26',
+                border: '3px solid #ffffff',
+                outline: '2px solid rgba(22,34,29,.82)',
+                borderRadius: '7px',
+                boxShadow: '0 3px 10px rgba(0,0,0,.28)',
+                boxSizing: 'border-box',
+            },
+        );
+
+        canvasFrame.appendChild(
+            desktopEyedropperPreview,
+        );
+
         const avatarModeButton =
             document.createElement(
                 'button',
@@ -19474,14 +19503,29 @@ export class GameScene extends Phaser.Scene {
                     -1;
 
                 syncAvatarModeButton();
+
+                if (
+                    typeof syncAvatarPrecisionHint ===
+                        'function'
+                ) {
+                    syncAvatarPrecisionHint();
+                }
+
                 refreshToolStates();
                 replay();
             },
         );
 
-        canvasFrame.appendChild(
-            avatarModeButton,
-        );
+        /*
+         * V1010389_AVATAR_EDITOR_INPUT_UX:
+         * Desktop has direct mouse semantics and must not show the mobile
+         * Finger/Precision toggle on top of the character canvas.
+         * Mobile relocates this control outside the canvas below.
+         */
+        if (!this.mobileControlsEnabled) {
+            avatarModeButton.style.display =
+                'none';
+        }
 
         syncAvatarModeButton();
 
@@ -19702,6 +19746,134 @@ export class GameScene extends Phaser.Scene {
                     'none';
             };
 
+        const updateDesktopEyedropperPreview =
+            (
+                clientX: number,
+                clientY: number,
+            ): void => {
+                if (
+                    this.mobileControlsEnabled ||
+                    !eyedropperArmed
+                ) {
+                    desktopEyedropperPreview.style.display =
+                        'none';
+                    return;
+                }
+
+                const rect =
+                    canvas.getBoundingClientRect();
+
+                const px =
+                    Phaser.Math.Clamp(
+                        Math.floor(
+                            (
+                                clientX -
+                                rect.left
+                            ) /
+                            Math.max(
+                                1,
+                                rect.width,
+                            ) *
+                            canvas.width,
+                        ),
+                        0,
+                        canvas.width - 1,
+                    );
+
+                const py =
+                    Phaser.Math.Clamp(
+                        Math.floor(
+                            (
+                                clientY -
+                                rect.top
+                            ) /
+                            Math.max(
+                                1,
+                                rect.height,
+                            ) *
+                            canvas.height,
+                        ),
+                        0,
+                        canvas.height - 1,
+                    );
+
+                const previewContext =
+                    canvas.getContext('2d');
+
+                if (!previewContext) {
+                    return;
+                }
+
+                const pixel =
+                    previewContext.getImageData(
+                        px,
+                        py,
+                        1,
+                        1,
+                    ).data;
+
+                if (pixel[3] > 0) {
+                    lastEyedropperPreviewColor =
+                        (
+                            pixel[0] << 16
+                        ) |
+                        (
+                            pixel[1] << 8
+                        ) |
+                        pixel[2];
+
+                    desktopEyedropperPreview.style.background =
+                        `#${lastEyedropperPreviewColor
+                            .toString(16)
+                            .padStart(
+                                6,
+                                '0',
+                            )}`;
+                }
+
+                const frameRect =
+                    canvasFrame.getBoundingClientRect();
+
+                const previewWidth = 36;
+                const previewHeight = 36;
+
+                const rawLeft =
+                    clientX -
+                    frameRect.left +
+                    16;
+                const rawTop =
+                    clientY -
+                    frameRect.top -
+                    48;
+
+                desktopEyedropperPreview.style.left =
+                    `${Phaser.Math.Clamp(
+                        rawLeft,
+                        4,
+                        Math.max(
+                            4,
+                            frameRect.width -
+                            previewWidth -
+                            4,
+                        ),
+                    )}px`;
+
+                desktopEyedropperPreview.style.top =
+                    `${Phaser.Math.Clamp(
+                        rawTop,
+                        4,
+                        Math.max(
+                            4,
+                            frameRect.height -
+                            previewHeight -
+                            4,
+                        ),
+                    )}px`;
+
+                desktopEyedropperPreview.style.display =
+                    'block';
+            };
+
         const context =
             canvas.getContext('2d');
 
@@ -19803,6 +19975,52 @@ export class GameScene extends Phaser.Scene {
             false;
         let straightLineArmed =
             false;
+
+        /*
+         * V1010389_AVATAR_EDITOR_EYEDROPPER_ONE_SHOT:
+         * Sampling is temporary. Circle/Square/Line selected before sampling
+         * is restored immediately after the color is picked.
+         */
+        let avatarToolBeforeEyedropper:
+            'circle' |
+            'square' |
+            'line' =
+            'circle';
+
+        const rememberAvatarToolBeforeEyedropper =
+            (): void => {
+                avatarToolBeforeEyedropper =
+                    straightLineArmed
+                        ? 'line'
+                        : selectedShape ===
+                            'square'
+                            ? 'square'
+                            : 'circle';
+            };
+
+        const restoreAvatarToolAfterEyedropper =
+            (): void => {
+                eyedropperArmed =
+                    false;
+
+                if (
+                    avatarToolBeforeEyedropper ===
+                        'line'
+                ) {
+                    straightLineArmed =
+                        true;
+                } else {
+                    straightLineArmed =
+                        false;
+                    selectedShape =
+                        avatarToolBeforeEyedropper;
+                }
+
+                floatingTool.innerHTML =
+                    brushCursorSvg;
+                desktopEyedropperPreview.style.display =
+                    'none';
+            };
         let straightLineStart:
             NetworkPaintPoint |
             undefined;
@@ -21018,6 +21236,14 @@ export class GameScene extends Phaser.Scene {
         );
 
         canvas.addEventListener(
+            'pointerleave',
+            () => {
+                desktopEyedropperPreview.style.display =
+                    'none';
+            },
+        );
+
+        canvas.addEventListener(
             'wheel',
             (event) => {
                 event.preventDefault();
@@ -21103,8 +21329,25 @@ export class GameScene extends Phaser.Scene {
                         2 ||
                     eyedropperArmed
                 ) {
+                    if (
+                        event.button ===
+                            2 &&
+                        !eyedropperArmed
+                    ) {
+                        rememberAvatarToolBeforeEyedropper();
+                        eyedropperArmed =
+                            true;
+                        straightLineArmed =
+                            false;
+                    }
+
                     avatarEyedropperPointerId =
                         event.pointerId;
+
+                    updateDesktopEyedropperPreview(
+                        event.clientX,
+                        event.clientY,
+                    );
 
                     hoverPoint =
                         downLogical;
@@ -21200,6 +21443,11 @@ export class GameScene extends Phaser.Scene {
             'pointermove',
             (event) => {
                 updateFloatingTool(
+                    event.clientX,
+                    event.clientY,
+                );
+
+                updateDesktopEyedropperPreview(
                     event.clientX,
                     event.clientY,
                 );
@@ -21480,14 +21728,11 @@ export class GameScene extends Phaser.Scene {
                         -1;
 
                     /*
-                     * Eyedropper is a one-shot sampling action in the avatar
-                     * editor too. Return to the existing Circle/Square brush.
+                     * V1010389_AVATAR_EDITOR_EYEDROPPER_ONE_SHOT:
+                     * Return to exactly the paint tool used before sampling:
+                     * Circle, Square, or dedicated Line.
                      */
-                    eyedropperArmed =
-                        false;
-
-                    floatingTool.innerHTML =
-                        brushCursorSvg;
+                    restoreAvatarToolAfterEyedropper();
 
                     if (
                         avatarPaintInputMode ===
@@ -21938,6 +22183,10 @@ export class GameScene extends Phaser.Scene {
                  * tapping eyedropper SELECTS it; tapping again does not
                  * accidentally toggle back to brush.
                  */
+                if (!eyedropperArmed) {
+                    rememberAvatarToolBeforeEyedropper();
+                }
+
                 eyedropperArmed =
                     true;
                 straightLineArmed =
@@ -22227,10 +22476,104 @@ export class GameScene extends Phaser.Scene {
             },
         );
 
-        editorBody.append(
+        /*
+         * V1010389_AVATAR_EDITOR_MOBILE_TOGGLE_OUTSIDE:
+         * Keep the mode switch OUTSIDE the drawable canvas so it never covers
+         * the avatar. Precision-mode help sits directly below the switch.
+         */
+        const canvasStage =
+            document.createElement('div');
+
+        Object.assign(
+            canvasStage.style,
+            {
+                position: 'relative',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                overflow: 'visible',
+                flex: '0 0 auto',
+            },
+        );
+
+        const avatarPrecisionHint =
+            document.createElement('div');
+
+        const syncAvatarPrecisionHint =
+            (): void => {
+                const language =
+                    getLanguage();
+
+                avatarPrecisionHint.innerHTML =
+                    language === 'ja'
+                        ? 'ドラッグ: ブラシ移動<br>長押し: 塗り開始'
+                        : language === 'en'
+                            ? 'Drag: move brush<br>Hold: start painting'
+                            : language === 'zh'
+                                ? '拖动: 移动画笔<br>长按: 开始涂色'
+                                : '드래그: 붓이동<br>꾹누르기: 색칠시작';
+
+                avatarPrecisionHint.style.display =
+                    (
+                        this.mobileControlsEnabled &&
+                        avatarPaintInputMode ===
+                            'brush'
+                    )
+                        ? 'block'
+                        : 'none';
+            };
+
+        Object.assign(
+            avatarPrecisionHint.style,
+            {
+                position: 'absolute',
+                right: 'calc(100% + 8px)',
+                top: '58px',
+                width: '126px',
+                padding: '7px 8px',
+                border: '1px solid rgba(71,105,75,.68)',
+                borderRadius: '9px',
+                background: 'rgba(246,251,237,.78)',
+                color: '#294433',
+                fontSize: '11px',
+                lineHeight: '1.35',
+                fontWeight: '800',
+                textAlign: 'left',
+                boxShadow: '0 3px 8px rgba(0,0,0,.12)',
+                pointerEvents: 'none',
+                zIndex: '25',
+                boxSizing: 'border-box',
+            },
+        );
+
+        if (this.mobileControlsEnabled) {
+            avatarModeButton.style.display =
+                'block';
+            avatarModeButton.style.left =
+                'auto';
+            avatarModeButton.style.right =
+                'calc(100% + 8px)';
+            avatarModeButton.style.top =
+                '8px';
+            avatarModeButton.style.minWidth =
+                '126px';
+
+            canvasStage.append(
+                avatarModeButton,
+                avatarPrecisionHint,
+            );
+        }
+
+        canvasStage.appendChild(
             canvasFrame,
+        );
+
+        editorBody.append(
+            canvasStage,
             sideControls,
         );
+
+        syncAvatarPrecisionHint();
 
         card.append(
             title,
