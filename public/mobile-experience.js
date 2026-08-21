@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  /* V1010372_INAPP_LANDSCAPE_FALLBACK: Kakao/messenger fullscreen + virtual landscape fallback. */
+  /* V1010373_INAPP_LANDSCAPE_SAFE: Kakao/messenger best-effort landscape; never CSS-rotate the game root. */
 
   const coarse =
     window.matchMedia?.('(pointer: coarse)').matches ?? false;
@@ -38,7 +38,6 @@
     /KAKAOTALK|KakaoTalk|Line\/|NAVER|Instagram|FBAN|FBAV|; wv\)|\bwv\b/i
       .test(ua);
 
-  let virtualLandscape = false;
 
   const languageCandidates = [
     ...(navigator.languages ?? []),
@@ -123,10 +122,6 @@
   });
 
   const isPortrait = () => {
-    if (virtualLandscape) {
-      return false;
-    }
-
     const { width, height } = getViewport();
     return height > width;
   };
@@ -171,137 +166,139 @@
   const installButton =
     overlay.querySelector('[data-ch-install]');
 
-  const virtualLandscapeStyle =
-    document.createElement('style');
+  let rotateHintTimer = null;
 
-  virtualLandscapeStyle.id =
-    'colorhunt-virtual-landscape-style';
-
-  virtualLandscapeStyle.textContent = `
-    html.ch-virtual-landscape,
-    html.ch-virtual-landscape body {
-      margin: 0 !important;
-      padding: 0 !important;
-      width: 100vw !important;
-      height: 100vh !important;
-      min-width: 100vw !important;
-      min-height: 100vh !important;
-      overflow: hidden !important;
-      background: #000 !important;
-      overscroll-behavior: none !important;
-      touch-action: none !important;
-    }
-
-    html.ch-virtual-landscape body > #root {
-      position: fixed !important;
-      left: 0 !important;
-      top: 0 !important;
-      width: 100vh !important;
-      height: 100vw !important;
-      min-width: 100vh !important;
-      min-height: 100vw !important;
-      max-width: none !important;
-      max-height: none !important;
-      transform-origin: 0 0 !important;
-      transform: translateX(100vw) rotate(90deg) !important;
-      overflow: hidden !important;
-      z-index: 1 !important;
-    }
-
-    html.ch-virtual-landscape #colorhunt-orientation-overlay {
-      display: none !important;
-    }
-
-    html.ch-virtual-landscape #colorhunt-fullscreen-chip {
-      display: none !important;
-    }
-  `;
-
-  document.head.appendChild(
-    virtualLandscapeStyle,
-  );
-
-  function enableVirtualLandscape() {
-    if (
-      !isPortrait() &&
-      !virtualLandscape
-    ) {
-      return;
-    }
-
-    virtualLandscape = true;
-
-    document.documentElement
-      .classList.add(
-        'ch-virtual-landscape',
+  function showInAppRotateHint() {
+    let hint =
+      document.getElementById(
+        'colorhunt-inapp-rotate-hint',
       );
 
-    /*
-     * Tell Phaser/DOM overlays that the effective play stage changed.
-     * The CSS transform itself does not require an OS orientation change.
-     */
-    window.dispatchEvent(
-      new Event('resize'),
-    );
+    if (!hint) {
+      hint = document.createElement('div');
+      hint.id =
+        'colorhunt-inapp-rotate-hint';
 
-    window.dispatchEvent(
-      new Event(
-        'colorhunt:viewportchange',
-      ),
-    );
+      hint.innerHTML = `
+        <div class="ch-inapp-rotate-card">
+          <div class="ch-inapp-rotate-icon" aria-hidden="true">📱↻</div>
+          <strong>${language === 'ja'
+            ? 'スマホを横向きにしてください'
+            : language === 'zh'
+              ? '请将手机横向旋转'
+              : '휴대폰을 가로로 돌려주세요'}</strong>
+          <span>${language === 'ja'
+            ? '画面が回転しない場合は、スマホの自動回転（横画面）をオンにしてください。'
+            : language === 'zh'
+              ? '如果画面没有旋转，请开启手机的自动旋转（横屏模式）。'
+              : '화면이 돌아가지 않으면 휴대폰의 자동 회전(가로 모드)을 켜주세요.'}</span>
+          <button type="button" data-ch-rotate-close>
+            ${language === 'ja'
+              ? '確認'
+              : language === 'zh'
+                ? '确认'
+                : '확인'}
+          </button>
+        </div>
+      `;
 
-    requestAnimationFrame(
-      () => {
-        window.dispatchEvent(
-          new Event('resize'),
-        );
-      },
-    );
-  }
+      const style =
+        document.createElement('style');
+      style.id =
+        'colorhunt-inapp-rotate-hint-style';
+      style.textContent = `
+        #colorhunt-inapp-rotate-hint {
+          position: fixed;
+          inset: 0;
+          z-index: 2147483647;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 24px;
+          box-sizing: border-box;
+          background: rgba(4, 24, 15, .72);
+          backdrop-filter: blur(5px);
+          -webkit-backdrop-filter: blur(5px);
+        }
+        #colorhunt-inapp-rotate-hint .ch-inapp-rotate-card {
+          width: min(88vw, 380px);
+          box-sizing: border-box;
+          border: 3px solid #315f3e;
+          border-radius: 18px;
+          padding: 22px 20px 18px;
+          background: #f8fff0;
+          color: #183522;
+          box-shadow: 0 16px 44px rgba(0,0,0,.28);
+          text-align: center;
+          font-family: inherit;
+        }
+        #colorhunt-inapp-rotate-hint .ch-inapp-rotate-icon {
+          margin-bottom: 10px;
+          font-size: 42px;
+          line-height: 1;
+        }
+        #colorhunt-inapp-rotate-hint strong {
+          display: block;
+          margin-bottom: 9px;
+          font-size: 20px;
+          line-height: 1.35;
+        }
+        #colorhunt-inapp-rotate-hint span {
+          display: block;
+          font-size: 13px;
+          line-height: 1.55;
+          opacity: .78;
+        }
+        #colorhunt-inapp-rotate-hint button {
+          width: 100%;
+          margin-top: 16px;
+          border: 0;
+          border-radius: 11px;
+          padding: 12px 16px;
+          background: #48bd70;
+          color: #fff;
+          font: inherit;
+          font-weight: 800;
+        }
+      `;
 
-  function disableVirtualLandscape() {
-    if (!virtualLandscape) {
-      return;
+      document.head.appendChild(style);
+      document.body.appendChild(hint);
+
+      hint.querySelector(
+        '[data-ch-rotate-close]',
+      )?.addEventListener(
+        'click',
+        () => {
+          hint?.remove();
+        },
+      );
     }
 
-    virtualLandscape = false;
+    if (rotateHintTimer) {
+      clearTimeout(rotateHintTimer);
+    }
 
-    document.documentElement
-      .classList.remove(
-        'ch-virtual-landscape',
+    rotateHintTimer =
+      setTimeout(
+        () => {
+          document.getElementById(
+            'colorhunt-inapp-rotate-hint',
+          )?.remove();
+        },
+        9000,
       );
-
-    window.dispatchEvent(
-      new Event('resize'),
-    );
-
-    window.dispatchEvent(
-      new Event(
-        'colorhunt:viewportchange',
-      ),
-    );
   }
 
   async function requestFullscreenLandscape() {
-    /*
-     * V1010372_INAPP_LANDSCAPE_FALLBACK:
-     * 1) standards/legacy fullscreen
-     * 2) standards/legacy orientation lock
-     * 3) Kakao/other WebView CSS landscape fallback
-     */
-    let fullscreenEntered =
-      Boolean(
-        document.fullscreenElement ||
-        document.webkitFullscreenElement,
-      );
-
-    let orientationLocked = false;
-
     const root =
       document.documentElement;
 
     try {
-      if (!fullscreenEntered) {
+      if (
+        !document.fullscreenElement &&
+        !document.webkitFullscreenElement
+      ) {
         const requestFullscreen =
           root.requestFullscreen?.bind(root) ||
           root.webkitRequestFullscreen?.bind(root) ||
@@ -321,35 +318,26 @@
           ) {
             await result;
           }
-
-          fullscreenEntered =
-            Boolean(
-              document.fullscreenElement ||
-              document.webkitFullscreenElement,
-            );
         }
       }
     } catch {
-      fullscreenEntered = false;
+      // In-app WebViews may reject fullscreen.
     }
 
-    /*
-     * Some Android WebViews only accept orientation lock immediately after
-     * the user gesture, while others require fullscreen first. Try both the
-     * modern and legacy APIs.
-     */
+    let lockSucceeded = false;
+
     try {
       if (screen.orientation?.lock) {
         await screen.orientation.lock(
           'landscape',
         );
-        orientationLocked = true;
+        lockSucceeded = true;
       }
     } catch {
-      orientationLocked = false;
+      lockSucceeded = false;
     }
 
-    if (!orientationLocked) {
+    if (!lockSucceeded) {
       try {
         const legacyLock =
           screen.lockOrientation ||
@@ -357,46 +345,38 @@
           screen.msLockOrientation;
 
         if (legacyLock) {
-          orientationLocked =
+          lockSucceeded =
             legacyLock.call(
               screen,
               'landscape',
             ) !== false;
         }
       } catch {
-        orientationLocked = false;
+        lockSucceeded = false;
       }
     }
 
-    /*
-     * Give a real orientation change a brief moment to materialize before
-     * deciding that the in-app browser needs virtual landscape.
-     */
     await new Promise(
       (resolve) =>
-        setTimeout(resolve, 180),
+        setTimeout(resolve, 220),
     );
 
+    const viewport =
+      getViewport();
     const physicallyLandscape =
-      (
-        window.visualViewport?.width ??
-        window.innerWidth
-      ) >=
-      (
-        window.visualViewport?.height ??
-        window.innerHeight
-      );
+      viewport.width >= viewport.height;
 
+    /*
+     * Never rotate/scale #root with CSS.
+     * KakaoTalk and similar WebViews can keep a portrait viewport, which made
+     * the whole game tiny. If the browser refuses orientation lock, keep the
+     * normal responsive layout and show a short manual-rotation hint instead.
+     */
     if (
-      physicallyLandscape ||
-      orientationLocked
+      !physicallyLandscape &&
+      (!lockSucceeded || inAppBrowser)
     ) {
-      disableVirtualLandscape();
-    } else if (
-      inAppBrowser ||
-      !fullscreenEntered
-    ) {
-      enableVirtualLandscape();
+      showInAppRotateHint();
     }
 
     syncViewport();
@@ -537,19 +517,7 @@
     'orientationchange',
     () => {
       window.setTimeout(
-        () => {
-          const viewport =
-            getViewport();
-
-          if (
-            viewport.width >=
-            viewport.height
-          ) {
-            disableVirtualLandscape();
-          }
-
-          syncViewport();
-        },
+        syncViewport,
         120,
       );
     },
