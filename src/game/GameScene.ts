@@ -22851,10 +22851,10 @@ export class GameScene extends Phaser.Scene {
                      * Wider/taller safety margins prevent hair, hands or feet
                      * from being cropped on PC and mobile.
                      */
-                    const cropX = 16;
-                    const cropY = 24;
-                    const cropWidth = 48;
-                    const cropHeight = 76;
+                    const cropX = 15;
+                    const cropY = 20;
+                    const cropWidth = 50;
+                    const cropHeight = 82;
 
                     cropCanvas.width =
                         cropWidth;
@@ -24816,12 +24816,22 @@ export class GameScene extends Phaser.Scene {
             if (avatarImage) {
                 avatarImage.style.setProperty(
                     'width',
-                    '100%',
+                    '92%',
                     'important',
                 );
                 avatarImage.style.setProperty(
                     'height',
-                    '100%',
+                    '92%',
+                    'important',
+                );
+                avatarImage.style.setProperty(
+                    'margin',
+                    '0 auto',
+                    'important',
+                );
+                avatarImage.style.setProperty(
+                    'display',
+                    'block',
                     'important',
                 );
                 avatarImage.style.setProperty(
@@ -24840,7 +24850,7 @@ export class GameScene extends Phaser.Scene {
                  */
                 avatarImage.style.setProperty(
                     'transform',
-                    'translateY(0) scale(.90)',
+                    'translateY(-8%) scale(.78)',
                     'important',
                 );
                 avatarImage.style.setProperty(
