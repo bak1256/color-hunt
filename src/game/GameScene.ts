@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010386H_UNIFIED_MOBILE_HOLD: Hunter and Hider mobile precision brush both use 520ms hold-to-paint. */
     /* V1010386G_INPUT_FEEL_POLISH: Practice arrows outside thumbnail, 520ms Hunter/avatar brush hold, one-shot line tool. */
     /* V1010386F_PRACTICE_BOTH_ARROWS: merged v386e dock guard + guaranteed left/right Practice map arrows. */
     /* V1010386E_DOCK_VISIBILITY_GUARD: paint dock is hard-hidden outside the actual Paint phase. */
@@ -37412,11 +37413,7 @@ export class GameScene extends Phaser.Scene {
          * the tool does not accidentally paint. Hider keeps the existing feel.
          */
         const holdToPaintDelay =
-            this.isMultiplayerSession() &&
-            this.networkPlayerManager
-                .canLocalControlHunter()
-                ? 520
-                : 120;
+            520;
 
         this.mobilePaintHoldDotEvent =
             this.time.delayedCall(
