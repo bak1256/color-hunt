@@ -3106,6 +3106,42 @@ this.manualReconnectInFlight = false;
         code: number,
         message?: string,
       ) => {
+        const normalizedMessage =
+          String(message ?? "")
+            .trim()
+            .toLowerCase();
+
+        /*
+         * V1010387_STALE_SEAT_RESERVATION_LOG_CLEANUP:
+         * Colyseus may report an expired reservation from an obsolete reconnect
+         * attempt even after the client has already recovered through a newer Room.
+         * This is non-fatal and must not be presented as a red gameplay error.
+         *
+         * IMPORTANT:
+         * Do not alter reconnect state here.
+         * The normal reconnect / fresh-rejoin paths remain authoritative.
+         */
+        if (
+          code === 524 &&
+          normalizedMessage.includes(
+            "seat reservation expired",
+          )
+        ) {
+          console.info(
+            "[Chameleon Hunt] Ignored stale reconnect reservation",
+            {
+              code,
+              message,
+              roomId:
+                room.roomId,
+              sessionId:
+                room.sessionId,
+            },
+          );
+
+          return;
+        }
+
         console.error(
           "[Chameleon Hunt] Room error",
           {
