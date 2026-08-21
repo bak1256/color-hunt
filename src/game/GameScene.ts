@@ -8476,8 +8476,8 @@ export class GameScene extends Phaser.Scene {
                 `${Math.round(
                     rect.left +
                     Math.max(
-                        105,
-                        rect.width * 0.10,
+                        110,
+                        rect.width * 0.10 + 5,
                     ),
                 )}px`;
 
