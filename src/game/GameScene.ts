@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010384_BRUSH_HOLD_TO_PAINT_RESTORE: restore mobile precision-brush hold-to-paint and clean avatar-editor mode ghosts. */
     /* V1010382_FINGER_EYEDROPPER_SQUARE: use a larger square color swatch above the finger for clearer sampling. */
     /* V1010381_PAINT_TOGGLE_LEFT_GAP: move mobile paint-mode toggle farther left to clear max-zoom avatar without touching joystick. */
     /* V1010380_PRACTICE_CARD_EN_FIT: joystick-safe paint toggle + full English practice title/subtitle on desktop/mobile. */
@@ -18269,6 +18270,32 @@ export class GameScene extends Phaser.Scene {
             'finger' |
             'brush' = 'finger';
 
+        /*
+         * V1010384_AVATAR_BRUSH_HOLD_TO_PAINT:
+         * Brush mode can be moved freely without painting. Holding still at
+         * the intended tip for a short moment arms painting.
+         */
+        let avatarBrushHoldTimer:
+            number |
+            undefined;
+        let avatarBrushHoldReady =
+            false;
+
+        const clearAvatarBrushHold =
+            (): void => {
+                if (
+                    avatarBrushHoldTimer !==
+                        undefined
+                ) {
+                    window.clearTimeout(
+                        avatarBrushHoldTimer,
+                    );
+                }
+
+                avatarBrushHoldTimer =
+                    undefined;
+            };
+
         const floatingTool =
             document.createElement(
                 'div',
@@ -18487,8 +18514,16 @@ export class GameScene extends Phaser.Scene {
                     avatarPaintInputMode ===
                         'finger'
                 ) {
+                    /*
+                     * Hard reset all visual/tool ownership when returning to
+                     * direct finger painting. No brush/dropper ghost may remain.
+                     */
                     floatingTool.style.display =
                         'none';
+                    floatingTool.innerHTML =
+                        brushCursorSvg;
+                    avatarEyedropperPointerId =
+                        -1;
                 }
             };
 
@@ -18498,13 +18533,44 @@ export class GameScene extends Phaser.Scene {
                 event.preventDefault();
                 event.stopPropagation();
 
+                if (
+                    avatarBrushHoldTimer !==
+                        undefined
+                ) {
+                    window.clearTimeout(
+                        avatarBrushHoldTimer,
+                    );
+                    avatarBrushHoldTimer =
+                        undefined;
+                }
+
+                drawing = false;
+                paintStarted = false;
+                pendingPointerId = -1;
+                pendingStartScreen =
+                    undefined;
+                currentPoints = [];
+                avatarBrushHoldReady =
+                    false;
+
                 avatarPaintInputMode =
                     avatarPaintInputMode ===
                         'finger'
                         ? 'brush'
                         : 'finger';
 
+                /*
+                 * Pipette is never carried across mode changes. The selected
+                 * paint color and Circle/Square shape remain intact.
+                 */
+                eyedropperArmed =
+                    false;
+                avatarEyedropperPointerId =
+                    -1;
+
                 syncAvatarModeButton();
+                refreshToolStates();
+                replay();
             },
         );
 
@@ -19830,7 +19896,9 @@ export class GameScene extends Phaser.Scene {
                 floatingTool.style.top =
                     `calc(50% - ${90 * avatarMobileToolScale}px)`;
                 floatingTool.style.display =
-                    this.mobileControlsEnabled
+                    this.mobileControlsEnabled &&
+                    avatarPaintInputMode ===
+                        'brush'
                         ? 'flex'
                         : 'none';
 
@@ -19941,6 +20009,9 @@ export class GameScene extends Phaser.Scene {
 
                 drawing = false;
                 paintStarted = false;
+                clearAvatarBrushHold();
+                avatarBrushHoldReady =
+                    false;
                 straightLineStart =
                     undefined;
 
@@ -20167,6 +20238,55 @@ export class GameScene extends Phaser.Scene {
                 currentPoints = [
                     downLogical,
                 ];
+
+                clearAvatarBrushHold();
+                avatarBrushHoldReady =
+                    avatarPaintInputMode !==
+                        'brush' ||
+                    !this.mobileControlsEnabled;
+
+                if (
+                    this.mobileControlsEnabled &&
+                    avatarPaintInputMode ===
+                        'brush'
+                ) {
+                    avatarBrushHoldTimer =
+                        window.setTimeout(
+                            () => {
+                                if (
+                                    !drawing ||
+                                    pendingPointerId !==
+                                        event.pointerId ||
+                                    activePointers.size !==
+                                        1
+                                ) {
+                                    return;
+                                }
+
+                                avatarBrushHoldReady =
+                                    true;
+                                paintStarted =
+                                    true;
+
+                                const holdPoint =
+                                    avatarToolTipToLogical(
+                                        event.clientX,
+                                        event.clientY,
+                                    );
+
+                                currentPoints = [
+                                    holdPoint,
+                                ];
+
+                                straightLineStart =
+                                    holdPoint;
+
+                                replay();
+                            },
+                            130,
+                        );
+                }
+
                 replay();
             },
         );
@@ -20243,8 +20363,71 @@ export class GameScene extends Phaser.Scene {
                         );
 
                     /*
-                     * Same safety philosophy as in-game mobile paint:
-                     * touch first = preview, actual paint after movement.
+                     * Precision brush parity with the in-game painter:
+                     * move freely first, hold at the desired location, then draw.
+                     */
+                    if (
+                        this.mobileControlsEnabled &&
+                        avatarPaintInputMode ===
+                            'brush' &&
+                        !avatarBrushHoldReady
+                    ) {
+                        if (moved >= 3) {
+                            pendingStartScreen = {
+                                x: event.clientX,
+                                y: event.clientY,
+                            };
+
+                            currentPoints = [
+                                avatarToolTipToLogical(
+                                    event.clientX,
+                                    event.clientY,
+                                ),
+                            ];
+
+                            clearAvatarBrushHold();
+
+                            avatarBrushHoldTimer =
+                                window.setTimeout(
+                                    () => {
+                                        if (
+                                            !drawing ||
+                                            pendingPointerId !==
+                                                event.pointerId ||
+                                            activePointers.size !==
+                                                1
+                                        ) {
+                                            return;
+                                        }
+
+                                        avatarBrushHoldReady =
+                                            true;
+                                        paintStarted =
+                                            true;
+
+                                        const holdPoint =
+                                            avatarToolTipToLogical(
+                                                event.clientX,
+                                                event.clientY,
+                                            );
+
+                                        currentPoints = [
+                                            holdPoint,
+                                        ];
+                                        straightLineStart =
+                                            holdPoint;
+                                        replay();
+                                    },
+                                    130,
+                                );
+                        }
+
+                        replay();
+                        return;
+                    }
+
+                    /*
+                     * Finger mode / desktop: movement starts painting normally.
                      */
                     if (moved < 1) {
                         replay();
@@ -20391,6 +20574,24 @@ export class GameScene extends Phaser.Scene {
                     avatarEyedropperPointerId =
                         -1;
 
+                    /*
+                     * Eyedropper is a one-shot sampling action in the avatar
+                     * editor too. Return to the existing Circle/Square brush.
+                     */
+                    eyedropperArmed =
+                        false;
+
+                    floatingTool.innerHTML =
+                        brushCursorSvg;
+
+                    if (
+                        avatarPaintInputMode ===
+                            'finger'
+                    ) {
+                        floatingTool.style.display =
+                            'none';
+                    }
+
                     refreshToolStates();
                     replay();
                 }
@@ -20434,8 +20635,15 @@ export class GameScene extends Phaser.Scene {
                             ? dropperCursorSvg
                             : brushCursorSvg;
 
+                    /*
+                     * Finger mode owns no floating brush/pipette artwork.
+                     * This fixes stale visuals after repeatedly toggling modes.
+                     */
                     floatingTool.style.display =
-                        'flex';
+                        avatarPaintInputMode ===
+                            'brush'
+                            ? 'flex'
+                            : 'none';
 
                     replay();
                 }
@@ -36561,13 +36769,58 @@ export class GameScene extends Phaser.Scene {
                 pointer.y,
             );
 
+        /*
+         * V1010384_BRUSH_HOLD_TO_PAINT_RESTORE:
+         *
+         * Precision BRUSH mode is a cursor-positioning tool first.
+         * Merely dragging the brush handle must NOT leave paint behind.
+         * The user moves the brush tip to the desired location, holds there
+         * briefly, then painting starts and subsequent drag paints normally.
+         *
+         * Direct FINGER mode keeps the fast drag-to-paint contract.
+         */
+        if (
+            this.mobilePaintInputMode ===
+                'brush' &&
+            !this.mobilePaintDotCommitted
+        ) {
+            if (movedScreenPixels >= 4) {
+                this.mobilePendingPaintStartScreen
+                    .set(
+                        pointer.x,
+                        pointer.y,
+                    );
+
+                this.mobilePendingPaintStartWorld =
+                    this.getPaintInputWorldPoint(
+                        pointer,
+                    );
+
+                /*
+                 * Restart the hold clock at the new brush-tip location.
+                 * As long as the user is moving, this keeps repositioning only.
+                 */
+                this.scheduleMobilePaintHoldModes(
+                    pointer,
+                );
+            }
+
+            this.showMobilePendingPaintPreview(
+                pointer,
+            );
+            this.updateMobilePaintPrecisionGuide(
+                pointer,
+            );
+            return true;
+        }
+
         /* Ignore normal finger tremor. A still/near-still hold becomes a dot. */
         if (movedScreenPixels < 6) {
             this.showMobilePendingPaintPreview(pointer);
             return true;
         }
 
-        /* Deliberate movement before the long-hold threshold = freehand. */
+        /* Direct finger movement before long-hold threshold = freehand. */
         this.mobilePaintLineModeEvent?.remove(false);
         this.mobilePaintLineModeEvent = undefined;
         this.mobilePaintHoldDotEvent?.remove(false);
