@@ -79,7 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
-    /* V1010386C_PALETTE_LAYOUT_POLISH: single-row tool buttons on PC/mobile and full-width bottom brush slider on desktop. */
+    /* V1010386D_REAL_LAYOUT_FIX: force actual DOM palette one-row tools/full-width slider and large Practice thumbnail via runtime !important styles. */
     /* V1010386_EXPLICIT_LINE_TOOL: slower Hunter/avatar brush hold, explicit line tool, larger centered Practice map picker. */
     /* V1010384E_AVATAR_EDITOR_OPEN_FIX: fix PC/mobile avatar editor initialization crash. */
     /* V1010384D_EYEDROPPER_NEXT_TOUCH_IMMEDIATE: first valid finger touch after sampling stamps paint immediately. */
@@ -7628,6 +7628,92 @@ export class GameScene extends Phaser.Scene {
         tools.className =
             'colorhunt-paint-dock__tools';
 
+        /*
+         * V1010386D_REAL_PAINT_DOCK_LAYOUT:
+         * This DOM dock is the palette actually visible on PC/mobile.
+         * Force the layout inline with !important so older stylesheet rules
+         * cannot wrap REDO onto a second row.
+         */
+        root.style.setProperty(
+            'display',
+            'grid',
+            'important',
+        );
+        root.style.setProperty(
+            'grid-template-columns',
+            'minmax(250px, 38%) minmax(0, 1fr)',
+            'important',
+        );
+        root.style.setProperty(
+            'grid-template-rows',
+            'auto auto',
+            'important',
+        );
+        root.style.setProperty(
+            'column-gap',
+            '12px',
+            'important',
+        );
+        root.style.setProperty(
+            'row-gap',
+            '8px',
+            'important',
+        );
+        root.style.setProperty(
+            'align-items',
+            'center',
+            'important',
+        );
+
+        colors.style.setProperty(
+            'grid-column',
+            '1',
+            'important',
+        );
+        colors.style.setProperty(
+            'grid-row',
+            '1',
+            'important',
+        );
+
+        tools.style.setProperty(
+            'grid-column',
+            '2',
+            'important',
+        );
+        tools.style.setProperty(
+            'grid-row',
+            '1',
+            'important',
+        );
+        tools.style.setProperty(
+            'display',
+            'grid',
+            'important',
+        );
+        tools.style.setProperty(
+            'grid-template-columns',
+            'repeat(6, minmax(0, 1fr))',
+            'important',
+        );
+        tools.style.setProperty(
+            'gap',
+            this.mobileControlsEnabled
+                ? '6px'
+                : '5px',
+            'important',
+        );
+        tools.style.setProperty(
+            'width',
+            '100%',
+            'important',
+        );
+        tools.style.setProperty(
+            'min-width',
+            '0',
+            'important',
+        );
+
         const makeTool =
             (
                 key: string,
@@ -7645,6 +7731,46 @@ export class GameScene extends Phaser.Scene {
                     'colorhunt-paint-tool';
                 button.dataset.tool =
                     key;
+
+                button.style.setProperty(
+                    'min-width',
+                    '0',
+                    'important',
+                );
+                button.style.setProperty(
+                    'width',
+                    '100%',
+                    'important',
+                );
+                button.style.setProperty(
+                    'max-width',
+                    'none',
+                    'important',
+                );
+                button.style.setProperty(
+                    'box-sizing',
+                    'border-box',
+                    'important',
+                );
+                button.style.setProperty(
+                    'padding',
+                    this.mobileControlsEnabled
+                        ? '7px 3px'
+                        : '6px 3px',
+                    'important',
+                );
+                button.style.setProperty(
+                    'font-size',
+                    this.mobileControlsEnabled
+                        ? '12px'
+                        : '10px',
+                    'important',
+                );
+                button.style.setProperty(
+                    'white-space',
+                    'nowrap',
+                    'important',
+                );
                 button.innerHTML =
                     `<span class="colorhunt-paint-tool__icon">${svg}</span>` +
                     `<span>${label}</span>`;
@@ -7800,6 +7926,52 @@ export class GameScene extends Phaser.Scene {
         sizeWrap.className =
             'colorhunt-paint-size';
 
+        sizeWrap.style.setProperty(
+            'grid-column',
+            '1 / -1',
+            'important',
+        );
+        sizeWrap.style.setProperty(
+            'grid-row',
+            '2',
+            'important',
+        );
+        sizeWrap.style.setProperty(
+            'display',
+            'grid',
+            'important',
+        );
+        sizeWrap.style.setProperty(
+            'grid-template-columns',
+            '76px minmax(0, 1fr) 52px',
+            'important',
+        );
+        sizeWrap.style.setProperty(
+            'align-items',
+            'center',
+            'important',
+        );
+        sizeWrap.style.setProperty(
+            'gap',
+            '10px',
+            'important',
+        );
+        sizeWrap.style.setProperty(
+            'width',
+            '100%',
+            'important',
+        );
+        sizeWrap.style.setProperty(
+            'margin',
+            '0',
+            'important',
+        );
+        sizeWrap.style.setProperty(
+            'box-sizing',
+            'border-box',
+            'important',
+        );
+
         const sizeTitle =
             document.createElement(
                 'span',
@@ -7819,6 +7991,16 @@ export class GameScene extends Phaser.Scene {
                 'input',
             );
         sizeInput.type = 'range';
+        sizeInput.style.setProperty(
+            'width',
+            '100%',
+            'important',
+        );
+        sizeInput.style.setProperty(
+            'min-width',
+            '0',
+            'important',
+        );
         sizeInput.min = '1';
         sizeInput.max = '20';
         sizeInput.step = '1';
@@ -7929,6 +8111,21 @@ export class GameScene extends Phaser.Scene {
                 event.stopPropagation();
             },
         );
+
+        /*
+         * Keep the six-button row intact even on narrower landscape phones.
+         * The color block yields width first; tools never wrap.
+         */
+        if (
+            this.mobileControlsEnabled &&
+            window.innerWidth < 900
+        ) {
+            root.style.setProperty(
+                'grid-template-columns',
+                'minmax(220px, 36%) minmax(0, 1fr)',
+                'important',
+            );
+        }
 
         this.mobilePaintDock =
             root;
@@ -11462,7 +11659,7 @@ export class GameScene extends Phaser.Scene {
                         color: '#294232',
                         fontFamily:
                             'ui-monospace, SFMono-Regular, Consolas, monospace',
-                        fontSize: '13px',
+                        fontSize: '14px',
                         boxShadow:
                             'inset 0 1px 2px rgba(62,91,66,.06)',
                     },
@@ -12457,6 +12654,222 @@ export class GameScene extends Phaser.Scene {
             card.querySelector<HTMLElement>(
                 '[data-practice-map-name]',
             );
+
+        const mapPicker =
+            card.querySelector<HTMLElement>(
+                '.colorhunt-practice-map-picker',
+            );
+
+        const mapArrows =
+            Array.from(
+                card.querySelectorAll<HTMLButtonElement>(
+                    '.colorhunt-practice-map-arrow',
+                ),
+            );
+
+        /*
+         * V1010386D_PRACTICE_MAP_VISIBILITY:
+         * The old stylesheet has compact Practice-map sizing rules. Inline
+         * markup alone was still being overridden, so force the final runtime
+         * layout with !important.
+         *
+         * Layout:
+         *          [ < ] [ LARGE MAP THUMBNAIL ] [ > ]
+         *                    MAP NAME
+         */
+        if (mapPicker) {
+            mapPicker.style.setProperty(
+                'display',
+                'grid',
+                'important',
+            );
+            mapPicker.style.setProperty(
+                'grid-template-columns',
+                '64px minmax(280px, 520px) 64px',
+                'important',
+            );
+            mapPicker.style.setProperty(
+                'grid-template-rows',
+                'auto auto',
+                'important',
+            );
+            mapPicker.style.setProperty(
+                'align-items',
+                'center',
+                'important',
+            );
+            mapPicker.style.setProperty(
+                'justify-content',
+                'center',
+                'important',
+            );
+            mapPicker.style.setProperty(
+                'gap',
+                '10px 16px',
+                'important',
+            );
+            mapPicker.style.setProperty(
+                'width',
+                '100%',
+                'important',
+            );
+            mapPicker.style.setProperty(
+                'margin',
+                '14px auto 8px',
+                'important',
+            );
+        }
+
+        if (mapPreview) {
+            mapPreview.style.setProperty(
+                'grid-column',
+                '2',
+                'important',
+            );
+            mapPreview.style.setProperty(
+                'grid-row',
+                '1',
+                'important',
+            );
+            mapPreview.style.setProperty(
+                'width',
+                'clamp(280px, 52vw, 520px)',
+                'important',
+            );
+            mapPreview.style.setProperty(
+                'height',
+                'auto',
+                'important',
+            );
+            mapPreview.style.setProperty(
+                'min-width',
+                '280px',
+                'important',
+            );
+            mapPreview.style.setProperty(
+                'max-width',
+                '520px',
+                'important',
+            );
+            mapPreview.style.setProperty(
+                'aspect-ratio',
+                '16 / 9',
+                'important',
+            );
+            mapPreview.style.setProperty(
+                'object-fit',
+                'cover',
+                'important',
+            );
+            mapPreview.style.setProperty(
+                'justify-self',
+                'center',
+                'important',
+            );
+            mapPreview.style.setProperty(
+                'border-radius',
+                '14px',
+                'important',
+            );
+            mapPreview.style.setProperty(
+                'border',
+                '3px solid #6f9b6e',
+                'important',
+            );
+            mapPreview.style.setProperty(
+                'box-shadow',
+                '0 8px 22px rgba(38,69,43,.22)',
+                'important',
+            );
+        }
+
+        mapArrows.forEach(
+            (
+                arrow,
+                index,
+            ) => {
+                arrow.style.setProperty(
+                    'grid-column',
+                    index === 0
+                        ? '1'
+                        : '3',
+                    'important',
+                );
+                arrow.style.setProperty(
+                    'grid-row',
+                    '1',
+                    'important',
+                );
+                arrow.style.setProperty(
+                    'width',
+                    '56px',
+                    'important',
+                );
+                arrow.style.setProperty(
+                    'height',
+                    '82px',
+                    'important',
+                );
+                arrow.style.setProperty(
+                    'font-size',
+                    '36px',
+                    'important',
+                );
+                arrow.style.setProperty(
+                    'justify-self',
+                    'center',
+                    'important',
+                );
+            },
+        );
+
+        if (mapName) {
+            mapName.style.setProperty(
+                'grid-column',
+                '1 / 4',
+                'important',
+            );
+            mapName.style.setProperty(
+                'grid-row',
+                '2',
+                'important',
+            );
+            mapName.style.setProperty(
+                'display',
+                'block',
+                'important',
+            );
+            mapName.style.setProperty(
+                'width',
+                '100%',
+                'important',
+            );
+            mapName.style.setProperty(
+                'text-align',
+                'center',
+                'important',
+            );
+            mapName.style.setProperty(
+                'font-size',
+                '20px',
+                'important',
+            );
+            mapName.style.setProperty(
+                'line-height',
+                '1.25',
+                'important',
+            );
+            mapName.style.setProperty(
+                'font-weight',
+                '900',
+                'important',
+            );
+            mapName.style.setProperty(
+                'margin-top',
+                '2px',
+                'important',
+            );
+        }
 
         const syncPracticeMapPreview = (): void => {
             const selected = mapSelect?.value ?? this.practiceMap;
@@ -19742,7 +20155,7 @@ export class GameScene extends Phaser.Scene {
             controls.style,
             {
                 display: 'flex',
-                flexWrap: 'nowrap',
+                flexWrap: 'wrap',
                 gap: '6px',
                 justifyContent: 'center',
                 marginTop: '4px',
@@ -21379,7 +21792,7 @@ export class GameScene extends Phaser.Scene {
                 flexDirection: 'row',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: '7px',
+                gap: '10px',
             },
         );
 
@@ -33548,9 +33961,9 @@ export class GameScene extends Phaser.Scene {
 
         const panel = this.add
             .rectangle(
-                390,
-                this.gameHeight - 68,
-                760,
+                380,
+                this.gameHeight - 64,
+                740,
                 this.mobileControlsEnabled
                     ? 126
                     : 110,
@@ -33834,8 +34247,8 @@ export class GameScene extends Phaser.Scene {
 
         this.straightLineToolButton =
             this.add.text(
-                462,
-                this.gameHeight - 82,
+                475,
+                this.gameHeight - 78,
                 this.mobileControlsEnabled
                     ? `╱\n${tr('직선')}`
                     : `╱ ${tr('직선')}`,
@@ -33860,10 +34273,10 @@ export class GameScene extends Phaser.Scene {
                 .setOrigin(0.5)
                 .setFixedSize(
                     this.mobileControlsEnabled
-                        ? 64
-                        : 58,
+                        ? 70
+                        : 68,
                     this.mobileControlsEnabled
-                        ? 46
+                        ? 48
                         : 28,
                 )
                 .setAlign('center')
@@ -33906,8 +34319,8 @@ export class GameScene extends Phaser.Scene {
          */
         this.eyedropperButton =
             this.add.text(
-                526,
-                this.gameHeight - 82,
+                550,
+                this.gameHeight - 78,
                 this.mobileControlsEnabled
                     ? `💧\n${tr('스포이드')}`
                     : `◉ ${tr('스포이드')}`,
@@ -34006,8 +34419,8 @@ export class GameScene extends Phaser.Scene {
 
         this.undoPaintButton =
             this.add.text(
-                590,
-                this.gameHeight - 82,
+                625,
+                this.gameHeight - 78,
                 `↶ ${tr('되돌리기')}`,
                 {
                     fontFamily:
@@ -34081,8 +34494,8 @@ export class GameScene extends Phaser.Scene {
 
         this.redoPaintButton =
             this.add.text(
-                654,
-                this.gameHeight - 82,
+                700,
+                this.gameHeight - 78,
                 `↷ ${tr('다시 실행')}`,
                 {
                     fontFamily:
