@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010384B_FINGER_EYEDROPPER_TOUCHEND_RETURN: touch fallback returns sampler to last Circle/Square brush on finger-up. */
     /* V1010384_BRUSH_HOLD_TO_PAINT_RESTORE: restore mobile precision-brush hold-to-paint and clean avatar-editor mode ghosts. */
     /* V1010382_FINGER_EYEDROPPER_SQUARE: use a larger square color swatch above the finger for clearer sampling. */
     /* V1010381_PAINT_TOGGLE_LEFT_GAP: move mobile paint-mode toggle farther left to clear max-zoom avatar without touching joystick. */
@@ -39813,9 +39814,17 @@ export class GameScene extends Phaser.Scene {
                     this.eyedropperPointerId =
                         -1;
 
-                    this.updateEyedropperButtonUi();
-                    this.hideMobilePaintPrecisionGuide();
-                    this.showMobileIdleEyedropperGuide();
+                    /*
+                     * V1010384B_FINGER_EYEDROPPER_TOUCHEND_RETURN:
+                     * Android/iOS in-app browsers can finish the sampler through
+                     * the TouchEvent fallback rather than PointerEvent. This path
+                     * previously sampled the final color but left the eyedropper
+                     * armed, so the UI never returned to the last Circle/Square
+                     * brush after finger-up.
+                     *
+                     * Use the same one-shot completion path as PointerEvent.
+                     */
+                    this.finishMobileEyedropperSelection();
 
                     this.isPainting = false;
                     this.finishActivePaintStroke();
