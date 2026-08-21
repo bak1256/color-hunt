@@ -24682,6 +24682,30 @@ export class GameScene extends Phaser.Scene {
                     'contain',
                     'important',
                 );
+
+                /*
+                 * V1010392_LOBBY_AVATAR_VERTICAL_RECENTER:
+                 * The exported lobby-avatar texture is optically bottom-heavy.
+                 * In the enlarged square preview it therefore appears to sink
+                 * below the card. Lift it slightly and give it a little safety
+                 * scale so the whole character remains visible on both PC and
+                 * mobile without changing the frame/card size.
+                 */
+                avatarImage.style.setProperty(
+                    'transform',
+                    'translateY(-10%) scale(.92)',
+                    'important',
+                );
+                avatarImage.style.setProperty(
+                    'transform-origin',
+                    '50% 50%',
+                    'important',
+                );
+                avatarImage.style.setProperty(
+                    'object-position',
+                    '50% 45%',
+                    'important',
+                );
                 avatarImage.style.setProperty(
                     'image-rendering',
                     'pixelated',
