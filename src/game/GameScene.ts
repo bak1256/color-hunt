@@ -22844,10 +22844,10 @@ export class GameScene extends Phaser.Scene {
                             'canvas',
                         );
 
-                    const cropX = 20;
-                    const cropY = 31;
-                    const cropWidth = 40;
-                    const cropHeight = 62;
+                    const cropX = 18;
+                    const cropY = 27;
+                    const cropWidth = 44;
+                    const cropHeight = 68;
 
                     cropCanvas.width =
                         cropWidth;
@@ -24833,12 +24833,12 @@ export class GameScene extends Phaser.Scene {
                  */
                 avatarImage.style.setProperty(
                     'transform',
-                    'translateY(-2%) scale(1.06)',
+                    'translateY(0) scale(.94)',
                     'important',
                 );
                 avatarImage.style.setProperty(
                     'transform-origin',
-                    '50% 100%',
+                    '50% 50%',
                     'important',
                 );
                 avatarImage.style.setProperty(
@@ -24894,26 +24894,54 @@ export class GameScene extends Phaser.Scene {
              * this gives the enlarged avatar more visual ownership without
              * sacrificing tap/click accessibility.
              */
+            const japaneseLobby =
+                getLanguage() ===
+                    'ja';
+
             force(
                 editButton,
                 'width',
-                isCoarse
-                    ? '78%'
-                    : '72%',
+                japaneseLobby
+                    ? (
+                        isCoarse
+                            ? '92%'
+                            : '88%'
+                    )
+                    : (
+                        isCoarse
+                            ? '78%'
+                            : '72%'
+                    ),
             );
             force(
                 editButton,
                 'max-width',
-                isCoarse
-                    ? '190px'
-                    : '210px',
+                japaneseLobby
+                    ? (
+                        isCoarse
+                            ? '220px'
+                            : '240px'
+                    )
+                    : (
+                        isCoarse
+                            ? '190px'
+                            : '210px'
+                    ),
             );
             force(
                 editButton,
                 'min-width',
-                isCoarse
-                    ? '118px'
-                    : '132px',
+                japaneseLobby
+                    ? (
+                        isCoarse
+                            ? '150px'
+                            : '164px'
+                    )
+                    : (
+                        isCoarse
+                            ? '118px'
+                            : '132px'
+                    ),
             );
             force(
                 editButton,
@@ -24938,7 +24966,20 @@ export class GameScene extends Phaser.Scene {
             force(
                 editButton,
                 'white-space',
-                'normal',
+                japaneseLobby
+                    ? 'nowrap'
+                    : 'normal',
+            );
+            force(
+                editButton,
+                'font-size',
+                japaneseLobby
+                    ? (
+                        isCoarse
+                            ? '12px'
+                            : '13px'
+                    )
+                    : '',
             );
             force(
                 editButton,
