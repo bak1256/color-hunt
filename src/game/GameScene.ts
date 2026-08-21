@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010386J_CURRENT_MODE_TOGGLE: paint toggle shows current mode + explicit switch action. */
     /* V1010386I_PRECISION_BRUSH_UX: outside-body hold arming, destination-mode labels, Precision Brush naming, translucent controls hint. */
     /* V1010386H_UNIFIED_MOBILE_HOLD: Hunter and Hider mobile precision brush both use 520ms hold-to-paint. */
     /* V1010386G_INPUT_FEEL_POLISH: Practice arrows outside thumbnail, 520ms Hunter/avatar brush hold, one-shot line tool. */
@@ -8380,33 +8381,34 @@ export class GameScene extends Phaser.Scene {
         const language =
             getLanguage();
 
-        const fingerLabel =
+        const currentFingerLabel =
             language === 'ja'
-                ? '☝ 指で\n描く'
+                ? '☝ 指で描く\n↔ 切替'
                 : language === 'en'
-                    ? '☝ Finger\nPaint'
+                    ? '☝ Finger Paint\n↔ Switch'
                     : language === 'zh'
-                        ? '☝ 手指\n绘制'
-                        : '☝ 손가락\n그리기';
+                        ? '☝ 手指绘制\n↔ 切换'
+                        : '☝ 손가락 그리기\n↔ 전환';
 
-        const precisionBrushLabel =
+        const currentPrecisionBrushLabel =
             language === 'ja'
-                ? '🖌 精密ブラシで\n描く'
+                ? '🖌 精密ブラシ\n↔ 切替'
                 : language === 'en'
-                    ? '🖌 Precision\nBrush'
+                    ? '🖌 Precision Brush\n↔ Switch'
                     : language === 'zh'
-                        ? '🖌 精细画笔\n绘制'
-                        : '🖌 정밀붓\n그리기';
+                        ? '🖌 精细画笔\n↔ 切换'
+                        : '🖌 정밀붓 그리기\n↔ 전환';
 
         /*
-         * Show the destination mode, not the currently active mode.
+         * V1010386J_CURRENT_MODE_TOGGLE:
+         * Always show the CURRENT paint mode; second line makes the action explicit.
          */
         this.mobilePaintModeButton
             .textContent =
             this.mobilePaintInputMode ===
                 'finger'
-                ? `${precisionBrushLabel}  ↔`
-                : `↔  ${fingerLabel}`;
+                ? currentFingerLabel
+                : currentPrecisionBrushLabel;
 
         this.mobilePaintModeButton
             .style.background =
@@ -19261,21 +19263,21 @@ export class GameScene extends Phaser.Scene {
                         'finger'
                         ? (
                             language === 'ja'
-                                ? '🖌 精密ブラシ ↔'
+                                ? '☝ 指で描く\n↔ 切替'
                                 : language === 'en'
-                                    ? '🖌 Precision Brush ↔'
+                                    ? '☝ Finger Paint\n↔ Switch'
                                     : language === 'zh'
-                                        ? '🖌 精细画笔 ↔'
-                                        : '🖌 정밀붓 그리기 ↔'
+                                        ? '☝ 手指绘制\n↔ 切换'
+                                        : '☝ 손가락 그리기\n↔ 전환'
                         )
                         : (
                             language === 'ja'
-                                ? '↔ ☝ 指で描く'
+                                ? '🖌 精密ブラシ\n↔ 切替'
                                 : language === 'en'
-                                    ? '↔ ☝ Finger Paint'
+                                    ? '🖌 Precision Brush\n↔ Switch'
                                     : language === 'zh'
-                                        ? '↔ ☝ 手指绘制'
-                                        : '↔ ☝ 손가락 그리기'
+                                        ? '🖌 精细画笔\n↔ 切换'
+                                        : '🖌 정밀붓 그리기\n↔ 전환'
                         );
 
                 avatarModeButton.style
