@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010400_AVATAR_EDITOR_SAFE_RESTORE: known-good avatar editor methods restored surgically. */
     /* V1010388R_HIDER_VISUAL_BOUNDS_CENTER: center Hider social capture on actual rendered bounds, not container pivot. */
     /* V1010388Q_ALIVE_HIDER_ONLY_SYMMETRIC_CROWN: only living Hiders get survival cards; crown geometry is perfectly centered. */
     /* V1010388P_FINISHED_DEAD_FADE_BADGE_POSITION: Finished dead-Hider alpha invariant + correctly lifted survivor crown badge. */
@@ -17449,49 +17450,175 @@ export class GameScene extends Phaser.Scene {
                         .toString(16)
                         .padStart(6, '0')}`;
 
-                stroke.points.forEach(
-                    (point) => {
-                        const radius =
-                            stroke.size <= 1
-                                ? 0
-                                : stroke.size;
+                /*
+                 * V1010394_LOBBY_AVATAR_BRUSH_THICKNESS_FIX
+                 *
+                 * stroke.size is the brush DIAMETER in the avatar editor.
+                 * The lobby preview previously treated it as a radius, so a
+                 * 4px brush became roughly 9px wide here.
+                 *
+                 * Use the exact same pixel footprint math as the editor.
+                 */
+                const diameter =
+                    Math.max(
+                        1,
+                        Math.round(
+                            stroke.size,
+                        ),
+                    );
 
+                const minOffset =
+                    -Math.floor(
+                        diameter /
+                            2,
+                    );
+
+                const maxOffset =
+                    minOffset +
+                    diameter -
+                    1;
+
+                const centerOffset =
+                    (
+                        minOffset +
+                        maxOffset
+                    ) /
+                    2;
+
+                const circleRadius =
+                    Math.max(
+                        0.5,
+                        diameter /
+                            2 -
+                            0.25,
+                    );
+
+                const stampPoint =
+                    (
+                        pointX: number,
+                        pointY: number,
+                    ): void => {
                         for (
-                            let oy = -radius;
-                            oy <= radius;
+                            let oy = minOffset;
+                            oy <= maxOffset;
                             oy += 1
                         ) {
                             for (
-                                let ox = -radius;
-                                ox <= radius;
+                                let ox = minOffset;
+                                ox <= maxOffset;
                                 ox += 1
                             ) {
                                 if (
                                     stroke.shape !==
-                                        'square' &&
-                                    ox * ox +
-                                        oy * oy >
-                                        radius *
-                                            radius
+                                        'square'
                                 ) {
-                                    continue;
+                                    const dx =
+                                        ox -
+                                        centerOffset;
+                                    const dy =
+                                        oy -
+                                        centerOffset;
+
+                                    if (
+                                        dx * dx +
+                                            dy * dy >
+                                        circleRadius *
+                                            circleRadius
+                                    ) {
+                                        continue;
+                                    }
                                 }
 
                                 drawPixel(
                                     Math.round(
-                                        point.x +
+                                        pointX +
                                         ox,
                                     ),
                                     Math.round(
-                                        point.y +
+                                        pointY +
                                         oy,
                                     ),
                                     color,
                                 );
                             }
                         }
-                    },
-                );
+                    };
+
+                /*
+                 * V1010393_LOBBY_AVATAR_CONTINUOUS_PREVIEW:
+                 * Stored avatar strokes are intentionally compacted, so simply
+                 * painting one stamp per stored point creates visible holes in
+                 * the lobby card. Reconstruct every segment exactly like a real
+                 * continuous brush stroke.
+                 */
+                for (
+                    let pointIndex = 0;
+                    pointIndex <
+                    stroke.points.length;
+                    pointIndex += 1
+                ) {
+                    const point =
+                        stroke.points[
+                            pointIndex
+                        ];
+
+                    if (pointIndex === 0) {
+                        stampPoint(
+                            point.x,
+                            point.y,
+                        );
+                        continue;
+                    }
+
+                    const previous =
+                        stroke.points[
+                            pointIndex - 1
+                        ];
+
+                    const dx =
+                        point.x -
+                        previous.x;
+                    const dy =
+                        point.y -
+                        previous.y;
+                    const distance =
+                        Math.hypot(
+                            dx,
+                            dy,
+                        );
+
+                    /*
+                     * <= 0.45 logical pixels leaves no raster gaps even for the
+                     * smallest 1px brush. Larger brushes naturally overlap.
+                     */
+                    const steps =
+                        Math.max(
+                            1,
+                            Math.ceil(
+                                distance /
+                                0.45,
+                            ),
+                        );
+
+                    for (
+                        let step = 1;
+                        step <= steps;
+                        step += 1
+                    ) {
+                        const t =
+                            step /
+                            steps;
+
+                        stampPoint(
+                            previous.x +
+                                dx *
+                                    t,
+                            previous.y +
+                                dy *
+                                    t,
+                        );
+                    }
+                }
             },
         );
 
@@ -17590,7 +17717,7 @@ export class GameScene extends Phaser.Scene {
                             ? '1 finger: paint · 2 fingers: zoom · ●/■ brush · 💧 eyedropper · ╱ line'
                             : getLanguage() === 'zh'
                                 ? '单指涂色 · 双指缩放 · ●/■画笔 · 💧吸管 · ╱直线'
-                                : '드래그: 위치 맞추기 · 잠깐 멈추면 색칠 시작 · 두 손가락: 확대 · ●/■ 브러시 · 💧 스포이드 · ╱ 직선'
+                                : '한 손가락: 배경부터 드래그해 색칠 · 두 손가락: 확대 · ●/■ 브러시 · 💧 스포이드 · ╱ 직선'
                 )
                 : (
                     getLanguage() === 'ja'
@@ -17669,6 +17796,36 @@ export class GameScene extends Phaser.Scene {
          * Recreate that UX inside the DOM avatar editor so the finger never
          * hides the actual tool position.
          */
+        let avatarPaintInputMode:
+            'finger' |
+            'brush' = 'finger';
+
+        /*
+         * V1010384_AVATAR_BRUSH_HOLD_TO_PAINT:
+         * Brush mode can be moved freely without painting. Holding still at
+         * the intended tip for a short moment arms painting.
+         */
+        let avatarBrushHoldTimer:
+            number |
+            undefined;
+        let avatarBrushHoldReady =
+            false;
+
+        const clearAvatarBrushHold =
+            (): void => {
+                if (
+                    avatarBrushHoldTimer !==
+                        undefined
+                ) {
+                    window.clearTimeout(
+                        avatarBrushHoldTimer,
+                    );
+                }
+
+                avatarBrushHoldTimer =
+                    undefined;
+            };
+
         const floatingTool =
             document.createElement(
                 'div',
@@ -17820,6 +17977,190 @@ export class GameScene extends Phaser.Scene {
         );
 
         /*
+         * V1010389_AVATAR_EDITOR_DESKTOP_EYEDROPPER_PREVIEW:
+         * Desktop has no floating brush artwork. While Eyedropper is armed,
+         * show a clear square color preview beside the mouse BEFORE click.
+         */
+        const desktopEyedropperPreview =
+            document.createElement('div');
+
+        Object.assign(
+            desktopEyedropperPreview.style,
+            {
+                position: 'absolute',
+                width: '36px',
+                height: '36px',
+                display: 'none',
+                pointerEvents: 'none',
+                zIndex: '26',
+                border: '3px solid #ffffff',
+                outline: '2px solid rgba(22,34,29,.82)',
+                borderRadius: '7px',
+                boxShadow: '0 3px 10px rgba(0,0,0,.28)',
+                boxSizing: 'border-box',
+            },
+        );
+
+        canvasFrame.appendChild(
+            desktopEyedropperPreview,
+        );
+
+        const avatarModeButton =
+            document.createElement(
+                'button',
+            );
+
+        avatarModeButton.type =
+            'button';
+
+        Object.assign(
+            avatarModeButton.style,
+            {
+                position: 'absolute',
+                left: '8px',
+                top: '8px',
+                zIndex: '24',
+                minWidth: '108px',
+                minHeight: '40px',
+                padding: '6px 9px',
+                border: '2px solid #5c8f66',
+                borderRadius: '11px',
+                background: 'rgba(223,247,230,.66)',
+                color: '#26352b',
+                fontWeight: '900',
+                fontSize: '12px',
+                lineHeight: '1.15',
+                whiteSpace: 'pre-line',
+                touchAction: 'manipulation',
+            },
+        );
+
+        const syncAvatarModeButton =
+            (): void => {
+                const language =
+                    getLanguage();
+
+                avatarModeButton.textContent =
+                    avatarPaintInputMode ===
+                        'finger'
+                        ? (
+                            language === 'ja'
+                                ? '☝ 指で描く\n↔ 切替'
+                                : language === 'en'
+                                    ? '☝ Finger Paint\n↔ Switch'
+                                    : language === 'zh'
+                                        ? '☝ 手指绘制\n↔ 切换'
+                                        : '☝ 손가락 그리기\n↔ 전환'
+                        )
+                        : (
+                            language === 'ja'
+                                ? '🖌 精密ブラシ\n↔ 切替'
+                                : language === 'en'
+                                    ? '🖌 Precision Brush\n↔ Switch'
+                                    : language === 'zh'
+                                        ? '🖌 精细画笔\n↔ 切换'
+                                        : '🖌 정밀붓 그리기\n↔ 전환'
+                        );
+
+                avatarModeButton.style
+                    .background =
+                    avatarPaintInputMode ===
+                        'finger'
+                        ? 'rgba(223,247,230,.66)'
+                        : 'rgba(255,244,214,.66)';
+
+                if (
+                    avatarPaintInputMode ===
+                        'finger'
+                ) {
+                    /*
+                     * Hard reset all visual/tool ownership when returning to
+                     * direct finger painting. No brush/dropper ghost may remain.
+                     */
+                    floatingTool.style.display =
+                        'none';
+                    floatingTool.innerHTML =
+                        brushCursorSvg;
+
+                    /*
+                     * V1010384E_AVATAR_EDITOR_OPEN_FIX:
+                     * syncAvatarModeButton() runs once during editor creation,
+                     * before avatarEyedropperPointerId is initialized later in
+                     * this function. Touching it here caused a TDZ ReferenceError
+                     * and aborted opening the editor on both PC and mobile.
+                     */
+                }
+            };
+
+        avatarModeButton.addEventListener(
+            'pointerdown',
+            (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+
+                if (
+                    avatarBrushHoldTimer !==
+                        undefined
+                ) {
+                    window.clearTimeout(
+                        avatarBrushHoldTimer,
+                    );
+                    avatarBrushHoldTimer =
+                        undefined;
+                }
+
+                drawing = false;
+                paintStarted = false;
+                pendingPointerId = -1;
+                pendingStartScreen =
+                    undefined;
+                currentPoints = [];
+                avatarBrushHoldReady =
+                    false;
+
+                avatarPaintInputMode =
+                    avatarPaintInputMode ===
+                        'finger'
+                        ? 'brush'
+                        : 'finger';
+
+                /*
+                 * Pipette is never carried across mode changes. The selected
+                 * paint color and Circle/Square shape remain intact.
+                 */
+                eyedropperArmed =
+                    false;
+                avatarEyedropperPointerId =
+                    -1;
+
+                syncAvatarModeButton();
+
+                if (
+                    typeof syncAvatarPrecisionHint ===
+                        'function'
+                ) {
+                    syncAvatarPrecisionHint();
+                }
+
+                refreshToolStates();
+                replay();
+            },
+        );
+
+        /*
+         * V1010389_AVATAR_EDITOR_INPUT_UX:
+         * Desktop has direct mouse semantics and must not show the mobile
+         * Finger/Precision toggle on top of the character canvas.
+         * Mobile relocates this control outside the canvas below.
+         */
+        if (!this.mobileControlsEnabled) {
+            avatarModeButton.style.display =
+                'none';
+        }
+
+        syncAvatarModeButton();
+
+        /*
          * V1010350_AVATAR_EDITOR_FULL_PAINT_PARITY / TOOL_TIP_COORDINATE
          *
          * On mobile, the finger holds the lower-right grip exactly like
@@ -17848,7 +18189,9 @@ export class GameScene extends Phaser.Scene {
                 y: number;
             } => {
                 if (
-                    !this.mobileControlsEnabled
+                    !this.mobileControlsEnabled ||
+                    avatarPaintInputMode ===
+                        'finger'
                 ) {
                     return {
                         x: clientX,
@@ -17885,7 +18228,9 @@ export class GameScene extends Phaser.Scene {
                 clientY: number,
             ): void => {
                 if (
-                    !this.mobileControlsEnabled
+                    !this.mobileControlsEnabled ||
+                    avatarPaintInputMode ===
+                        'finger'
                 ) {
                     floatingTool.style
                         .display =
@@ -18032,6 +18377,134 @@ export class GameScene extends Phaser.Scene {
                     'none';
             };
 
+        const updateDesktopEyedropperPreview =
+            (
+                clientX: number,
+                clientY: number,
+            ): void => {
+                if (
+                    this.mobileControlsEnabled ||
+                    !eyedropperArmed
+                ) {
+                    desktopEyedropperPreview.style.display =
+                        'none';
+                    return;
+                }
+
+                const rect =
+                    canvas.getBoundingClientRect();
+
+                const px =
+                    Phaser.Math.Clamp(
+                        Math.floor(
+                            (
+                                clientX -
+                                rect.left
+                            ) /
+                            Math.max(
+                                1,
+                                rect.width,
+                            ) *
+                            canvas.width,
+                        ),
+                        0,
+                        canvas.width - 1,
+                    );
+
+                const py =
+                    Phaser.Math.Clamp(
+                        Math.floor(
+                            (
+                                clientY -
+                                rect.top
+                            ) /
+                            Math.max(
+                                1,
+                                rect.height,
+                            ) *
+                            canvas.height,
+                        ),
+                        0,
+                        canvas.height - 1,
+                    );
+
+                const previewContext =
+                    canvas.getContext('2d');
+
+                if (!previewContext) {
+                    return;
+                }
+
+                const pixel =
+                    previewContext.getImageData(
+                        px,
+                        py,
+                        1,
+                        1,
+                    ).data;
+
+                if (pixel[3] > 0) {
+                    lastEyedropperPreviewColor =
+                        (
+                            pixel[0] << 16
+                        ) |
+                        (
+                            pixel[1] << 8
+                        ) |
+                        pixel[2];
+
+                    desktopEyedropperPreview.style.background =
+                        `#${lastEyedropperPreviewColor
+                            .toString(16)
+                            .padStart(
+                                6,
+                                '0',
+                            )}`;
+                }
+
+                const frameRect =
+                    canvasFrame.getBoundingClientRect();
+
+                const previewWidth = 36;
+                const previewHeight = 36;
+
+                const rawLeft =
+                    clientX -
+                    frameRect.left +
+                    16;
+                const rawTop =
+                    clientY -
+                    frameRect.top -
+                    48;
+
+                desktopEyedropperPreview.style.left =
+                    `${Phaser.Math.Clamp(
+                        rawLeft,
+                        4,
+                        Math.max(
+                            4,
+                            frameRect.width -
+                            previewWidth -
+                            4,
+                        ),
+                    )}px`;
+
+                desktopEyedropperPreview.style.top =
+                    `${Phaser.Math.Clamp(
+                        rawTop,
+                        4,
+                        Math.max(
+                            4,
+                            frameRect.height -
+                            previewHeight -
+                            4,
+                        ),
+                    )}px`;
+
+                desktopEyedropperPreview.style.display =
+                    'block';
+            };
+
         const context =
             canvas.getContext('2d');
 
@@ -18133,6 +18606,52 @@ export class GameScene extends Phaser.Scene {
             false;
         let straightLineArmed =
             false;
+
+        /*
+         * V1010389_AVATAR_EDITOR_EYEDROPPER_ONE_SHOT:
+         * Sampling is temporary. Circle/Square/Line selected before sampling
+         * is restored immediately after the color is picked.
+         */
+        let avatarToolBeforeEyedropper:
+            'circle' |
+            'square' |
+            'line' =
+            'circle';
+
+        const rememberAvatarToolBeforeEyedropper =
+            (): void => {
+                avatarToolBeforeEyedropper =
+                    straightLineArmed
+                        ? 'line'
+                        : selectedShape ===
+                            'square'
+                            ? 'square'
+                            : 'circle';
+            };
+
+        const restoreAvatarToolAfterEyedropper =
+            (): void => {
+                eyedropperArmed =
+                    false;
+
+                if (
+                    avatarToolBeforeEyedropper ===
+                        'line'
+                ) {
+                    straightLineArmed =
+                        true;
+                } else {
+                    straightLineArmed =
+                        false;
+                    selectedShape =
+                        avatarToolBeforeEyedropper;
+                }
+
+                floatingTool.innerHTML =
+                    brushCursorSvg;
+                desktopEyedropperPreview.style.display =
+                    'none';
+            };
         let straightLineStart:
             NetworkPaintPoint |
             undefined;
@@ -18190,108 +18709,6 @@ export class GameScene extends Phaser.Scene {
         let pendingStartScreen:
             { x: number; y: number } |
             undefined;
-
-        /*
-         * V1010365_MOBILE_PRECISION_CUSTOMIZATION_PAINT / AVATAR_HOLD_TO_PAINT
-         * Mobile customization is precision-first:
-         * drag positions the brush; a short stationary hold starts paint.
-         */
-        const avatarMobilePaintHoldMs =
-            180;
-
-        let avatarMobilePaintHoldTimer:
-            number |
-            undefined;
-
-        const cancelAvatarMobilePaintHold =
-            (): void => {
-                if (
-                    avatarMobilePaintHoldTimer !==
-                    undefined
-                ) {
-                    window.clearTimeout(
-                        avatarMobilePaintHoldTimer,
-                    );
-
-                    avatarMobilePaintHoldTimer =
-                        undefined;
-                }
-            };
-
-        const scheduleAvatarMobilePaintHold =
-            (
-                pointerId: number,
-            ): void => {
-                cancelAvatarMobilePaintHold();
-
-                if (
-                    !this.mobileControlsEnabled ||
-                    !drawing ||
-                    pendingPointerId !==
-                        pointerId ||
-                    eyedropperArmed
-                ) {
-                    return;
-                }
-
-                avatarMobilePaintHoldTimer =
-                    window.setTimeout(
-                        () => {
-                            avatarMobilePaintHoldTimer =
-                                undefined;
-
-                            if (
-                                !drawing ||
-                                pendingPointerId !==
-                                    pointerId ||
-                                !activePointers.has(
-                                    pointerId,
-                                ) ||
-                                activePointers.size !==
-                                    1 ||
-                                eyedropperArmed
-                            ) {
-                                return;
-                            }
-
-                            const latest =
-                                activePointers.get(
-                                    pointerId,
-                                );
-
-                            if (!latest) {
-                                return;
-                            }
-
-                            const startPoint =
-                                avatarToolTipToLogical(
-                                    latest.x,
-                                    latest.y,
-                                );
-
-                            hoverPoint =
-                                startPoint;
-
-                            paintStarted =
-                                true;
-
-                            straightLineStart =
-                                startPoint;
-
-                            currentPoints = [
-                                startPoint,
-                            ];
-
-                            /*
-                             * This is intentionally the FIRST raster commit.
-                             * Until this timer fires the finger can move around
-                             * the canvas without drawing anything.
-                             */
-                            replay();
-                        },
-                        avatarMobilePaintHoldMs,
-                    );
-            };
 
         let currentPoints:
             NetworkPaintPoint[] = [];
@@ -19233,7 +19650,9 @@ export class GameScene extends Phaser.Scene {
                 floatingTool.style.top =
                     `calc(50% - ${90 * avatarMobileToolScale}px)`;
                 floatingTool.style.display =
-                    this.mobileControlsEnabled
+                    this.mobileControlsEnabled &&
+                    avatarPaintInputMode ===
+                        'brush'
                         ? 'flex'
                         : 'none';
 
@@ -19309,8 +19728,6 @@ export class GameScene extends Phaser.Scene {
 
         const finishStroke =
             (): void => {
-                cancelAvatarMobilePaintHold();
-
                 if (
                     paintStarted &&
                     currentPoints.length > 0
@@ -19346,6 +19763,9 @@ export class GameScene extends Phaser.Scene {
 
                 drawing = false;
                 paintStarted = false;
+                clearAvatarBrushHold();
+                avatarBrushHoldReady =
+                    false;
                 straightLineStart =
                     undefined;
 
@@ -19413,9 +19833,6 @@ export class GameScene extends Phaser.Scene {
 
                 if (!pinchActive) {
                     pinchActive = true;
-
-                    cancelAvatarMobilePaintHold();
-
                     /*
                      * V1010348_AVATAR_EDITOR_PAINT_PARITY / PINCH_OWNS_VIEW
                      * Finish the current paint gesture when two fingers take
@@ -19446,6 +19863,14 @@ export class GameScene extends Phaser.Scene {
                 event,
             ) => {
                 event.preventDefault();
+            },
+        );
+
+        canvas.addEventListener(
+            'pointerleave',
+            () => {
+                desktopEyedropperPreview.style.display =
+                    'none';
             },
         );
 
@@ -19535,8 +19960,25 @@ export class GameScene extends Phaser.Scene {
                         2 ||
                     eyedropperArmed
                 ) {
+                    if (
+                        event.button ===
+                            2 &&
+                        !eyedropperArmed
+                    ) {
+                        rememberAvatarToolBeforeEyedropper();
+                        eyedropperArmed =
+                            true;
+                        straightLineArmed =
+                            false;
+                    }
+
                     avatarEyedropperPointerId =
                         event.pointerId;
+
+                    updateDesktopEyedropperPreview(
+                        event.clientX,
+                        event.clientY,
+                    );
 
                     hoverPoint =
                         downLogical;
@@ -19549,6 +19991,12 @@ export class GameScene extends Phaser.Scene {
                     return;
                 }
 
+                /*
+                 * V1010348_AVATAR_EDITOR_PAINT_PARITY / BACKGROUND_STARTS_PAINT
+                 * Do NOT reject a pointer that starts outside the avatar.
+                 * The stroke may enter the body later. Raster writes remain
+                 * clipped by insideBody(), exactly like Hider paint.
+                 */
                 drawing = true;
                 paintStarted = false;
                 pendingPointerId =
@@ -19562,26 +20010,60 @@ export class GameScene extends Phaser.Scene {
                 hoverPoint =
                     downLogical;
 
-                if (
-                    this.mobileControlsEnabled
-                ) {
-                    /*
-                     * V1010365_MOBILE_PRECISION_CUSTOMIZATION_PAINT:
-                     * Mobile pointer-down paints NOTHING.
-                     * The user may freely drag the tool to an eye/hair pixel.
-                     */
-                    currentPoints = [];
+                /*
+                 * V1010350_AVATAR_EDITOR_FULL_PAINT_PARITY: seed the stroke immediately, even on empty
+                 * background. drawBodyPixel() clips it to the avatar later.
+                 */
+                currentPoints = [
+                    downLogical,
+                ];
 
-                    scheduleAvatarMobilePaintHold(
-                        event.pointerId,
-                    );
-                } else {
-                    /*
-                     * Desktop keeps the existing immediate drag workflow.
-                     */
-                    currentPoints = [
-                        downLogical,
-                    ];
+                clearAvatarBrushHold();
+                avatarBrushHoldReady =
+                    avatarPaintInputMode !==
+                        'brush' ||
+                    !this.mobileControlsEnabled;
+
+                if (
+                    this.mobileControlsEnabled &&
+                    avatarPaintInputMode ===
+                        'brush'
+                ) {
+                    avatarBrushHoldTimer =
+                        window.setTimeout(
+                            () => {
+                                if (
+                                    !drawing ||
+                                    pendingPointerId !==
+                                        event.pointerId ||
+                                    activePointers.size !==
+                                        1
+                                ) {
+                                    return;
+                                }
+
+                                avatarBrushHoldReady =
+                                    true;
+                                paintStarted =
+                                    true;
+
+                                const holdPoint =
+                                    avatarToolTipToLogical(
+                                        event.clientX,
+                                        event.clientY,
+                                    );
+
+                                currentPoints = [
+                                    holdPoint,
+                                ];
+
+                                straightLineStart =
+                                    holdPoint;
+
+                                replay();
+                            },
+                            520,
+                        );
                 }
 
                 replay();
@@ -19592,6 +20074,11 @@ export class GameScene extends Phaser.Scene {
             'pointermove',
             (event) => {
                 updateFloatingTool(
+                    event.clientX,
+                    event.clientY,
+                );
+
+                updateDesktopEyedropperPreview(
                     event.clientX,
                     event.clientY,
                 );
@@ -19659,27 +20146,64 @@ export class GameScene extends Phaser.Scene {
                                 pendingStartScreen.y,
                         );
 
+                    /*
+                     * Precision brush parity with the in-game painter:
+                     * move freely first, hold at the desired location, then draw.
+                     */
                     if (
-                        this.mobileControlsEnabled
+                        this.mobileControlsEnabled &&
+                        avatarPaintInputMode ===
+                            'brush' &&
+                        !avatarBrushHoldReady
                     ) {
-                        /*
-                         * V1010365_MOBILE_PRECISION_CUSTOMIZATION_PAINT / AVATAR_DRAG_IS_AIM
-                         * A meaningful move restarts the stationary-hold timer
-                         * from THIS latest position. No raster write occurs.
-                         */
                         if (moved >= 3) {
                             pendingStartScreen = {
-                                x:
-                                    event.clientX,
-                                y:
-                                    event.clientY,
+                                x: event.clientX,
+                                y: event.clientY,
                             };
 
-                            currentPoints = [];
+                            currentPoints = [
+                                avatarToolTipToLogical(
+                                    event.clientX,
+                                    event.clientY,
+                                ),
+                            ];
 
-                            scheduleAvatarMobilePaintHold(
-                                event.pointerId,
-                            );
+                            clearAvatarBrushHold();
+
+                            avatarBrushHoldTimer =
+                                window.setTimeout(
+                                    () => {
+                                        if (
+                                            !drawing ||
+                                            pendingPointerId !==
+                                                event.pointerId ||
+                                            activePointers.size !==
+                                                1
+                                        ) {
+                                            return;
+                                        }
+
+                                        avatarBrushHoldReady =
+                                            true;
+                                        paintStarted =
+                                            true;
+
+                                        const holdPoint =
+                                            avatarToolTipToLogical(
+                                                event.clientX,
+                                                event.clientY,
+                                            );
+
+                                        currentPoints = [
+                                            holdPoint,
+                                        ];
+                                        straightLineStart =
+                                            holdPoint;
+                                        replay();
+                                    },
+                                    520,
+                                );
                         }
 
                         replay();
@@ -19687,7 +20211,7 @@ export class GameScene extends Phaser.Scene {
                     }
 
                     /*
-                     * Desktop existing behavior: movement starts freehand.
+                     * Finger mode / desktop: movement starts painting normally.
                      */
                     if (moved < 1) {
                         replay();
@@ -19705,13 +20229,24 @@ export class GameScene extends Phaser.Scene {
                     straightLineStart =
                         startPoint;
 
+                    /*
+                     * Desktop mirrors Hider paint: hold Shift while dragging.
+                     * Mobile uses the dedicated LINE tool button below.
+                     */
                     if (
+                        !this.mobileControlsEnabled &&
                         event.shiftKey
                     ) {
                         straightLineArmed =
                             true;
                     }
 
+                    /*
+                     * V1010350_AVATAR_EDITOR_FULL_PAINT_PARITY / KEEP_BACKGROUND_ORIGIN
+                     * Keep the pointerdown seed when it began outside the body.
+                     * This lets expandSegmentPoints() bridge cleanly across the
+                     * body edge instead of starting only after entry.
+                     */
                     if (
                         currentPoints.length ===
                             0
@@ -19823,6 +20358,21 @@ export class GameScene extends Phaser.Scene {
                     avatarEyedropperPointerId =
                         -1;
 
+                    /*
+                     * V1010389_AVATAR_EDITOR_EYEDROPPER_ONE_SHOT:
+                     * Return to exactly the paint tool used before sampling:
+                     * Circle, Square, or dedicated Line.
+                     */
+                    restoreAvatarToolAfterEyedropper();
+
+                    if (
+                        avatarPaintInputMode ===
+                            'finger'
+                    ) {
+                        floatingTool.style.display =
+                            'none';
+                    }
+
                     refreshToolStates();
                     replay();
                 }
@@ -19866,8 +20416,15 @@ export class GameScene extends Phaser.Scene {
                             ? dropperCursorSvg
                             : brushCursorSvg;
 
+                    /*
+                     * Finger mode owns no floating brush/pipette artwork.
+                     * This fixes stale visuals after repeatedly toggling modes.
+                     */
                     floatingTool.style.display =
-                        'flex';
+                        avatarPaintInputMode ===
+                            'brush'
+                            ? 'flex'
+                            : 'none';
 
                     replay();
                 }
@@ -20257,6 +20814,10 @@ export class GameScene extends Phaser.Scene {
                  * tapping eyedropper SELECTS it; tapping again does not
                  * accidentally toggle back to brush.
                  */
+                if (!eyedropperArmed) {
+                    rememberAvatarToolBeforeEyedropper();
+                }
+
                 eyedropperArmed =
                     true;
                 straightLineArmed =
@@ -20316,8 +20877,8 @@ export class GameScene extends Phaser.Scene {
         toolRow.append(
             circleTool,
             squareTool,
-            eyedropperTool,
             straightTool,
+            eyedropperTool,
         );
 
         refreshToolStates();
@@ -20546,10 +21107,166 @@ export class GameScene extends Phaser.Scene {
             },
         );
 
-        editorBody.append(
-            canvasFrame,
-            sideControls,
+        /*
+         * V1010389_AVATAR_EDITOR_MOBILE_TOGGLE_OUTSIDE:
+         * Keep the mode switch OUTSIDE the drawable canvas so it never covers
+         * the avatar. Precision-mode help sits directly below the switch.
+         */
+        const canvasStage =
+            document.createElement('div');
+
+        Object.assign(
+            canvasStage.style,
+            {
+                position: 'relative',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                overflow: 'visible',
+                flex: '0 0 auto',
+            },
         );
+
+        const avatarPrecisionHint =
+            document.createElement('div');
+
+        const syncAvatarPrecisionHint =
+            (): void => {
+                const language =
+                    getLanguage();
+
+                avatarPrecisionHint.innerHTML =
+                    language === 'ja'
+                        ? 'ドラッグ: ブラシ移動<br>長押し: 塗り開始'
+                        : language === 'en'
+                            ? 'Drag: move brush<br>Hold: start painting'
+                            : language === 'zh'
+                                ? '拖动: 移动画笔<br>长按: 开始涂色'
+                                : '드래그: 붓이동<br>꾹누르기: 색칠시작';
+
+                avatarPrecisionHint.style.display =
+                    (
+                        this.mobileControlsEnabled &&
+                        avatarPaintInputMode ===
+                            'brush'
+                    )
+                        ? 'block'
+                        : 'none';
+            };
+
+        Object.assign(
+            avatarPrecisionHint.style,
+            {
+                position: 'absolute',
+                right: 'calc(100% + 8px)',
+                top: '58px',
+                width: '126px',
+                padding: '7px 8px',
+                border: '1px solid rgba(71,105,75,.68)',
+                borderRadius: '9px',
+                background: 'rgba(246,251,237,.78)',
+                color: '#294433',
+                fontSize: '11px',
+                lineHeight: '1.35',
+                fontWeight: '800',
+                textAlign: 'left',
+                boxShadow: '0 3px 8px rgba(0,0,0,.12)',
+                pointerEvents: 'none',
+                zIndex: '25',
+                boxSizing: 'border-box',
+            },
+        );
+
+        /*
+         * V1010390_AVATAR_EDITOR_MOBILE_GUIDE_RAIL:
+         * The previous mobile controls lived at right: calc(100% + 8px),
+         * which visually placed them left of the canvas but also outside the
+         * modal's clipping boundary. Use a REAL flex rail instead, so both the
+         * mode toggle and precision instructions always remain inside the
+         * editor and can never be cut off.
+         */
+        const mobileAvatarInputRail =
+            document.createElement('div');
+
+        Object.assign(
+            mobileAvatarInputRail.style,
+            {
+                display:
+                    this.mobileControlsEnabled
+                        ? 'flex'
+                        : 'none',
+                flexDirection: 'column',
+                alignItems: 'stretch',
+                justifyContent: 'flex-start',
+                gap: '8px',
+                width: '132px',
+                minWidth: '132px',
+                maxWidth: '132px',
+                alignSelf: 'center',
+                boxSizing: 'border-box',
+                overflow: 'visible',
+                flex: '0 0 132px',
+            },
+        );
+
+        if (this.mobileControlsEnabled) {
+            Object.assign(
+                avatarModeButton.style,
+                {
+                    display: 'block',
+                    position: 'relative',
+                    left: 'auto',
+                    right: 'auto',
+                    top: 'auto',
+                    bottom: 'auto',
+                    width: '132px',
+                    minWidth: '132px',
+                    maxWidth: '132px',
+                    margin: '0',
+                    boxSizing: 'border-box',
+                },
+            );
+
+            Object.assign(
+                avatarPrecisionHint.style,
+                {
+                    position: 'relative',
+                    left: 'auto',
+                    right: 'auto',
+                    top: 'auto',
+                    bottom: 'auto',
+                    width: '132px',
+                    minWidth: '132px',
+                    maxWidth: '132px',
+                    margin: '0',
+                    boxSizing: 'border-box',
+                },
+            );
+
+            mobileAvatarInputRail.append(
+                avatarModeButton,
+                avatarPrecisionHint,
+            );
+        }
+
+        canvasStage.appendChild(
+            canvasFrame,
+        );
+
+        if (this.mobileControlsEnabled) {
+            editorBody.append(
+                mobileAvatarInputRail,
+                canvasStage,
+                sideControls,
+            );
+        } else {
+            editorBody.append(
+                canvasStage,
+                sideControls,
+            );
+        }
+
+        syncAvatarPrecisionHint();
 
         card.append(
             title,
