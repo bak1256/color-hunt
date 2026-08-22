@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010388D_MAIN_RESTORE_LOBBY_READY_ROBUST: restore guest READY + host start barrier across CRLF/LF sources. */
     /* V1010388_CLIENT_VICTORY_SHOWCASE: winner-only social result poster. */
     /* V1010373_RECONNECT_SINGLE_AUTHORITY_GAMEPLAY_LOCK: reconnect freezes local gameplay until one authoritative Room/player/paint state owns the Scene again. */
     /* V1010371_ROOM_CREATE_RECOVERY: coalesce lobby polling and guarantee room-create failure recovery instead of infinite busy UI. */
@@ -9764,6 +9765,23 @@ export class GameScene extends Phaser.Scene {
                         );
 
                     this.updatePaintReadyButton();
+                },
+            ),
+        );
+
+        
+        /*
+         * V1010388D_MAIN_RESTORE_LOBBY_READY_ROBUST: lobby READY changes repaint button/count immediately.
+         */
+        this.networkUnsubscribers.push(
+            multiplayerClient.onLobbyReadyState(
+                () => {
+                    if (
+                        this.phase === 'lobby'
+                    ) {
+                        this.updateWaitingRoomDom();
+                        this.updateLobbyUi();
+                    }
                 },
             ),
         );
@@ -23316,16 +23334,59 @@ export class GameScene extends Phaser.Scene {
                 },
             );
 
+        /*
+         * V1010388D_MAIN_RESTORE_LOBBY_READY_ROBUST
+         * Host starts only after the lobby READY barrier opens.
+         * Guests use the same main button as READY / CANCEL READY.
+         */
         root.querySelector('.ch-waiting-start')
             ?.addEventListener(
                 'click',
                 () => {
                     if (
-                        multiplayerClient.isHost() &&
-                        multiplayerClient.getPhase() === 'lobby'
+                        multiplayerClient.getPhase() !==
+                        'lobby'
                     ) {
-                        multiplayerClient.sendStartGame();
+                        return;
                     }
+
+                    if (
+                        multiplayerClient.isHost()
+                    ) {
+                        const readyState =
+                            multiplayerClient
+                                .getLobbyReadyState();
+
+                        if (
+                            readyState.canStart
+                        ) {
+                            multiplayerClient
+                                .sendStartGame();
+                        }
+                        return;
+                    }
+
+                    const readyState =
+                        multiplayerClient
+                            .getLobbyReadyState();
+
+                    const localSessionId =
+                        multiplayerClient
+                            .getSessionId();
+
+                    const localReady =
+                        Boolean(
+                            localSessionId &&
+                            readyState.readySessionIds
+                                .includes(
+                                    localSessionId,
+                                ),
+                        );
+
+                    multiplayerClient
+                        .sendLobbyReady(
+                            !localReady,
+                        );
                 },
             );
 
@@ -24438,13 +24499,59 @@ export class GameScene extends Phaser.Scene {
             this.waitingRoomRoot.querySelector<
                 HTMLButtonElement
             >('.ch-waiting-start');
+
         if (start) {
-            start.disabled =
-                !isHost;
-            start.classList.toggle(
-                'is-disabled',
-                !isHost,
-            );
+            const readyState =
+                multiplayerClient
+                    .getLobbyReadyState();
+
+            const localSessionId =
+                multiplayerClient
+                    .getSessionId();
+
+            const localReady =
+                Boolean(
+                    localSessionId &&
+                    readyState.readySessionIds
+                        .includes(
+                            localSessionId,
+                        ),
+                );
+
+            const progress =
+                `${readyState.readyCount}/${readyState.totalCount}`;
+
+            if (isHost) {
+                start.textContent =
+                    `▶ ${tr('게임 시작')} · ${progress}`;
+
+                start.disabled =
+                    !readyState.canStart;
+
+                start.classList.toggle(
+                    'is-disabled',
+                    !readyState.canStart,
+                );
+                start.classList.remove(
+                    'is-ready',
+                );
+            } else {
+                start.textContent =
+                    localReady
+                        ? `✓ ${tr('준비 취소')} · ${progress}`
+                        : `✓ ${tr('준비완료')} · ${progress}`;
+
+                start.disabled =
+                    false;
+
+                start.classList.remove(
+                    'is-disabled',
+                );
+                start.classList.toggle(
+                    'is-ready',
+                    localReady,
+                );
+            }
         }
 
         this.waitingRoomRoot
