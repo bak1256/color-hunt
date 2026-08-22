@@ -3152,6 +3152,48 @@ this.room = room;
     >(
       "round_result",
       (result) => {
+        /*
+         * V1010445_FOUND_RUNTIME_TRACE_CLIENT
+         * Temporary runtime trace.  This tells us what the deployed browser
+         * actually received, before any victory-card transformation.
+         */
+        console.log(
+          "[V445 CLIENT ROUND_RESULT]",
+          {
+            winner:
+              result?.winner,
+            reason:
+              result?.reason,
+            teamFoundCount:
+              Array.isArray(
+                result?.victoryShowcase
+                  ?.foundHiders,
+              )
+                ? result.victoryShowcase
+                    ?.foundHiders?.length
+                : -1,
+            personalFoundCount:
+              Array.isArray(
+                result?.victoryShowcase
+                  ?.personalFoundHiders,
+              )
+                ? result.victoryShowcase
+                    ?.personalFoundHiders?.length
+                : -1,
+            recipientSessionId:
+              result?.victoryShowcase
+                ?.recipientSessionId,
+            recipientClientKey:
+              result?.victoryShowcase
+                ?.recipientClientKey,
+            foundHiders:
+              result?.victoryShowcase
+                ?.foundHiders,
+            personalFoundHiders:
+              result?.victoryShowcase
+                ?.personalFoundHiders,
+          },
+        );
         const personalized =
           result.victoryShowcase
             ?.personalFoundHiders;
