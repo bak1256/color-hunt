@@ -1807,13 +1807,13 @@ this.manualReconnectInFlight = false;
           return;
         }
 
+        /*
+         * V1010425_TRANSPORT_EVENT_ONLY_RECONNECT / OFFLINE_HINT_ONLY
+         * navigator/offline is a browser hint, not proof that the Colyseus
+         * Room transport died. Keep evidence for a later REAL onDrop, but do
+         * not freeze gameplay or create a second reconnect owner here.
+         */
         this.browserOfflineCycleActive = true;
-        this.lastConfirmedTransportDropAt =
-          Date.now();
-
-        this.notifyConnectionIssue(
-          "browser_offline",
-        );
       };
 
     const handleBrowserOnline =
@@ -1822,28 +1822,32 @@ this.manualReconnectInFlight = false;
           return;
         }
 
-        this.notifyConnectionIssue(
-          "browser_online_recovering",
-        );
-
-        this.lastRoomPingAt =
-          Math.min(
-            this.lastRoomPingAt,
-            Date.now() - 1400,
-          );
-
         /*
-         * First give the official token reconnect a chance. If this was a
-         * confirmed offline cycle and the old socket is still unusable after
-         * 6.5s, escalate once to the stable-clientKey fresh handoff.
+         * V1010425_TRANSPORT_EVENT_ONLY_RECONNECT / ONLINE_PROBE_ONLY
+         * Do not reconnect just because the browser emitted "online".
+         * A healthy WebSocket often survives Wi-Fi/mobile lifecycle noise.
          */
-        void this.attemptManualReconnect(
-          room,
-        );
-        this.scheduleConfirmedFreshRecovery(
-          room,
-          15_000,
-        );
+        try {
+          room.ping(
+            () => {
+              if (this.room !== room) {
+                return;
+              }
+
+              this.lastRoomPingAt =
+                Date.now();
+
+              /*
+               * No connectionRecovered event here: nothing actually dropped.
+               * Cheap authoritative refresh only.
+               */
+              this.requestLobbySnapshot();
+              this.requestPaintReadyState();
+            },
+          );
+        } catch {
+          // If the transport is truly gone, Room.onDrop owns recovery.
+        }
       };
 
     const isActiveRound = (): boolean =>
@@ -1861,7 +1865,7 @@ this.manualReconnectInFlight = false;
       };
 
     const resumeFromAppBackground =
-      (reason: string): void => {
+      (_reason: string): void => {
         const now = Date.now();
         this.appBackgroundSignalActive = false;
         this.lastAppForegroundAt = now;
@@ -1924,43 +1928,12 @@ this.manualReconnectInFlight = false;
           // Closed/half-open transport: the timeout below escalates recovery.
         }
 
-        globalThis.setTimeout(() => {
-          if (
-            answered ||
-            generation !== this.resumeProbeGeneration ||
-            this.room !== room ||
-            !isActiveRound() ||
-            (typeof document !== "undefined" && document.hidden)
-          ) {
-            return;
-          }
-
-          this.notifyConnectionIssue(reason);
-
-          /*
-           * v0.10.10.230:
-           * Focus/visibility changes are normal. Give the SDK/server
-           * reconnection reservation time to recover the SAME sessionId.
-           * Do not open a second WebSocket/player while automatic reconnect
-           * is active.
-           */
-          globalThis.setTimeout(() => {
-            if (
-              answered ||
-              generation !== this.resumeProbeGeneration ||
-              this.room !== room ||
-              !this.connectionIssueNotified ||
-              (typeof document !== "undefined" && document.hidden) ||
-              room.reconnection.isReconnecting
-            ) {
-              return;
-            }
-
-            void this.attemptManualReconnect(
-              room,
-            );
-          }, 7000);
-        }, 5000);
+        /*
+         * V1010425_TRANSPORT_EVENT_ONLY_RECONNECT / FOREGROUND_PROBE_ONLY
+         * A missed lifecycle ping does NOT imply transport loss.
+         * Do not notify/freeze/reconnect here. A real Room.onDrop() or
+         * terminal 524 is the only reconnect authority.
+         */
       };
 
     const handleVisibilityChange =
@@ -2128,7 +2101,6 @@ this.manualReconnectInFlight = false;
             activeRound &&
             silentFor >= 30_000 &&
             (
-              this.browserOfflineCycleActive ||
               this.lastConfirmedTransportDropAt > 0 ||
               room.reconnection.isReconnecting
             )
@@ -2150,13 +2122,10 @@ this.manualReconnectInFlight = false;
            * connectivity event.
            */
           const confirmedTransportProblem =
-            this.browserOfflineCycleActive ||
-            (
-              this.lastConfirmedTransportDropAt > 0 &&
-              now -
-                this.lastConfirmedTransportDropAt <
-                30_000
-            );
+            this.lastConfirmedTransportDropAt > 0 &&
+            now -
+              this.lastConfirmedTransportDropAt <
+              30_000;
 
           if (
             activeRound &&
