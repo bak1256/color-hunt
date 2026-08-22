@@ -212,6 +212,7 @@ export type NetworkLobbySnapshot = {
   phase?: NetworkGamePhase;
   phaseEndsAt?: number;
   serverNow?: number;
+  lobbyReadyState?: LobbyReadyState;
   paintReadyState?: PaintReadyState;
   players: Array<
     NetworkPlayerState & {
@@ -308,6 +309,20 @@ export type RoundAbortedHandler = (
   message: string,
 ) => void;
 
+export type LobbyReadyState = {
+  readySessionIds: string[];
+  readyCount: number;
+  totalCount: number;
+  allReady: boolean;
+  canStart: boolean;
+  livePlayerCount: number;
+  hasDisconnectedPlayers: boolean;
+};
+
+export type LobbyReadyStateHandler = (
+  state: LobbyReadyState,
+) => void;
+
 export type PaintReadyState = {
   readySessionIds: string[];
   hiderCount: number;
@@ -320,6 +335,7 @@ export type PaintReadyStateHandler = (
 ) => void;
 
 export class MultiplayerClient {
+  /* V1010374_RESTORE_LOBBY_READY_CLIENT_API: restore authoritative lobby READY client contract without touching reconnect/gameplay transport. */
   /* V1010373_RECONNECT_SINGLE_AUTHORITY_GAMEPLAY_LOCK: reconnect has one transport owner; gameplay sends pause until the authoritative Room is stable. */
   /* V1010372_SEAT_EXPIRED_FRESH_REJOIN: terminal 524 reconnect seats immediately fall back to bounded fresh clientKey rejoin. */
   /* V1010367_CLIENT_RECONNECT_SNAPSHOT_CONVERGENCE: throttle heavy paint snapshots and converge reconnect state before gameplay rebuild. */
@@ -656,6 +672,19 @@ this.phaseChangedHandlers.forEach(
 
   private readonly roundAbortedHandlers =
     new Set<RoundAbortedHandler>();
+
+  private readonly lobbyReadyStateHandlers =
+    new Set<LobbyReadyStateHandler>();
+
+  private lobbyReadyState: LobbyReadyState = {
+    readySessionIds: [],
+    readyCount: 0,
+    totalCount: 0,
+    allReady: false,
+    canStart: false,
+    livePlayerCount: 0,
+    hasDisconnectedPlayers: false,
+  };
 
   private readonly paintReadyStateHandlers =
     new Set<PaintReadyStateHandler>();
@@ -1092,6 +1121,12 @@ this.phaseChangedHandlers.forEach(
       );
     }
 
+    if (snapshot.lobbyReadyState) {
+      this.applyLobbyReadyState(
+        snapshot.lobbyReadyState,
+      );
+    }
+
     if (snapshot.paintReadyState) {
       const readySessionIds =
         Array.isArray(
@@ -1284,6 +1319,48 @@ this.phaseChangedHandlers.forEach(
           }
         },
       );
+  }
+
+  private applyLobbyReadyState(
+    payload: LobbyReadyState,
+  ): void {
+    const readySessionIds =
+      Array.isArray(payload?.readySessionIds)
+        ? payload.readySessionIds.map(String)
+        : [];
+
+    const readyCount = Number(
+      payload?.readyCount ??
+      readySessionIds.length,
+    );
+
+    const totalCount = Number(
+      payload?.totalCount ?? 0,
+    );
+
+    const livePlayerCount = Number(
+      payload?.livePlayerCount ??
+      totalCount,
+    );
+
+    this.lobbyReadyState = {
+      readySessionIds,
+      readyCount,
+      totalCount,
+      allReady:
+        Boolean(payload?.allReady) ||
+        (totalCount > 0 && readyCount >= totalCount),
+      canStart: Boolean(payload?.canStart),
+      livePlayerCount,
+      hasDisconnectedPlayers:
+        Boolean(payload?.hasDisconnectedPlayers),
+    };
+
+    this.lobbyReadyStateHandlers.forEach(
+      (handler) => {
+        handler(this.lobbyReadyState);
+      },
+    );
   }
 
   requestLobbySnapshot(): void {
@@ -2802,6 +2879,13 @@ this.manualReconnectInFlight = false;
       },
     );
 
+    room.onMessage<LobbyReadyState>(
+      "lobby_ready_state",
+      (payload) => {
+        this.applyLobbyReadyState(payload);
+      },
+    );
+
     room.onMessage<PaintReadyState>(
       "paint_ready_state",
       (payload) => {
@@ -3371,6 +3455,26 @@ this.manualReconnectInFlight = false;
 
   getHuntDurationMs(): number {
     return this.snapshotHuntDurationMs;
+  }
+
+  sendLobbyReady(
+    ready: boolean,
+  ): void {
+    this.room?.send(
+      "lobby_ready",
+      { ready },
+    );
+  }
+
+  requestLobbyReadyState(): void {
+    this.room?.send(
+      "request_lobby_ready_state",
+      {},
+    );
+  }
+
+  getLobbyReadyState(): LobbyReadyState {
+    return this.lobbyReadyState;
   }
 
   sendPaintReady(
@@ -4014,6 +4118,19 @@ this.manualReconnectInFlight = false;
 
     return () => {
       this.playerDisconnectedHandlers
+        .delete(handler);
+    };
+  }
+
+  onLobbyReadyState(
+    handler:
+      LobbyReadyStateHandler,
+  ): () => void {
+    this.lobbyReadyStateHandlers
+      .add(handler);
+
+    return () => {
+      this.lobbyReadyStateHandlers
         .delete(handler);
     };
   }
