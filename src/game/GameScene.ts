@@ -4811,6 +4811,8 @@ export class GameScene extends Phaser.Scene {
     private mobileNativePinchClickGuard?: (event: MouseEvent) => void;
 
     private mobilePendingPaintPointerId = -1;
+    /* V1010416_PRECISION_OUTSIDE_BODY_HOLD_RESTORE */
+    private mobilePaintHoldArmed = false;
 
     /*
      * v0.10.10.174
@@ -7817,8 +7819,9 @@ export class GameScene extends Phaser.Scene {
                 width: min(48vw, 420px) !important;
                 min-width: 210px !important;
                 max-width: 420px !important;
-                aspect-ratio: 16 / 9 !important;
-                object-fit: cover !important;
+                aspect-ratio: auto !important;
+                height: auto !important;
+                object-fit: contain !important;
                 justify-self: center !important;
                 border-radius: 14px !important;
             }
@@ -39815,6 +39818,8 @@ export class GameScene extends Phaser.Scene {
 
         this.mobilePaintDotCommitted =
             false;
+        this.mobilePaintHoldArmed =
+            false;
 
         if (hidePreview) {
             if (
@@ -40118,11 +40123,16 @@ export class GameScene extends Phaser.Scene {
     ): void {
         this.cancelMobilePaintHoldTimers();
         this.mobilePaintDotCommitted = false;
+        this.mobilePaintHoldArmed = false;
 
-        /* Short hold = one precise dot, even with a perfectly still finger. */
+        const holdToPaintDelay =
+            this.mobilePaintInputMode === 'brush'
+                ? 520
+                : 120;
+
         this.mobilePaintHoldDotEvent =
             this.time.delayedCall(
-                120,
+                holdToPaintDelay,
                 () => {
                     if (
                         pointer.id !== this.mobilePendingPaintPointerId ||
@@ -40130,18 +40140,34 @@ export class GameScene extends Phaser.Scene {
                     ) {
                         return;
                     }
+
+                    if (
+                        this.mobilePaintInputMode ===
+                            'brush'
+                    ) {
+                        /*
+                         * Arm even when the brush tip is outside the body.
+                         * commitMobilePendingDot() may fail there; that is OK.
+                         * The held gesture remains armed and paints the first
+                         * legal pixel when it enters the character.
+                         */
+                        this.mobilePaintHoldArmed =
+                            true;
+                    }
+
                     this.commitMobilePendingDot();
-                    this.showMobilePendingPaintPreview(pointer);
+                    this.showMobilePendingPaintPreview(
+                        pointer,
+                    );
                 },
             );
 
         /*
-         * V1010411_RESTORE_EXPLICIT_LINE_TOOL
-         * Long hold remains a normal paint gesture.
-         * LINE is selected only from the dedicated toolbar button.
+         * Explicit LINE stays toolbar-only. No hold -> LINE conversion.
          */
         this.mobilePaintLineModeEvent?.remove(false);
-        this.mobilePaintLineModeEvent = undefined;
+        this.mobilePaintLineModeEvent =
+            undefined;
     }
 
     private beginMobilePaintAfterDrag(
@@ -40179,8 +40205,10 @@ export class GameScene extends Phaser.Scene {
          * camouflage behavior below.
          */
         if (
-            this.isMobileHunterCustomizationPaint() &&
-            !this.mobilePaintDotCommitted
+            this.mobilePaintInputMode ===
+                'brush' &&
+            !this.mobilePaintDotCommitted &&
+            !this.mobilePaintHoldArmed
         ) {
             if (movedScreenPixels >= 3) {
                 this.mobilePendingPaintStartScreen
@@ -40233,7 +40261,14 @@ export class GameScene extends Phaser.Scene {
          * held brush actually enters the body and make THAT first legal pixel
          * the stroke origin.
          */
-        if (!this.mobilePaintDotCommitted) {
+        if (
+            !this.mobilePaintDotCommitted &&
+            !(
+                this.mobilePaintInputMode ===
+                    'brush' &&
+                this.mobilePaintHoldArmed
+            )
+        ) {
             const startPoint =
                 this.networkPlayerManager
                     .paintLocalPlayer(
@@ -40314,6 +40349,7 @@ export class GameScene extends Phaser.Scene {
         this.mobilePendingPaintStartScreen = undefined;
         this.mobilePendingPaintStartWorld = undefined;
         this.mobilePaintDotCommitted = false;
+        this.mobilePaintHoldArmed = false;
 
         this.paintPreview
             .setAlpha(1)
@@ -41639,18 +41675,16 @@ export class GameScene extends Phaser.Scene {
                     false;
 
                 /*
-                 * V1010411_RESTORE_EXPLICIT_LINE_TOOL / ONE_SHOT_RESET
-                 * After one line, return to the existing Circle/Square brush.
+                 * V1010417_PERSISTENT_LINE_TOOL
+                 * LINE is a persistent selected tool.
+                 * Completing one line ends only the active stroke/preview.
+                 * Do NOT switch back to Circle/Square or Finger/Precision.
+                 * The user leaves LINE only by explicitly choosing another tool.
                  */
                 if (
                     this.straightLineToolSelected
                 ) {
-                    this.straightLineToolSelected =
-                        false;
                     this.syncMobilePaintDockUi();
-                    this.highlightBrushShape(
-                        this.brushShape,
-                    );
                 }
 
                 this.clearStraightLinePreview();
@@ -42641,6 +42675,64 @@ export class GameScene extends Phaser.Scene {
 
         const zoom =
             Math.max(0.01, this.cameras.main.zoom);
+
+        /*
+         * V1010416_FINGER_EYEDROPPER_SWATCH_RESTORE
+         * Finger mode samples at the actual finger position and shows only
+         * the sampled-color preview above the finger. Never draw the pipette.
+         */
+        if (
+            this.mobilePaintInputMode ===
+                'finger'
+        ) {
+            const previewX =
+                grip.x + 40 / zoom;
+            const previewY =
+                grip.y - 94 / zoom;
+            const outerSize =
+                64 / zoom;
+            const innerSize =
+                48 / zoom;
+
+            guide
+                .clear()
+                .fillStyle(
+                    0x172027,
+                    0.94,
+                )
+                .fillRoundedRect(
+                    previewX - outerSize / 2,
+                    previewY - outerSize / 2,
+                    outerSize,
+                    outerSize,
+                    10 / zoom,
+                )
+                .fillStyle(
+                    previewColor,
+                    1,
+                )
+                .fillRoundedRect(
+                    previewX - innerSize / 2,
+                    previewY - innerSize / 2,
+                    innerSize,
+                    innerSize,
+                    7 / zoom,
+                )
+                .lineStyle(
+                    4 / zoom,
+                    0xffffff,
+                    0.97,
+                )
+                .strokeRoundedRect(
+                    previewX - innerSize / 2,
+                    previewY - innerSize / 2,
+                    innerSize,
+                    innerSize,
+                    7 / zoom,
+                )
+                .setVisible(true);
+            return;
+        }
         const dx = grip.x - target.x;
         const dy = grip.y - target.y;
         const length = Math.max(0.001, Math.hypot(dx, dy));
