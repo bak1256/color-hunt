@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010388R_HIDER_VISUAL_BOUNDS_CENTER: center Hider social capture on actual rendered bounds, not container pivot. */
     /* V1010388Q_ALIVE_HIDER_ONLY_SYMMETRIC_CROWN: only living Hiders get survival cards; crown geometry is perfectly centered. */
     /* V1010388P_FINISHED_DEAD_FADE_BADGE_POSITION: Finished dead-Hider alpha invariant + correctly lifted survivor crown badge. */
     /* V1010388O_DEAD_HIDER_FADE_SURVIVOR_BADGE: dead Hiders stay faded in Finished + Hider card crown/SURVIVED badge. */
@@ -31573,12 +31574,38 @@ export class GameScene extends Phaser.Scene {
                         .setVisible(true)
                         .setAlpha(1);
 
+                    /*
+                     * V1010388R_HIDER_VISUAL_BOUNDS_CENTER / TRUE_VISUAL_CENTER
+                     *
+                     * Container x/y is a gameplay pivot, not necessarily the
+                     * visible Hider body's center. getBounds() includes the
+                     * actual rendered children (body + painted texture) in
+                     * world coordinates, so the social snapshot is centered
+                     * on the real visible character.
+                     */
+                    const visualBounds =
+                        localTarget.getBounds();
+
+                    const visualCenterX =
+                        Number.isFinite(
+                            visualBounds.centerX,
+                        )
+                            ? visualBounds.centerX
+                            : localTarget.x;
+
+                    const visualCenterY =
+                        Number.isFinite(
+                            visualBounds.centerY,
+                        )
+                            ? visualBounds.centerY
+                            : localTarget.y;
+
                     camera
                         .stopFollow()
                         .removeBounds()
                         .centerOn(
-                            localTarget.x,
-                            localTarget.y,
+                            visualCenterX,
+                            visualCenterY,
                         );
                 }
             }
@@ -32118,6 +32145,12 @@ export class GameScene extends Phaser.Scene {
          * frame center without leaking into the real game scene.
          */
         if (!isHunter) {
+            /*
+             * V1010388R_HIDER_VISUAL_BOUNDS_CENTER / POSTER_CENTER_CONTRACT
+             * captureVictoryFrameForRoleShowcase() now guarantees that the
+             * rendered Hider visual center sits at the image/frame center.
+             * Crown and pill use that same exact X.
+             */
             const survivorX =
                 frameX +
                 frameW / 2;
