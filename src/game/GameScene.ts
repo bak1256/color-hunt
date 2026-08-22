@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010420_VICTORY_PC_MOBILE_PARITY: Hunter/Hider victory capture + Share behavior are role-authoritative and device-independent. */
     /* V1010408_FINGER_DIRECT_TOUCH_COORDINATE: Finger paints at touch point; Precision Brush alone uses offset coordinates. */
     /* V1010404_CLIENT_MAP12_16_FOREST_GUARD: playable client maps are map1..map16; Forest remains lobby-only. */
     /* V1010403C_MOBILE_PAINT_SURGICAL_RECOVERY: Finger/Precision Paint restored by additive surgery; latest feature fields preserved. */
@@ -16302,9 +16303,7 @@ export class GameScene extends Phaser.Scene {
          * Same default Paint framing as the real Hider game.
          */
         this.paintWorldZoom =
-            this.mobileControlsEnabled
-                ? 4.55
-                : 3.75;
+            3.75;
 
         this.cameras.main
             .stopFollow()
@@ -33614,9 +33613,7 @@ export class GameScene extends Phaser.Scene {
                     .setNamesVisible(false);
 
                 this.paintWorldZoom =
-                    this.mobileControlsEnabled
-                        ? 4.55
-                        : 3.75;
+                    3.75;
 
                 camera
                     .stopFollow()
@@ -35110,46 +35107,44 @@ export class GameScene extends Phaser.Scene {
          * Prefer clipboard there. Mobile/coarse-pointer devices keep the
          * familiar native share sheet.
          */
-        const coarsePointer =
-            window.matchMedia(
-                '(pointer: coarse)',
-            ).matches;
+        /* V1010420_VICTORY_PC_MOBILE_PARITY / SHARE_PC_PARITY
+         * Mobile and desktop now use the SAME clipboard-first Share path.
+         * navigator.share remains only as a fallback when clipboard is unavailable.
+         */
+        /* V1010420B_FIX_SHARE_SCOPE: primary clipboard attempt is separate from fallback attempt. */
+        const primaryClipboardResult =
+            await this.copyVictoryShowcaseToClipboard(
+                blob,
+                text,
+            );
 
-        if (!coarsePointer) {
-            const clipboardResult =
-                await this.copyVictoryShowcaseToClipboard(
-                    blob,
-                    text,
-                );
+        if (
+            primaryClipboardResult !==
+                'failed'
+        ) {
+            this.showVictoryShowcaseShareFeedback(
+                primaryClipboardResult ===
+                    'image-and-text'
+                    ? (
+                        language === 'ko'
+                            ? '✓ 승리카드 + 게임 링크 복사 완료 · 카톡에서 붙여넣기 하세요!'
+                            : '✓ Victory card + game link copied · Paste it into chat!'
+                    )
+                    : (
+                        language === 'ko'
+                            ? '✓ 게임 링크 복사 완료 · 이미지는 자동 저장합니다.'
+                            : '✓ Game link copied · Saving the image.'
+                    ),
+            );
 
             if (
-                clipboardResult !==
-                    'failed'
+                primaryClipboardResult ===
+                    'text'
             ) {
-                this.showVictoryShowcaseShareFeedback(
-                    clipboardResult ===
-                        'image-and-text'
-                        ? (
-                            language === 'ko'
-                                ? '✓ 승리카드 + 게임 링크 복사 완료 · 카톡에서 붙여넣기 하세요!'
-                                : '✓ Victory card + game link copied · Paste it into chat!'
-                        )
-                        : (
-                            language === 'ko'
-                                ? '✓ 게임 링크 복사 완료 · 이미지는 자동 저장합니다.'
-                                : '✓ Game link copied · Saving the image.'
-                        ),
-                );
-
-                if (
-                    clipboardResult ===
-                        'text'
-                ) {
-                    this.downloadMultiplayerVictoryShowcase();
-                }
-
-                return;
+                this.downloadMultiplayerVictoryShowcase();
             }
+
+            return;
         }
 
         try {
@@ -49047,9 +49042,7 @@ export class GameScene extends Phaser.Scene {
              * dedicated 1.05 camera override later.
              */
             this.paintWorldZoom =
-                this.mobileControlsEnabled
-                    ? 4.55
-                    : 3.75;
+                3.75;
 
             this.cameras.main
                 .stopFollow()
