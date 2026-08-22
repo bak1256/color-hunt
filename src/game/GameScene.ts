@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010443_FREEZE_PERSONAL_FOUND_IN_ROUND_RESULT: personal FOUND survives async poster capture/reset timing. */
     /* V1010442_CLEAN_VICTORY_CAPTURE_NO_LIVE_CANVAS: victory capture never falls back to live gameplay canvas. */
     /* V1010440F_HIDER_NICKNAME_SCOPE_FIX: Hider nickname rendered only inside victory-card capture scope. */
     /* V1010440E_AUDITED_DIRECT_FOUND_GALLERY: direct personal FOUND + nicknames + larger victory portraits. */
@@ -34293,30 +34294,30 @@ const roomPlayers =
          * v439 server sends THIS recipient's exact FOUND subset before the
          * round_result reaches GameScene. No session/clientKey comparison here.
          */
-        const serverPersonalFound:
+        const frozenPersonalFound:
             VictoryFoundEntry[] =
             extended.victoryShowcase
                 ?.personalFoundHiders ??
             [];
 
-        const directPersonalFound =
+        const liveCachePersonalFound =
             multiplayerClient
                 .getPersonalVictoryFoundHiders() as
                 VictoryFoundEntry[];
 
         /*
-         * V1010440E_AUDITED_DIRECT_FOUND_GALLERY / PERSONAL_FOUND_SOURCE
-         * Direct shooter-event cache is independent of round-result identity
-         * matching and therefore fixes the persistent 0 FOUND case.
+         * V1010443_FREEZE_PERSONAL_FOUND_IN_ROUND_RESULT
+         * round_result is the first authority because it survives asynchronous
+         * victory capture.  Live cache is only a compatibility fallback.
          */
         const personalFound:
             VictoryFoundEntry[] =
             !isHunter
                 ? []
-                : serverPersonalFound.length > 0
-                    ? serverPersonalFound
-                    : directPersonalFound.length > 0
-                        ? directPersonalFound
+                : frozenPersonalFound.length > 0
+                    ? frozenPersonalFound
+                    : liveCachePersonalFound.length > 0
+                        ? liveCachePersonalFound
                         : (
                             hunterCount <= 1
                                 ? allFound
@@ -34818,6 +34819,7 @@ const roomPlayers =
                     const foundAvatar =
                         this.buildVictoryPaintedHiderCanvas(
                             marker.sessionId,
+                            marker.paintStrokes,
                         );
 
                     context.save();

@@ -706,6 +706,7 @@ this.phaseChangedHandlers.forEach(
    */
   private personalVictoryFoundHiders:
     any[] = [];
+  /* V1010443_FREEZE_PERSONAL_FOUND_IN_ROUND_RESULT: async victory poster reads frozen round_result ownership. */
 
   /*
    * V1010441_LOCAL_SHOT_FOUND_IDS
@@ -3180,25 +3181,49 @@ this.room = room;
                 ),
           );
 
+        const resolvedPersonalFound =
+          (
+            Array.isArray(personalized) &&
+            personalized.length > 0
+          )
+            ? personalized.map(
+                (entry) => ({
+                  ...entry,
+                }),
+              )
+            : shotDerivedPersonal.length > 0
+              ? shotDerivedPersonal.map(
+                  (entry) => ({
+                    ...entry,
+                  }),
+                )
+              : this.personalVictoryFoundHiders
+                  .map(
+                    (entry) => ({
+                      ...entry,
+                    }),
+                  );
+
+        this.personalVictoryFoundHiders =
+          resolvedPersonalFound;
+
+        /*
+         * V1010443_FREEZE_PERSONAL_FOUND_IN_ROUND_RESULT
+         * Freeze personal ownership inside the round_result itself BEFORE
+         * GameScene begins asynchronous poster capture.  reset_round may clear
+         * live caches later, but this immutable result payload remains correct.
+         */
         if (
-          Array.isArray(personalized) &&
-          personalized.length > 0
+          resolvedPersonalFound.length > 0
         ) {
-          this.personalVictoryFoundHiders =
-            personalized.map(
-              (entry) => ({
-                ...entry,
-              }),
-            );
-        } else if (
-          shotDerivedPersonal.length > 0
-        ) {
-          this.personalVictoryFoundHiders =
-            shotDerivedPersonal.map(
-              (entry) => ({
-                ...entry,
-              }),
-            );
+          result.victoryShowcase = {
+            ...(
+              result.victoryShowcase ??
+              {}
+            ),
+            personalFoundHiders:
+              resolvedPersonalFound,
+          };
         }
 
         this.roundResultHandlers
