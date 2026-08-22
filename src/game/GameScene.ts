@@ -7690,7 +7690,234 @@ export class GameScene extends Phaser.Scene {
         );
     }
 
+
+    /*
+     * V1010413_RESTORE_FINAL_PAINT_PRACTICE_LAYOUT
+     *
+     * Final v386 paint/practice layout contract restored additively.
+     * This helper only owns DOM layout. It never touches paint coordinates,
+     * Finger/Precision behavior, reconnect, READY, victory or network state.
+     */
+    private ensureFinalPaintPracticeLayoutCss(): void {
+        const styleId =
+            'colorhunt-v413-final-paint-practice-layout';
+
+        if (
+            document.getElementById(
+                styleId,
+            )
+        ) {
+            return;
+        }
+
+        const style =
+            document.createElement(
+                'style',
+            );
+
+        style.id =
+            styleId;
+
+        style.textContent = `
+            /*
+             * V1010386C / V1010386D parity:
+             * every paint tool stays in ONE row, including the restored LINE
+             * button. The size slider owns a separate full-width bottom row.
+             */
+            .colorhunt-paint-dock__tools {
+                display: grid !important;
+                grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+                grid-auto-flow: column !important;
+                grid-auto-columns: minmax(0, 1fr) !important;
+                width: 100% !important;
+                min-width: 0 !important;
+                gap: 4px !important;
+                align-items: stretch !important;
+            }
+
+            .colorhunt-paint-dock__tools .colorhunt-paint-tool {
+                min-width: 0 !important;
+                width: 100% !important;
+                padding: 5px 4px !important;
+                gap: 2px !important;
+                font-size: 10px !important;
+                line-height: 1.05 !important;
+                box-sizing: border-box !important;
+            }
+
+            .colorhunt-paint-dock__tools .colorhunt-paint-tool__icon {
+                width: 22px !important;
+                height: 22px !important;
+                min-width: 22px !important;
+            }
+
+            .colorhunt-paint-size {
+                display: grid !important;
+                grid-template-columns: auto minmax(0, 1fr) auto !important;
+                align-items: center !important;
+                column-gap: 8px !important;
+                width: 100% !important;
+                max-width: none !important;
+                min-width: 0 !important;
+                box-sizing: border-box !important;
+            }
+
+            .colorhunt-paint-size input[type="range"] {
+                width: 100% !important;
+                max-width: none !important;
+                min-width: 0 !important;
+                margin: 0 !important;
+            }
+
+            /*
+             * Desktop specifically lost the v386C bottom/full-width slider.
+             */
+            .colorhunt-paint-dock--desktop {
+                display: grid !important;
+                grid-template-columns: minmax(0, 1fr) !important;
+                grid-auto-flow: row !important;
+                align-content: start !important;
+            }
+
+            .colorhunt-paint-dock--desktop .colorhunt-paint-dock__tools {
+                grid-row: auto !important;
+            }
+
+            .colorhunt-paint-dock--desktop .colorhunt-paint-size {
+                grid-row: auto !important;
+                width: 100% !important;
+                justify-self: stretch !important;
+            }
+
+            /*
+             * V1010386K/L/M parity:
+             *
+             *   [ < ] [      LARGE THUMBNAIL      ] [ > ]
+             *               MAP NAME
+             *
+             * Name belongs to column 2 so it is geometrically centered under
+             * the image even when the two arrow columns are present.
+             */
+            .colorhunt-practice-map-picker {
+                display: grid !important;
+                grid-template-columns: 56px minmax(210px, 420px) 56px !important;
+                grid-template-rows: auto auto !important;
+                align-items: center !important;
+                justify-content: center !important;
+                gap: 10px 14px !important;
+                width: 100% !important;
+                max-width: 100% !important;
+                margin: 12px auto 4px !important;
+                box-sizing: border-box !important;
+            }
+
+            .colorhunt-practice-map-preview {
+                grid-column: 2 !important;
+                grid-row: 1 !important;
+                width: min(48vw, 420px) !important;
+                min-width: 210px !important;
+                max-width: 420px !important;
+                aspect-ratio: 16 / 9 !important;
+                object-fit: cover !important;
+                justify-self: center !important;
+                border-radius: 14px !important;
+            }
+
+            .colorhunt-practice-map-arrow {
+                grid-row: 1 !important;
+                width: 52px !important;
+                height: 72px !important;
+                min-width: 0 !important;
+                padding: 0 !important;
+                font-size: 34px !important;
+                line-height: 1 !important;
+                justify-self: center !important;
+                align-self: center !important;
+                box-sizing: border-box !important;
+            }
+
+            .colorhunt-practice-map-arrow[data-practice-map-prev] {
+                grid-column: 1 !important;
+            }
+
+            .colorhunt-practice-map-arrow[data-practice-map-next] {
+                grid-column: 3 !important;
+            }
+
+            .colorhunt-practice-map-name {
+                position: relative !important;
+                left: auto !important;
+                right: auto !important;
+                top: auto !important;
+                bottom: auto !important;
+                transform: none !important;
+                grid-column: 2 !important;
+                grid-row: 2 !important;
+                display: block !important;
+                width: 100% !important;
+                min-width: 0 !important;
+                max-width: none !important;
+                justify-self: stretch !important;
+                text-align: center !important;
+                margin: 2px 0 0 !important;
+                font-size: 18px !important;
+                line-height: 1.25 !important;
+                font-weight: 900 !important;
+                box-sizing: border-box !important;
+            }
+
+            /*
+             * Compact/Fold/mobile: arrows remain visible, while the thumbnail
+             * yields width first. No second row of paint buttons is allowed.
+             */
+            @media (max-width: 760px), (pointer: coarse) {
+                .colorhunt-paint-dock__tools {
+                    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+                    gap: 3px !important;
+                }
+
+                .colorhunt-paint-dock__tools .colorhunt-paint-tool {
+                    padding: 4px 2px !important;
+                    font-size: 9px !important;
+                }
+
+                .colorhunt-paint-dock__tools .colorhunt-paint-tool__icon {
+                    width: 20px !important;
+                    height: 20px !important;
+                    min-width: 20px !important;
+                }
+
+                .colorhunt-practice-map-picker {
+                    grid-template-columns: 44px minmax(0, 1fr) 44px !important;
+                    gap: 8px !important;
+                    padding-inline: 2px !important;
+                }
+
+                .colorhunt-practice-map-preview {
+                    width: min(100%, 420px) !important;
+                    min-width: 0 !important;
+                    max-width: 420px !important;
+                }
+
+                .colorhunt-practice-map-arrow {
+                    width: 42px !important;
+                    height: 66px !important;
+                    font-size: 31px !important;
+                }
+
+                .colorhunt-practice-map-name {
+                    font-size: 17px !important;
+                }
+            }
+        `;
+
+        document.head.appendChild(
+            style,
+        );
+    }
+
     private createMobilePaintDock(): void {
+        this.ensureFinalPaintPracticeLayoutCss();
         if (
             this.mobilePaintDock
         ) {
@@ -12060,6 +12287,8 @@ export class GameScene extends Phaser.Scene {
     }
 
     private openPracticeGroundModal(): void {
+        this.ensureFinalPaintPracticeLayoutCss();
+
         this.closeMenuModal();
         this.input.enabled = false;
 
