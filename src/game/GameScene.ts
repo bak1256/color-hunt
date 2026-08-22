@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010388P_FINISHED_DEAD_FADE_BADGE_POSITION: Finished dead-Hider alpha invariant + correctly lifted survivor crown badge. */
     /* V1010388O_DEAD_HIDER_FADE_SURVIVOR_BADGE: dead Hiders stay faded in Finished + Hider card crown/SURVIVED badge. */
     /* V1010388N_HUNTER_FULL_MAP_VICTORY_CARD: Hunter social snapshot = clean full-map 960x540 evidence board. */
     /* V1010388M2_HIDE_ROLE_LABELS_ROBUST: hide gameplay role/survival HUD from social Victory Snapshot only. */
@@ -890,6 +891,66 @@ export class GameScene extends Phaser.Scene {
                         .setVisible(false);
                 },
             );
+    }
+
+    /*
+     * V1010388P_FINISHED_DEAD_FADE_BADGE_POSITION / FINISHED_DEAD_HIDER_INVARIANT
+     *
+     * A dead Hider must NEVER become fully opaque again during the result
+     * countdown. Social-card capture temporarily manipulates visibility, and
+     * reconnect/render settle code can also call restoreAllPlayerVisibility().
+     *
+     * Re-assert the visual state directly from authoritative room Schema.
+     */
+    private enforceFinishedDeadHiderFade(): void {
+        if (
+            this.phase !== 'finished'
+        ) {
+            return;
+        }
+
+        const room =
+            multiplayerClient.getRoom();
+
+        if (!room?.state?.players) {
+            return;
+        }
+
+        room.state.players.forEach(
+            (
+                player:
+                    NetworkPlayerState,
+                sessionId:
+                    string,
+            ) => {
+                if (
+                    player.role !==
+                        'hider'
+                ) {
+                    return;
+                }
+
+                const container =
+                    this.networkPlayerManager
+                        .getPlayerContainer(
+                            sessionId,
+                        );
+
+                if (!container) {
+                    return;
+                }
+
+                /*
+                 * Living Hiders stay normal. Found/dead Hiders use the
+                 * established ghost-like presentation.
+                 */
+                container.setAlpha(
+                    player.alive
+                        ? 1
+                        : 0.28,
+                );
+            },
+        );
     }
 
     private getAuthoritativeAliveHiderCount(): number {
@@ -26573,6 +26634,12 @@ export class GameScene extends Phaser.Scene {
             }
 
             /*
+             * V1010388P_FINISHED_DEAD_FADE_BADGE_POSITION: other capture/recovery code may restore alpha=1.
+             * Force dead Hiders back to ghost alpha on every Finished tick.
+             */
+            this.enforceFinishedDeadHiderFade();
+
+            /*
              * V1010388I_INGAME_VICTORY_CLEAN_CARD_CAPTURE / PLAYER_FACING_FINISHED_UI
              *
              * The real match-ending presentation remains fully visible to the
@@ -32027,7 +32094,7 @@ export class GameScene extends Phaser.Scene {
             const badgeY =
                 frameY +
                 frameH / 2 -
-                122;
+                184;
 
             const badgeW = 178;
             const badgeH = 38;
@@ -32082,9 +32149,9 @@ export class GameScene extends Phaser.Scene {
              * Small outlined crown above the pill.
              */
             const crownCenterY =
-                badgeY - 20;
-            const crownW = 36;
-            const crownH = 22;
+                badgeY - 24;
+            const crownW = 32;
+            const crownH = 19;
             const crownLeft =
                 survivorX -
                 crownW / 2;
