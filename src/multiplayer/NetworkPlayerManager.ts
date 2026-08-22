@@ -3489,8 +3489,11 @@ export class NetworkPlayerManager {
         .setScale(1);
     }
 
-    this.restoreAllPlayerVisibility();
-
+    /*
+     * V1010423_ATOMIC_HUNT_VISUAL_HANDOFF_RESTORE
+     * Local normalization must not toggle visibility for the whole room.
+     * GameScene owns phase-level visibility changes.
+     */
     this.syncPaintLayerPosition(view);
   }
 

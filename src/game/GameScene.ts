@@ -36038,49 +36038,21 @@ export class GameScene extends Phaser.Scene {
             this.finishActivePaintStroke();
             this.isPainting = false;
 
+            /*
+             * V1010423_ATOMIC_HUNT_VISUAL_HANDOFF_RESTORE
+             * Preserve the exact Paint raster on the Paint -> Hunt boundary.
+             * The final history still goes to the authoritative server, but
+             * NEVER clear/rebuild/replay the visible texture here.
+             */
             if (
                 this.networkPlayerManager
                     .isLocalHider() &&
                 this.localPaintHistory.length > 0
             ) {
-                /*
-                 * V1010338_CRITICAL_GAMEPLAY_TRIPLE_FIX / HUNT_PAINT_FINAL_SNAPSHOT
-                 *
-                 * Server rejects ordinary paint_stroke after phase becomes Hunt.
-                 * Do NOT try to rebroadcast final camouflage through that path.
-                 *
-                 * 1) Rebuild the local raster exactly from complete history.
-                 * 2) Send the complete history through restore_local_paint,
-                 *    which is explicitly accepted during Hunt and replaces the
-                 *    authoritative round snapshot for this Hider.
-                 */
-                this.rebuildLocalPaintFromHistory(
-                    false,
-                );
-
                 multiplayerClient
                     .sendReconnectPaintSnapshot(
                         this.localPaintHistory,
                     );
-
-                /*
-                 * Ask for one convergence snapshot after opponents/server had
-                 * time to process the replacement. This is cheap and prevents
-                 * an early Hunt render from staying on an older partial image.
-                 */
-                this.time.delayedCall(
-                    260,
-                    () => {
-                        if (
-                            this.phase ===
-                            'hunt' &&
-                            this.isMultiplayerSession()
-                        ) {
-                            multiplayerClient
-                                .requestRoundPaintState();
-                        }
-                    },
-                );
             }
 
             this.clearStatus();
@@ -36090,24 +36062,12 @@ export class GameScene extends Phaser.Scene {
                 .setText('')
                 .setVisible(false);
 
-            this.networkPlayerManager
-                .syncLobbyPositionsFromState();
-
-            this.networkPlayerManager
-                .normalizeLocalPlayerForGameplay();
-
             /*
-             * Paint -> Hunt 전환 프레임에서 이전 걷기 pose/sub-pixel 좌표가
-             * 남아 있으면 픽셀 위장이 몸체와 어긋나 보입니다.
-             * 모든 Hider를 즉시 neutral pose + 동일 픽셀 기준으로 고정합니다.
+             * V1010423_ATOMIC_HUNT_VISUAL_HANDOFF_RESTORE / NO_PRE_HUNT_VISUAL_NORMALIZE
+             * Do not sync positions, normalize role bodies, stabilize every
+             * Hider, or reveal the whole room while Paint still owns the frame.
              */
-            this.networkPlayerManager
-                .stabilizeHidersForHunt();
-
             this.resetPaintWorldZoom();
-
-            this.networkPlayerManager
-                .restoreAllPlayerVisibility();
 
             this.setHunterPaintBlind(false);
             this.setPaintPaletteVisible(false);
@@ -36124,52 +36084,10 @@ export class GameScene extends Phaser.Scene {
             this.startGameplayCamera();
 
             /*
-             * V1010344B_HIDER_SELF_PAINT_HUNT_SETTLE
-             *
-             * Opponents can already have the correct camouflage while the
-             * owner's local RenderTexture is blank after Paint -> Hunt.
-             *
-             * Replay localPaintHistory locally only. broadcast=false means
-             * zero paint_stroke network traffic and no server state changes.
-             *
-             * Multiple short settle passes protect against late Hunt
-             * normalization / visibility callbacks overwriting the local
-             * texture during the transition.
+             * V1010423_ATOMIC_HUNT_VISUAL_HANDOFF_RESTORE / NO_POST_HUNT_REPLAY_PULSE
+             * Hunt inherits the final Paint RenderTextures unchanged.
+             * No 0/120/360ms rebuild + visibility pulse.
              */
-            if (
-                this.networkPlayerManager
-                    .isLocalHider() &&
-                this.localPaintHistory.length > 0
-            ) {
-                [0, 120, 360].forEach(
-                    (delay) => {
-                        this.time.delayedCall(
-                            delay,
-                            () => {
-                                if (
-                                    this.phase !== 'hunt' ||
-                                    !this.networkPlayerManager
-                                        .isLocalHider() ||
-                                    this.localPaintHistory
-                                        .length < 1
-                                ) {
-                                    return;
-                                }
-
-                                this.rebuildLocalPaintFromHistory(
-                                    false,
-                                );
-
-                                this.networkPlayerManager
-                                    .normalizeLocalPlayerForGameplay();
-
-                                this.networkPlayerManager
-                                    .restoreAllPlayerVisibility();
-                            },
-                        );
-                    },
-                );
-            }
 
             this.phaseEndTime =
                 this.time.now +
