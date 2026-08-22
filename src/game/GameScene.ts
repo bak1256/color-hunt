@@ -79,6 +79,9 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010439G_MEMORY_PANEL_Y_RELOCATE: memoryPanelY restored at statement scope. */
+    /* V1010439F_ROBUST_BUILD_SCOPE_REPAIR: robustly restores v439 victory-card local scope. */
+    /* V1010439D_ROBUST_CAMO_BLOCK_REPAIR: rebuilt malformed v439 Hunter camouflage block by structural anchors. */
     /* V1010439_PERSONAL_FOUND_VISUAL_FINAL: server-personal FOUND + visible targets + large camo. */
     /* V1010438_PERSONAL_FOUND_VISUAL_AND_FOLD_CLOSE: stable personal FOUND, clear markers, big camo, close-to-fold. */
     /* V1010437_PERSONAL_HUNTER_CARD_AND_CAMOUFLAGE: per-Hunter FOUND/ALL KILL + Hunter camouflage social memory. */
@@ -34194,12 +34197,7 @@ export class GameScene extends Phaser.Scene {
         const localSessionId =
             multiplayerClient.getSessionId() ??
             '';
-
-        const localStableClientKey =
-            multiplayerClient
-                .getStableClientKeyForUi();
-
-        const roomPlayers =
+const roomPlayers =
             multiplayerClient.getRoom()
                 ?.state.players;
 
@@ -34213,24 +34211,7 @@ export class GameScene extends Phaser.Scene {
                     )
                     .length
                 : 0;
-
-        const hasStableFinderAttribution =
-            allFound.some(
-                (entry) =>
-                    Boolean(
-                        entry.foundByHunterClientKey,
-                    ),
-            );
-
-        const hasSessionFinderAttribution =
-            allFound.some(
-                (entry) =>
-                    Boolean(
-                        entry.foundByHunterSessionId,
-                    ),
-            );
-
-        /*
+/*
          * V1010438_PERSONAL_FOUND_VISUAL_AND_FOLD_CLOSE / STABLE_PERSONAL_FOUND
          *
          * clientKey survives a Colyseus session replacement; sessionId does not.
@@ -34259,6 +34240,25 @@ export class GameScene extends Phaser.Scene {
                             ? allFound
                             : []
                     );
+
+        /*
+         * V1010439F_ROBUST_BUILD_SCOPE_REPAIR / PERSONAL_DISPLAY_LIST
+         * Server already personalized this recipient's FOUND subset.
+         */
+        const displayedFound =
+            [...personalFound].sort(
+                (a, b) =>
+                    (
+                        Number(
+                            a.foundOrder,
+                        ) || 0
+                    ) -
+                    (
+                        Number(
+                            b.foundOrder,
+                        ) || 0
+                    ),
+            );
 
         const totalHiders =
             isHunter
@@ -34689,40 +34689,27 @@ export class GameScene extends Phaser.Scene {
          * Hunter: ONLY this local Hunter's actual catches get FOUND markers.
          * No revealedHiders fallback, no circle/# for Hiders found by teammates.
          */
+        /*
+         * V1010439G_MEMORY_PANEL_Y_RELOCATE
+         * Shared Y anchor for MATCH MEMORY / MY CAMOUFLAGE / FOUND summary.
+         * Defined at statement scope, never inside another initializer.
+         */
+        const memoryPanelY =
+            isHunter
+                ? 814
+                : 1104;
+
         if (isHunter) {
-            displayedFound.forEach(
-                (
-                    marker,
-                    index,
-                ) => {
-                    const mx =
-                        frameX +
-                        Phaser.Math.Clamp(
-                            Number(marker.x) ||
-                                0,
-                            0,
-                            this.gameWidth,
-                        );
-                    const my =
-                        frameY +
-                        Phaser.Math.Clamp(
-                            Number(marker.y) ||
-                                0,
-                            0,
-                            this.gameHeight,
-                        );
+            const hunterPaintAvatar =
+                this.buildVictoryPaintedHiderCanvas(
+                    localSessionId,
+                );
 
-                    const paintedAvatar =
-                        this.buildVictoryPaintedHiderCanvas(
-                            marker.sessionId,
-                            marker.paintStrokes,
-                        );
-
-                    /*
-                     * V1010439_PERSONAL_FOUND_VISUAL_FINAL / HIGH_CONTRAST_FOUND_TARGET
-                     * Busy maps need an unmistakable target marker.
-                     */
-                    const camoCardX = 520;
+            /*
+             * V1010439D_ROBUST_CAMO_BLOCK_REPAIR
+             * Large dedicated Hunter camouflage card.
+             */
+            const camoCardX = 520;
             const camoCardY =
                 memoryPanelY - 24;
             const camoCardW = 300;
@@ -34735,6 +34722,7 @@ export class GameScene extends Phaser.Scene {
             context.strokeStyle =
                 'rgba(37,41,45,.16)';
             context.lineWidth = 3;
+
             context.beginPath();
             context.roundRect(
                 camoCardX,
@@ -34752,6 +34740,7 @@ export class GameScene extends Phaser.Scene {
                 '900 15px Arial, sans-serif';
             context.textAlign =
                 'left';
+
             context.fillText(
                 'MY CAMOUFLAGE',
                 camoCardX + 20,
@@ -34762,6 +34751,7 @@ export class GameScene extends Phaser.Scene {
                 '#25292d';
             context.font =
                 '900 24px Arial, sans-serif';
+
             context.fillText(
                 language === 'ko'
                     ? '내 위장 자랑!'
@@ -34775,6 +34765,7 @@ export class GameScene extends Phaser.Scene {
             context.imageSmoothingEnabled =
                 false;
             context.globalAlpha = 1;
+
             context.drawImage(
                 hunterPaintAvatar,
                 camoCardX + 85,
