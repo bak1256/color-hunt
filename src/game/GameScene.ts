@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010448_LOBBY_ROUND_PAINT_HARD_ISOLATION: finished-round paint is scrubbed before lobby avatar presets are rebuilt. */
     /* V1010444_RESULT_IDENTITY_FALLBACK: personal FOUND can be reconstructed from one final result payload. */
     /* V1010443_FREEZE_PERSONAL_FOUND_IN_ROUND_RESULT: personal FOUND survives async poster capture/reset timing. */
     /* V1010442_CLEAN_VICTORY_CAPTURE_NO_LIVE_CANVAS: victory capture never falls back to live gameplay canvas. */
@@ -36259,6 +36260,84 @@ const roomPlayers =
         }
 
         if (phase === 'lobby') {
+            /*
+             * V1010448_LOBBY_ROUND_PAINT_HARD_ISOLATION
+             *
+             * Lobby avatars and in-game camouflage are separate visual domains.
+             * Never let the just-finished round texture become a waiting-room
+             * avatar simply because phase_changed reaches us before reset_round.
+             */
+            const restoreLobbyAvatarPresets =
+                (): void => {
+                    if (
+                        this.phase !== 'lobby' &&
+                        multiplayerClient.getPhase() !==
+                            'lobby'
+                    ) {
+                        return;
+                    }
+
+                    this.networkPlayerManager
+                        .clearAllPaint();
+
+                    this.lobbyAvatarPresetsBySession
+                        .forEach(
+                            (
+                                strokes,
+                                sessionId,
+                            ) => {
+                                this.networkPlayerManager
+                                    .applyLobbyAvatarPreset(
+                                        sessionId,
+                                        this.getMobileSafeAvatarPreset(
+                                            strokes,
+                                        ),
+                                    );
+                            },
+                        );
+                };
+
+            /*
+             * First scrub is synchronous so Lobby never intentionally inherits
+             * Hunt paint.
+             */
+            this.networkPlayerManager
+                .clearAllPaint();
+
+            this.lobbyAvatarPresetsBySession
+                .forEach(
+                    (
+                        strokes,
+                        sessionId,
+                    ) => {
+                        this.networkPlayerManager
+                            .applyLobbyAvatarPreset(
+                                sessionId,
+                                this.getMobileSafeAvatarPreset(
+                                    strokes,
+                                ),
+                            );
+                    },
+                );
+
+            multiplayerClient
+                .requestAvatarPresets();
+
+            /*
+             * One bounded second scrub absorbs any paint message already queued
+             * around finished -> lobby.  It does NOT loop and does not affect
+             * gameplay/reconnect cadence.
+             */
+            this.time.delayedCall(
+                120,
+                () => {
+                    restoreLobbyAvatarPresets();
+
+                    multiplayerClient
+                        .requestAvatarPresets();
+                },
+            );
+
             /*
              * V1010300_CLIENT_MOBILE_UI_GHOST_GAS_FIX: GAS belongs to one Hunt only.
              * Never carry the previous Hunter's pressure into Lobby/next round.
