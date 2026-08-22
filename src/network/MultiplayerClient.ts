@@ -335,6 +335,7 @@ export type PaintReadyStateHandler = (
 ) => void;
 
 export class MultiplayerClient {
+  /* V1010426B_RECONNECT_STORM_VISUAL_CONVERGENCE: old reconnect stability contracts restored without recovery fanout. */
   /* V1010374_RESTORE_LOBBY_READY_CLIENT_API: restore authoritative lobby READY client contract without touching reconnect/gameplay transport. */
   /* V1010373_RECONNECT_SINGLE_AUTHORITY_GAMEPLAY_LOCK: reconnect has one transport owner; gameplay sends pause until the authoritative Room is stable. */
   /* V1010372_SEAT_EXPIRED_FRESH_REJOIN: terminal 524 reconnect seats immediately fall back to bounded fresh clientKey rejoin. */
@@ -2135,7 +2136,7 @@ this.manualReconnectInFlight = false;
               .isReconnecting &&
             now -
               this.lastManualReconnectAt >=
-              5000
+                10_000
           ) {
             void this.attemptManualReconnect(
               room,
@@ -2242,51 +2243,23 @@ this.manualReconnectInFlight = false;
         }
 
         /*
-         * V1010340C_MULTIPLAYER_TRANSPORT_HARDENING_FINAL / RECONNECT_AIM_RESET
+         * V1010426B_RECONNECT_STORM_VISUAL_CONVERGENCE / SINGLE_RECOVERY_PULSE
+         *
+         * Restore the old stability rule:
+         * one recovered transport -> one authoritative convergence pass.
+         * Do not create a burst of delayed lobby/paint recovery work.
          */
         this.lastHunterAimSentAt = 0;
         this.lastHunterAimSentAngle =
           Number.NaN;
 
-        /*
-         * Force the authoritative server phase to be applied even when
-         * reconnecting during the same phase.
-         */
         this.deliveredPhase = "";
 
         this.requestLobbySnapshot();
         this.requestPaintReadyState();
         this.requestAvatarPresets();
-
-        /*
-         * V1010367_CLIENT_RECONNECT_SNAPSHOT_CONVERGENCE: one authoritative full-paint request immediately.
-         */
         this.requestRoundPaintState(
           true,
-        );
-
-        /*
-         * Cheap phase/READY convergence can pulse more often than raster paint.
-         */
-        [250, 1250].forEach(
-          (delay) => {
-            globalThis.setTimeout(
-              () => {
-                if (this.room !== room) {
-                  return;
-                }
-
-                this.deliveredPhase = "";
-                this.requestLobbySnapshot();
-                this.requestPaintReadyState();
-
-                if (delay >= 1250) {
-                  this.requestRoundPaintState();
-                }
-              },
-              delay,
-            );
-          },
         );
 
         this.lastConfirmedTransportDropAt = 0;
@@ -2294,21 +2267,21 @@ this.manualReconnectInFlight = false;
         this.recoveryEscalationGeneration += 1;
         this.clearConnectionIssue();
 
-        [80, 220, 650].forEach(
-          (delay) => {
-            globalThis.setTimeout(
-              () => {
-                if (
-                  this.room === room
-                ) {
-                  this.deliveredPhase =
-                    "";
-                  this.requestLobbySnapshot();
-                }
-              },
-              delay,
-            );
+        /*
+         * One cheap delayed phase/READY settle only.
+         * Full paint convergence is owned by GameScene's bounded recovery.
+         */
+        globalThis.setTimeout(
+          () => {
+            if (this.room !== room) {
+              return;
+            }
+
+            this.deliveredPhase = "";
+            this.requestLobbySnapshot();
+            this.requestPaintReadyState();
           },
+          800,
         );
       },
     );

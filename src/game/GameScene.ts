@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010426B_RECONNECT_STORM_VISUAL_CONVERGENCE: reconnect recovery no longer repeatedly rebuilds Hunt visuals. */
     /* V1010420_VICTORY_PC_MOBILE_PARITY: Hunter/Hider victory capture + Share behavior are role-authoritative and device-independent. */
     /* V1010408_FINGER_DIRECT_TOUCH_COORDINATE: Finger paints at touch point; Precision Brush alone uses offset coordinates. */
     /* V1010404_CLIENT_MAP12_16_FOREST_GUARD: playable client maps are map1..map16; Forest remains lobby-only. */
@@ -9497,32 +9498,15 @@ export class GameScene extends Phaser.Scene {
 
         this.hideLegacySinglePlayerActors();
 
+        /*
+         * V1010426B_RECONNECT_STORM_VISUAL_CONVERGENCE / CHEAP_FINAL_REFRESH
+         * Full paint convergence already finished above.
+         * Refresh only cheap phase/READY state here.
+         */
         multiplayerClient
             .requestLobbySnapshot();
         multiplayerClient
             .requestPaintReadyState();
-        multiplayerClient
-            .requestRoundPaintState();
-
-        /*
-         * One more settle pass catches Schema transfer arriving just after the
-         * replacement Room joined, without touching the WebSocket lifecycle.
-         */
-        if (attempt === 0) {
-            this.time.delayedCall(
-                260,
-                () => {
-                    if (
-                        multiplayerClient.getRoom() ===
-                        room
-                    ) {
-                        this.resyncGameplayAfterConnectionRecovery(
-                            21,
-                        );
-                    }
-                },
-            );
-        }
     }
 
     private attachJoinRejectedListener(): void {
@@ -11028,57 +11012,11 @@ export class GameScene extends Phaser.Scene {
                     );
 
                     /*
-                     * v0.10.10.239 RECOVERY CONVERGENCE:
-                     * sessionId, Schema, phase and READY may settle on different
-                     * mobile ticks. Rebuild cheap authoritative state repeatedly
-                     * so a Hider cannot remain visually stuck at Paint 0s.
+                     * V1010426B_RECONNECT_STORM_VISUAL_CONVERGENCE / NO_RECOVERY_VISUAL_PULSE_STORM
+                     * resyncGameplayAfterConnectionRecovery() is the single
+                     * recovery owner. Do not repeatedly normalize visibility
+                     * or request paint at 0/300/1000/2400ms.
                      */
-                    [0, 300, 1000, 2400].forEach(
-                        (delay) => {
-                            this.time.delayedCall(
-                                delay,
-                                () => {
-                                    if (!multiplayerClient.isConnected()) {
-                                        return;
-                                    }
-
-                                    this.networkPlayerManager
-                                        .syncPlayersFromCurrentRoom();
-
-                                    /*
-                                     * v0.10.10.240 PAINT VISUAL RECOVERY:
-                                     * normalizeLocalPlayerForGameplay() is a Hunt
-                                     * normalizer. Calling it repeatedly during Paint
-                                     * clears customization mode / paint zoom and can
-                                     * make the reconnecting Hunter body disappear while
-                                     * the Room itself is healthy. Keep Paint in Paint.
-                                     */
-                                    if (this.phase === 'hunt') {
-                                        this.networkPlayerManager
-                                            .normalizeLocalPlayerForGameplay();
-                                        this.networkPlayerManager
-                                            .restoreAllPlayerVisibility();
-                                    } else if (this.phase === 'paint') {
-                                        this.networkPlayerManager
-                                            .showOnlyLocalPlayer();
-                                        this.centerPaintCameraOnLocalPlayer();
-                                    }
-
-                                    multiplayerClient.requestLobbySnapshot();
-                                    multiplayerClient.requestPaintReadyState();
-                                    multiplayerClient.requestRoundPaintState();
-
-                                    if (
-                                        this.phase === 'paint' &&
-                                        this.localPaintReady &&
-                                        this.networkPlayerManager.isLocalHider()
-                                    ) {
-                                        multiplayerClient.sendPaintReady(true);
-                                    }
-                                },
-                            );
-                        },
-                    );
 
                     this.showStatus(
                         tr('재접속했습니다.'),
