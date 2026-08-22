@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010428B_PAINT_SNAPSHOT_VISUAL_NOOP: round paint snapshots never toggle Hunt actor visibility. */
     /* V1010426B_RECONNECT_STORM_VISUAL_CONVERGENCE: reconnect recovery no longer repeatedly rebuilds Hunt visuals. */
     /* V1010420_VICTORY_PC_MOBILE_PARITY: Hunter/Hider victory capture + Share behavior are role-authoritative and device-independent. */
     /* V1010408_FINGER_DIRECT_TOUCH_COORDINATE: Finger paints at touch point; Precision Brush alone uses offset coordinates. */
@@ -10203,17 +10204,15 @@ export class GameScene extends Phaser.Scene {
                                 },
                             );
 
-                            this.networkPlayerManager
-                                .restoreAllPlayerVisibility();
-
-                            if (
-                                this.phase ===
-                                    'hunt'
-                            ) {
-                                this.networkPlayerManager
-                                    .normalizeLocalPlayerForGameplay();
-                            }
-
+                            /*
+                             * V1010428B_PAINT_SNAPSHOT_VISUAL_NOOP
+                             * round_paint_state is authoritative PAINT DATA.
+                             * It must not repeatedly toggle actor visibility
+                             * or normalize the local Hunter during Hunt.
+                             *
+                             * Actor/session recovery remains owned by the
+                             * reconnect flow, not by paint snapshot replay.
+                             */
                             return pending;
                         };
 
