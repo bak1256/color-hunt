@@ -31561,6 +31561,24 @@ export class GameScene extends Phaser.Scene {
             blob;
         this.victoryShowcaseWinner =
             winner;
+
+        /*
+         * V1010388E_VICTORY_SHOWCASE_RACE_FIX
+         *
+         * enterLobbyPhase() performs one reveal check at 320ms, but poster
+         * generation is asynchronous (2 RAFs + canvas capture + PNG toBlob).
+         * On slower/mobile devices the lobby check can therefore happen before
+         * victoryShowcaseBlob exists and the card is missed forever.
+         *
+         * Make capture completion the second authority: if Lobby is already
+         * active when the PNG becomes ready, reveal it immediately.
+         */
+        if (
+            this.phase === 'lobby' &&
+            this.victoryShowcaseBlob
+        ) {
+            this.showMultiplayerVictoryShowcase();
+        }
     }
 
     private downloadMultiplayerVictoryShowcase(): void {
