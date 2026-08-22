@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010388G_AUTHORITATIVE_ROUND_RESULT_FIX: final server round_result outranks one-patch stale alive Schema. */
     /* V1010388F_VICTORY_SHOWCASE_GUARANTEED: winner role fallback + resilient capture + bounded lobby reveal watchdog. */
     /* V1010388D_MAIN_RESTORE_LOBBY_READY_ROBUST: restore guest READY + host start barrier across CRLF/LF sources. */
     /* V1010388_CLIENT_VICTORY_SHOWCASE: winner-only social result poster. */
@@ -30855,8 +30856,23 @@ export class GameScene extends Phaser.Scene {
          * gameplay, so reject the impossible result and wait for a coherent
          * state/result pair.
          */
+        /*
+         * V1010388G_AUTHORITATIVE_ROUND_RESULT_FIX / RESULT_AUTHORITY
+         *
+         * player.alive Schema can trail the server's final hit by one patch.
+         * When the server explicitly sends all_hiders_found, that round_result
+         * is the final resolution and must not be discarded because an older
+         * alive=true patch is still visible locally.
+         *
+         * For any other suspicious Hunter result, preserve the old safety guard.
+         */
+        const authoritativeHunterResult =
+            result.winner === 'hunters' &&
+            result.reason === 'all_hiders_found';
+
         if (
             result.winner === 'hunters' &&
+            !authoritativeHunterResult &&
             this.phase === 'hunt' &&
             this.getAuthoritativeAliveHiderCount() > 0
         ) {
@@ -32509,8 +32525,16 @@ export class GameScene extends Phaser.Scene {
              * finished transition is internally inconsistent and must not
              * terminate the client's round.
              */
+            /*
+             * V1010388G_AUTHORITATIVE_ROUND_RESULT_FIX / FINISHED_AUTHORITY
+             *
+             * If handleNetworkRoundResult() already accepted the server's
+             * authoritative Hunter result, stale alive=true Schema must not
+             * rewind Finished back into Hunt.
+             */
             if (
                 authoritativeWinner === 'hunters' &&
+                this.roundResultWinner !== 'hunters' &&
                 this.getAuthoritativeAliveHiderCount() > 0
             ) {
                 console.warn(
