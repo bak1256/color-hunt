@@ -49395,6 +49395,27 @@ export class GameScene extends Phaser.Scene {
         this.syncPhaseMusic();
 
         if (this.isMultiplayerSession()) {
+            /*
+             * V1010431_HUNT_FIRST_VISIBILITY_HANDOFF
+             *
+             * Paint intentionally hides every remote network actor with
+             * showOnlyLocalPlayer(). Hunt must undo that exactly ONCE.
+             *
+             * This is visibility-only. Do NOT request/replay paint snapshots
+             * and do NOT touch reconnect ownership/transport here.
+             */
+            this.networkPlayerManager
+                .restoreAllPlayerVisibility();
+
+            this.networkPlayerManager
+                .stabilizeHidersForHunt();
+
+            this.networkPlayerManager
+                .setNamesVisible(false);
+
+            this.networkPlayerManager
+                .setHunterGunsVisible();
+
             this.hideLegacySinglePlayerActors();
 
             this.hiders.forEach(
