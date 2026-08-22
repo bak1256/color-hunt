@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010435_VICTORY_INVITE_LOADING_POLISH: victory UI + loading + stale invite guards; stable reconnect untouched. */
     /* V1010434_VICTORY_SOCIAL_CARD_POLISH: social victory poster polish; reconnect subsystem untouched. */
     /* V1010428B_PAINT_SNAPSHOT_VISUAL_NOOP: round paint snapshots never toggle Hunt actor visibility. */
     /* V1010426B_RECONNECT_STORM_VISUAL_CONVERGENCE: reconnect recovery no longer repeatedly rebuilds Hunt visuals. */
@@ -5004,6 +5005,144 @@ export class GameScene extends Phaser.Scene {
     }
 
     preload(): void {
+        /*
+         * V1010435_VICTORY_INVITE_LOADING_POLISH / VISIBLE_BOOT_LOADING
+         * A blank dark canvas looks frozen, especially inside Kakao/LINE.
+         * Render English loading feedback before the first heavy assets finish.
+         */
+        const loadingBg =
+            this.add.rectangle(
+                this.gameWidth / 2,
+                this.gameHeight / 2,
+                this.gameWidth,
+                this.gameHeight,
+                0x223448,
+                1,
+            )
+                .setDepth(100000)
+                .setScrollFactor(0);
+
+        const loadingText =
+            this.add.text(
+                this.gameWidth / 2,
+                this.gameHeight / 2 - 20,
+                'LOADING...',
+                {
+                    fontFamily:
+                        'Arial, sans-serif',
+                    fontSize: '30px',
+                    fontStyle: 'bold',
+                    color: '#f7fbff',
+                    align: 'center',
+                },
+            )
+                .setOrigin(0.5)
+                .setDepth(100001)
+                .setScrollFactor(0);
+
+        const loadingSubtext =
+            this.add.text(
+                this.gameWidth / 2,
+                this.gameHeight / 2 + 22,
+                'Preparing COLOR HUNT · 0%',
+                {
+                    fontFamily:
+                        'Arial, sans-serif',
+                    fontSize: '14px',
+                    color: '#bcd2e4',
+                    align: 'center',
+                },
+            )
+                .setOrigin(0.5)
+                .setDepth(100001)
+                .setScrollFactor(0);
+
+        const loadingBarBg =
+            this.add.rectangle(
+                this.gameWidth / 2,
+                this.gameHeight / 2 + 58,
+                260,
+                8,
+                0xffffff,
+                0.14,
+            )
+                .setDepth(100001)
+                .setScrollFactor(0);
+
+        const loadingBar =
+            this.add.rectangle(
+                this.gameWidth / 2 - 130,
+                this.gameHeight / 2 + 58,
+                1,
+                8,
+                0x8fd6bc,
+                1,
+            )
+                .setOrigin(0, 0.5)
+                .setDepth(100002)
+                .setScrollFactor(0);
+
+        let loadingPulse = 0;
+
+        this.load.on(
+            'progress',
+            (value: number) => {
+                const progress =
+                    Phaser.Math.Clamp(
+                        Number(value) || 0,
+                        0,
+                        1,
+                    );
+
+                loadingBar.displayWidth =
+                    Math.max(
+                        1,
+                        260 * progress,
+                    );
+
+                loadingSubtext.setText(
+                    'Preparing COLOR HUNT · ' +
+                    String(
+                        Math.round(
+                            progress * 100,
+                        ),
+                    ) +
+                    '%',
+                );
+            },
+        );
+
+        this.load.on(
+            'fileprogress',
+            () => {
+                loadingPulse =
+                    (
+                        loadingPulse +
+                        1
+                    ) % 4;
+
+                loadingText.setText(
+                    'LOADING' +
+                    '.'.repeat(
+                        loadingPulse === 0
+                            ? 3
+                            : loadingPulse,
+                    ),
+                );
+            },
+        );
+
+        this.load.once(
+            'complete',
+            () => {
+                loadingBg.destroy();
+                loadingText.destroy();
+                loadingSubtext.destroy();
+                loadingBarBg.destroy();
+                loadingBar.destroy();
+            },
+        );
+
         this.load.audio(
             'shotgun-blast',
             'assets/audio/shotgun-blast.wav',
@@ -11271,34 +11410,95 @@ export class GameScene extends Phaser.Scene {
         }
     }
 
-    private showInviteGameInProgressModal(): void {
+    private showInviteGameInProgressModal(
+        reason:
+            | 'playing'
+            | 'gone'
+            | 'full' =
+            'playing',
+    ): void {
         this.closeMenuModal();
 
+        /*
+         * V1010435_VICTORY_INVITE_LOADING_POLISH / INVITE_REJECTION_MODAL
+         * Public/private invite links share the same clear return-to-lobby UX.
+         */
+        const language =
+            getLanguage();
+
+        const copyByReason = {
+            playing: {
+                ko: {
+                    title: '🎮 게임이 진행 중입니다',
+                    body: '이미 게임이 시작된 방입니다.\n메인 로비로 돌아갑니다.',
+                    button: '확인',
+                },
+                ja: {
+                    title: '🎮 ゲーム進行中です',
+                    body: 'すでにゲームが始まっています。\nメインロビーへ戻ります。',
+                    button: '確認',
+                },
+                en: {
+                    title: '🎮 Game in progress',
+                    body: 'This match has already started.\nReturning to the main lobby.',
+                    button: 'OK',
+                },
+                zh: {
+                    title: '🎮 游戏正在进行中',
+                    body: '游戏已经开始。\n正在返回主大厅。',
+                    button: '确认',
+                },
+            },
+            gone: {
+                ko: {
+                    title: '🚪 방을 찾을 수 없습니다',
+                    body: '초대받은 방이 이미 사라졌습니다.\n메인 로비로 돌아갑니다.',
+                    button: '확인',
+                },
+                ja: {
+                    title: '🚪 部屋が見つかりません',
+                    body: '招待された部屋はすでに終了しています。\nメインロビーへ戻ります。',
+                    button: '確認',
+                },
+                en: {
+                    title: '🚪 Room unavailable',
+                    body: 'This invited room no longer exists.\nReturning to the main lobby.',
+                    button: 'OK',
+                },
+                zh: {
+                    title: '🚪 房间不存在',
+                    body: '邀请的房间已经不存在。\n正在返回主大厅。',
+                    button: '确认',
+                },
+            },
+            full: {
+                ko: {
+                    title: '👥 방이 가득 찼습니다',
+                    body: '현재 10명이 모두 참가 중입니다.\n메인 로비로 돌아갑니다.',
+                    button: '확인',
+                },
+                ja: {
+                    title: '👥 満員です',
+                    body: '現在10人全員が参加中です。\nメインロビーへ戻ります。',
+                    button: '確認',
+                },
+                en: {
+                    title: '👥 Room full',
+                    body: 'All 10 player slots are occupied.\nReturning to the main lobby.',
+                    button: 'OK',
+                },
+                zh: {
+                    title: '👥 房间已满',
+                    body: '当前10个位置都已占用。\n正在返回主大厅。',
+                    button: '确认',
+                },
+            },
+        } as const;
+
         const copy =
-            (
-                {
-                    ko: {
-                        title: '🎮 게임이 진행 중입니다',
-                        body: '이미 게임이 진행 중입니다.\n게임이 끝난 후 다시 참가해주세요.',
-                        button: '확인',
-                    },
-                    ja: {
-                        title: '🎮 ゲーム進行中です',
-                        body: 'すでにゲームが進行中です。\nゲーム終了後にもう一度参加してください。',
-                        button: '確認',
-                    },
-                    en: {
-                        title: '🎮 Game in progress',
-                        body: 'A game is already in progress.\nPlease join again after the round ends.',
-                        button: 'OK',
-                    },
-                    zh: {
-                        title: '🎮 游戏正在进行中',
-                        body: '游戏已经开始。\n请在本局结束后重新加入。',
-                        button: '确认',
-                    },
-                } as const
-            )[getLanguage()];
+            copyByReason[
+                reason
+            ][language];
 
         const overlay =
             document.createElement(
@@ -11522,8 +11722,21 @@ export class GameScene extends Phaser.Scene {
                         roomId,
                     );
 
+            if (!status.exists) {
+                this.pendingInviteRoomId =
+                    '';
+                this.pendingInvitePrivate =
+                    false;
+
+                this.clearInviteRoomFromAddressBar();
+                this.showMainMenu();
+                this.showInviteGameInProgressModal(
+                    'gone',
+                );
+                return;
+            }
+
             if (
-                status.exists &&
                 status.phase !==
                     'lobby'
             ) {
@@ -11534,7 +11747,9 @@ export class GameScene extends Phaser.Scene {
 
                 this.clearInviteRoomFromAddressBar();
                 this.showMainMenu();
-                this.showInviteGameInProgressModal();
+                this.showInviteGameInProgressModal(
+                    'playing',
+                );
                 return;
             }
 
@@ -11579,8 +11794,8 @@ export class GameScene extends Phaser.Scene {
 
                 this.clearInviteRoomFromAddressBar();
                 this.showMainMenu();
-                this.showStatus(
-                    tr('방이 가득 찼습니다. 잠시 후 다시 시도하세요.'),
+                this.showInviteGameInProgressModal(
+                    'full',
                 );
                 return;
             }
@@ -16627,6 +16842,50 @@ export class GameScene extends Phaser.Scene {
                         roomId,
                     );
 
+            /*
+             * V1010435_VICTORY_INVITE_LOADING_POLISH / FINAL_STALE_INVITE_GUARD
+             * This is the old v374 protection that was accidentally replaced by
+             * the later full-room-only preflight.
+             */
+            if (!status.exists) {
+                this.pendingInviteRoomId =
+                    '';
+                this.pendingInvitePrivate =
+                    false;
+
+                this.clearInviteRoomFromAddressBar();
+                this.setModalBusy(
+                    false,
+                );
+                this.closeMenuModal();
+                this.showMainMenu();
+                this.showInviteGameInProgressModal(
+                    'gone',
+                );
+                return;
+            }
+
+            if (
+                status.phase !==
+                    'lobby'
+            ) {
+                this.pendingInviteRoomId =
+                    '';
+                this.pendingInvitePrivate =
+                    false;
+
+                this.clearInviteRoomFromAddressBar();
+                this.setModalBusy(
+                    false,
+                );
+                this.closeMenuModal();
+                this.showMainMenu();
+                this.showInviteGameInProgressModal(
+                    'playing',
+                );
+                return;
+            }
+
             const statusAny =
                 status as {
                     clients?: number;
@@ -16663,9 +16922,19 @@ export class GameScene extends Phaser.Scene {
                 statusPlayerCount >=
                     statusMaxClients
             ) {
+                this.pendingInviteRoomId =
+                    '';
+                this.pendingInvitePrivate =
+                    false;
+
+                this.clearInviteRoomFromAddressBar();
                 this.setModalBusy(
                     false,
-                    tr('방이 가득 찼습니다. 잠시 후 다시 시도하세요.'),
+                );
+                this.closeMenuModal();
+                this.showMainMenu();
+                this.showInviteGameInProgressModal(
+                    'full',
                 );
 
                 if (!isPrivate) {
@@ -33603,6 +33872,13 @@ export class GameScene extends Phaser.Scene {
 
                 this.networkPlayerManager
                     .clearHunterAimLines();
+
+                /*
+                 * V1010435_VICTORY_INVITE_LOADING_POLISH / CLEAN_HUNTER_BASE_FRAME
+                 * FOUND circles belong to the poster compositor only.
+                 */
+                this.networkPlayerManager
+                    .clearRevealMarkers();
             } else {
                 this.networkPlayerManager
                     .clearRevealMarkers();
@@ -33616,7 +33892,7 @@ export class GameScene extends Phaser.Scene {
                  * of a tiny dot surrounded by most of the map.
                  */
                 this.paintWorldZoom =
-                    6.2;
+                    4.9;
 
                 camera
                     .stopFollow()
@@ -33898,6 +34174,28 @@ export class GameScene extends Phaser.Scene {
                         ? allFound
                         : [];
 
+        /*
+         * V1010435_VICTORY_INVITE_LOADING_POLISH / TEAM_FOUND_DISPLAY
+         * The card is viewed from a Hunter perspective: every Hider that was
+         * genuinely FOUND gets a numbered marker. Surviving/unfound Hiders get
+         * no circle and no FOUND label. Personal attribution remains separate
+         * so ALL KILL is awarded only to the Hunter who personally got them all.
+         */
+        const displayedFound =
+            [...allFound].sort(
+                (a, b) =>
+                    (
+                        Number(
+                            a.foundOrder,
+                        ) || 0
+                    ) -
+                    (
+                        Number(
+                            b.foundOrder,
+                        ) || 0
+                    ),
+            );
+
         const totalHiders =
             allFound.length +
             surviving.length;
@@ -33934,28 +34232,28 @@ export class GameScene extends Phaser.Scene {
         if (isHunter) {
             bg.addColorStop(
                 0,
-                '#fff4ec',
+                '#f8f6f2',
             );
             bg.addColorStop(
                 0.52,
-                '#ffd9ca',
+                '#eee9e3',
             );
             bg.addColorStop(
                 1,
-                '#f3def2',
+                '#e9edf0',
             );
         } else {
             bg.addColorStop(
                 0,
-                '#effff5',
+                '#f6f8f5',
             );
             bg.addColorStop(
                 0.52,
-                '#d9f4e6',
+                '#e8eee9',
             );
             bg.addColorStop(
                 1,
-                '#deefff',
+                '#e8eef2',
             );
         }
 
@@ -33969,12 +34267,12 @@ export class GameScene extends Phaser.Scene {
 
         const accent =
             isHunter
-                ? '#ef795f'
-                : '#39a96b';
+                ? '#c96f55'
+                : '#537b68';
         const ink =
-            '#24313b';
+            '#25292d';
         const muted =
-            '#65717a';
+            '#71767b';
 
         context.fillStyle =
             accent;
@@ -34033,8 +34331,8 @@ export class GameScene extends Phaser.Scene {
             isHunter
                 ? (
                     language === 'ko'
-                        ? '내가 직접 찾아낸 숨은 흔적의 기록.'
-                        : 'The hiding spots I personally found.'
+                        ? '이번 사냥에서 찾아낸 숨은 흔적의 기록.'
+                        : 'The Hiders found in this hunt.'
                 )
                 : (
                     language === 'ko'
@@ -34322,7 +34620,7 @@ export class GameScene extends Phaser.Scene {
          * No revealedHiders fallback, no circle/# for Hiders found by teammates.
          */
         if (isHunter) {
-            personalFound.forEach(
+            displayedFound.forEach(
                 (
                     marker,
                     index,
@@ -34391,7 +34689,13 @@ export class GameScene extends Phaser.Scene {
                     context.shadowBlur = 0;
 
                     const foundOrder =
-                        index + 1;
+                        Number(
+                            marker.foundOrder,
+                        ) > 0
+                            ? Number(
+                                marker.foundOrder,
+                            )
+                            : index + 1;
                     const label =
                         'FOUND ' +
                         String(
@@ -34527,7 +34831,7 @@ export class GameScene extends Phaser.Scene {
                     personalAllKill
                         ? 'ALL KILL'
                         : String(
-                            personalFound.length,
+                            displayedFound.length,
                         ) + ' FOUND'
                 )
                 : 'SURVIVED',
@@ -35344,15 +35648,9 @@ export class GameScene extends Phaser.Scene {
             document.createElement('style');
 
         style.textContent =
-            '.colorhunt-victory-collapsed{position:fixed;z-index:2147482500;display:flex;align-items:center;gap:9px;min-width:184px;max-width:min(72vw,300px);padding:9px 13px;border:2px solid rgba(255,255,255,.88);border-radius:17px;color:#26343d;background:' +
-            (
-                isHunter
-                    ? 'linear-gradient(135deg,rgba(255,239,229,.98),rgba(255,205,193,.98))'
-                    : 'linear-gradient(135deg,rgba(235,255,244,.98),rgba(195,238,214,.98))'
-            ) +
-            ';box-shadow:0 12px 30px rgba(20,37,48,.24);font:inherit;cursor:pointer;animation:chVictoryChipIn .34s cubic-bezier(.2,.9,.2,1.15) both}' +
-            '.colorhunt-victory-collapsed__spark{font-size:26px;line-height:1}.colorhunt-victory-collapsed__copy{display:flex;flex-direction:column;align-items:flex-start;min-width:0}.colorhunt-victory-collapsed__copy b{font-size:13px;line-height:1.15}.colorhunt-victory-collapsed__copy small{margin-top:3px;font-size:10px;opacity:.62}' +
-            '@keyframes chVictoryChipIn{from{opacity:0;transform:translate(-50%,-72%) scale(.86)}to{opacity:1;transform:translate(-50%,-100%) scale(1)}}';
+            '.colorhunt-victory-collapsed{position:fixed;z-index:2147482500;display:flex;align-items:center;gap:10px;min-width:190px;max-width:min(72vw,310px);padding:10px 14px;border:1px solid rgba(255,255,255,.22);border-radius:18px;color:#fff;background:linear-gradient(135deg,rgba(20,25,34,.97),rgba(8,11,17,.98));box-shadow:0 14px 38px rgba(0,0,0,.38),0 0 26px rgba(255,255,255,.08);font:inherit;cursor:pointer;animation:chVictoryChipIn .34s cubic-bezier(.2,.9,.2,1.15) both}' +
+            '.colorhunt-victory-collapsed__spark{font-size:27px;line-height:1}.colorhunt-victory-collapsed__copy{display:flex;flex-direction:column;align-items:flex-start;min-width:0}.colorhunt-victory-collapsed__copy b{font-size:13px;line-height:1.15}.colorhunt-victory-collapsed__copy small{margin-top:3px;font-size:10px;opacity:.62}' +
+            '@keyframes chVictoryChipIn{from{opacity:0;transform:translate(-50%,-72%) scale(.86)}to{opacity:1;transform:translate(-50%,-100%) scale(1)}}'
 
         chip.appendChild(
             style,
@@ -35531,10 +35829,10 @@ export class GameScene extends Phaser.Scene {
             '<style>' +
             '.colorhunt-victory-showcase-overlay{position:fixed;inset:0;z-index:2147483000;display:grid;place-items:center;padding:6px;background:radial-gradient(circle at 50% 18%,rgba(255,255,255,.09),transparent 36%),rgba(3,7,12,.80);backdrop-filter:blur(18px) saturate(1.15);-webkit-backdrop-filter:blur(18px) saturate(1.15);animation:chVictoryBackdrop .42s ease both}' +
             '.colorhunt-victory-showcase-card{width:min(96vw,560px);height:min(98dvh,900px);max-height:98dvh;overflow:hidden;border:1px solid rgba(255,255,255,.72);border-radius:24px;padding:10px;color:#26343d;background:linear-gradient(180deg,rgba(255,249,243,.98),rgba(238,248,247,.99));box-shadow:0 30px 90px rgba(20,37,48,.30),inset 0 1px 0 rgba(255,255,255,.80);transform-origin:50% 72%;animation:chVictoryPop .62s cubic-bezier(.2,.9,.2,1.1) both;font-family:Inter,Pretendard,system-ui,sans-serif;display:flex;flex-direction:column;box-sizing:border-box}' +
-            '.colorhunt-victory-showcase-card.is-hunter{background:linear-gradient(180deg,#fff7f1,#ffe4d9);box-shadow:0 30px 90px rgba(52,46,42,.24),0 0 70px rgba(255,157,126,.24)}' +
-            '.colorhunt-victory-showcase-card.is-hider{background:linear-gradient(180deg,#f2fff6,#dff5e9);box-shadow:0 30px 90px rgba(40,60,52,.22),0 0 70px rgba(112,218,157,.22)}' +
-            '.colorhunt-victory-showcase-head{display:flex;align-items:end;justify-content:space-between;gap:14px;padding:3px 4px 14px}.colorhunt-victory-showcase-kicker{font-size:11px;font-weight:950;letter-spacing:.18em;opacity:.58}.colorhunt-victory-showcase-title{margin-top:4px;font-size:clamp(25px,5vw,34px);line-height:1;font-weight:950;letter-spacing:-.04em}.is-hunter .colorhunt-victory-showcase-title{color:#ffb087}.is-hider .colorhunt-victory-showcase-title{color:#93f5b2}.colorhunt-victory-showcase-badge{flex:0 0 auto;padding:7px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);font-size:11px;font-weight:900}.colorhunt-victory-showcase-preview{display:block;width:auto;max-width:100%;height:auto;max-height:calc(100% - 64px);min-height:0;object-fit:contain;align-self:center;flex:1 1 auto;border-radius:18px;box-shadow:0 18px 42px rgba(0,0,0,.34);background:#111}.colorhunt-victory-showcase-caption{display:none;margin:0;color:rgba(255,255,255,.62);font-size:12px;font-weight:700;text-align:center}.colorhunt-victory-showcase-feedback{display:none;margin:0 5px 12px;padding:10px 12px;border:1px solid rgba(143,255,184,.34);border-radius:13px;background:rgba(49,183,101,.16);color:#bfffd2;font-size:12px;font-weight:900;text-align:center;animation:chVictoryFeedback .22s ease both}.colorhunt-victory-showcase-feedback.is-visible{display:block}.colorhunt-victory-showcase-fold{display:flex;align-items:center;justify-content:center;gap:8px;flex:0 0 auto;margin:7px 0 0;color:rgba(255,255,255,.72);font-size:11px;font-weight:800;user-select:none}.colorhunt-victory-showcase-fold input{width:17px;height:17px;accent-color:#8df0ac;cursor:pointer}.colorhunt-victory-showcase-actions{display:grid;grid-template-columns:.8fr 1fr 1.2fr;gap:7px;flex:0 0 auto;margin-top:7px}.colorhunt-victory-showcase-actions button{min-height:42px;border:0;border-radius:13px;color:#fff;background:rgba(255,255,255,.08);font:inherit;font-size:13px;font-weight:900;cursor:pointer}.colorhunt-victory-showcase-actions [data-victory-share]{color:#09100c;background:' +
-            (isHunter ? '#ffb087' : '#8df0ac') +
+            '.colorhunt-victory-showcase-card.is-hunter{background:linear-gradient(180deg,#faf8f5,#eee9e3);box-shadow:0 30px 90px rgba(38,42,46,.22),0 0 58px rgba(201,111,85,.12)}' +
+            '.colorhunt-victory-showcase-card.is-hider{background:linear-gradient(180deg,#f8faf7,#e7eee9);box-shadow:0 30px 90px rgba(38,50,44,.20),0 0 58px rgba(83,123,104,.12)}' +
+            '.colorhunt-victory-showcase-head{display:flex;align-items:end;justify-content:space-between;gap:14px;padding:3px 4px 14px}.colorhunt-victory-showcase-kicker{font-size:11px;font-weight:950;letter-spacing:.18em;opacity:.58}.colorhunt-victory-showcase-title{margin-top:4px;font-size:clamp(25px,5vw,34px);line-height:1;font-weight:950;letter-spacing:-.04em}.is-hunter .colorhunt-victory-showcase-title{color:#ffb087}.is-hider .colorhunt-victory-showcase-title{color:#93f5b2}.colorhunt-victory-showcase-badge{flex:0 0 auto;padding:7px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);font-size:11px;font-weight:900}.colorhunt-victory-showcase-preview{display:block;width:auto;max-width:100%;height:auto;max-height:calc(100% - 64px);min-height:0;object-fit:contain;align-self:center;flex:1 1 auto;border-radius:18px;box-shadow:0 18px 42px rgba(0,0,0,.34);background:#111}.colorhunt-victory-showcase-caption{display:none;margin:0;color:rgba(255,255,255,.62);font-size:12px;font-weight:700;text-align:center}.colorhunt-victory-showcase-feedback{display:none;margin:0 5px 12px;padding:10px 12px;border:1px solid rgba(143,255,184,.34);border-radius:13px;background:rgba(49,183,101,.16);color:#bfffd2;font-size:12px;font-weight:900;text-align:center;animation:chVictoryFeedback .22s ease both}.colorhunt-victory-showcase-feedback.is-visible{display:block}.colorhunt-victory-showcase-fold{display:flex;align-items:center;justify-content:center;gap:8px;flex:0 0 auto;margin:7px 0 0;color:rgba(37,41,45,.72);font-size:11px;font-weight:800;user-select:none}.colorhunt-victory-showcase-fold input{width:17px;height:17px;accent-color:#537b68;cursor:pointer}.colorhunt-victory-showcase-actions{display:grid;grid-template-columns:.8fr 1fr 1.2fr;gap:7px;flex:0 0 auto;margin-top:7px}.colorhunt-victory-showcase-actions button{min-height:42px;border:1px solid rgba(37,41,45,.16);border-radius:13px;color:#25292d;background:rgba(255,255,255,.88);box-shadow:0 3px 10px rgba(37,41,45,.08);font:inherit;font-size:13px;font-weight:900;cursor:pointer}.colorhunt-victory-showcase-actions [data-victory-share]{border-color:transparent;color:#fff;background:' +
+            (isHunter ? '#c96f55' : '#537b68') +
             '}@keyframes chVictoryFeedback{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}@keyframes chVictoryBackdrop{from{opacity:0}to{opacity:1}}@keyframes chVictoryPop{0%{opacity:0;transform:translateY(34px) scale(.88) rotate(-1.5deg)}58%{opacity:1;transform:translateY(-3px) scale(1.015) rotate(.3deg)}100%{opacity:1;transform:translateY(0) scale(1)}}@media(max-height:650px){.colorhunt-victory-showcase-overlay{padding:2px}.colorhunt-victory-showcase-card{width:min(94vw,430px);height:99dvh;max-height:99dvh;padding:6px;border-radius:18px}.colorhunt-victory-showcase-preview{max-height:calc(100% - 54px);border-radius:14px}.colorhunt-victory-showcase-actions{margin-top:5px;gap:5px}.colorhunt-victory-showcase-actions button{min-height:38px;font-size:12px}}' +
             '</style>' +
             /* V1010421_VICTORY_MODAL_ONE_SCREEN: poster already contains the victory title. */

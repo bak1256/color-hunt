@@ -923,6 +923,9 @@ this.phaseChangedHandlers.forEach(
     exists: boolean;
     phase: string;
     isPrivate: boolean;
+    clients?: number;
+    playerCount?: number;
+    maxClients?: number;
   }> {
     const response = await fetch(
       `${this.serverUrl}/api/room-status?roomId=${encodeURIComponent(roomId)}&t=${Date.now()}`,
@@ -946,6 +949,9 @@ this.phaseChangedHandlers.forEach(
         exists?: boolean;
         phase?: string;
         isPrivate?: boolean;
+        clients?: number;
+        playerCount?: number;
+        maxClients?: number;
       };
 
     return {
@@ -958,6 +964,24 @@ this.phaseChangedHandlers.forEach(
         ),
       isPrivate:
         payload.isPrivate === true,
+      clients:
+        Number.isFinite(
+          Number(payload.clients),
+        )
+          ? Number(payload.clients)
+          : undefined,
+      playerCount:
+        Number.isFinite(
+          Number(payload.playerCount),
+        )
+          ? Number(payload.playerCount)
+          : undefined,
+      maxClients:
+        Number.isFinite(
+          Number(payload.maxClients),
+        )
+          ? Number(payload.maxClients)
+          : undefined,
     };
   }
 
