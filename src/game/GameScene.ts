@@ -79,6 +79,8 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010388H1_REMOVE_UNUSED_AMMO_FINISH_STATE: obsolete Finished-popup ammo flag removed after v388h. */
+    /* V1010388H_CLEAN_FINISH_HIDER_HERO_CARD: clean Finished phase + character-first Hider victory poster. */
     /* V1010388G_AUTHORITATIVE_ROUND_RESULT_FIX: final server round_result outranks one-patch stale alive Schema. */
     /* V1010388F_VICTORY_SHOWCASE_GUARANTEED: winner role fallback + resilient capture + bounded lobby reveal watchdog. */
     /* V1010388D_MAIN_RESTORE_LOBBY_READY_ROBUST: restore guest READY + host start barrier across CRLF/LF sources. */
@@ -4516,8 +4518,6 @@ export class GameScene extends Phaser.Scene {
     private readonly hunterAimSendInterval = 50;
     private readonly gameplayCameraZoom = 1.65;
     private roundResultWinner: 'hunters' | 'hiders' | null = null;
-    private roundEndedByAmmoDepletion = false;
-
     /*
      * V1010388_CLIENT_VICTORY_SHOWCASE
      * Capture during Finished, present after returning to Lobby.
@@ -9696,7 +9696,6 @@ export class GameScene extends Phaser.Scene {
         this.networkUnsubscribers.push(
             multiplayerClient.onHuntersOutOfAmmo(
                 (_message: string) => {
-                    this.roundEndedByAmmoDepletion = true;
                     this.statusText
                         .setText(
                             tr('탄약 소진! HIDER 승리!'),
@@ -26476,66 +26475,36 @@ export class GameScene extends Phaser.Scene {
                     effectiveWinner;
             }
 
-            const victoryText =
-                effectiveWinner === 'hunters'
-                    ? tr('HUNTER 승리!')
-                    : effectiveWinner === 'hiders'
-                        ? tr('HIDER 승리!')
-                        : tr('ROUND OVER');
-
+            /*
+             * V1010388H_CLEAN_FINISH_HIDER_HERO_CARD / SILENT_FINISHED
+             *
+             * Victory is celebrated by the social Victory Snapshot AFTER
+             * returning to the waiting room. Keep the final gameplay frame
+             * clean here: no HUNTER/HIDER VICTORY, GAME OVER, ammo message,
+             * or giant countdown covering the player's camouflage.
+             */
             this.countdownPanel
+                .setVisible(false)
                 .setFillStyle(0x000000, 0)
                 .setAlpha(0);
 
-            const victoryColor =
-                effectiveWinner === 'hunters'
-                    ? '#d32f2f'
-                    : '#1f2937';
-
-            /*
-             * v0.10.10.186:
-             * Ammo depletion belongs INSIDE the normal Finished UI. Do not
-             * create a second floating result/status box.
-             *
-             * Phaser Text is single-color, so when ammo is the finish reason
-             * the complete result card uses the strong red finish color.
-             */
-            const ammoDepletedHiderWin =
-                effectiveWinner === 'hiders' &&
-                this.roundEndedByAmmoDepletion;
-
-            const finalResultLines =
-                ammoDepletedHiderWin
-                    ? [
-                        tr('탄약 소진!'),
-                        victoryText,
-                        tr('게임 종료'),
-                        String(remaining),
-                    ]
-                    : [
-                        victoryText,
-                        tr('게임 종료'),
-                        String(remaining),
-                    ];
-
             this.countdownText
-                .setFontSize(
-                    ammoDepletedHiderWin
-                        ? 46
-                        : 48,
-                )
-                .setColor(
-                    ammoDepletedHiderWin
-                        ? '#d32f2f'
-                        : victoryColor,
-                )
-                .setText(
-                    finalResultLines.join(
-                        '\n',
-                    ),
-                );
+                .setText('')
+                .setVisible(false);
 
             this.timerText
+                .setText('')
+                .setVisible(false);
+
+            this.phaseText
+                .setText('')
+                .setVisible(false);
+
+            this.guideText
+                .setText('')
+                .setVisible(false);
+
+            this.statusText
                 .setText('')
                 .setVisible(false);
 
@@ -31296,10 +31265,74 @@ export class GameScene extends Phaser.Scene {
             204,
         );
 
+        /*
+         * V1010388H_CLEAN_FINISH_HIDER_HERO_CARD / HIDER_HERO_CROP
+         *
+         * Hunter: full 16:9 map = trophy board of every FOUND location.
+         * Hider: taller, zoomed center crop = the painted survivor is the hero.
+         */
         const frameX = 60;
         const frameY = 252;
         const frameW = 960;
-        const frameH = 540;
+        const frameH =
+            isHunter
+                ? 540
+                : 720;
+
+        const imageW =
+            image.naturalWidth ||
+            image.width ||
+            this.gameWidth;
+        const imageH =
+            image.naturalHeight ||
+            image.height ||
+            this.gameHeight;
+
+        let sourceX = 0;
+        let sourceY = 0;
+        let sourceW = imageW;
+        let sourceH = imageH;
+
+        if (!isHunter) {
+            /*
+             * 4:3-ish source crop from the center of the Hunt viewport.
+             * The Hunt camera keeps the local Hider near screen center, so this
+             * enlarges the custom-painted body by roughly 1.45–1.6x compared
+             * with the old full-width 16:9 card.
+             */
+            const desiredSourceRatio =
+                frameW /
+                frameH;
+
+            const currentSourceRatio =
+                imageW /
+                imageH;
+
+            if (
+                currentSourceRatio >
+                desiredSourceRatio
+            ) {
+                sourceW =
+                    imageH *
+                    desiredSourceRatio;
+                sourceX =
+                    (
+                        imageW -
+                        sourceW
+                    ) /
+                    2;
+            } else {
+                sourceH =
+                    imageW /
+                    desiredSourceRatio;
+                sourceY =
+                    (
+                        imageH -
+                        sourceH
+                    ) /
+                    2;
+            }
+        }
 
         context.save();
         context.beginPath();
@@ -31311,8 +31344,13 @@ export class GameScene extends Phaser.Scene {
             34,
         );
         context.clip();
+
         context.drawImage(
             image,
+            sourceX,
+            sourceY,
+            sourceW,
+            sourceH,
             frameX,
             frameY,
             frameW,
@@ -31402,19 +31440,32 @@ export class GameScene extends Phaser.Scene {
                 index,
             ) => {
                 const mx =
-                    frameX +
-                    Phaser.Math.Clamp(
-                        Number(marker.x) || 0,
-                        0,
-                        this.gameWidth,
-                    );
+                    isHunter
+                        ? (
+                            frameX +
+                            Phaser.Math.Clamp(
+                                Number(marker.x) || 0,
+                                0,
+                                this.gameWidth,
+                            )
+                        )
+                        : frameX +
+                            frameW /
+                            2;
+
                 const my =
-                    frameY +
-                    Phaser.Math.Clamp(
-                        Number(marker.y) || 0,
-                        0,
-                        this.gameHeight,
-                    );
+                    isHunter
+                        ? (
+                            frameY +
+                            Phaser.Math.Clamp(
+                                Number(marker.y) || 0,
+                                0,
+                                this.gameHeight,
+                            )
+                        )
+                        : frameY +
+                            frameH /
+                            2;
 
                 context.save();
                 context.shadowColor =
@@ -31533,14 +31584,21 @@ export class GameScene extends Phaser.Scene {
             roomState?.activeMap ??
             'forest';
 
+        const memoryPanelY =
+            isHunter
+                ? 838
+                : 1000;
+
         context.fillStyle =
             'rgba(255,255,255,.09)';
         context.beginPath();
         context.roundRect(
             60,
-            838,
+            memoryPanelY,
             960,
-            168,
+            isHunter
+                ? 168
+                : 124,
             30,
         );
         context.fill();
@@ -31552,7 +31610,9 @@ export class GameScene extends Phaser.Scene {
         context.fillText(
             'MATCH MEMORY',
             88,
-            882,
+            isHunter
+                ? 882
+                : 1038,
         );
 
         context.fillStyle = '#ffffff';
@@ -31563,7 +31623,9 @@ export class GameScene extends Phaser.Scene {
                 activeMap,
             ),
             88,
-            930,
+            isHunter
+                ? 930
+                : 1082,
         );
 
         context.textAlign = 'right';
@@ -31583,7 +31645,9 @@ export class GameScene extends Phaser.Scene {
                 ) + ' FOUND'
                 : 'SURVIVED',
             990,
-            930,
+            isHunter
+                ? 930
+                : 1082,
         );
 
         context.fillStyle =
@@ -31595,7 +31659,9 @@ export class GameScene extends Phaser.Scene {
                 ? 'HUNT COMPLETE'
                 : 'HIDE COMPLETE',
             990,
-            965,
+            isHunter
+                ? 965
+                : 1110,
         );
 
         context.textAlign = 'left';
@@ -31605,7 +31671,9 @@ export class GameScene extends Phaser.Scene {
         context.fillText(
             'COLOR HUNT',
             60,
-            1112,
+            isHunter
+                ? 1112
+                : 1188,
         );
 
         context.fillStyle =
@@ -31615,7 +31683,9 @@ export class GameScene extends Phaser.Scene {
         context.fillText(
             'CAMOUFLAGE · HIDE · HUNT',
             62,
-            1148,
+            isHunter
+                ? 1148
+                : 1222,
         );
 
         context.fillStyle =
@@ -31625,9 +31695,13 @@ export class GameScene extends Phaser.Scene {
         context.beginPath();
         context.roundRect(
             60,
-            1192,
+            isHunter
+                ? 1192
+                : 1250,
             430,
-            58,
+            isHunter
+                ? 58
+                : 48,
             29,
         );
         context.fill();
@@ -31643,7 +31717,9 @@ export class GameScene extends Phaser.Scene {
                 ? '#COLORHUNT  #HUNTERWIN'
                 : '#COLORHUNT  #HIDERWIN',
             86,
-            1229,
+            isHunter
+                ? 1229
+                : 1281,
         );
 
         context.textAlign = 'right';
@@ -31662,7 +31738,9 @@ export class GameScene extends Phaser.Scene {
                     '',
                 ),
             1018,
-            1228,
+            isHunter
+                ? 1228
+                : 1280,
         );
 
         context.font =
@@ -31673,7 +31751,9 @@ export class GameScene extends Phaser.Scene {
             new Date()
                 .toLocaleDateString(),
             1018,
-            1288,
+            isHunter
+                ? 1288
+                : 1322,
         );
 
         const blob =
@@ -32046,8 +32126,6 @@ export class GameScene extends Phaser.Scene {
             this.spectatorCycleIndex = -1;
 
             this.roundResultWinner = null;
-            this.roundEndedByAmmoDepletion = false;
-    
             this.guideText
                 .setPosition(
                     18,
