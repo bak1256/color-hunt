@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010444_RESULT_IDENTITY_FALLBACK: personal FOUND can be reconstructed from one final result payload. */
     /* V1010443_FREEZE_PERSONAL_FOUND_IN_ROUND_RESULT: personal FOUND survives async poster capture/reset timing. */
     /* V1010442_CLEAN_VICTORY_CAPTURE_NO_LIVE_CANVAS: victory capture never falls back to live gameplay canvas. */
     /* V1010440F_HIDER_NICKNAME_SCOPE_FIX: Hider nickname rendered only inside victory-card capture scope. */
@@ -34188,6 +34189,8 @@ export class GameScene extends Phaser.Scene {
                         paintStrokes?: NetworkPaintStroke[];
                     }>;
                     recipientName?: string;
+                    recipientSessionId?: string;
+                    recipientClientKey?: string;
                     survivingHiders?: Array<{
                         sessionId: string;
                         name?: string;
@@ -34300,29 +34303,80 @@ const roomPlayers =
                 ?.personalFoundHiders ??
             [];
 
+        /*
+         * V1010444_RESULT_IDENTITY_FALLBACK
+         * The server echoes the exact recipient identity in this same
+         * round_result.  Filter authoritative team foundHiders by that identity
+         * before consulting any asynchronous/live cache.
+         */
+        const resultRecipientSessionId =
+            String(
+                extended.victoryShowcase
+                    ?.recipientSessionId ??
+                localSessionId,
+            );
+
+        const resultRecipientClientKey =
+            String(
+                extended.victoryShowcase
+                    ?.recipientClientKey ??
+                '',
+            );
+
+        const resultIdentityPersonalFound:
+            VictoryFoundEntry[] =
+            !isHunter
+                ? []
+                : allFound.filter(
+                    (entry) => {
+                        const finderClientKey =
+                            String(
+                                entry
+                                    .foundByHunterClientKey ??
+                                '',
+                            );
+
+                        if (
+                            resultRecipientClientKey &&
+                            finderClientKey
+                        ) {
+                            return (
+                                finderClientKey ===
+                                resultRecipientClientKey
+                            );
+                        }
+
+                        return (
+                            String(
+                                entry
+                                    .foundByHunterSessionId ??
+                                '',
+                            ) ===
+                            resultRecipientSessionId
+                        );
+                    },
+                );
+
         const liveCachePersonalFound =
             multiplayerClient
                 .getPersonalVictoryFoundHiders() as
                 VictoryFoundEntry[];
 
-        /*
-         * V1010443_FREEZE_PERSONAL_FOUND_IN_ROUND_RESULT
-         * round_result is the first authority because it survives asynchronous
-         * victory capture.  Live cache is only a compatibility fallback.
-         */
         const personalFound:
             VictoryFoundEntry[] =
             !isHunter
                 ? []
                 : frozenPersonalFound.length > 0
                     ? frozenPersonalFound
-                    : liveCachePersonalFound.length > 0
-                        ? liveCachePersonalFound
-                        : (
-                            hunterCount <= 1
-                                ? allFound
-                                : []
-                        );
+                    : resultIdentityPersonalFound.length > 0
+                        ? resultIdentityPersonalFound
+                        : liveCachePersonalFound.length > 0
+                            ? liveCachePersonalFound
+                            : (
+                                hunterCount <= 1
+                                    ? allFound
+                                    : []
+                            );
 
         const displayedFound =
             [...personalFound].sort(

@@ -220,6 +220,8 @@ export type NetworkRoundResult = {
       paintStrokes?: NetworkPaintStroke[];
     }>;
     recipientName?: string;
+    recipientSessionId?: string;
+    recipientClientKey?: string;
     survivingHiders?: Array<{
       sessionId: string;
       name?: string;
@@ -706,6 +708,7 @@ this.phaseChangedHandlers.forEach(
    */
   private personalVictoryFoundHiders:
     any[] = [];
+  /* V1010444_RESULT_IDENTITY_FALLBACK: cache remains fallback; final result identity is primary. */
   /* V1010443_FREEZE_PERSONAL_FOUND_IN_ROUND_RESULT: async victory poster reads frozen round_result ownership. */
 
   /*
