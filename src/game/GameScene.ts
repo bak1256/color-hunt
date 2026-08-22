@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010434_VICTORY_SOCIAL_CARD_POLISH: social victory poster polish; reconnect subsystem untouched. */
     /* V1010428B_PAINT_SNAPSHOT_VISUAL_NOOP: round paint snapshots never toggle Hunt actor visibility. */
     /* V1010426B_RECONNECT_STORM_VISUAL_CONVERGENCE: reconnect recovery no longer repeatedly rebuilds Hunt visuals. */
     /* V1010420_VICTORY_PC_MOBILE_PARITY: Hunter/Hider victory capture + Share behavior are role-authoritative and device-independent. */
@@ -4635,6 +4636,7 @@ export class GameScene extends Phaser.Scene {
     private readonly victoryShowcaseFoldStorageKey =
         'colorhunt:victory-showcase-folded';
     private victoryShowcaseCollapsedChip?: HTMLButtonElement;
+    private victoryShowcaseCollapsedResizeHandler?: () => void;
 
     /*
      * V1010388J_VICTORY_CARD_FINAL_VISUALS / ROUND_PAINT_MEMORY
@@ -4825,6 +4827,12 @@ export class GameScene extends Phaser.Scene {
     private mobilePendingPaintPointerId = -1;
     /* V1010416_PRECISION_OUTSIDE_BODY_HOLD_RESTORE */
     private mobilePaintHoldArmed = false;
+    /*
+     * V1010434_VICTORY_SOCIAL_CARD_POLISH / EYEDROPPER_ONE_SHOT_MEMORY
+     * Pipette returns to the Circle/Square brush that was active immediately
+     * before sampling.
+     */
+    private mobileBrushShapeBeforeEyedropper: BrushShape = 'circle';
 
     /*
      * v0.10.10.174
@@ -8642,10 +8650,36 @@ export class GameScene extends Phaser.Scene {
     }
 
     private finishMobileEyedropperSelection(): void {
+        const restoreShape =
+            this.mobileBrushShapeBeforeEyedropper;
+
         this.eyedropperArmed =
             false;
         this.eyedropperPointerId =
             -1;
+
+        /*
+         * Sampling is one-shot: finger-up immediately restores the previous
+         * Circle/Square brush instead of leaving an invisible pipette state.
+         */
+        this.straightLineToolSelected =
+            false;
+        this.straightLineModeActive =
+            false;
+        this.straightLineStart =
+            undefined;
+        this.straightLineStartWorld =
+            undefined;
+        this.clearStraightLinePreview();
+
+        this.brushShape =
+            restoreShape;
+        this.createBrushTexture();
+        this.updatePaintHud();
+        this.highlightBrushShape(
+            restoreShape,
+        );
+
         this.updateEyedropperButtonUi();
         this.hideEyedropperMagnifier();
         this.hideMobilePaintPrecisionGuide();
@@ -8659,8 +8693,10 @@ export class GameScene extends Phaser.Scene {
                 true;
         }
 
+        this.updatePaintPreviewImmediately();
         this.syncMobilePaintDockUi();
         this.syncMobilePaintModeUi();
+        this.showMobileIdleBrushGuide();
     }
 
     private syncMobilePaintDockUi(): void {
@@ -28426,6 +28462,8 @@ export class GameScene extends Phaser.Scene {
          *
          * 따라서 로비 BGM/WebAudio context도 그대로 유지됩니다.
          */
+        this.clearVictoryShowcaseForRoundLifecycle();
+
         await multiplayerClient.disconnect();
 
         this.hideChatUi(true);
@@ -33422,6 +33460,18 @@ export class GameScene extends Phaser.Scene {
      * The change exists only for the screenshot frame and is restored
      * immediately afterwards.
      */
+    /*
+     * V1010434_VICTORY_SOCIAL_CARD_POLISH / CLEAN_ROLE_CAPTURE
+     *
+     * Hider:
+     * - Practice-record feeling: close centered camouflage, substantially less
+     *   surrounding map, no Hunt vision mask / spectator / joystick / HUD.
+     *
+     * Hunter:
+     * - clean full logical map, no last-shot or gameplay HUD debris.
+     *
+     * Capture-only state is restored immediately afterwards.
+     */
     private async captureVictoryFrameForRoleShowcase(
         result: NetworkRoundResult,
     ): Promise<HTMLImageElement> {
@@ -33439,127 +33489,134 @@ export class GameScene extends Phaser.Scene {
             camera.scrollY;
         const savedPaintWorldZoom =
             this.paintWorldZoom;
-
-        const finishedUiWasVisible =
-            this.countdownText?.visible ??
-            false;
-        const returnButtonWasVisible =
-            this.roundReturnLobbyButton?.visible ??
-            false;
-
-        /*
-         * V1010388M2_HIDE_ROLE_LABELS_ROBUST / SAVE_ROLE_HUD
-         * These labels belong to gameplay only. Remember their state so the
-         * social-card capture can hide them without changing normal gameplay.
-         */
-        const survivalHudGraphicsWasVisible =
-            this.survivalHudGraphics?.visible ??
-            false;
-        const survivalHudTextWasVisible =
-            this.survivalHudText?.visible ??
-            false;
-        const survivalHiderLabelWasVisible =
-            this.survivalHiderLabelText?.visible ??
-            false;
-        const survivalHunterLabelWasVisible =
-            this.survivalHunterLabelText?.visible ??
-            false;
-
         const previousCleanCaptureActive =
             this.victoryShowcaseCleanCaptureActive;
 
         /*
-         * V1010388K_CLEAN_CARD_CENTER_CLIPBOARD / HARD_CLEAN_CAPTURE
-         *
-         * updateCountdownUi() runs every Phaser frame. Merely hiding the
-         * Finished widgets once is not enough: they are re-shown before
-         * renderer.snapshot(). Hold this flag for the entire capture window so
-         * HUNTER/HIDER 승리 · 게임 종료 · countdown · return button can NEVER
-         * enter the social card.
+         * Store only visibility. Never destroy/clear these objects during
+         * capture, so the actual Finished scene can resume exactly as it was.
          */
+        const captureHudVisibility:
+            Array<{
+                object: {
+                    visible?: boolean;
+                    setVisible:
+                        (visible: boolean) => unknown;
+                };
+                visible: boolean;
+            }> = [];
+
+        const captureHudCandidates =
+            [
+                this.countdownPanel,
+                this.countdownText,
+                this.roundReturnLobbyButton,
+                this.timerText,
+                this.phaseText,
+                this.guideText,
+                this.statusText,
+                this.survivalHudGraphics,
+                this.survivalHudText,
+                this.survivalHiderLabelText,
+                this.survivalHunterLabelText,
+                this.spectatorButton,
+                this.spectatorStatusText,
+                this.hiderVisionGraphics,
+                ...this.hiderVisionOverlays,
+                this.heartbeatDangerOverlay,
+                ...this.heartbeatBorders,
+                this.heartbeatText,
+                this.hidePointText,
+                this.hunterMinimapPanel,
+                this.hunterMinimapText,
+                this.hunterMinimapMarker,
+                this.hunterWeaponHudContainer,
+                this.fartHudContainer,
+                this.ammoText,
+                this.targetText,
+                this.mobileMoveBase,
+                this.mobileMoveKnob,
+                this.mobileMoveLabel,
+                this.mobileAimBase,
+                this.mobileAimKnob,
+                this.mobileAimLabel,
+                this.mobileFireButton,
+                this.mobileFireLabel,
+                this.mobileFartButton,
+                this.mobileFartLabel,
+                this.hunterBlindPanel,
+                this.hunterBlindText,
+                this.paintPreview,
+                this.paintControlHelpText,
+            ];
+
+        captureHudCandidates.forEach(
+            (candidate) => {
+                if (!candidate) {
+                    return;
+                }
+
+                const object =
+                    candidate as unknown as {
+                        visible?: boolean;
+                        setVisible?:
+                            (visible: boolean) => unknown;
+                    };
+
+                if (
+                    typeof object.setVisible !==
+                    'function'
+                ) {
+                    return;
+                }
+
+                captureHudVisibility.push({
+                    object: object as {
+                        visible?: boolean;
+                        setVisible:
+                            (visible: boolean) => unknown;
+                    },
+                    visible:
+                        Boolean(object.visible),
+                });
+
+                object.setVisible(false);
+            },
+        );
+
         this.victoryShowcaseCleanCaptureActive =
             true;
 
         try {
-            /*
-             * Social card must never contain Finished UI.
-             */
-            this.countdownPanel
-                ?.setVisible(false);
-            this.countdownText
-                ?.setVisible(false);
-            this.roundReturnLobbyButton
-                ?.setVisible(false);
-            this.timerText
-                ?.setVisible(false);
-            this.phaseText
-                ?.setVisible(false);
-            this.guideText
-                ?.setVisible(false);
-            this.statusText
-                ?.setVisible(false);
-
-            /*
-             * V1010388M2_HIDE_ROLE_LABELS_ROBUST / CLEAN_ROLE_HUD
-             * Prevent "하이더 / 헌터" role labels from appearing in the
-             * Victory Snapshot. This affects capture frames only.
-             */
-            this.survivalHudGraphics
-                ?.setVisible(false);
-            this.survivalHudText
-                ?.setVisible(false);
-            this.survivalHiderLabelText
-                ?.setVisible(false);
-            this.survivalHunterLabelText
-                ?.setVisible(false);
+            this.networkPlayerManager
+                .setNamesVisible(false);
 
             if (!isHider) {
-                /*
-                 * V1010388N_HUNTER_FULL_MAP_VICTORY_CARD / HUNTER_FULL_MAP_CAPTURE
-                 *
-                 * Hunter Victory Snapshot is a post-match evidence board, NOT
-                 * the last first-person shot frame.
-                 *
-                 * Use the complete logical 960x540 map at zoom=1, scroll=0.
-                 * This makes server FOUND x/y coordinates line up exactly with
-                 * the poster's 960x540 map frame.
-                 */
                 camera
                     .stopFollow()
                     .removeBounds()
                     .setZoom(1)
                     .setScroll(0, 0);
 
-                /*
-                 * Remove last-shot debris / muzzle flash / pellet trails /
-                 * detection bursts from the commemorative still.
-                 */
                 this.clearAllAimingVisuals();
                 this.clearTransientGameplayVfx();
 
                 this.networkPlayerManager
                     .clearHunterAimLines();
-
-                this.networkPlayerManager
-                    .setNamesVisible(false);
-            }
-
-            if (isHider) {
-                /*
-                 * Remove the result reveal ring entirely. The camouflage itself
-                 * is the trophy.
-                 */
+            } else {
                 this.networkPlayerManager
                     .clearRevealMarkers();
 
                 this.networkPlayerManager
                     .showOnlyLocalPlayer();
 
-                this.networkPlayerManager
-                    .setNamesVisible(false);
-
+                /*
+                 * Screenshot reference target:
+                 * the Practice poster shows the Hider as the clear hero instead
+                 * of a tiny dot surrounded by most of the map.
+                 */
                 this.paintWorldZoom =
-                    3.75;
+                    6.2;
 
                 camera
                     .stopFollow()
@@ -33568,18 +33625,6 @@ export class GameScene extends Phaser.Scene {
                         this.paintWorldZoom,
                     );
 
-                this.applyFixedHudForZoom(
-                    this.paintWorldZoom,
-                );
-
-                /*
-                 * V1010388K_CLEAN_CARD_CENTER_CLIPBOARD / HIDER_EXACT_CENTER
-                 *
-                 * centerPaintCameraOnLocalPlayer() only operates during Paint,
-                 * therefore it is a no-op during Finished. Use the real local
-                 * network container directly, force it fully visible/opaque,
-                 * and put its world position at the exact camera center.
-                 */
                 const localTarget =
                     this.networkPlayerManager
                         .getLocalPlayerContainer();
@@ -33589,57 +33634,34 @@ export class GameScene extends Phaser.Scene {
                         .setVisible(true)
                         .setAlpha(1);
 
-                    /*
-                     * V1010388R_HIDER_VISUAL_BOUNDS_CENTER / TRUE_VISUAL_CENTER
-                     *
-                     * Container x/y is a gameplay pivot, not necessarily the
-                     * visible Hider body's center. getBounds() includes the
-                     * actual rendered children (body + painted texture) in
-                     * world coordinates, so the social snapshot is centered
-                     * on the real visible character.
-                     */
                     const visualBounds =
                         localTarget.getBounds();
 
-                    const visualCenterX =
+                    camera.centerOn(
                         Number.isFinite(
                             visualBounds.centerX,
                         )
                             ? visualBounds.centerX
-                            : localTarget.x;
-
-                    const visualCenterY =
+                            : localTarget.x,
                         Number.isFinite(
                             visualBounds.centerY,
                         )
                             ? visualBounds.centerY
-                            : localTarget.y;
-
-                    camera
-                        .stopFollow()
-                        .removeBounds()
-                        .centerOn(
-                            visualCenterX,
-                            visualCenterY,
-                        );
+                            : localTarget.y,
+                    );
                 }
             }
 
             await new Promise<void>(
                 (resolve) => {
                     requestAnimationFrame(
-                        () => requestAnimationFrame(
-                            () => {
-                                if (!isHider) {
+                        () =>
+                            requestAnimationFrame(
+                                () =>
                                     requestAnimationFrame(
                                         () => resolve(),
-                                    );
-                                    return;
-                                }
-
-                                resolve();
-                            },
-                        ),
+                                    ),
+                            ),
                     );
                 },
             );
@@ -33660,92 +33682,28 @@ export class GameScene extends Phaser.Scene {
                     savedScrollY,
                 );
 
-            /*
-             * V1010388L_HIDER_FINISH_SCALE_SHARE_FEEDBACK / RESTORE_FINISHED_HUD_SCALE
-             *
-             * Hider capture called applyFixedHudForZoom(3.75/4.55), which
-             * inversely scales fixed HUD elements. Restore their scale together
-             * with the camera so HIDER 승리 / 게임 종료 / countdown and the
-             * Return-to-Lobby button remain full-size in the real game.
-             */
-            this.applyFixedHudForZoom(
-                Math.max(
-                    1,
-                    savedZoom,
-                ),
+            captureHudVisibility.forEach(
+                (entry) => {
+                    entry.object.setVisible(
+                        entry.visible,
+                    );
+                },
             );
 
             this.networkPlayerManager
                 .restoreAllPlayerVisibility();
 
-            /*
-             * V1010388O_DEAD_HIDER_FADE_SURVIVOR_BADGE / RESTORE_DEAD_HIDER_FADE
-             *
-             * restoreAllPlayerVisibility() is only a capture cleanup helper.
-             * During Finished, dead Hiders must go straight back to their
-             * authoritative semi-transparent state instead of keeping the
-             * fully opaque camouflage used by the social-card snapshot.
-             */
             if (
-                this.phase === 'finished'
+                this.phase ===
+                'finished'
             ) {
                 this.networkPlayerManager
                     .syncPlayersFromCurrentRoom();
+                this.updateCountdownUi();
             }
 
             this.networkPlayerManager
                 .setNamesVisible(false);
-
-            /*
-             * V1010388M2_HIDE_ROLE_LABELS_ROBUST / RESTORE_ROLE_HUD
-             */
-            this.survivalHudGraphics
-                ?.setVisible(
-                    survivalHudGraphicsWasVisible,
-                );
-            this.survivalHudText
-                ?.setVisible(
-                    survivalHudTextWasVisible,
-                );
-            this.survivalHiderLabelText
-                ?.setVisible(
-                    survivalHiderLabelWasVisible,
-                );
-            this.survivalHunterLabelText
-                ?.setVisible(
-                    survivalHunterLabelWasVisible,
-                );
-
-            /*
-             * Rebuild the player's real Finished presentation after the
-             * screenshot-only state is gone.
-             */
-            if (this.phase === 'finished') {
-                this.updateCountdownUi();
-
-                this.time.delayedCall(
-                    60,
-                    () => {
-                        if (
-                            this.phase ===
-                                'finished'
-                        ) {
-                            this.networkPlayerManager
-                                .syncPlayersFromCurrentRoom();
-                        }
-                    },
-                );
-
-                if (!finishedUiWasVisible) {
-                    this.countdownText
-                        ?.setVisible(false);
-                }
-
-                if (!returnButtonWasVisible) {
-                    this.roundReturnLobbyButton
-                        ?.setVisible(false);
-                }
-            }
         }
     }
 
@@ -33838,9 +33796,10 @@ export class GameScene extends Phaser.Scene {
         await new Promise<void>(
             (resolve) => {
                 requestAnimationFrame(
-                    () => requestAnimationFrame(
-                        () => resolve(),
-                    ),
+                    () =>
+                        requestAnimationFrame(
+                            () => resolve(),
+                        ),
                 );
             },
         );
@@ -33852,7 +33811,7 @@ export class GameScene extends Phaser.Scene {
 
         if (
             captureSerial !==
-                this.victoryShowcaseCaptureSerial
+            this.victoryShowcaseCaptureSerial
         ) {
             return;
         }
@@ -33867,6 +33826,7 @@ export class GameScene extends Phaser.Scene {
                         x: number;
                         y: number;
                         foundOrder?: number;
+                        foundByHunterSessionId?: string;
                     }>;
                     survivingHiders?: Array<{
                         sessionId: string;
@@ -33876,6 +33836,77 @@ export class GameScene extends Phaser.Scene {
                     }>;
                 };
             };
+
+        const winner =
+            result.winner;
+        const isHunter =
+            winner === 'hunters';
+        const language =
+            getLanguage();
+
+        const allFound =
+            extended.victoryShowcase
+                ?.foundHiders ??
+            [];
+        const surviving =
+            extended.victoryShowcase
+                ?.survivingHiders ??
+            [];
+
+        const localSessionId =
+            multiplayerClient.getSessionId() ??
+            '';
+
+        const roomPlayers =
+            multiplayerClient.getRoom()
+                ?.state.players;
+
+        const hunterCount =
+            roomPlayers
+                ? [...roomPlayers.values()]
+                    .filter(
+                        (player) =>
+                            player.role ===
+                            'hunter',
+                    )
+                    .length
+                : 0;
+
+        const hasFinderAttribution =
+            allFound.some(
+                (entry) =>
+                    Boolean(
+                        entry.foundByHunterSessionId,
+                    ),
+            );
+
+        /*
+         * New server metadata is per-Hunter.
+         * Compatibility: a legacy result with exactly one Hunter can safely
+         * attribute every found Hider to that only Hunter.
+         */
+        const personalFound =
+            !isHunter
+                ? []
+                : hasFinderAttribution
+                    ? allFound.filter(
+                        (entry) =>
+                            entry.foundByHunterSessionId ===
+                            localSessionId,
+                    )
+                    : hunterCount <= 1
+                        ? allFound
+                        : [];
+
+        const totalHiders =
+            allFound.length +
+            surviving.length;
+
+        const personalAllKill =
+            isHunter &&
+            totalHiders > 0 &&
+            personalFound.length ===
+                totalHiders;
 
         const canvas =
             document.createElement('canvas');
@@ -33889,11 +33920,9 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
-        const winner =
-            result.winner;
-        const isHunter =
-            winner === 'hunters';
-
+        /*
+         * Pastel / Instagram-friendly outer card.
+         */
         const bg =
             context.createLinearGradient(
                 0,
@@ -33902,22 +33931,33 @@ export class GameScene extends Phaser.Scene {
                 1350,
             );
 
-        bg.addColorStop(
-            0,
-            isHunter
-                ? '#170b08'
-                : '#06170e',
-        );
-        bg.addColorStop(
-            0.48,
-            isHunter
-                ? '#27130f'
-                : '#102a19',
-        );
-        bg.addColorStop(
-            1,
-            '#070a10',
-        );
+        if (isHunter) {
+            bg.addColorStop(
+                0,
+                '#fff4ec',
+            );
+            bg.addColorStop(
+                0.52,
+                '#ffd9ca',
+            );
+            bg.addColorStop(
+                1,
+                '#f3def2',
+            );
+        } else {
+            bg.addColorStop(
+                0,
+                '#effff5',
+            );
+            bg.addColorStop(
+                0.52,
+                '#d9f4e6',
+            );
+            bg.addColorStop(
+                1,
+                '#deefff',
+            );
+        }
 
         context.fillStyle = bg;
         context.fillRect(
@@ -33927,46 +33967,45 @@ export class GameScene extends Phaser.Scene {
             1350,
         );
 
-        const glow =
-            context.createRadialGradient(
-                isHunter ? 890 : 180,
-                130,
-                10,
-                isHunter ? 890 : 180,
-                130,
-                620,
-            );
-
-        glow.addColorStop(
-            0,
+        const accent =
             isHunter
-                ? 'rgba(255,104,62,.30)'
-                : 'rgba(74,246,137,.24)',
-        );
-        glow.addColorStop(
-            1,
-            'rgba(0,0,0,0)',
-        );
+                ? '#ef795f'
+                : '#39a96b';
+        const ink =
+            '#24313b';
+        const muted =
+            '#65717a';
 
-        context.fillStyle = glow;
-        context.fillRect(
-            0,
-            0,
-            1080,
-            720,
+        context.fillStyle =
+            accent;
+        context.font =
+            '900 25px Arial, sans-serif';
+        context.fillText(
+            isHunter
+                ? 'HUNTER VICTORY'
+                : 'HIDER VICTORY',
+            60,
+            72,
         );
-
-        const language =
-            getLanguage();
 
         const title =
             isHunter
                 ? (
-                    language === 'ko'
-                        ? '내가 다 찾았다!'
-                        : language === 'ja'
-                            ? '全部見つけた！'
-                            : 'I FOUND THEM!'
+                    personalAllKill
+                        ? (
+                            language === 'ko'
+                                ? '내가 다 찾았다!'
+                                : language === 'ja'
+                                    ? '全部見つけた！'
+                                    : 'I FOUND THEM ALL!'
+                        )
+                        : (
+                            language === 'ko'
+                                ? '내가 찾았다!'
+                                : language === 'ja'
+                                    ? '見つけた！'
+                                    : 'I FOUND THEM!'
+                        )
                 )
                 : (
                     language === 'ko'
@@ -33977,61 +34016,121 @@ export class GameScene extends Phaser.Scene {
                 );
 
         context.fillStyle =
-            isHunter
-                ? '#ffad79'
-                : '#87f8ae';
+            ink;
         context.font =
-            '900 25px Arial, sans-serif';
-        context.fillText(
-            isHunter
-                ? 'HUNTER VICTORY'
-                : 'HIDER VICTORY',
-            62,
-            78,
-        );
-
-        context.fillStyle = '#ffffff';
-        context.font =
-            '900 66px Arial, sans-serif';
+            '900 64px Arial, sans-serif';
         context.fillText(
             title,
-            60,
-            158,
+            58,
+            148,
         );
 
         context.fillStyle =
-            'rgba(255,255,255,.66)';
+            muted;
         context.font =
-            '700 22px Arial, sans-serif';
+            '700 21px Arial, sans-serif';
         context.fillText(
             isHunter
                 ? (
                     language === 'ko'
-                        ? '숨은 흔적까지, 오늘의 사냥 기록.'
-                        : 'Every hiding spot. One victory.'
+                        ? '내가 직접 찾아낸 숨은 흔적의 기록.'
+                        : 'The hiding spots I personally found.'
                 )
                 : (
                     language === 'ko'
                         ? '끝까지 들키지 않은 나의 위장.'
                         : 'Camouflaged. Hidden. Survived.'
                 ),
-            62,
-            204,
+            60,
+            192,
         );
 
-        /*
-         * V1010388H_CLEAN_FINISH_HIDER_HERO_CARD / HIDER_HERO_CROP
-         *
-         * Hunter: full 16:9 map = trophy board of every FOUND location.
-         * Hider: taller, zoomed center crop = the painted survivor is the hero.
-         */
+        if (personalAllKill) {
+            context.save();
+
+            context.fillStyle =
+                '#fff8d8';
+            context.strokeStyle =
+                '#ef795f';
+            context.lineWidth = 4;
+            context.beginPath();
+            context.roundRect(
+                735,
+                42,
+                285,
+                88,
+                28,
+            );
+            context.fill();
+            context.stroke();
+
+            context.fillStyle =
+                '#d64f40';
+            context.font =
+                '900 29px Arial, sans-serif';
+            context.textAlign =
+                'center';
+            context.fillText(
+                '★ ALL KILL!! ★',
+                878,
+                80,
+            );
+
+            context.fillStyle =
+                '#ef795f';
+            context.font =
+                '900 17px Arial, sans-serif';
+            context.fillText(
+                language === 'ko'
+                    ? '빠밤!!'
+                    : 'PERFECT HUNT!',
+                878,
+                108,
+            );
+
+            const confetti = [
+                [708, 48], [1032, 58],
+                [720, 118], [1008, 137],
+                [682, 86], [1040, 105],
+            ];
+
+            confetti.forEach(
+                ([x, y], index) => {
+                    context.fillStyle =
+                        index % 2 === 0
+                            ? '#ffd05b'
+                            : '#62b7e7';
+                    context.beginPath();
+                    context.arc(
+                        x,
+                        y,
+                        7,
+                        0,
+                        Math.PI * 2,
+                    );
+                    context.fill();
+                },
+            );
+
+            context.restore();
+        }
+
         const frameX = 60;
-        const frameY = 252;
+        const frameY =
+            isHunter
+                ? 238
+                : 218;
         const frameW = 960;
+
+        /*
+         * Hider reference image is intentionally almost-square/tall, like the
+         * attached Practice HIDER CAMOUFLAGE poster, rather than the old 16:9
+         * gameplay screenshot.
+         */
         const frameH =
             isHunter
                 ? 540
-                : 720;
+                : 860;
 
         const imageW =
             image.naturalWidth ||
@@ -34048,27 +34147,20 @@ export class GameScene extends Phaser.Scene {
         let sourceH = imageH;
 
         if (!isHunter) {
-            /*
-             * 4:3-ish source crop from the center of the Hunt viewport.
-             * The Hunt camera keeps the local Hider near screen center, so this
-             * enlarges the custom-painted body by roughly 1.45–1.6x compared
-             * with the old full-width 16:9 card.
-             */
-            const desiredSourceRatio =
+            const desiredRatio =
                 frameW /
                 frameH;
-
-            const currentSourceRatio =
+            const sourceRatio =
                 imageW /
                 imageH;
 
             if (
-                currentSourceRatio >
-                desiredSourceRatio
+                sourceRatio >
+                desiredRatio
             ) {
                 sourceW =
                     imageH *
-                    desiredSourceRatio;
+                    desiredRatio;
                 sourceX =
                     (
                         imageW -
@@ -34078,7 +34170,7 @@ export class GameScene extends Phaser.Scene {
             } else {
                 sourceH =
                     imageW /
-                    desiredSourceRatio;
+                    desiredRatio;
                 sourceY =
                     (
                         imageH -
@@ -34095,7 +34187,7 @@ export class GameScene extends Phaser.Scene {
             frameY,
             frameW,
             frameH,
-            34,
+            36,
         );
         context.clip();
 
@@ -34111,22 +34203,29 @@ export class GameScene extends Phaser.Scene {
             frameH,
         );
 
-        const fade =
+        /*
+         * Only a light bottom readability wash — no dark Hunt-vision look.
+         */
+        const frameWash =
             context.createLinearGradient(
                 0,
-                frameY + 330,
+                frameY +
+                    frameH *
+                    0.68,
                 0,
-                frameY + frameH,
+                frameY +
+                    frameH,
             );
-        fade.addColorStop(
+        frameWash.addColorStop(
             0,
-            'rgba(0,0,0,0)',
+            'rgba(255,255,255,0)',
         );
-        fade.addColorStop(
+        frameWash.addColorStop(
             1,
-            'rgba(0,0,0,.32)',
+            'rgba(255,255,255,.16)',
         );
-        context.fillStyle = fade;
+        context.fillStyle =
+            frameWash;
         context.fillRect(
             frameX,
             frameY,
@@ -34136,85 +34235,63 @@ export class GameScene extends Phaser.Scene {
         context.restore();
 
         context.strokeStyle =
-            'rgba(255,255,255,.34)';
-        context.lineWidth = 2;
+            'rgba(255,255,255,.88)';
+        context.lineWidth = 4;
         context.beginPath();
         context.roundRect(
             frameX,
             frameY,
             frameW,
             frameH,
-            34,
+            36,
         );
         context.stroke();
 
-        /*
-         * V1010388O_DEAD_HIDER_FADE_SURVIVOR_BADGE / HIDER_SURVIVOR_BADGE
-         *
-         * Practice-style survivor decoration:
-         *   translucent gold crown
-         *   green rounded YOU SURVIVED badge
-         *
-         * The Hider snapshot camera already places the local character at the
-         * exact center of this frame, so the badge can be anchored relative to
-         * frame center without leaking into the real game scene.
-         */
         if (!isHunter) {
-            /*
-             * V1010388R_HIDER_VISUAL_BOUNDS_CENTER / POSTER_CENTER_CONTRACT
-             * captureVictoryFrameForRoleShowcase() now guarantees that the
-             * rendered Hider visual center sits at the image/frame center.
-             * Crown and pill use that same exact X.
-             */
             const survivorX =
                 frameX +
                 frameW / 2;
 
             /*
-             * Keep enough clearance above the centered 80x120-ish character.
+             * Character is centered and enlarged by the capture camera.
+             * Keep the badge well above its head so the two never overlap.
              */
             const badgeY =
                 frameY +
                 frameH / 2 -
-                184;
-
-            const badgeW = 178;
-            const badgeH = 38;
+                238;
+            const badgeW = 204;
+            const badgeH = 44;
             const badgeX =
                 survivorX -
                 badgeW / 2;
 
             context.save();
-
-            /*
-             * Soft mint shadow similar to the Practice record treatment.
-             */
             context.shadowColor =
-                'rgba(64,181,106,.34)';
-            context.shadowBlur = 16;
-
+                'rgba(49,159,97,.28)';
+            context.shadowBlur = 18;
             context.fillStyle =
-                'rgba(53,151,88,.86)';
+                'rgba(55,174,103,.92)';
             context.beginPath();
             context.roundRect(
                 badgeX,
                 badgeY,
                 badgeW,
                 badgeH,
-                19,
+                22,
             );
             context.fill();
 
             context.shadowBlur = 0;
             context.strokeStyle =
-                'rgba(230,255,235,.58)';
-            context.lineWidth = 2;
+                'rgba(255,255,255,.88)';
+            context.lineWidth = 3;
             context.stroke();
 
             context.fillStyle =
-                'rgba(255,255,255,.96)';
+                '#ffffff';
             context.font =
-                '900 18px Arial, sans-serif';
+                '900 19px Arial, sans-serif';
             context.textAlign =
                 'center';
             context.textBaseline =
@@ -34227,182 +34304,51 @@ export class GameScene extends Phaser.Scene {
                     1,
             );
 
-            /*
-             * Small outlined crown above the pill.
-             */
-            const crownCenterY =
-                badgeY - 24;
-            const crownW = 32;
-            const crownH = 19;
-            context.globalAlpha =
-                0.84;
             context.fillStyle =
-                'rgba(255,209,74,.30)';
-            context.strokeStyle =
-                'rgba(255,213,75,.96)';
-            context.lineWidth = 3;
-            context.lineJoin =
-                'round';
-
-            /*
-             * V1010388Q_ALIVE_HIDER_ONLY_SYMMETRIC_CROWN / SYMMETRIC_CROWN
-             * Every crown point mirrors around survivorX.
-             */
-            const crownBottomY =
-                crownCenterY +
-                crownH / 2;
-            const crownTopY =
-                crownCenterY -
-                crownH / 2;
-            const crownShoulderY =
-                crownTopY +
-                crownH * 0.36;
-            const crownValleyY =
-                crownCenterY;
-
-            context.beginPath();
-            context.moveTo(
-                survivorX -
-                    crownW * 0.5,
-                crownBottomY,
-            );
-            context.lineTo(
-                survivorX -
-                    crownW * 0.39,
-                crownShoulderY,
-            );
-            context.lineTo(
-                survivorX -
-                    crownW * 0.18,
-                crownValleyY,
-            );
-            context.lineTo(
+                '#ffd45f';
+            context.font =
+                '900 31px Arial, sans-serif';
+            context.fillText(
+                '♛',
                 survivorX,
-                crownTopY,
+                badgeY - 22,
             );
-            context.lineTo(
-                survivorX +
-                    crownW * 0.18,
-                crownValleyY,
-            );
-            context.lineTo(
-                survivorX +
-                    crownW * 0.39,
-                crownShoulderY,
-            );
-            context.lineTo(
-                survivorX +
-                    crownW * 0.5,
-                crownBottomY,
-            );
-            context.closePath();
-            context.fill();
-            context.stroke();
-
-            context.beginPath();
-            context.moveTo(
-                survivorX -
-                    crownW * 0.44,
-                crownCenterY +
-                    crownH / 2,
-            );
-            context.lineTo(
-                survivorX +
-                    crownW * 0.44,
-                crownCenterY +
-                    crownH / 2,
-            );
-            context.stroke();
 
             context.restore();
-
-            /*
-             * Marker drawing below expects default text alignment.
-             */
-            context.textAlign =
-                'left';
-            context.textBaseline =
-                'alphabetic';
         }
 
-        const found =
-            extended.victoryShowcase
-                ?.foundHiders ??
-            [];
-        const fallbackFound =
-            result.revealedHiders.map(
-                (
-                    hider,
-                    index,
-                ) => ({
-                    sessionId:
-                        hider.sessionId,
-                    x:
-                        hider.x,
-                    y:
-                        hider.y,
-                    foundOrder:
-                        index + 1,
-                }),
-            );
-
         /*
-         * V1010388J_VICTORY_CARD_FINAL_VISUALS / MARKER_POLICY
-         * Hunter: FOUND rings stay.
-         * Hider: no ring at all; Practice-style centered camouflage is enough.
+         * Hunter: ONLY this local Hunter's actual catches get FOUND markers.
+         * No revealedHiders fallback, no circle/# for Hiders found by teammates.
          */
-        const markers =
-            isHunter
-                ? (
-                    found.length > 0
-                        ? found
-                        : fallbackFound
-                )
-                : [];
-
-        markers.forEach(
-            (
-                marker,
-                index,
-            ) => {
-                const mx =
-                    isHunter
-                        ? (
-                            frameX +
-                            Phaser.Math.Clamp(
-                                Number(marker.x) || 0,
+        if (isHunter) {
+            personalFound.forEach(
+                (
+                    marker,
+                    index,
+                ) => {
+                    const mx =
+                        frameX +
+                        Phaser.Math.Clamp(
+                            Number(marker.x) ||
                                 0,
-                                this.gameWidth,
-                            )
-                        )
-                        : frameX +
-                            frameW /
-                            2;
-
-                const my =
-                    isHunter
-                        ? (
-                            frameY +
-                            Phaser.Math.Clamp(
-                                Number(marker.y) || 0,
+                            0,
+                            this.gameWidth,
+                        );
+                    const my =
+                        frameY +
+                        Phaser.Math.Clamp(
+                            Number(marker.y) ||
                                 0,
-                                this.gameHeight,
-                            )
-                        )
-                        : frameY +
-                            frameH /
-                            2;
+                            0,
+                            this.gameHeight,
+                        );
 
-                if (isHunter) {
                     const paintedAvatar =
                         this.buildVictoryPaintedHiderCanvas(
                             marker.sessionId,
                         );
 
-                    /*
-                     * Network Hider logical art is 80x120. Draw at the same
-                     * world-scale footprint onto the 960x540 match frame.
-                     */
                     context.save();
                     context.imageSmoothingEnabled =
                         false;
@@ -34413,111 +34359,104 @@ export class GameScene extends Phaser.Scene {
                         80,
                         120,
                     );
+
+                    context.shadowColor =
+                        'rgba(224,80,62,.72)';
+                    context.shadowBlur = 18;
+                    context.strokeStyle =
+                        '#ffffff';
+                    context.lineWidth = 7;
+                    context.beginPath();
+                    context.arc(
+                        mx,
+                        my,
+                        38,
+                        0,
+                        Math.PI * 2,
+                    );
+                    context.stroke();
+
+                    context.strokeStyle =
+                        '#ef6656';
+                    context.lineWidth = 4;
+                    context.beginPath();
+                    context.arc(
+                        mx,
+                        my,
+                        30,
+                        0,
+                        Math.PI * 2,
+                    );
+                    context.stroke();
+                    context.shadowBlur = 0;
+
+                    const foundOrder =
+                        index + 1;
+                    const label =
+                        'FOUND ' +
+                        String(
+                            foundOrder,
+                        ).padStart(
+                            2,
+                            '0',
+                        );
+
+                    context.font =
+                        '900 17px Arial, sans-serif';
+
+                    const textWidth =
+                        context.measureText(
+                            label,
+                        ).width;
+                    const pillW =
+                        textWidth + 28;
+                    const pillX =
+                        Phaser.Math.Clamp(
+                            mx -
+                                pillW / 2,
+                            frameX + 10,
+                            frameX +
+                                frameW -
+                                pillW -
+                                10,
+                        );
+                    const pillY =
+                        Math.max(
+                            frameY + 10,
+                            my - 74,
+                        );
+
+                    context.fillStyle =
+                        'rgba(239,102,86,.95)';
+                    context.beginPath();
+                    context.roundRect(
+                        pillX,
+                        pillY,
+                        pillW,
+                        32,
+                        16,
+                    );
+                    context.fill();
+
+                    context.fillStyle =
+                        '#ffffff';
+                    context.textAlign =
+                        'center';
+                    context.textBaseline =
+                        'middle';
+                    context.fillText(
+                        label,
+                        pillX +
+                            pillW / 2,
+                        pillY + 17,
+                    );
                     context.restore();
-                }
+                },
+            );
+        }
 
-                context.save();
-                context.shadowColor =
-                    isHunter
-                        ? 'rgba(255,91,68,.86)'
-                        : 'rgba(76,255,145,.78)';
-                context.shadowBlur = 22;
-                context.strokeStyle =
-                    '#ffffff';
-                context.lineWidth = 7;
-                context.beginPath();
-                context.arc(
-                    mx,
-                    my,
-                    isHunter ? 38 : 46,
-                    0,
-                    Math.PI * 2,
-                );
-                context.stroke();
-
-                context.strokeStyle =
-                    isHunter
-                        ? '#ff5b44'
-                        : '#58ed8d';
-                context.lineWidth = 4;
-                context.beginPath();
-                context.arc(
-                    mx,
-                    my,
-                    isHunter ? 30 : 37,
-                    0,
-                    Math.PI * 2,
-                );
-                context.stroke();
-                context.shadowBlur = 0;
-
-                const foundOrder =
-                    'foundOrder' in marker &&
-                    Number(marker.foundOrder) > 0
-                        ? Number(marker.foundOrder)
-                        : index + 1;
-
-                const label =
-                    isHunter
-                        ? 'FOUND ' +
-                            String(foundOrder)
-                                .padStart(2, '0')
-                        : 'YOU SURVIVED';
-
-                context.font =
-                    '900 17px Arial, sans-serif';
-
-                const textWidth =
-                    context.measureText(label)
-                        .width;
-                const pillW =
-                    textWidth + 28;
-                const pillH = 32;
-                const pillX =
-                    Phaser.Math.Clamp(
-                        mx - pillW / 2,
-                        frameX + 10,
-                        frameX +
-                            frameW -
-                            pillW -
-                            10,
-                    );
-                const pillY =
-                    Math.max(
-                        frameY + 10,
-                        my - 74,
-                    );
-
-                context.fillStyle =
-                    isHunter
-                        ? 'rgba(255,71,56,.94)'
-                        : 'rgba(30,185,92,.94)';
-                context.beginPath();
-                context.roundRect(
-                    pillX,
-                    pillY,
-                    pillW,
-                    pillH,
-                    16,
-                );
-                context.fill();
-
-                context.fillStyle =
-                    '#ffffff';
-                context.textAlign =
-                    'center';
-                context.textBaseline =
-                    'middle';
-                context.fillText(
-                    label,
-                    pillX + pillW / 2,
-                    pillY + pillH / 2 + 1,
-                );
-                context.restore();
-            },
-        );
-
-        context.textAlign = 'left';
+        context.textAlign =
+            'left';
         context.textBaseline =
             'alphabetic';
 
@@ -34535,147 +34474,145 @@ export class GameScene extends Phaser.Scene {
 
         const memoryPanelY =
             isHunter
-                ? 838
-                : 1000;
+                ? 814
+                : 1104;
+        const memoryPanelH =
+            isHunter
+                ? 154
+                : 108;
 
         context.fillStyle =
-            'rgba(255,255,255,.09)';
+            'rgba(255,255,255,.58)';
         context.beginPath();
         context.roundRect(
             60,
             memoryPanelY,
             960,
-            isHunter
-                ? 168
-                : 124,
-            30,
+            memoryPanelH,
+            28,
         );
         context.fill();
 
         context.fillStyle =
-            'rgba(255,255,255,.52)';
+            muted;
         context.font =
-            '800 17px Arial, sans-serif';
+            '800 16px Arial, sans-serif';
         context.fillText(
             'MATCH MEMORY',
             88,
-            isHunter
-                ? 882
-                : 1038,
+            memoryPanelY + 35,
         );
 
-        context.fillStyle = '#ffffff';
+        context.fillStyle =
+            ink;
         context.font =
-            '900 34px Arial, sans-serif';
+            '900 31px Arial, sans-serif';
         context.fillText(
             this.getMapDisplayName(
                 activeMap,
             ),
             88,
-            isHunter
-                ? 930
-                : 1082,
+            memoryPanelY + 76,
         );
 
-        context.textAlign = 'right';
+        context.textAlign =
+            'right';
         context.fillStyle =
-            isHunter
-                ? '#ffb087'
-                : '#8bf3ad';
+            accent;
         context.font =
-            '900 32px Arial, sans-serif';
+            '900 30px Arial, sans-serif';
         context.fillText(
             isHunter
-                ? String(
-                    Math.max(
-                        found.length,
-                        result.revealedHiders.length,
-                    ),
-                ) + ' FOUND'
+                ? (
+                    personalAllKill
+                        ? 'ALL KILL'
+                        : String(
+                            personalFound.length,
+                        ) + ' FOUND'
+                )
                 : 'SURVIVED',
             990,
-            isHunter
-                ? 930
-                : 1082,
+            memoryPanelY + 76,
         );
 
         context.fillStyle =
-            'rgba(255,255,255,.56)';
+            muted;
         context.font =
-            '700 18px Arial, sans-serif';
+            '800 15px Arial, sans-serif';
         context.fillText(
             isHunter
-                ? 'HUNT COMPLETE'
+                ? (
+                    language === 'ko'
+                        ? 'MY HUNT RECORD'
+                        : 'MY HUNT RECORD'
+                )
                 : 'HIDE COMPLETE',
             990,
-            isHunter
-                ? 965
-                : 1110,
+            memoryPanelY + 101,
         );
 
-        context.textAlign = 'left';
-        context.fillStyle = '#ffffff';
+        context.textAlign =
+            'left';
+
+        const brandY =
+            isHunter
+                ? 1070
+                : 1260;
+
+        context.fillStyle =
+            ink;
         context.font =
-            '900 50px Arial, sans-serif';
+            '900 48px Arial, sans-serif';
         context.fillText(
             'COLOR HUNT',
             60,
-            isHunter
-                ? 1112
-                : 1188,
+            brandY,
         );
 
         context.fillStyle =
-            'rgba(255,255,255,.56)';
+            muted;
         context.font =
-            '700 21px Arial, sans-serif';
+            '700 19px Arial, sans-serif';
         context.fillText(
             'CAMOUFLAGE · HIDE · HUNT',
             62,
-            isHunter
-                ? 1148
-                : 1222,
+            brandY + 34,
         );
 
         context.fillStyle =
             isHunter
-                ? 'rgba(255,128,82,.15)'
-                : 'rgba(83,239,142,.13)';
+                ? 'rgba(239,121,95,.14)'
+                : 'rgba(57,169,107,.14)';
         context.beginPath();
         context.roundRect(
             60,
-            isHunter
-                ? 1192
-                : 1250,
+            brandY + 58,
             430,
-            isHunter
-                ? 58
-                : 48,
-            29,
+            48,
+            24,
         );
         context.fill();
 
         context.fillStyle =
             isHunter
-                ? '#ffc1a2'
-                : '#a4f7be';
+                ? '#b94e3d'
+                : '#237c4b';
         context.font =
-            '900 19px Arial, sans-serif';
+            '900 18px Arial, sans-serif';
         context.fillText(
             isHunter
                 ? '#COLORHUNT  #HUNTERWIN'
                 : '#COLORHUNT  #HIDERWIN',
-            86,
-            isHunter
-                ? 1229
-                : 1281,
+            84,
+            brandY + 89,
         );
 
-        context.textAlign = 'right';
+        context.textAlign =
+            'right';
         context.fillStyle =
-            'rgba(255,255,255,.42)';
+            '#66727b';
         context.font =
-            '700 17px Arial, sans-serif';
+            '700 16px Arial, sans-serif';
         context.fillText(
             this.getPracticeShareUrl()
                 .replace(
@@ -34687,22 +34624,18 @@ export class GameScene extends Phaser.Scene {
                     '',
                 ),
             1018,
-            isHunter
-                ? 1228
-                : 1280,
+            brandY + 88,
         );
 
         context.font =
-            '700 15px Arial, sans-serif';
+            '700 14px Arial, sans-serif';
         context.fillStyle =
-            'rgba(255,255,255,.25)';
+            'rgba(50,64,74,.50)';
         context.fillText(
             new Date()
                 .toLocaleDateString(),
             1018,
-            isHunter
-                ? 1288
-                : 1322,
+            1330,
         );
 
         const blob =
@@ -34729,17 +34662,6 @@ export class GameScene extends Phaser.Scene {
         this.victoryShowcaseWinner =
             winner;
 
-        /*
-         * V1010388E_VICTORY_SHOWCASE_RACE_FIX
-         *
-         * enterLobbyPhase() performs one reveal check at 320ms, but poster
-         * generation is asynchronous (2 RAFs + canvas capture + PNG toBlob).
-         * On slower/mobile devices the lobby check can therefore happen before
-         * victoryShowcaseBlob exists and the card is missed forever.
-         *
-         * Make capture completion the second authority: if Lobby is already
-         * active when the PNG becomes ready, reveal it immediately.
-         */
         if (
             this.phase === 'lobby' &&
             this.victoryShowcaseBlob
@@ -35314,9 +35236,36 @@ export class GameScene extends Phaser.Scene {
         );
     }
 
+    private clearVictoryShowcaseForRoundLifecycle(): void {
+        /*
+         * V1010434_VICTORY_SOCIAL_CARD_POLISH / LIFECYCLE_CLEANUP
+         * Leaving the waiting room or starting the next round must drop the
+         * modal/chip/blob completely so cards never stack or leak memory.
+         */
+        this.victoryShowcaseCaptureSerial +=
+            1;
+
+        this.victoryShowcaseModal
+            ?.remove();
+        this.victoryShowcaseModal =
+            undefined;
+
+        this.removeCollapsedVictoryShowcase(
+            true,
+        );
+    }
+
     private removeCollapsedVictoryShowcase(
         clearVictory = false,
     ): void {
+        this.victoryShowcaseCollapsedResizeHandler &&
+            window.removeEventListener(
+                'resize',
+                this.victoryShowcaseCollapsedResizeHandler,
+            );
+        this.victoryShowcaseCollapsedResizeHandler =
+            undefined;
+
         this.victoryShowcaseCollapsedChip
             ?.remove();
         this.victoryShowcaseCollapsedChip =
@@ -35360,6 +35309,7 @@ export class GameScene extends Phaser.Scene {
         chip.type = 'button';
         chip.className =
             'colorhunt-victory-collapsed';
+
         chip.innerHTML =
             '<span class="colorhunt-victory-collapsed__spark">🏆</span>' +
             '<span class="colorhunt-victory-collapsed__copy"><b>' +
@@ -35392,13 +35342,64 @@ export class GameScene extends Phaser.Scene {
 
         const style =
             document.createElement('style');
-        style.textContent =
-            '.colorhunt-victory-collapsed{position:fixed;z-index:2147482500;left:50%;bottom:max(16px,env(safe-area-inset-bottom));transform:translateX(-50%);display:flex;align-items:center;gap:10px;min-width:190px;max-width:min(88vw,310px);padding:10px 14px;border:1px solid rgba(255,255,255,.22);border-radius:18px;color:#fff;background:linear-gradient(135deg,rgba(20,25,34,.97),rgba(8,11,17,.98));box-shadow:0 14px 38px rgba(0,0,0,.38),0 0 26px rgba(255,255,255,.08);font:inherit;cursor:pointer;animation:chVictoryChipIn .34s cubic-bezier(.2,.9,.2,1.15) both}' +
-            '.colorhunt-victory-collapsed__spark{font-size:27px;line-height:1}.colorhunt-victory-collapsed__copy{display:flex;flex-direction:column;align-items:flex-start;min-width:0}.colorhunt-victory-collapsed__copy b{font-size:13px;line-height:1.15}.colorhunt-victory-collapsed__copy small{margin-top:3px;font-size:10px;opacity:.62}' +
-            '@keyframes chVictoryChipIn{from{opacity:0;transform:translate(-50%,16px) scale(.86)}to{opacity:1;transform:translate(-50%,0) scale(1)}}' +
-            '@media(pointer:coarse){.colorhunt-victory-collapsed{bottom:max(82px,calc(env(safe-area-inset-bottom) + 72px));min-width:176px;padding:9px 12px;border-radius:16px}.colorhunt-victory-collapsed__spark{font-size:24px}}';
 
-        chip.appendChild(style);
+        style.textContent =
+            '.colorhunt-victory-collapsed{position:fixed;z-index:2147482500;display:flex;align-items:center;gap:9px;min-width:184px;max-width:min(72vw,300px);padding:9px 13px;border:2px solid rgba(255,255,255,.88);border-radius:17px;color:#26343d;background:' +
+            (
+                isHunter
+                    ? 'linear-gradient(135deg,rgba(255,239,229,.98),rgba(255,205,193,.98))'
+                    : 'linear-gradient(135deg,rgba(235,255,244,.98),rgba(195,238,214,.98))'
+            ) +
+            ';box-shadow:0 12px 30px rgba(20,37,48,.24);font:inherit;cursor:pointer;animation:chVictoryChipIn .34s cubic-bezier(.2,.9,.2,1.15) both}' +
+            '.colorhunt-victory-collapsed__spark{font-size:26px;line-height:1}.colorhunt-victory-collapsed__copy{display:flex;flex-direction:column;align-items:flex-start;min-width:0}.colorhunt-victory-collapsed__copy b{font-size:13px;line-height:1.15}.colorhunt-victory-collapsed__copy small{margin-top:3px;font-size:10px;opacity:.62}' +
+            '@keyframes chVictoryChipIn{from{opacity:0;transform:translate(-50%,-72%) scale(.86)}to{opacity:1;transform:translate(-50%,-100%) scale(1)}}';
+
+        chip.appendChild(
+            style,
+        );
+
+        /*
+         * Browser bottom is NOT the game bottom on desktop letterboxing.
+         * Anchor against the real Phaser canvas rectangle.
+         */
+        const positionInsideCanvas =
+            (): void => {
+                if (!chip.isConnected) {
+                    return;
+                }
+
+                const rect =
+                    this.game.canvas
+                        .getBoundingClientRect();
+
+                chip.style.left =
+                    Math.round(
+                        rect.left +
+                        rect.width / 2,
+                    ) + 'px';
+
+                chip.style.top =
+                    Math.round(
+                        Math.max(
+                            rect.top + 64,
+                            rect.bottom - 12,
+                        ),
+                    ) + 'px';
+
+                chip.style.bottom =
+                    'auto';
+
+                chip.style.transform =
+                    'translate(-50%,-100%)';
+            };
+
+        this.victoryShowcaseCollapsedResizeHandler =
+            positionInsideCanvas;
+
+        window.addEventListener(
+            'resize',
+            positionInsideCanvas,
+        );
 
         chip.addEventListener(
             'click',
@@ -35412,9 +35413,15 @@ export class GameScene extends Phaser.Scene {
             },
         );
 
-        document.body.appendChild(chip);
+        document.body.appendChild(
+            chip,
+        );
+
+        positionInsideCanvas();
+
         this.victoryShowcaseCollapsedChip =
             chip;
+
         this.playVictoryShowcaseFireworks(
             chip,
         );
@@ -35523,9 +35530,9 @@ export class GameScene extends Phaser.Scene {
         card.innerHTML =
             '<style>' +
             '.colorhunt-victory-showcase-overlay{position:fixed;inset:0;z-index:2147483000;display:grid;place-items:center;padding:6px;background:radial-gradient(circle at 50% 18%,rgba(255,255,255,.09),transparent 36%),rgba(3,7,12,.80);backdrop-filter:blur(18px) saturate(1.15);-webkit-backdrop-filter:blur(18px) saturate(1.15);animation:chVictoryBackdrop .42s ease both}' +
-            '.colorhunt-victory-showcase-card{width:min(96vw,560px);height:min(98dvh,900px);max-height:98dvh;overflow:hidden;border:1px solid rgba(255,255,255,.16);border-radius:24px;padding:10px;color:#fff;background:linear-gradient(180deg,rgba(23,27,36,.97),rgba(8,11,17,.99));box-shadow:0 30px 90px rgba(0,0,0,.48),inset 0 1px 0 rgba(255,255,255,.10);transform-origin:50% 72%;animation:chVictoryPop .62s cubic-bezier(.2,.9,.2,1.1) both;font-family:Inter,Pretendard,system-ui,sans-serif;display:flex;flex-direction:column;box-sizing:border-box}' +
-            '.colorhunt-victory-showcase-card.is-hunter{box-shadow:0 30px 90px rgba(0,0,0,.48),0 0 70px rgba(255,104,61,.13),inset 0 1px 0 rgba(255,255,255,.10)}' +
-            '.colorhunt-victory-showcase-card.is-hider{box-shadow:0 30px 90px rgba(0,0,0,.48),0 0 70px rgba(77,238,139,.13),inset 0 1px 0 rgba(255,255,255,.10)}' +
+            '.colorhunt-victory-showcase-card{width:min(96vw,560px);height:min(98dvh,900px);max-height:98dvh;overflow:hidden;border:1px solid rgba(255,255,255,.72);border-radius:24px;padding:10px;color:#26343d;background:linear-gradient(180deg,rgba(255,249,243,.98),rgba(238,248,247,.99));box-shadow:0 30px 90px rgba(20,37,48,.30),inset 0 1px 0 rgba(255,255,255,.80);transform-origin:50% 72%;animation:chVictoryPop .62s cubic-bezier(.2,.9,.2,1.1) both;font-family:Inter,Pretendard,system-ui,sans-serif;display:flex;flex-direction:column;box-sizing:border-box}' +
+            '.colorhunt-victory-showcase-card.is-hunter{background:linear-gradient(180deg,#fff7f1,#ffe4d9);box-shadow:0 30px 90px rgba(52,46,42,.24),0 0 70px rgba(255,157,126,.24)}' +
+            '.colorhunt-victory-showcase-card.is-hider{background:linear-gradient(180deg,#f2fff6,#dff5e9);box-shadow:0 30px 90px rgba(40,60,52,.22),0 0 70px rgba(112,218,157,.22)}' +
             '.colorhunt-victory-showcase-head{display:flex;align-items:end;justify-content:space-between;gap:14px;padding:3px 4px 14px}.colorhunt-victory-showcase-kicker{font-size:11px;font-weight:950;letter-spacing:.18em;opacity:.58}.colorhunt-victory-showcase-title{margin-top:4px;font-size:clamp(25px,5vw,34px);line-height:1;font-weight:950;letter-spacing:-.04em}.is-hunter .colorhunt-victory-showcase-title{color:#ffb087}.is-hider .colorhunt-victory-showcase-title{color:#93f5b2}.colorhunt-victory-showcase-badge{flex:0 0 auto;padding:7px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);font-size:11px;font-weight:900}.colorhunt-victory-showcase-preview{display:block;width:auto;max-width:100%;height:auto;max-height:calc(100% - 64px);min-height:0;object-fit:contain;align-self:center;flex:1 1 auto;border-radius:18px;box-shadow:0 18px 42px rgba(0,0,0,.34);background:#111}.colorhunt-victory-showcase-caption{display:none;margin:0;color:rgba(255,255,255,.62);font-size:12px;font-weight:700;text-align:center}.colorhunt-victory-showcase-feedback{display:none;margin:0 5px 12px;padding:10px 12px;border:1px solid rgba(143,255,184,.34);border-radius:13px;background:rgba(49,183,101,.16);color:#bfffd2;font-size:12px;font-weight:900;text-align:center;animation:chVictoryFeedback .22s ease both}.colorhunt-victory-showcase-feedback.is-visible{display:block}.colorhunt-victory-showcase-fold{display:flex;align-items:center;justify-content:center;gap:8px;flex:0 0 auto;margin:7px 0 0;color:rgba(255,255,255,.72);font-size:11px;font-weight:800;user-select:none}.colorhunt-victory-showcase-fold input{width:17px;height:17px;accent-color:#8df0ac;cursor:pointer}.colorhunt-victory-showcase-actions{display:grid;grid-template-columns:.8fr 1fr 1.2fr;gap:7px;flex:0 0 auto;margin-top:7px}.colorhunt-victory-showcase-actions button{min-height:42px;border:0;border-radius:13px;color:#fff;background:rgba(255,255,255,.08);font:inherit;font-size:13px;font-weight:900;cursor:pointer}.colorhunt-victory-showcase-actions [data-victory-share]{color:#09100c;background:' +
             (isHunter ? '#ffb087' : '#8df0ac') +
             '}@keyframes chVictoryFeedback{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}@keyframes chVictoryBackdrop{from{opacity:0}to{opacity:1}}@keyframes chVictoryPop{0%{opacity:0;transform:translateY(34px) scale(.88) rotate(-1.5deg)}58%{opacity:1;transform:translateY(-3px) scale(1.015) rotate(.3deg)}100%{opacity:1;transform:translateY(0) scale(1)}}@media(max-height:650px){.colorhunt-victory-showcase-overlay{padding:2px}.colorhunt-victory-showcase-card{width:min(94vw,430px);height:99dvh;max-height:99dvh;padding:6px;border-radius:18px}.colorhunt-victory-showcase-preview{max-height:calc(100% - 54px);border-radius:14px}.colorhunt-victory-showcase-actions{margin-top:5px;gap:5px}.colorhunt-victory-showcase-actions button{min-height:38px;font-size:12px}}' +
@@ -35697,9 +35704,7 @@ export class GameScene extends Phaser.Scene {
         }
 
         if (phase === 'countdown') {
-            this.removeCollapsedVictoryShowcase(
-                true,
-            );
+            this.clearVictoryShowcaseForRoundLifecycle();
             this.clearStatus();
 
             /*
@@ -37970,6 +37975,18 @@ export class GameScene extends Phaser.Scene {
      * eyedropper graphic remains frozen at its old position.
      */
     private activateMobileEyedropperTool(): void {
+        /*
+         * V1010434_VICTORY_SOCIAL_CARD_POLISH / REMEMBER_PREVIOUS_BRUSH
+         * LINE still keeps its own persistent selection semantics; pipette
+         * returns to the last normal Circle/Square brush.
+         */
+        if (!this.eyedropperArmed) {
+            this.mobileBrushShapeBeforeEyedropper =
+                this.brushShape === 'square'
+                    ? 'square'
+                    : 'circle';
+        }
+
         this.stopMobileNativeEyedropperDrag();
 
         this.finishActivePaintStroke();
