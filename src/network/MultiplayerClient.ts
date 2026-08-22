@@ -335,6 +335,7 @@ export type PaintReadyStateHandler = (
 ) => void;
 
 export class MultiplayerClient {
+  /* V1010433_RESTORE_819_SINGLE_RECOVERY_OWNER: restore 8/19 single reconnect owner; terminal 524 handoff is serialized. */
   /* V1010426B_RECONNECT_STORM_VISUAL_CONVERGENCE: old reconnect stability contracts restored without recovery fanout. */
   /* V1010374_RESTORE_LOBBY_READY_CLIENT_API: restore authoritative lobby READY client contract without touching reconnect/gameplay transport. */
   /* V1010373_RECONNECT_SINGLE_AUTHORITY_GAMEPLAY_LOCK: reconnect has one transport owner; gameplay sends pause until the authoritative Room is stable. */
@@ -1598,6 +1599,7 @@ private async attemptFreshRejoin(
     if (
       this.room !== sourceRoom ||
       this.manualReconnectInFlight ||
+      this.freshRejoinInFlight ||
       sourceRoom.reconnection
         .isReconnecting
     ) {
@@ -1696,8 +1698,25 @@ private async attemptFreshRejoin(
          * longer exists, so the old SINGLE RECOVERY OWNER constraint is no
          * longer applicable. Fresh clientKey handoff is now the sole owner.
          */
-        this.recoverExpiredSeat(
-          sourceRoom,
+        /*
+         * V1010433_RESTORE_819_SINGLE_RECOVERY_OWNER / TERMINAL_524_HANDOFF
+         * 524 is terminal for the old seat, but keep exactly one recovery owner.
+         * Let attemptManualReconnect() release its lock in finally, then hand off
+         * to the fresh-seat path on the next task.
+         */
+        globalThis.setTimeout(
+          () => {
+            if (
+              this.room === sourceRoom &&
+              !this.manualReconnectInFlight &&
+              !this.freshRejoinInFlight
+            ) {
+              this.recoverExpiredSeat(
+                sourceRoom,
+              );
+            }
+          },
+          0,
         );
       }
 
@@ -1796,7 +1815,10 @@ this.room = room;
       Date.now();
     this.connectionIssueNotified =
       false;
-this.manualReconnectInFlight = false;
+/* V1010433_RESTORE_819_SINGLE_RECOVERY_OWNER / ATTACH_ROOM_DOES_NOT_RELEASE_OWNER
+     * Recovery ownership is released only by the reconnect method's finally.
+     */
+    
     this.lastManualReconnectAt = 0;
     this.lastConfirmedTransportDropAt = 0;
     this.browserOfflineCycleActive = false;
