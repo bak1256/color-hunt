@@ -4626,6 +4626,15 @@ export class GameScene extends Phaser.Scene {
     private victoryShowcaseCaptureSerial = 0;
 
     /*
+     * V1010422_COLLAPSIBLE_VICTORY_SHOWCASE
+     * "앞으로 접어두기" persists locally. A folded victory stays available
+     * in Lobby as a compact, non-blocking card that can reopen the full modal.
+     */
+    private readonly victoryShowcaseFoldStorageKey =
+        'colorhunt:victory-showcase-folded';
+    private victoryShowcaseCollapsedChip?: HTMLButtonElement;
+
+    /*
      * V1010388J_VICTORY_CARD_FINAL_VISUALS / ROUND_PAINT_MEMORY
      *
      * The normal dead-player visual can fade/hide its RenderTexture. The
@@ -35233,6 +35242,247 @@ export class GameScene extends Phaser.Scene {
         }
     }
 
+    private isVictoryShowcaseFoldedByDefault(): boolean {
+        try {
+            return window.localStorage.getItem(
+                this.victoryShowcaseFoldStorageKey,
+            ) === '1';
+        } catch {
+            return false;
+        }
+    }
+
+    private setVictoryShowcaseFoldedByDefault(
+        folded: boolean,
+    ): void {
+        try {
+            window.localStorage.setItem(
+                this.victoryShowcaseFoldStorageKey,
+                folded ? '1' : '0',
+            );
+        } catch {
+            // Storage can be unavailable in private/in-app browsers.
+        }
+    }
+
+    private playVictoryShowcaseFireworks(
+        anchor?: HTMLElement,
+    ): void {
+        const layer =
+            document.createElement('div');
+        layer.className =
+            'colorhunt-victory-fireworks';
+
+        const style =
+            document.createElement('style');
+        style.textContent =
+            '.colorhunt-victory-fireworks{position:fixed;inset:0;z-index:2147483600;pointer-events:none;overflow:hidden}' +
+            '.colorhunt-victory-fireworks i{position:absolute;left:var(--x);top:var(--y);font-style:normal;font-size:var(--s);opacity:0;transform:translate(-50%,-50%) scale(.2);animation:chVictoryBoom var(--d) cubic-bezier(.15,.75,.2,1) var(--delay) both}' +
+            '@keyframes chVictoryBoom{0%{opacity:0;transform:translate(-50%,-50%) scale(.2)}15%{opacity:1;transform:translate(calc(-50% + var(--dx1)),calc(-50% + var(--dy1))) scale(1.25)}70%{opacity:1;transform:translate(calc(-50% + var(--dx2)),calc(-50% + var(--dy2))) rotate(var(--r)) scale(.9)}100%{opacity:0;transform:translate(calc(-50% + var(--dx3)),calc(-50% + var(--dy3))) rotate(var(--r)) scale(.45)}}';
+
+        layer.appendChild(style);
+
+        const rect =
+            anchor?.getBoundingClientRect();
+        const centerX =
+            rect
+                ? rect.left + rect.width / 2
+                : window.innerWidth / 2;
+        const centerY =
+            rect
+                ? rect.top + Math.min(rect.height * 0.35, 180)
+                : window.innerHeight * 0.42;
+
+        const glyphs = [
+            '✨',
+            '🎉',
+            '★',
+            '✦',
+            '●',
+        ];
+
+        for (let index = 0; index < 34; index += 1) {
+            const particle =
+                document.createElement('i');
+            particle.textContent =
+                glyphs[index % glyphs.length];
+
+            const angle =
+                (
+                    Math.PI * 2 * index /
+                    34
+                ) +
+                (
+                    Math.random() - 0.5
+                ) * 0.45;
+            const distance =
+                90 + Math.random() * 230;
+
+            particle.style.setProperty(
+                '--x',
+                String(centerX + (Math.random() - 0.5) * 54) + 'px',
+            );
+            particle.style.setProperty(
+                '--y',
+                String(centerY + (Math.random() - 0.5) * 30) + 'px',
+            );
+            particle.style.setProperty(
+                '--s',
+                String(14 + Math.random() * 16) + 'px',
+            );
+            particle.style.setProperty(
+                '--d',
+                String(720 + Math.random() * 520) + 'ms',
+            );
+            particle.style.setProperty(
+                '--delay',
+                String(Math.random() * 180) + 'ms',
+            );
+            particle.style.setProperty(
+                '--dx1',
+                String(Math.cos(angle) * distance * 0.35) + 'px',
+            );
+            particle.style.setProperty(
+                '--dy1',
+                String(Math.sin(angle) * distance * 0.35) + 'px',
+            );
+            particle.style.setProperty(
+                '--dx2',
+                String(Math.cos(angle) * distance) + 'px',
+            );
+            particle.style.setProperty(
+                '--dy2',
+                String(Math.sin(angle) * distance + 45) + 'px',
+            );
+            particle.style.setProperty(
+                '--dx3',
+                String(Math.cos(angle) * distance * 1.15) + 'px',
+            );
+            particle.style.setProperty(
+                '--dy3',
+                String(Math.sin(angle) * distance + 120) + 'px',
+            );
+            particle.style.setProperty(
+                '--r',
+                String(-120 + Math.random() * 240) + 'deg',
+            );
+
+            layer.appendChild(particle);
+        }
+
+        document.body.appendChild(layer);
+        window.setTimeout(
+            () => layer.remove(),
+            1_650,
+        );
+    }
+
+    private removeCollapsedVictoryShowcase(
+        clearVictory = false,
+    ): void {
+        this.victoryShowcaseCollapsedChip
+            ?.remove();
+        this.victoryShowcaseCollapsedChip =
+            undefined;
+
+        if (clearVictory) {
+            this.victoryShowcaseBlob =
+                undefined;
+            this.victoryShowcaseWinner =
+                undefined;
+
+            if (
+                this.victoryShowcasePreviewUrl
+            ) {
+                URL.revokeObjectURL(
+                    this.victoryShowcasePreviewUrl,
+                );
+                this.victoryShowcasePreviewUrl =
+                    '';
+            }
+        }
+    }
+
+    private showCollapsedVictoryShowcase(): void {
+        if (
+            !this.victoryShowcaseBlob ||
+            !this.victoryShowcaseWinner ||
+            this.victoryShowcaseCollapsedChip
+        ) {
+            return;
+        }
+
+        const isHunter =
+            this.victoryShowcaseWinner ===
+            'hunters';
+        const language =
+            getLanguage();
+
+        const chip =
+            document.createElement('button');
+        chip.type = 'button';
+        chip.className =
+            'colorhunt-victory-collapsed';
+        chip.innerHTML =
+            '<span class="colorhunt-victory-collapsed__spark">🏆</span>' +
+            '<span class="colorhunt-victory-collapsed__copy"><b>' +
+            (
+                isHunter
+                    ? (
+                        language === 'ko'
+                            ? '헌터 승리카드'
+                            : language === 'ja'
+                                ? 'ハンター勝利カード'
+                                : 'Hunter Victory Card'
+                    )
+                    : (
+                        language === 'ko'
+                            ? '하이더 승리카드'
+                            : language === 'ja'
+                                ? 'ハイダー勝利カード'
+                                : 'Hider Victory Card'
+                    )
+            ) +
+            '</b><small>' +
+            (
+                language === 'ko'
+                    ? '눌러서 펼치기'
+                    : language === 'ja'
+                        ? 'タップして開く'
+                        : 'Tap to open'
+            ) +
+            '</small></span>';
+
+        const style =
+            document.createElement('style');
+        style.textContent =
+            '.colorhunt-victory-collapsed{position:fixed;z-index:2147482500;left:50%;bottom:max(16px,env(safe-area-inset-bottom));transform:translateX(-50%);display:flex;align-items:center;gap:10px;min-width:190px;max-width:min(88vw,310px);padding:10px 14px;border:1px solid rgba(255,255,255,.22);border-radius:18px;color:#fff;background:linear-gradient(135deg,rgba(20,25,34,.97),rgba(8,11,17,.98));box-shadow:0 14px 38px rgba(0,0,0,.38),0 0 26px rgba(255,255,255,.08);font:inherit;cursor:pointer;animation:chVictoryChipIn .34s cubic-bezier(.2,.9,.2,1.15) both}' +
+            '.colorhunt-victory-collapsed__spark{font-size:27px;line-height:1}.colorhunt-victory-collapsed__copy{display:flex;flex-direction:column;align-items:flex-start;min-width:0}.colorhunt-victory-collapsed__copy b{font-size:13px;line-height:1.15}.colorhunt-victory-collapsed__copy small{margin-top:3px;font-size:10px;opacity:.62}' +
+            '@keyframes chVictoryChipIn{from{opacity:0;transform:translate(-50%,16px) scale(.86)}to{opacity:1;transform:translate(-50%,0) scale(1)}}' +
+            '@media(pointer:coarse){.colorhunt-victory-collapsed{bottom:max(82px,calc(env(safe-area-inset-bottom) + 72px));min-width:176px;padding:9px 12px;border-radius:16px}.colorhunt-victory-collapsed__spark{font-size:24px}}';
+
+        chip.appendChild(style);
+
+        chip.addEventListener(
+            'click',
+            () => {
+                this.removeCollapsedVictoryShowcase(
+                    false,
+                );
+                this.showMultiplayerVictoryShowcase(
+                    true,
+                );
+            },
+        );
+
+        document.body.appendChild(chip);
+        this.victoryShowcaseCollapsedChip =
+            chip;
+        this.playVictoryShowcaseFireworks(
+            chip,
+        );
+    }
+
     private closeMultiplayerVictoryShowcase(): void {
         this.victoryShowcaseModal
             ?.remove();
@@ -35249,13 +35499,24 @@ export class GameScene extends Phaser.Scene {
                 '';
         }
 
-        this.victoryShowcaseBlob =
-            undefined;
-        this.victoryShowcaseWinner =
-            undefined;
+        if (
+            this.isVictoryShowcaseFoldedByDefault() &&
+            this.phase === 'lobby' &&
+            this.victoryShowcaseBlob &&
+            this.victoryShowcaseWinner
+        ) {
+            this.showCollapsedVictoryShowcase();
+            return;
+        }
+
+        this.removeCollapsedVictoryShowcase(
+            true,
+        );
     }
 
-    private showMultiplayerVictoryShowcase(): void {
+    private showMultiplayerVictoryShowcase(
+        forceOpen = false,
+    ): void {
         if (
             !this.victoryShowcaseBlob ||
             !this.victoryShowcaseWinner ||
@@ -35263,6 +35524,18 @@ export class GameScene extends Phaser.Scene {
         ) {
             return;
         }
+
+        if (
+            !forceOpen &&
+            this.isVictoryShowcaseFoldedByDefault()
+        ) {
+            this.showCollapsedVictoryShowcase();
+            return;
+        }
+
+        this.removeCollapsedVictoryShowcase(
+            false,
+        );
 
         this.victoryShowcasePreviewUrl =
             URL.createObjectURL(
@@ -35290,19 +35563,7 @@ export class GameScene extends Phaser.Scene {
                     : 'is-hider'
             );
 
-        const title =
-            isHunter
-                ? (
-                    language === 'ko'
-                        ? '내가 다 찾았다!'
-                        : 'I FOUND THEM!'
-                )
-                : (
-                    language === 'ko'
-                        ? '끝까지 살아남았다!'
-                        : 'STILL HIDDEN!'
-                );
-
+        /* V1010422C_REMOVE_UNUSED_MODAL_TITLE: v421 removed the duplicate modal header, so no separate modal title is needed. */
         const closeLabel =
             language === 'ko'
                 ? '닫기'
@@ -35315,20 +35576,24 @@ export class GameScene extends Phaser.Scene {
             language === 'ko'
                 ? '공유하기'
                 : 'Share';
+        const foldLabel =
+            language === 'ko'
+                ? '앞으로 접어두기'
+                : language === 'ja'
+                    ? '今後は折りたたむ'
+                    : 'Keep victory cards folded';
 
         card.innerHTML =
             '<style>' +
-            '.colorhunt-victory-showcase-overlay{position:fixed;inset:0;z-index:2147483000;display:grid;place-items:center;padding:18px;background:radial-gradient(circle at 50% 18%,rgba(255,255,255,.09),transparent 36%),rgba(3,7,12,.80);backdrop-filter:blur(18px) saturate(1.15);-webkit-backdrop-filter:blur(18px) saturate(1.15);animation:chVictoryBackdrop .42s ease both}' +
-            '.colorhunt-victory-showcase-card{width:min(94vw,560px);max-height:min(94vh,820px);overflow:auto;border:1px solid rgba(255,255,255,.16);border-radius:30px;padding:18px;color:#fff;background:linear-gradient(180deg,rgba(23,27,36,.97),rgba(8,11,17,.99));box-shadow:0 30px 90px rgba(0,0,0,.48),inset 0 1px 0 rgba(255,255,255,.10);transform-origin:50% 72%;animation:chVictoryPop .62s cubic-bezier(.2,.9,.2,1.1) both;font-family:Inter,Pretendard,system-ui,sans-serif}' +
+            '.colorhunt-victory-showcase-overlay{position:fixed;inset:0;z-index:2147483000;display:grid;place-items:center;padding:6px;background:radial-gradient(circle at 50% 18%,rgba(255,255,255,.09),transparent 36%),rgba(3,7,12,.80);backdrop-filter:blur(18px) saturate(1.15);-webkit-backdrop-filter:blur(18px) saturate(1.15);animation:chVictoryBackdrop .42s ease both}' +
+            '.colorhunt-victory-showcase-card{width:min(96vw,560px);height:min(98dvh,900px);max-height:98dvh;overflow:hidden;border:1px solid rgba(255,255,255,.16);border-radius:24px;padding:10px;color:#fff;background:linear-gradient(180deg,rgba(23,27,36,.97),rgba(8,11,17,.99));box-shadow:0 30px 90px rgba(0,0,0,.48),inset 0 1px 0 rgba(255,255,255,.10);transform-origin:50% 72%;animation:chVictoryPop .62s cubic-bezier(.2,.9,.2,1.1) both;font-family:Inter,Pretendard,system-ui,sans-serif;display:flex;flex-direction:column;box-sizing:border-box}' +
             '.colorhunt-victory-showcase-card.is-hunter{box-shadow:0 30px 90px rgba(0,0,0,.48),0 0 70px rgba(255,104,61,.13),inset 0 1px 0 rgba(255,255,255,.10)}' +
             '.colorhunt-victory-showcase-card.is-hider{box-shadow:0 30px 90px rgba(0,0,0,.48),0 0 70px rgba(77,238,139,.13),inset 0 1px 0 rgba(255,255,255,.10)}' +
-            '.colorhunt-victory-showcase-head{display:flex;align-items:end;justify-content:space-between;gap:14px;padding:3px 4px 14px}.colorhunt-victory-showcase-kicker{font-size:11px;font-weight:950;letter-spacing:.18em;opacity:.58}.colorhunt-victory-showcase-title{margin-top:4px;font-size:clamp(25px,5vw,34px);line-height:1;font-weight:950;letter-spacing:-.04em}.is-hunter .colorhunt-victory-showcase-title{color:#ffb087}.is-hider .colorhunt-victory-showcase-title{color:#93f5b2}.colorhunt-victory-showcase-badge{flex:0 0 auto;padding:7px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);font-size:11px;font-weight:900}.colorhunt-victory-showcase-preview{display:block;width:100%;height:auto;border-radius:22px;box-shadow:0 18px 42px rgba(0,0,0,.34);background:#111}.colorhunt-victory-showcase-caption{margin:12px 5px 15px;color:rgba(255,255,255,.62);font-size:12px;font-weight:700;text-align:center}.colorhunt-victory-showcase-feedback{display:none;margin:0 5px 12px;padding:10px 12px;border:1px solid rgba(143,255,184,.34);border-radius:13px;background:rgba(49,183,101,.16);color:#bfffd2;font-size:12px;font-weight:900;text-align:center;animation:chVictoryFeedback .22s ease both}.colorhunt-victory-showcase-feedback.is-visible{display:block}.colorhunt-victory-showcase-actions{display:grid;grid-template-columns:.8fr 1fr 1.2fr;gap:9px}.colorhunt-victory-showcase-actions button{min-height:46px;border:0;border-radius:15px;color:#fff;background:rgba(255,255,255,.08);font:inherit;font-size:13px;font-weight:900;cursor:pointer}.colorhunt-victory-showcase-actions [data-victory-share]{color:#09100c;background:' +
+            '.colorhunt-victory-showcase-head{display:flex;align-items:end;justify-content:space-between;gap:14px;padding:3px 4px 14px}.colorhunt-victory-showcase-kicker{font-size:11px;font-weight:950;letter-spacing:.18em;opacity:.58}.colorhunt-victory-showcase-title{margin-top:4px;font-size:clamp(25px,5vw,34px);line-height:1;font-weight:950;letter-spacing:-.04em}.is-hunter .colorhunt-victory-showcase-title{color:#ffb087}.is-hider .colorhunt-victory-showcase-title{color:#93f5b2}.colorhunt-victory-showcase-badge{flex:0 0 auto;padding:7px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);font-size:11px;font-weight:900}.colorhunt-victory-showcase-preview{display:block;width:auto;max-width:100%;height:auto;max-height:calc(100% - 64px);min-height:0;object-fit:contain;align-self:center;flex:1 1 auto;border-radius:18px;box-shadow:0 18px 42px rgba(0,0,0,.34);background:#111}.colorhunt-victory-showcase-caption{display:none;margin:0;color:rgba(255,255,255,.62);font-size:12px;font-weight:700;text-align:center}.colorhunt-victory-showcase-feedback{display:none;margin:0 5px 12px;padding:10px 12px;border:1px solid rgba(143,255,184,.34);border-radius:13px;background:rgba(49,183,101,.16);color:#bfffd2;font-size:12px;font-weight:900;text-align:center;animation:chVictoryFeedback .22s ease both}.colorhunt-victory-showcase-feedback.is-visible{display:block}.colorhunt-victory-showcase-fold{display:flex;align-items:center;justify-content:center;gap:8px;flex:0 0 auto;margin:7px 0 0;color:rgba(255,255,255,.72);font-size:11px;font-weight:800;user-select:none}.colorhunt-victory-showcase-fold input{width:17px;height:17px;accent-color:#8df0ac;cursor:pointer}.colorhunt-victory-showcase-actions{display:grid;grid-template-columns:.8fr 1fr 1.2fr;gap:7px;flex:0 0 auto;margin-top:7px}.colorhunt-victory-showcase-actions button{min-height:42px;border:0;border-radius:13px;color:#fff;background:rgba(255,255,255,.08);font:inherit;font-size:13px;font-weight:900;cursor:pointer}.colorhunt-victory-showcase-actions [data-victory-share]{color:#09100c;background:' +
             (isHunter ? '#ffb087' : '#8df0ac') +
-            '}@keyframes chVictoryFeedback{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}@keyframes chVictoryBackdrop{from{opacity:0}to{opacity:1}}@keyframes chVictoryPop{0%{opacity:0;transform:translateY(34px) scale(.88) rotate(-1.5deg)}58%{opacity:1;transform:translateY(-3px) scale(1.015) rotate(.3deg)}100%{opacity:1;transform:translateY(0) scale(1)}}@media(max-height:650px){.colorhunt-victory-showcase-card{width:min(88vw,430px);padding:12px;border-radius:22px}.colorhunt-victory-showcase-actions button{min-height:40px}}' +
+            '}@keyframes chVictoryFeedback{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}@keyframes chVictoryBackdrop{from{opacity:0}to{opacity:1}}@keyframes chVictoryPop{0%{opacity:0;transform:translateY(34px) scale(.88) rotate(-1.5deg)}58%{opacity:1;transform:translateY(-3px) scale(1.015) rotate(.3deg)}100%{opacity:1;transform:translateY(0) scale(1)}}@media(max-height:650px){.colorhunt-victory-showcase-overlay{padding:2px}.colorhunt-victory-showcase-card{width:min(94vw,430px);height:99dvh;max-height:99dvh;padding:6px;border-radius:18px}.colorhunt-victory-showcase-preview{max-height:calc(100% - 54px);border-radius:14px}.colorhunt-victory-showcase-actions{margin-top:5px;gap:5px}.colorhunt-victory-showcase-actions button{min-height:38px;font-size:12px}}' +
             '</style>' +
-            '<div class="colorhunt-victory-showcase-head"><div><div class="colorhunt-victory-showcase-kicker">VICTORY SNAPSHOT</div><div class="colorhunt-victory-showcase-title">' +
-            title +
-            '</div></div><div class="colorhunt-victory-showcase-badge">4:5 · SOCIAL</div></div>' +
+            /* V1010421_VICTORY_MODAL_ONE_SCREEN: poster already contains the victory title. */
             '<img class="colorhunt-victory-showcase-preview" src="' +
             this.victoryShowcasePreviewUrl +
             '" alt="COLOR HUNT victory snapshot" />' +
@@ -35340,6 +35605,10 @@ export class GameScene extends Phaser.Scene {
             ) +
             '</div>' +
             '<div class="colorhunt-victory-showcase-feedback" data-victory-feedback></div>' +
+            '<label class="colorhunt-victory-showcase-fold"><input type="checkbox" data-victory-fold />' +
+            '<span>' +
+            foldLabel +
+            '</span></label>' +
             '<div class="colorhunt-victory-showcase-actions">' +
             '<button type="button" data-victory-close>' +
             closeLabel +
@@ -35358,6 +35627,29 @@ export class GameScene extends Phaser.Scene {
 
         this.victoryShowcaseModal =
             overlay;
+
+        const foldToggle =
+            card.querySelector<HTMLInputElement>(
+                '[data-victory-fold]',
+            );
+
+        if (foldToggle) {
+            foldToggle.checked =
+                this.isVictoryShowcaseFoldedByDefault();
+
+            foldToggle.addEventListener(
+                'change',
+                () => {
+                    this.setVictoryShowcaseFoldedByDefault(
+                        foldToggle.checked,
+                    );
+                },
+            );
+        }
+
+        this.playVictoryShowcaseFireworks(
+            card,
+        );
 
         card.querySelector(
             '[data-victory-close]',
@@ -35468,6 +35760,9 @@ export class GameScene extends Phaser.Scene {
         }
 
         if (phase === 'countdown') {
+            this.removeCollapsedVictoryShowcase(
+                true,
+            );
             this.clearStatus();
 
             /*
