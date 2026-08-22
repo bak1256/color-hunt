@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010439_PERSONAL_FOUND_VISUAL_FINAL: server-personal FOUND + visible targets + large camo. */
     /* V1010438_PERSONAL_FOUND_VISUAL_AND_FOLD_CLOSE: stable personal FOUND, clear markers, big camo, close-to-fold. */
     /* V1010437_PERSONAL_HUNTER_CARD_AND_CAMOUFLAGE: per-Hunter FOUND/ALL KILL + Hunter camouflage social memory. */
     /* V1010436D_VICTORY_RESULT_TYPEFIX: strict complete round_result + unified FOUND entry typing. */
@@ -34116,6 +34117,17 @@ export class GameScene extends Phaser.Scene {
                         foundByHunterClientKey?: string;
                         paintStrokes?: NetworkPaintStroke[];
                     }>;
+                    personalFoundHiders?: Array<{
+                        sessionId: string;
+                        name?: string;
+                        x: number;
+                        y: number;
+                        foundOrder?: number;
+                        foundAt?: number;
+                        foundByHunterSessionId?: string;
+                        foundByHunterClientKey?: string;
+                        paintStrokes?: NetworkPaintStroke[];
+                    }>;
                     survivingHiders?: Array<{
                         sessionId: string;
                         name?: string;
@@ -34224,51 +34236,29 @@ export class GameScene extends Phaser.Scene {
          * clientKey survives a Colyseus session replacement; sessionId does not.
          * Prefer clientKey whenever the v438 server supplied it.
          */
-        const personalFound =
+        /*
+         * V1010439_PERSONAL_FOUND_VISUAL_FINAL / SERVER_PERSONAL_FOUND_AUTHORITY
+         *
+         * v439 server sends THIS recipient's exact FOUND subset before the
+         * round_result reaches GameScene. No session/clientKey comparison here.
+         */
+        const serverPersonalFound:
+            VictoryFoundEntry[] =
+            extended.victoryShowcase
+                ?.personalFoundHiders ??
+            [];
+
+        const personalFound:
+            VictoryFoundEntry[] =
             !isHunter
                 ? []
-                : hasStableFinderAttribution
-                    ? allFound.filter(
-                        (entry) =>
-                            entry.foundByHunterClientKey ===
-                            localStableClientKey,
-                    )
-                    : hasSessionFinderAttribution
-                        ? allFound.filter(
-                            (entry) =>
-                                entry.foundByHunterSessionId ===
-                                localSessionId,
-                        )
-                        : hunterCount <= 1
+                : serverPersonalFound.length > 0
+                    ? serverPersonalFound
+                    : (
+                        hunterCount <= 1
                             ? allFound
-                            : [];
-
-        /*
-         * V1010435_VICTORY_INVITE_LOADING_POLISH / TEAM_FOUND_DISPLAY
-         * The card is viewed from a Hunter perspective: every Hider that was
-         * genuinely FOUND gets a numbered marker. Surviving/unfound Hiders get
-         * no circle and no FOUND label. Personal attribution remains separate
-         * so ALL KILL is awarded only to the Hunter who personally got them all.
-         */
-        /*
-         * V1010437_PERSONAL_HUNTER_CARD_AND_CAMOUFLAGE / PERSONAL_FOUND_ONLY
-         * Every Hunter receives the same authoritative team result, but their
-         * social card contains ONLY the Hiders personally found by this client.
-         */
-        const displayedFound =
-            [...personalFound].sort(
-                (a, b) =>
-                    (
-                        Number(
-                            a.foundOrder,
-                        ) || 0
-                    ) -
-                    (
-                        Number(
-                            b.foundOrder,
-                        ) || 0
-                    ),
-            );
+                            : []
+                    );
 
         const totalHiders =
             isHunter
@@ -34728,259 +34718,69 @@ export class GameScene extends Phaser.Scene {
                             marker.paintStrokes,
                         );
 
-                    context.save();
-                    context.globalAlpha = 1;
-                    context.imageSmoothingEnabled =
-                        false;
-
                     /*
-                     * V1010438_PERSONAL_FOUND_VISUAL_AND_FOLD_CLOSE / STRONG_FOUND_MARKER
-                     * Found Hider must read immediately even on a visually busy map.
+                     * V1010439_PERSONAL_FOUND_VISUAL_FINAL / HIGH_CONTRAST_FOUND_TARGET
+                     * Busy maps need an unmistakable target marker.
                      */
-                    context.drawImage(
-                        paintedAvatar,
-                        mx - 46,
-                        my - 69,
-                        92,
-                        138,
-                    );
-
-                    context.shadowColor =
-                        'rgba(215,54,48,.52)';
-                    context.shadowBlur = 16;
-
-                    context.strokeStyle =
-                        '#d83d35';
-                    context.lineWidth = 9;
-                    context.beginPath();
-                    context.arc(
-                        mx,
-                        my,
-                        48,
-                        0,
-                        Math.PI * 2,
-                    );
-                    context.stroke();
-
-                    context.shadowBlur = 0;
-                    context.strokeStyle =
-                        'rgba(255,255,255,.98)';
-                    context.lineWidth = 4;
-                    context.beginPath();
-                    context.arc(
-                        mx,
-                        my,
-                        39,
-                        0,
-                        Math.PI * 2,
-                    );
-                    context.stroke();
-
-                    const foundOrder =
-                        Number(
-                            marker.foundOrder,
-                        ) > 0
-                            ? Number(
-                                marker.foundOrder,
-                            )
-                            : index + 1;
-                    const label =
-                        'FOUND ' +
-                        String(
-                            foundOrder,
-                        ).padStart(
-                            2,
-                            '0',
-                        );
-
-                    context.font =
-                        '900 17px Arial, sans-serif';
-
-                    const textWidth =
-                        context.measureText(
-                            label,
-                        ).width;
-                    const pillW =
-                        textWidth + 28;
-                    const pillX =
-                        Phaser.Math.Clamp(
-                            mx -
-                                pillW / 2,
-                            frameX + 10,
-                            frameX +
-                                frameW -
-                                pillW -
-                                10,
-                        );
-                    const pillY =
-                        Math.max(
-                            frameY + 10,
-                            my - 74,
-                        );
-
-                    context.fillStyle =
-                        'rgba(239,102,86,.95)';
-                    context.beginPath();
-                    context.roundRect(
-                        pillX,
-                        pillY,
-                        pillW,
-                        32,
-                        16,
-                    );
-                    context.fill();
-
-                    context.fillStyle =
-                        '#ffffff';
-                    context.textAlign =
-                        'center';
-                    context.textBaseline =
-                        'middle';
-                    context.fillText(
-                        label,
-                        pillX +
-                            pillW / 2,
-                        pillY + 17,
-                    );
-                    context.restore();
-                },
-            );
-        }
-
-        context.textAlign =
-            'left';
-        context.textBaseline =
-            'alphabetic';
-
-        const roomState =
-            multiplayerClient.getRoom()
-                ?.state as {
-                    activeMap?: string;
-                } | undefined;
-
-        const activeMap =
-            extended.victoryShowcase
-                ?.activeMap ??
-            roomState?.activeMap ??
-            'forest';
-
-        const memoryPanelY =
-            isHunter
-                ? 814
-                : 1104;
-        const memoryPanelH =
-            isHunter
-                ? 154
-                : 108;
-
-        context.fillStyle =
-            'rgba(255,255,255,.58)';
-        context.beginPath();
-        context.roundRect(
-            60,
-            memoryPanelY,
-            960,
-            memoryPanelH,
-            28,
-        );
-        context.fill();
-
-        context.fillStyle =
-            muted;
-        context.font =
-            '800 16px Arial, sans-serif';
-        context.fillText(
-            'MATCH MEMORY',
-            88,
-            memoryPanelY + 35,
-        );
-
-        context.fillStyle =
-            ink;
-        context.font =
-            '900 31px Arial, sans-serif';
-        context.fillText(
-            this.getMapDisplayName(
-                activeMap,
-            ),
-            88,
-            memoryPanelY + 76,
-        );
-
-        /*
-         * V1010437_PERSONAL_HUNTER_CARD_AND_CAMOUFLAGE / HUNTER_CAMOUFLAGE_MEMORY
-         * Hunters painted themselves too. Preserve that work on the social card.
-         */
-        if (isHunter) {
-            const hunterPaintAvatar =
-                this.buildVictoryPaintedHiderCanvas(
-                    localSessionId,
-                );
-
-            /*
-             * V1010438_PERSONAL_FOUND_VISUAL_AND_FOLD_CLOSE / LARGE_HUNTER_CAMOUFLAGE_CARD
-             * Give the Hunter's own painting a real showcase instead of a tiny
-             * icon squeezed into MATCH MEMORY.
-             */
-            const camoCardX = 585;
+                    const camoCardX = 520;
             const camoCardY =
-                memoryPanelY - 8;
-            const camoCardW = 210;
-            const camoCardH = 170;
+                memoryPanelY - 24;
+            const camoCardW = 300;
+            const camoCardH = 210;
 
             context.save();
 
             context.fillStyle =
-                'rgba(255,255,255,.94)';
+                'rgba(255,255,255,.98)';
             context.strokeStyle =
-                'rgba(37,41,45,.11)';
-            context.lineWidth = 2;
+                'rgba(37,41,45,.16)';
+            context.lineWidth = 3;
             context.beginPath();
             context.roundRect(
                 camoCardX,
                 camoCardY,
                 camoCardW,
                 camoCardH,
-                28,
+                30,
             );
             context.fill();
             context.stroke();
 
             context.fillStyle =
-                '#71767b';
+                '#777d82';
             context.font =
-                '800 14px Arial, sans-serif';
+                '900 15px Arial, sans-serif';
             context.textAlign =
                 'left';
             context.fillText(
                 'MY CAMOUFLAGE',
-                camoCardX + 18,
-                camoCardY + 28,
+                camoCardX + 20,
+                camoCardY + 30,
             );
 
             context.fillStyle =
                 '#25292d';
             context.font =
-                '900 21px Arial, sans-serif';
+                '900 24px Arial, sans-serif';
             context.fillText(
                 language === 'ko'
                     ? '내 위장 자랑!'
                     : language === 'ja'
                         ? 'マイ迷彩'
                         : 'MY LOOK',
-                camoCardX + 18,
-                camoCardY + 54,
+                camoCardX + 20,
+                camoCardY + 60,
             );
 
-            context.globalAlpha = 1;
             context.imageSmoothingEnabled =
                 false;
+            context.globalAlpha = 1;
             context.drawImage(
                 hunterPaintAvatar,
-                camoCardX + 70,
-                camoCardY + 50,
-                80,
-                120,
+                camoCardX + 85,
+                camoCardY + 54,
+                130,
+                195,
             );
 
             context.restore();

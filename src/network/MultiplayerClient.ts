@@ -205,6 +205,20 @@ export type NetworkRoundResult = {
       foundByHunterClientKey?: string;
       paintStrokes?: NetworkPaintStroke[];
     }>;
+    /*
+     * V1010439_PERSONAL_FOUND_VISUAL_FINAL: authoritative per-recipient subset calculated by server.
+     */
+    personalFoundHiders?: Array<{
+      sessionId: string;
+      name?: string;
+      x: number;
+      y: number;
+      foundOrder?: number;
+      foundAt?: number;
+      foundByHunterSessionId?: string;
+      foundByHunterClientKey?: string;
+      paintStrokes?: NetworkPaintStroke[];
+    }>;
     survivingHiders?: Array<{
       sessionId: string;
       name?: string;
