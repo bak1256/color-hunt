@@ -79,6 +79,10 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010404_CLIENT_MAP12_16_FOREST_GUARD: playable client maps are map1..map16; Forest remains lobby-only. */
+    /* V1010403C_MOBILE_PAINT_SURGICAL_RECOVERY: Finger/Precision Paint restored by additive surgery; latest feature fields preserved. */
+    /* V1010402_CLIENT_FULL_ROOM_SAFE_RECOVERY: restore 10/10 client join guard without touching Paint/reconnect/victory code. */
+    /* V1010401_LOST_LOBBY_FEATURES_SAFE_RECOVERY: final lobby profile/preview state restored surgically. */
     /* V1010400_AVATAR_EDITOR_SAFE_RESTORE: known-good avatar editor methods restored surgically. */
     /* V1010388R_HIDER_VISUAL_BOUNDS_CENTER: center Hider social capture on actual rendered bounds, not container pivot. */
     /* V1010388Q_ALIVE_HIDER_ONLY_SYMMETRIC_CROWN: only living Hiders get survival cards; crown geometry is perfectly centered. */
@@ -4496,6 +4500,26 @@ export class GameScene extends Phaser.Scene {
     private controlsHelpButton?: HTMLButtonElement;
     private controlsHelpViewportHandler?: () => void;
     private mobilePaintDock?: HTMLDivElement;
+
+    /*
+     * V1010403C_MOBILE_PAINT_SURGICAL_RECOVERY / INPUT_MODE
+     * Mobile defaults to direct finger painting.
+     * Precision Brush is explicitly opt-in.
+     */
+    private mobilePaintInputMode:
+        'finger' |
+        'brush' = 'finger';
+    private mobilePaintModeButton?: HTMLButtonElement;
+    private mobilePrecisionBrushHint?: HTMLDivElement;
+    private mobileBrushSizePreviewTimer?: number;
+
+    /*
+     * After a one-shot eyedropper sample, the next valid finger touch paints
+     * immediately instead of feeling like the first touch was swallowed.
+     */
+    private mobileFingerImmediatePaintNextTouch =
+        false;
+
     private mobilePaintSizeInput?: HTMLInputElement;
     private mobilePaintSizeValue?: HTMLSpanElement;
     private mobilePaintToolButtons =
@@ -4550,7 +4574,7 @@ export class GameScene extends Phaser.Scene {
     private readonly selectableMaps = [
         'random',
         ...Array.from(
-            { length: 11 },
+            { length: 16 },
             (_, index) =>
                 `map${index + 1}`,
         ),
@@ -4989,7 +5013,7 @@ export class GameScene extends Phaser.Scene {
 
         for (
             let index = 1;
-            index <= 11;
+            index <= 16;
             index += 1
         ) {
             this.load.image(
@@ -5595,10 +5619,40 @@ export class GameScene extends Phaser.Scene {
 
             this.showMainMenu();
 
+            const joinErrorText =
+                String(
+                    (
+                        error as {
+                            message?: unknown;
+                        }
+                    )?.message ??
+                    error ??
+                    '',
+                ).toLowerCase();
+
+            const roomFullError =
+                joinErrorText.includes(
+                    'full',
+                ) ||
+                joinErrorText.includes(
+                    'maxclients',
+                ) ||
+                joinErrorText.includes(
+                    'max clients',
+                ) ||
+                joinErrorText.includes(
+                    'capacity',
+                ) ||
+                joinErrorText.includes(
+                    'room_full',
+                );
+
             this.showStatus(
-                pending.isPrivate
-                    ? tr('방 ID 또는 비밀번호를 확인하세요.')
-                    : tr('방에 참가할 수 없습니다. 이미 사라진 방일 수 있습니다.'),
+                roomFullError
+                    ? tr('방이 가득 찼습니다. 잠시 후 다시 시도하세요.')
+                    : pending.isPrivate
+                        ? tr('방 ID 또는 비밀번호를 확인하세요.')
+                        : tr('방에 참가할 수 없습니다. 이미 사라진 방일 수 있습니다.'),
             );
 
             if (!pending.isPrivate) {
@@ -7646,6 +7700,133 @@ export class GameScene extends Phaser.Scene {
                 : 'colorhunt-paint-dock colorhunt-paint-dock--desktop';
         root.hidden = true;
 
+        /*
+         * V1010403C_MOBILE_PAINT_SURGICAL_RECOVERY / MODE_TOGGLE
+         * This is a separate fixed control, not part of the drawable world.
+         */
+        const modeButton =
+            document.createElement(
+                'button',
+            );
+
+        modeButton.type = 'button';
+        modeButton.className =
+            'colorhunt-paint-mode-toggle';
+
+        Object.assign(
+            modeButton.style,
+            {
+                position: 'fixed',
+                zIndex: '2140',
+                minWidth: '126px',
+                minHeight: '46px',
+                padding: '7px 12px',
+                border: '2px solid #5c8f66',
+                borderRadius: '13px',
+                background: 'rgba(223,247,230,.66)',
+                color: '#26352b',
+                boxShadow:
+                    '0 4px 14px rgba(35,59,42,.22)',
+                fontFamily:
+                    'Arial, sans-serif',
+                fontWeight: '900',
+                fontSize: '13px',
+                lineHeight: '1.15',
+                whiteSpace: 'pre-line',
+                textAlign: 'center',
+                cursor: 'pointer',
+                touchAction: 'manipulation',
+            },
+        );
+
+        modeButton.addEventListener(
+            'pointerdown',
+            (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+
+                this.mobilePaintInputMode =
+                    this.mobilePaintInputMode ===
+                        'finger'
+                        ? 'brush'
+                        : 'finger';
+
+                this.finishActivePaintStroke();
+                this.isPainting = false;
+                this.releaseMobilePaintPointer();
+                this.cancelMobilePaintHoldTimers();
+                this.hideMobilePaintPrecisionGuide();
+                this.hideEyedropperMagnifier();
+                this.paintPreview
+                    ?.setVisible(false);
+
+                this.syncMobilePaintModeUi();
+
+                if (
+                    this.mobilePaintInputMode ===
+                        'brush'
+                ) {
+                    this.showMobileBrushFirstUseCoach();
+                    this.showMobileIdleBrushGuide();
+                }
+            },
+        );
+
+        document.body.appendChild(
+            modeButton,
+        );
+
+        this.mobilePaintModeButton =
+            modeButton;
+
+        const precisionHint =
+            document.createElement(
+                'div',
+            );
+
+        precisionHint.className =
+            'colorhunt-precision-brush-hint';
+
+        Object.assign(
+            precisionHint.style,
+            {
+                position: 'fixed',
+                zIndex: '2138',
+                padding: '7px 11px',
+                border:
+                    '1.5px solid rgba(92,143,102,.78)',
+                borderRadius: '11px',
+                background:
+                    'rgba(248,255,240,.60)',
+                color: '#26352b',
+                boxShadow:
+                    '0 3px 10px rgba(35,59,42,.12)',
+                fontFamily:
+                    'Arial, sans-serif',
+                fontWeight: '900',
+                fontSize: '12px',
+                lineHeight: '1.35',
+                whiteSpace: 'pre-line',
+                textAlign: 'left',
+                pointerEvents: 'none',
+                backdropFilter:
+                    'blur(2px)',
+                WebkitBackdropFilter:
+                    'blur(2px)',
+            },
+        );
+
+        precisionHint.hidden = true;
+        precisionHint.style.display =
+            'none';
+
+        document.body.appendChild(
+            precisionHint,
+        );
+
+        this.mobilePrecisionBrushHint =
+            precisionHint;
+
         const colors =
             document.createElement(
                 'div',
@@ -7927,7 +8108,15 @@ export class GameScene extends Phaser.Scene {
                 }
 
                 this.syncMobilePaintDockUi();
-                this.centerMobilePaintToolGuide();
+
+                if (
+                    this.mobilePaintInputMode ===
+                        'finger'
+                ) {
+                    this.showFingerBrushSizePreview();
+                } else {
+                    this.centerMobilePaintToolGuide();
+                }
 
                 window.requestAnimationFrame(
                     () => {
@@ -7984,15 +8173,209 @@ export class GameScene extends Phaser.Scene {
         this.mobilePaintDock.hidden =
             !visible;
 
-        if (visible) {
-            this.syncMobilePaintDockUi();
-            this.updateMobilePaintDockPosition();
+        if (
+            this.mobilePaintModeButton
+        ) {
+            this.mobilePaintModeButton.hidden =
+                !visible ||
+                !this.mobileControlsEnabled;
+
+            this.mobilePaintModeButton.style.display =
+                visible &&
+                this.mobileControlsEnabled
+                    ? 'block'
+                    : 'none';
+        }
+
+        if (!visible) {
+            if (
+                this.mobilePrecisionBrushHint
+            ) {
+                this.mobilePrecisionBrushHint.hidden =
+                    true;
+                this.mobilePrecisionBrushHint
+                    .style.display =
+                    'none';
+            }
+            return;
+        }
+
+        this.syncMobilePaintDockUi();
+        this.syncMobilePaintModeUi();
+        this.updateMobilePaintDockPosition();
+
+        if (
+            this.mobilePaintInputMode ===
+                'brush'
+        ) {
             this.showMobileIdleBrushGuide();
             this.time.delayedCall(
                 0,
                 () => this.showMobileIdleBrushGuide(),
             );
+        } else {
+            this.paintPreview
+                ?.setVisible(false);
+            this.hideMobilePaintPrecisionGuide();
         }
+    }
+
+    /*
+     * V1010403C_MOBILE_PAINT_SURGICAL_RECOVERY / CURRENT_MODE_UI
+     */
+    private syncMobilePaintModeUi(): void {
+        if (
+            !this.mobilePaintModeButton
+        ) {
+            return;
+        }
+
+        const language =
+            getLanguage();
+
+        const fingerLabel =
+            language === 'ja'
+                ? '☝ 指で描く\n↔ 切替'
+                : language === 'en'
+                    ? '☝ Finger Paint\n↔ Switch'
+                    : language === 'zh'
+                        ? '☝ 手指绘制\n↔ 切换'
+                        : '☝ 손가락 그리기\n↔ 전환';
+
+        const brushLabel =
+            language === 'ja'
+                ? '🖌 精密ブラシ\n↔ 切替'
+                : language === 'en'
+                    ? '🖌 Precision Brush\n↔ Switch'
+                    : language === 'zh'
+                        ? '🖌 精细画笔\n↔ 切换'
+                        : '🖌 정밀붓 그리기\n↔ 전환';
+
+        this.mobilePaintModeButton
+            .textContent =
+            this.mobilePaintInputMode ===
+                'finger'
+                ? fingerLabel
+                : brushLabel;
+
+        this.mobilePaintModeButton
+            .style.background =
+            this.mobilePaintInputMode ===
+                'finger'
+                ? 'rgba(223,247,230,.66)'
+                : 'rgba(255,244,214,.66)';
+
+        if (
+            this.mobilePrecisionBrushHint
+        ) {
+            this.mobilePrecisionBrushHint
+                .textContent =
+                language === 'ja'
+                    ? 'ドラッグ：ブラシ移動\n長押し：色塗り開始'
+                    : language === 'en'
+                        ? 'Drag: Move brush\nHold: Start painting'
+                        : language === 'zh'
+                            ? '拖动：移动画笔\n长按：开始上色'
+                            : '드래그: 붓 이동\n꾹 누르기: 색칠 시작';
+
+            const visible =
+                this.mobileControlsEnabled &&
+                this.phase === 'paint' &&
+                this.mobilePaintInputMode ===
+                    'brush';
+
+            this.mobilePrecisionBrushHint.hidden =
+                !visible;
+            this.mobilePrecisionBrushHint
+                .style.display =
+                visible
+                    ? 'block'
+                    : 'none';
+        }
+    }
+
+    private showFingerBrushSizePreview(): void {
+        if (
+            !this.mobileControlsEnabled ||
+            this.phase !== 'paint' ||
+            this.mobilePaintInputMode !==
+                'finger' ||
+            !this.paintPreview
+        ) {
+            return;
+        }
+
+        window.clearTimeout(
+            this.mobileBrushSizePreviewTimer,
+        );
+
+        const center =
+            new Phaser.Math.Vector2();
+
+        this.cameras.main.getWorldPoint(
+            this.gameWidth * 0.5,
+            this.gameHeight * 0.5,
+            center,
+        );
+
+        this.paintPreview
+            .setPosition(
+                center.x,
+                center.y,
+            );
+
+        this.redrawPaintPreview();
+
+        this.paintPreview
+            .setAlpha(0.46)
+            .setVisible(true);
+
+        this.hideMobilePaintPrecisionGuide();
+
+        this.mobileBrushSizePreviewTimer =
+            window.setTimeout(
+                () => {
+                    if (
+                        this.mobilePaintInputMode ===
+                            'finger'
+                    ) {
+                        this.paintPreview
+                            ?.setVisible(false);
+                    }
+                },
+                520,
+            );
+    }
+
+    private showMobileBrushFirstUseCoach(): void {
+        /*
+         * The persistent hint beside the toggle is enough after first use.
+         * Keep this helper intentionally lightweight to avoid resurrecting
+         * older modal/coach overlays.
+         */
+        this.syncMobilePaintModeUi();
+    }
+
+    private finishMobileEyedropperSelection(): void {
+        this.eyedropperArmed =
+            false;
+        this.eyedropperPointerId =
+            -1;
+        this.updateEyedropperButtonUi();
+        this.hideEyedropperMagnifier();
+        this.hideMobilePaintPrecisionGuide();
+
+        if (
+            this.mobileControlsEnabled &&
+            this.mobilePaintInputMode ===
+                'finger'
+        ) {
+            this.mobileFingerImmediatePaintNextTouch =
+                true;
+        }
+
+        this.syncMobilePaintDockUi();
+        this.syncMobilePaintModeUi();
     }
 
     private syncMobilePaintDockUi(): void {
@@ -8155,13 +8538,68 @@ export class GameScene extends Phaser.Scene {
                     ),
                 )}px`,
             );
+
+        if (
+            this.mobilePaintModeButton &&
+            this.mobileControlsEnabled
+        ) {
+            this.mobilePaintModeButton.style.left =
+                `${Math.round(
+                    rect.left +
+                    Math.max(
+                        110,
+                        rect.width * 0.10 + 5,
+                    ),
+                )}px`;
+
+            this.mobilePaintModeButton.style.top =
+                `${Math.round(
+                    rect.top +
+                    rect.height * 0.48,
+                )}px`;
+
+            this.mobilePaintModeButton.style.transform =
+                'translateY(-50%)';
+
+            if (
+                this.mobilePrecisionBrushHint
+            ) {
+                const buttonRect =
+                    this.mobilePaintModeButton
+                        .getBoundingClientRect();
+
+                this.mobilePrecisionBrushHint.style.left =
+                    `${Math.round(
+                        buttonRect.left,
+                    )}px`;
+
+                this.mobilePrecisionBrushHint.style.top =
+                    `${Math.round(
+                        buttonRect.bottom + 8,
+                    )}px`;
+            }
+        }
     }
 
     private destroyMobilePaintDock(): void {
         this.mobilePaintDock
             ?.remove();
 
+        this.mobilePaintModeButton
+            ?.remove();
+
+        this.mobilePrecisionBrushHint
+            ?.remove();
+
+        window.clearTimeout(
+            this.mobileBrushSizePreviewTimer,
+        );
+
         this.mobilePaintDock =
+            undefined;
+        this.mobilePaintModeButton =
+            undefined;
+        this.mobilePrecisionBrushHint =
             undefined;
         this.mobilePaintSizeInput =
             undefined;
@@ -10834,6 +11272,53 @@ export class GameScene extends Phaser.Scene {
                 this.showInviteGameInProgressModal();
                 return;
             }
+
+            /*
+             * V1010402_CLIENT_FULL_ROOM_SAFE_RECOVERY / INVITE_FULL_PREFLIGHT
+             * Forest/map/gameplay state is irrelevant here: capacity is checked
+             * from room status before we ever show the join modal.
+             */
+            const inviteStatus =
+                status as {
+                    clients?: number;
+                    playerCount?: number;
+                    maxClients?: number;
+                    metadata?: {
+                        playerCount?: number;
+                    };
+                };
+
+            const inviteCount =
+                Number(
+                    inviteStatus.playerCount ??
+                    inviteStatus.metadata
+                        ?.playerCount ??
+                    inviteStatus.clients,
+                );
+
+            const inviteMax =
+                Number(
+                    inviteStatus.maxClients,
+                );
+
+            if (
+                status.exists &&
+                status.phase === 'lobby' &&
+                Number.isFinite(inviteCount) &&
+                Number.isFinite(inviteMax) &&
+                inviteMax > 0 &&
+                inviteCount >= inviteMax
+            ) {
+                this.pendingInviteRoomId = '';
+                this.pendingInvitePrivate = false;
+
+                this.clearInviteRoomFromAddressBar();
+                this.showMainMenu();
+                this.showStatus(
+                    tr('방이 가득 찼습니다. 잠시 후 다시 시도하세요.'),
+                );
+                return;
+            }
         } catch (error) {
             /*
              * If status lookup fails because the server is waking up or the
@@ -11547,7 +12032,7 @@ export class GameScene extends Phaser.Scene {
 
         const mapOptions =
             Array.from(
-                { length: 11 },
+                { length: 16 },
                 (
                     _,
                     index,
@@ -12088,11 +12573,11 @@ export class GameScene extends Phaser.Scene {
 
         const syncPracticeMapPreview = (): void => {
             const selected = mapSelect?.value ?? this.practiceMap;
-            if (mapPreview && /^map(?:[1-9]|1[01])$/.test(selected)) {
+            if (mapPreview && /^map(?:[1-9]|1[0-6])$/.test(selected)) {
                 mapPreview.src = `/assets/backgrounds/${selected}.png`;
                 mapPreview.alt = `${tr('연습 맵 미리보기')} · ${this.getMapDisplayName(selected)}`;
             }
-            if (mapName && /^map(?:[1-9]|1[01])$/.test(selected)) {
+            if (mapName && /^map(?:[1-9]|1[0-6])$/.test(selected)) {
                 mapName.textContent = this.getMapDisplayName(selected);
             }
         };
@@ -12435,7 +12920,7 @@ export class GameScene extends Phaser.Scene {
                     mapSelect?.value ??
                     'map1';
 
-                if (/^map(?:[1-9]|1[01])$/.test(selected)) {
+                if (/^map(?:[1-9]|1[0-6])$/.test(selected)) {
                     this.practiceMap = selected;
                     syncPracticeMapPreview();
                 }
@@ -15860,6 +16345,77 @@ export class GameScene extends Phaser.Scene {
                 tr('비밀번호를 입력하세요.'),
             );
             return;
+        }
+
+        /*
+         * V1010402_CLIENT_FULL_ROOM_SAFE_RECOVERY / JOIN_FULL_PREFLIGHT
+         *
+         * The room may have become 10/10 while the join modal was open.
+         * Re-check immediately before joinFromCleanBoot(). If status lookup
+         * itself fails, preserve the existing join path and let the server be
+         * final authority.
+         */
+        try {
+            const status =
+                await multiplayerClient
+                    .getRoomStatus(
+                        roomId,
+                    );
+
+            const statusAny =
+                status as {
+                    clients?: number;
+                    playerCount?: number;
+                    maxClients?: number;
+                    metadata?: {
+                        playerCount?: number;
+                    };
+                };
+
+            const statusPlayerCount =
+                Number(
+                    statusAny.playerCount ??
+                    statusAny.metadata
+                        ?.playerCount ??
+                    statusAny.clients,
+                );
+
+            const statusMaxClients =
+                Number(
+                    statusAny.maxClients,
+                );
+
+            if (
+                status.exists &&
+                status.phase === 'lobby' &&
+                Number.isFinite(
+                    statusPlayerCount,
+                ) &&
+                Number.isFinite(
+                    statusMaxClients,
+                ) &&
+                statusMaxClients > 0 &&
+                statusPlayerCount >=
+                    statusMaxClients
+            ) {
+                this.setModalBusy(
+                    false,
+                    tr('방이 가득 찼습니다. 잠시 후 다시 시도하세요.'),
+                );
+
+                if (!isPrivate) {
+                    void this.refreshPublicRoomList(
+                        false,
+                    );
+                }
+
+                return;
+            }
+        } catch (error) {
+            console.info(
+                '[Color Hunt] full-room preflight unavailable; server remains authoritative',
+                error,
+            );
         }
 
         localStorage.setItem(
@@ -21379,6 +21935,75 @@ export class GameScene extends Phaser.Scene {
                 source instanceof
                     HTMLCanvasElement
             ) {
+                /*
+                 * V1010393_LOBBY_AVATAR_TIGHT_PREVIEW_CROP:
+                 * The source texture is 80x120 while the body occupies only the
+                 * middle portion. Exporting the full transparent canvas made the
+                 * avatar tiny inside the enlarged square card.
+                 *
+                 * Keep a small safety margin around every body part and crop
+                 * only for the lobby preview texture.
+                 */
+                if (
+                    textureKey ===
+                        'lobby-avatar-preview'
+                ) {
+                    const cropCanvas =
+                        document.createElement(
+                            'canvas',
+                        );
+
+                    /*
+                     * V1010395_LOBBY_AVATAR_FULL_BODY:
+                     * Keep the preview large, but include the complete authored
+                     * silhouette from the top of the head through both feet.
+                     * Wider/taller safety margins prevent hair, hands or feet
+                     * from being cropped on PC and mobile.
+                     */
+                    const cropX = 15;
+                    const cropY = 20;
+                    const cropWidth = 50;
+                    const cropHeight = 82;
+
+                    cropCanvas.width =
+                        cropWidth;
+                    cropCanvas.height =
+                        cropHeight;
+
+                    const cropContext =
+                        cropCanvas.getContext(
+                            '2d',
+                        );
+
+                    if (cropContext) {
+                        cropContext.imageSmoothingEnabled =
+                            false;
+
+                        cropContext.clearRect(
+                            0,
+                            0,
+                            cropWidth,
+                            cropHeight,
+                        );
+
+                        cropContext.drawImage(
+                            source,
+                            cropX,
+                            cropY,
+                            cropWidth,
+                            cropHeight,
+                            0,
+                            0,
+                            cropWidth,
+                            cropHeight,
+                        );
+
+                        return cropCanvas.toDataURL(
+                            'image/png',
+                        );
+                    }
+                }
+
                 return source.toDataURL(
                     'image/png',
                 );
@@ -21999,13 +22624,20 @@ export class GameScene extends Phaser.Scene {
         set(
             practiceCopy,
             'grid-template-rows',
-            '20px 16px',
+            getLanguage() === 'en'
+                ? '18px 20px'
+                : '20px 16px',
         );
         set(practiceCopy, 'align-items', 'center');
         set(practiceCopy, 'column-gap', '6px');
         set(practiceCopy, 'row-gap', '1px');
         set(practiceCopy, 'min-width', '0');
-        set(practiceCopy, 'overflow', 'hidden');
+        set(practiceCopy, 'overflow', 'visible');
+
+        const practiceCardLanguage =
+            getLanguage();
+        const practiceEnglish =
+            practiceCardLanguage === 'en';
 
         const practiceBadge =
             practice
@@ -22014,8 +22646,15 @@ export class GameScene extends Phaser.Scene {
                 ) ??
             null;
 
-        set(practiceBadge, 'font-size', '10px');
+        set(
+            practiceBadge,
+            'font-size',
+            practiceEnglish
+                ? '8px'
+                : '10px',
+        );
         set(practiceBadge, 'white-space', 'nowrap');
+        set(practiceBadge, 'line-height', '1');
 
         const practiceStrong =
             practice
@@ -22024,9 +22663,24 @@ export class GameScene extends Phaser.Scene {
                 ) ??
             null;
 
-        set(practiceStrong, 'font-size', '17px');
-        set(practiceStrong, 'line-height', '20px');
+        set(
+            practiceStrong,
+            'font-size',
+            practiceEnglish
+                ? '13px'
+                : '17px',
+        );
+        set(
+            practiceStrong,
+            'line-height',
+            practiceEnglish
+                ? '16px'
+                : '20px',
+        );
         set(practiceStrong, 'white-space', 'nowrap');
+        set(practiceStrong, 'overflow', 'visible');
+        set(practiceStrong, 'text-overflow', 'clip');
+        set(practiceStrong, 'letter-spacing', practiceEnglish ? '-0.02em' : '');
 
         const practiceSmall =
             practice
@@ -22036,10 +22690,70 @@ export class GameScene extends Phaser.Scene {
             null;
 
         set(practiceSmall, 'grid-column', '1 / -1');
-        set(practiceSmall, 'font-size', '10px');
-        set(practiceSmall, 'line-height', '16px');
-        set(practiceSmall, 'white-space', 'nowrap');
-        set(practiceSmall, 'overflow', 'hidden');
+        set(
+            practiceSmall,
+            'font-size',
+            practiceEnglish
+                ? '8px'
+                : '10px',
+        );
+        set(
+            practiceSmall,
+            'line-height',
+            practiceEnglish
+                ? '9px'
+                : '16px',
+        );
+        set(
+            practiceSmall,
+            'white-space',
+            practiceEnglish
+                ? 'normal'
+                : 'nowrap',
+        );
+        set(
+            practiceSmall,
+            'overflow',
+            practiceEnglish
+                ? 'visible'
+                : 'hidden',
+        );
+        set(practiceSmall, 'text-overflow', 'clip');
+        set(
+            practiceSmall,
+            'display',
+            practiceEnglish
+                ? '-webkit-box'
+                : 'block',
+        );
+        set(
+            practiceSmall,
+            '-webkit-box-orient',
+            practiceEnglish
+                ? 'vertical'
+                : '',
+        );
+        set(
+            practiceSmall,
+            '-webkit-line-clamp',
+            practiceEnglish
+                ? '2'
+                : '',
+        );
+        set(
+            practiceSmall,
+            'overflow-wrap',
+            practiceEnglish
+                ? 'normal'
+                : '',
+        );
+        set(
+            practiceSmall,
+            'word-break',
+            practiceEnglish
+                ? 'normal'
+                : '',
+        );
 
         const guide =
             root.querySelector<HTMLElement>(
@@ -23067,6 +23781,340 @@ export class GameScene extends Phaser.Scene {
             );
         }
 
+        /*
+         * V1010391_LOBBY_PROFILE_FOCUS:
+         * Make "My Character" the visual hero of the right panel.
+         *
+         * - The redundant bottom guide card is gone.
+         * - Avatar preview becomes substantially larger and close to 1:1.
+         * - Edit button becomes narrower but taller.
+         * - Final override lives here so legacy v33x profile sizing cannot
+         *   shrink it again on desktop or mobile.
+         */
+        {
+            const isCoarse =
+                window.matchMedia(
+                    '(pointer: coarse)',
+                ).matches;
+
+            const force =
+                (
+                    element:
+                        HTMLElement |
+                        null,
+                    property:
+                        string,
+                    value:
+                        string,
+                ): void => {
+                    element?.style.setProperty(
+                        property,
+                        value,
+                        'important',
+                    );
+                };
+
+            const actions =
+                root.querySelector<HTMLElement>(
+                    '.ch-lobby-actions',
+                );
+
+            const profile =
+                root.querySelector<HTMLElement>(
+                    '.ch-lobby-profile-card',
+                );
+
+            const avatarFrame =
+                profile
+                    ?.querySelector<HTMLElement>(
+                        '.ch-lobby-avatar-frame',
+                    ) ??
+                null;
+
+            const avatarImage =
+                avatarFrame
+                    ?.querySelector<HTMLImageElement>(
+                        'img',
+                    ) ??
+                null;
+
+            const profileCopy =
+                profile
+                    ?.querySelector<HTMLElement>(
+                        '.ch-lobby-profile-copy',
+                    ) ??
+                null;
+
+            const editButton =
+                profile
+                    ?.querySelector<HTMLButtonElement>(
+                        '.ch-lobby-avatar-edit',
+                    ) ??
+                null;
+
+            /*
+             * With the guide removed there are now six rows:
+             * title / profile / public / private / join / practice.
+             * Give the reclaimed vertical budget to the profile.
+             */
+            force(
+                actions,
+                'grid-template-rows',
+                isCoarse
+                    ? '44px 112px 56px 56px 56px minmax(54px, 1fr)'
+                    : '54px 124px 48px 48px 48px minmax(46px, 1fr)',
+            );
+
+            force(
+                profile,
+                'height',
+                isCoarse
+                    ? '112px'
+                    : '124px',
+            );
+            force(
+                profile,
+                'min-height',
+                isCoarse
+                    ? '112px'
+                    : '124px',
+            );
+            force(
+                profile,
+                'max-height',
+                isCoarse
+                    ? '112px'
+                    : '124px',
+            );
+            force(profile, 'display', 'grid');
+            force(
+                profile,
+                'grid-template-columns',
+                isCoarse
+                    ? '92px minmax(0, 1fr)'
+                    : '104px minmax(0, 1fr)',
+            );
+            force(profile, 'align-items', 'center');
+            force(profile, 'column-gap', '12px');
+            force(
+                profile,
+                'padding',
+                isCoarse
+                    ? '8px 10px'
+                    : '10px 12px',
+            );
+            force(profile, 'overflow', 'hidden');
+            force(profile, 'box-sizing', 'border-box');
+
+            const avatarSize =
+                isCoarse
+                    ? '88px'
+                    : '100px';
+
+            force(avatarFrame, 'width', avatarSize);
+            force(avatarFrame, 'height', avatarSize);
+            force(avatarFrame, 'min-width', avatarSize);
+            force(avatarFrame, 'min-height', avatarSize);
+            force(avatarFrame, 'max-width', avatarSize);
+            force(avatarFrame, 'max-height', avatarSize);
+            force(avatarFrame, 'aspect-ratio', '1 / 1');
+            force(avatarFrame, 'margin', '0');
+            force(avatarFrame, 'padding', '4px');
+            force(avatarFrame, 'box-sizing', 'border-box');
+
+            if (avatarImage) {
+                avatarImage.style.setProperty(
+                    'width',
+                    '92%',
+                    'important',
+                );
+                avatarImage.style.setProperty(
+                    'height',
+                    '92%',
+                    'important',
+                );
+                avatarImage.style.setProperty(
+                    'margin',
+                    '0 auto',
+                    'important',
+                );
+                avatarImage.style.setProperty(
+                    'display',
+                    'block',
+                    'important',
+                );
+                avatarImage.style.setProperty(
+                    'object-fit',
+                    'contain',
+                    'important',
+                );
+
+                /*
+                 * V1010392_LOBBY_AVATAR_VERTICAL_RECENTER:
+                 * The exported lobby-avatar texture is optically bottom-heavy.
+                 * In the enlarged square preview it therefore appears to sink
+                 * below the card. Lift it slightly and give it a little safety
+                 * scale so the whole character remains visible on both PC and
+                 * mobile without changing the frame/card size.
+                 */
+                avatarImage.style.setProperty(
+                    'transform',
+                    'translateY(-20%) scale(1.009866)',
+                    'important',
+                );
+                avatarImage.style.setProperty(
+                    'transform-origin',
+                    '50% 50%',
+                    'important',
+                );
+                avatarImage.style.setProperty(
+                    'object-position',
+                    '50% 50%',
+                    'important',
+                );
+                avatarImage.style.setProperty(
+                    'image-rendering',
+                    'pixelated',
+                    'important',
+                );
+            }
+
+            force(profileCopy, 'display', 'flex');
+            force(
+                profileCopy,
+                'flex-direction',
+                'column',
+            );
+            force(
+                profileCopy,
+                'align-items',
+                'flex-start',
+            );
+            force(
+                profileCopy,
+                'justify-content',
+                'center',
+            );
+            force(profileCopy, 'gap', '8px');
+            force(profileCopy, 'min-width', '0');
+
+            const profileTitle =
+                profileCopy
+                    ?.querySelector<HTMLElement>(
+                        'strong',
+                    ) ??
+                null;
+
+            force(
+                profileTitle,
+                'font-size',
+                isCoarse
+                    ? '16px'
+                    : '18px',
+            );
+            force(profileTitle, 'line-height', '1.1');
+            force(profileTitle, 'white-space', 'nowrap');
+
+            /*
+             * Narrower horizontally, taller vertically:
+             * this gives the enlarged avatar more visual ownership without
+             * sacrificing tap/click accessibility.
+             */
+            const japaneseLobby =
+                getLanguage() ===
+                    'ja';
+
+            force(
+                editButton,
+                'width',
+                japaneseLobby
+                    ? (
+                        isCoarse
+                            ? '92%'
+                            : '88%'
+                    )
+                    : (
+                        isCoarse
+                            ? '78%'
+                            : '72%'
+                    ),
+            );
+            force(
+                editButton,
+                'max-width',
+                japaneseLobby
+                    ? (
+                        isCoarse
+                            ? '220px'
+                            : '240px'
+                    )
+                    : (
+                        isCoarse
+                            ? '190px'
+                            : '210px'
+                    ),
+            );
+            force(
+                editButton,
+                'min-width',
+                japaneseLobby
+                    ? (
+                        isCoarse
+                            ? '150px'
+                            : '164px'
+                    )
+                    : (
+                        isCoarse
+                            ? '118px'
+                            : '132px'
+                    ),
+            );
+            force(
+                editButton,
+                'height',
+                isCoarse
+                    ? '44px'
+                    : '46px',
+            );
+            force(
+                editButton,
+                'min-height',
+                isCoarse
+                    ? '44px'
+                    : '46px',
+            );
+            force(
+                editButton,
+                'padding',
+                '6px 12px',
+            );
+            force(editButton, 'line-height', '1.15');
+            force(
+                editButton,
+                'white-space',
+                japaneseLobby
+                    ? 'nowrap'
+                    : 'normal',
+            );
+            force(
+                editButton,
+                'font-size',
+                japaneseLobby
+                    ? (
+                        isCoarse
+                            ? '12px'
+                            : '13px'
+                    )
+                    : '',
+            );
+            force(
+                editButton,
+                'text-align',
+                'center',
+            );
+            force(editButton, 'box-sizing', 'border-box');
+        }
+
     }
 
     private createMainLobbyDom(): void {
@@ -23298,14 +24346,7 @@ export class GameScene extends Phaser.Scene {
                             <small>${tr('처음이라면 여기서 헌터와 하이더를 연습해보세요')}</small>
                         </span>
                     </button>
-
-                    <div class="ch-lobby-guide">
-                        <div class="ch-lobby-guide-mascot">🍄</div>
-                        <div>
-                            <strong>${tr('위장하고, 숨고, 찾아내세요!')}</strong>
-                            <span>${tr('카멜레온이 되어 색을 칠하고 헌터로부터 도망쳐 살아남아요!')}</span>
-                        </div>
-                    </div>
+                    <!-- V1010401_LOST_LOBBY_FEATURES_SAFE_RECOVERY: redundant camouflage guide removed; space belongs to My Character. -->
                 </section>
 
                 <footer class="ch-lobby-language">
@@ -25622,7 +26663,7 @@ export class GameScene extends Phaser.Scene {
                     }
 
                     const match =
-                        /^map(?:[1-9]|1[01])$/
+                        /^map(?:[1-9]|1[0-6])$/
                             .exec(
                                 rawSelected,
                             );
@@ -25766,9 +26807,52 @@ export class GameScene extends Phaser.Scene {
                                 room,
                             );
 
+                        /*
+                         * V1010402_CLIENT_FULL_ROOM_SAFE_RECOVERY / FULL_ROOM_LIST
+                         * Prefer authoritative playerCount metadata over stale
+                         * transport socket count; room.maxClients is capacity.
+                         */
+                        const metadataCount =
+                            Number(
+                                room.metadata
+                                    ?.playerCount,
+                            );
+                        const transportCount =
+                            Number(
+                                room.clients,
+                            );
+                        const roomMaxClients =
+                            Math.max(
+                                0,
+                                Number(
+                                    room.maxClients,
+                                ) || 0,
+                            );
+                        const roomActualCount =
+                            Number.isFinite(
+                                metadataCount,
+                            )
+                                ? metadataCount
+                                : transportCount;
+                        const displayPlayerCount =
+                            Math.max(
+                                0,
+                                Math.min(
+                                    roomMaxClients ||
+                                        roomActualCount,
+                                    Math.floor(
+                                        roomActualCount,
+                                    ),
+                                ),
+                            );
+                        const roomIsFull =
+                            roomMaxClients > 0 &&
+                            displayPlayerCount >=
+                                roomMaxClients;
+
                         const available =
-                            phase ===
-                            'lobby';
+                            phase === 'lobby' &&
+                            !roomIsFull;
 
                         row.disabled =
                             !available;
@@ -25797,42 +26881,16 @@ export class GameScene extends Phaser.Scene {
                             </span>
 
                             <span class="ch-lobby-room-count">
-                                ${(() => {
-                                    /*
-                                     * v0.10.10.223:
-                                     * Colyseus room.clients can briefly include a stale socket while
-                                     * background reconnect handoff is in progress. When the room API
-                                     * exposes authoritative playerCount metadata, prefer it so the
-                                     * public lobby reflects actual players instead of transport sockets.
-                                     */
-                                    const metadataCount = Number(
-                                        room.metadata?.playerCount,
-                                    );
-                                    const transportCount = Number(
-                                        room.clients,
-                                    );
-                                    const maxClients = Math.max(
-                                        0,
-                                        Number(room.maxClients) || 0,
-                                    );
-                                    const actualCount = Number.isFinite(metadataCount)
-                                        ? metadataCount
-                                        : transportCount;
-
-                                    return Math.max(
-                                        0,
-                                        Math.min(
-                                            maxClients || actualCount,
-                                            Math.floor(actualCount),
-                                        ),
-                                    );
-                                })()} / ${room.maxClients}
+                                ${displayPlayerCount} / ${roomMaxClients || room.maxClients}
                             </span>
 
                             <span class="ch-lobby-room-status ${
                                 available
                                     ? 'is-open'
-                                    : 'is-playing'
+                                    : roomIsFull &&
+                                        phase === 'lobby'
+                                        ? 'is-full'
+                                        : 'is-playing'
                             }">
                                 <i aria-hidden="true"></i>
                                 ${
@@ -25840,9 +26898,12 @@ export class GameScene extends Phaser.Scene {
                                         ? trPhase(
                                             phase,
                                         )
-                                        : tr(
-                                            '게임중',
-                                        )
+                                        : roomIsFull &&
+                                            phase === 'lobby'
+                                            ? 'FULL'
+                                            : tr(
+                                                '게임중',
+                                            )
                                 }
                             </span>
 
@@ -26594,6 +27655,16 @@ export class GameScene extends Phaser.Scene {
                     '낙서 세상',
                 map11:
                     '무지개 세상',
+                map12:
+                    '여행의 나라',
+                map13:
+                    '디저트의 나라',
+                map14:
+                    '랜드마크의 나라',
+                map15:
+                    '대충의 나라',
+                map16:
+                    '스틱액션의 나라',
             };
 
         const key =
@@ -26612,7 +27683,7 @@ export class GameScene extends Phaser.Scene {
         mapName: string,
     ): string {
         const match =
-            /^map([1-9]|1[0-2])$/.exec(
+            /^map([1-9]|1[0-6])$/.exec(
                 mapName,
             );
 
@@ -38767,17 +39838,17 @@ export class GameScene extends Phaser.Scene {
     }
 
     /*
-     * V1010365_MOBILE_PRECISION_CUSTOMIZATION_PAINT / HUNTER_HOLD_TO_PAINT
-     * Hunter customization needs pixel precision, unlike Hider camouflage.
+     * V1010403C_MOBILE_PAINT_SURGICAL_RECOVERY / PRECISION_MODE
+     * Keep the existing helper name to minimize churn, but its authority is
+     * now the explicit Precision Brush mode for Hider/Hunter/Practice alike.
      */
     private isMobileHunterCustomizationPaint():
         boolean {
         return (
             this.mobileControlsEnabled &&
             this.phase === 'paint' &&
-            this.isMultiplayerSession() &&
-            this.networkPlayerManager
-                .canLocalControlHunter()
+            this.mobilePaintInputMode ===
+                'brush'
         );
     }
 
@@ -38790,7 +39861,12 @@ export class GameScene extends Phaser.Scene {
 
         this.mobilePaintHoldDotEvent =
             this.time.delayedCall(
-                180,
+                /*
+                 * V1010403C_MOBILE_PAINT_SURGICAL_RECOVERY / HOLD_520
+                 * Drag repositions the precision brush. Staying still for
+                 * 520ms begins painting.
+                 */
+                520,
                 () => {
                     if (
                         !this.isMobileHunterCustomizationPaint() ||
@@ -39571,6 +40647,76 @@ export class GameScene extends Phaser.Scene {
                             pointer,
                         );
 
+                    /*
+                     * V1010403C_MOBILE_PAINT_SURGICAL_RECOVERY / EYEDROPPER_NEXT_TOUCH_IMMEDIATE
+                     */
+                    if (
+                        this.mobileControlsEnabled &&
+                        this.mobilePaintInputMode ===
+                            'finger' &&
+                        this.mobileFingerImmediatePaintNextTouch
+                    ) {
+                        this.mobileFingerImmediatePaintNextTouch =
+                            false;
+
+                        this.finishActivePaintStroke();
+                        this.isPainting = false;
+                        this.captureMobilePaintPointer(
+                            pointer,
+                        );
+
+                        const immediatePoint =
+                            this.networkPlayerManager
+                                .paintLocalPlayer(
+                                    paintTarget.x,
+                                    paintTarget.y,
+                                    this.brushTextureKey,
+                                    this.paintColor,
+                                    this.brushSize,
+                                    this.brushShape,
+                                );
+
+                        if (immediatePoint) {
+                            this.playPaintSound();
+                            this.isPainting = true;
+                            this.activeStrokeTargetSessionId =
+                                this.networkPlayerManager
+                                    .getLocalSessionId() ?? '';
+                            this.activeStrokePoints = [
+                                immediatePoint,
+                            ];
+                            this.currentStrokeHistoryPoints = [
+                                immediatePoint,
+                            ];
+                            this.straightLineStart = {
+                                x: immediatePoint.x,
+                                y: immediatePoint.y,
+                            };
+                            this.straightLineStartWorld =
+                                paintTarget.clone();
+                            this.mobilePendingPaintPointerId =
+                                pointer.id;
+                            this.mobilePendingPaintStartScreen =
+                                new Phaser.Math.Vector2(
+                                    pointer.x,
+                                    pointer.y,
+                                );
+                            this.mobilePendingPaintStartWorld =
+                                paintTarget.clone();
+                            this.mobilePaintDotCommitted =
+                                true;
+                            this.updateMobilePaintPrecisionGuide(
+                                pointer,
+                            );
+                        } else {
+                            this.mobileFingerImmediatePaintNextTouch =
+                                true;
+                            this.releaseMobilePaintPointer();
+                        }
+
+                        return;
+                    }
+
                     if (
                         this.mobileControlsEnabled
                     ) {
@@ -40159,9 +41305,7 @@ export class GameScene extends Phaser.Scene {
                      * until Circle/Square is explicitly selected.
                      */
                     this.eyedropperPointerId = -1;
-                    this.updateEyedropperButtonUi();
-                    this.hideMobilePaintPrecisionGuide();
-                    this.showMobileIdleEyedropperGuide();
+                    this.finishMobileEyedropperSelection();
 
                     this.isPainting = false;
                     this.finishActivePaintStroke();
