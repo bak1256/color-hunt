@@ -219,6 +219,7 @@ export type NetworkRoundResult = {
       foundByHunterClientKey?: string;
       paintStrokes?: NetworkPaintStroke[];
     }>;
+    recipientName?: string;
     survivingHiders?: Array<{
       sessionId: string;
       name?: string;
@@ -697,6 +698,45 @@ this.phaseChangedHandlers.forEach(
 
   private readonly roundResultHandlers =
     new Set<RoundResultHandler>();
+
+  /*
+   * V1010440E_AUDITED_DIRECT_FOUND_GALLERY
+   * Shooter-only hit events arrive before round_result and are cached here.
+   * This is the final fallback if any result identity metadata is stale.
+   */
+  private personalVictoryFoundHiders:
+    any[] = [];
+
+  getPersonalVictoryFoundHiders():
+    any[] {
+    return this.personalVictoryFoundHiders
+      .map(
+        (entry) => ({
+          ...entry,
+          paintStrokes:
+            Array.isArray(
+              entry?.paintStrokes,
+            )
+              ? entry.paintStrokes
+                  .map(
+                    (stroke: any) => ({
+                      ...stroke,
+                      points:
+                        Array.isArray(
+                          stroke?.points,
+                        )
+                          ? stroke.points.map(
+                              (point: any) => ({
+                                ...point,
+                              }),
+                            )
+                          : [],
+                    }),
+                  )
+              : [],
+        }),
+      );
+  }
 
 
   private readonly phaseChangedHandlers =
@@ -3032,11 +3072,68 @@ this.room = room;
     });
 
 
+    room.onMessage<{
+      entry?: any;
+      count?: number;
+    }>(
+      "hunter_personal_found",
+      (payload) => {
+        const entry =
+          payload?.entry;
+
+        if (
+          !entry ||
+          !String(
+            entry.sessionId ??
+              "",
+          )
+        ) {
+          return;
+        }
+
+        const exists =
+          this.personalVictoryFoundHiders
+            .some(
+              (current) =>
+                String(
+                  current?.sessionId ??
+                    "",
+                ) ===
+                String(
+                  entry.sessionId,
+                ),
+            );
+
+        if (!exists) {
+          this.personalVictoryFoundHiders
+            .push(entry);
+        }
+      },
+    );
+
     room.onMessage<
       NetworkRoundResult
     >(
       "round_result",
       (result) => {
+        const personalized =
+          result.victoryShowcase
+            ?.personalFoundHiders;
+
+        if (
+          Array.isArray(
+            personalized,
+          ) &&
+          personalized.length > 0
+        ) {
+          this.personalVictoryFoundHiders =
+            personalized.map(
+              (entry) => ({
+                ...entry,
+              }),
+            );
+        }
+
         this.roundResultHandlers
           .forEach(
             (handler) => {
@@ -3066,6 +3163,9 @@ this.room = room;
     room.onMessage(
       "reset_round",
       () => {
+        this.personalVictoryFoundHiders =
+          [];
+
         this.resetRoundHandlers
           .forEach(
             (handler) => {

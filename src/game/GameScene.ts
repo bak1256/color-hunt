@@ -79,6 +79,8 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010440F_HIDER_NICKNAME_SCOPE_FIX: Hider nickname rendered only inside victory-card capture scope. */
+    /* V1010440E_AUDITED_DIRECT_FOUND_GALLERY: direct personal FOUND + nicknames + larger victory portraits. */
     /* V1010439G_MEMORY_PANEL_Y_RELOCATE: memoryPanelY restored at statement scope. */
     /* V1010439F_ROBUST_BUILD_SCOPE_REPAIR: robustly restores v439 victory-card local scope. */
     /* V1010439D_ROBUST_CAMO_BLOCK_REPAIR: rebuilt malformed v439 Hunter camouflage block by structural anchors. */
@@ -34131,6 +34133,7 @@ export class GameScene extends Phaser.Scene {
                         foundByHunterClientKey?: string;
                         paintStrokes?: NetworkPaintStroke[];
                     }>;
+                    recipientName?: string;
                     survivingHiders?: Array<{
                         sessionId: string;
                         name?: string;
@@ -34197,6 +34200,20 @@ export class GameScene extends Phaser.Scene {
         const localSessionId =
             multiplayerClient.getSessionId() ??
             '';
+
+        const localPlayerName =
+            String(
+                extended.victoryShowcase
+                    ?.recipientName ??
+                multiplayerClient.getRoom()
+                    ?.state.players.get(
+                        localSessionId,
+                    )?.name ??
+                'Player',
+            )
+                .trim()
+                .slice(0, 20) ||
+            'Player';
 const roomPlayers =
             multiplayerClient.getRoom()
                 ?.state.players;
@@ -34229,22 +34246,30 @@ const roomPlayers =
                 ?.personalFoundHiders ??
             [];
 
+        const directPersonalFound =
+            multiplayerClient
+                .getPersonalVictoryFoundHiders() as
+                VictoryFoundEntry[];
+
+        /*
+         * V1010440E_AUDITED_DIRECT_FOUND_GALLERY / PERSONAL_FOUND_SOURCE
+         * Direct shooter-event cache is independent of round-result identity
+         * matching and therefore fixes the persistent 0 FOUND case.
+         */
         const personalFound:
             VictoryFoundEntry[] =
             !isHunter
                 ? []
                 : serverPersonalFound.length > 0
                     ? serverPersonalFound
-                    : (
-                        hunterCount <= 1
-                            ? allFound
-                            : []
-                    );
+                    : directPersonalFound.length > 0
+                        ? directPersonalFound
+                        : (
+                            hunterCount <= 1
+                                ? allFound
+                                : []
+                        );
 
-        /*
-         * V1010439F_ROBUST_BUILD_SCOPE_REPAIR / PERSONAL_DISPLAY_LIST
-         * Server already personalized this recipient's FOUND subset.
-         */
         const displayedFound =
             [...personalFound].sort(
                 (a, b) =>
@@ -34694,10 +34719,211 @@ const roomPlayers =
          * Shared Y anchor for MATCH MEMORY / MY CAMOUFLAGE / FOUND summary.
          * Defined at statement scope, never inside another initializer.
          */
+        /*
+         * V1010440E_AUDITED_FOUND_GALLERY
+         * Current source has no old foundOrder/paintedAvatar marker loop.
+         * Draw the personalized FOUND set directly from displayedFound.
+         */
+        if (
+            isHunter &&
+            displayedFound.length > 0
+        ) {
+            const foundCount =
+                displayedFound.length;
+            const galleryCenterX = 540;
+            const galleryY = 650;
+            const spacing =
+                Math.min(
+                    176,
+                    820 /
+                        Math.max(
+                            1,
+                            foundCount,
+                        ),
+                );
+            const galleryStartX =
+                galleryCenterX -
+                (
+                    (
+                        foundCount - 1
+                    ) *
+                    spacing
+                ) /
+                    2;
+
+            displayedFound.forEach(
+                (
+                    marker,
+                    index,
+                ) => {
+                    const mx =
+                        galleryStartX +
+                        index * spacing;
+                    const my =
+                        galleryY;
+
+                    const foundAvatar =
+                        this.buildVictoryPaintedHiderCanvas(
+                            marker.sessionId,
+                        );
+
+                    context.save();
+                    context.globalAlpha = 1;
+
+                    /*
+                     * Soft white portrait card so camouflage never disappears
+                     * into the captured map/background.
+                     */
+                    context.shadowColor =
+                        'rgba(35,39,43,.16)';
+                    context.shadowBlur = 14;
+                    context.fillStyle =
+                        'rgba(255,255,255,.97)';
+                    context.beginPath();
+                    context.roundRect(
+                        mx - 62,
+                        my - 82,
+                        124,
+                        174,
+                        24,
+                    );
+                    context.fill();
+                    context.shadowBlur = 0;
+
+                    context.imageSmoothingEnabled =
+                        false;
+                    context.drawImage(
+                        foundAvatar,
+                        mx - 48,
+                        my - 72,
+                        96,
+                        144,
+                    );
+
+                    /*
+                     * Strong red target ring + white inner ring.
+                     */
+                    context.shadowColor =
+                        'rgba(217,54,48,.48)';
+                    context.shadowBlur = 16;
+                    context.strokeStyle =
+                        '#d93630';
+                    context.lineWidth = 9;
+                    context.beginPath();
+                    context.arc(
+                        mx,
+                        my,
+                        57,
+                        0,
+                        Math.PI * 2,
+                    );
+                    context.stroke();
+
+                    context.shadowBlur = 0;
+                    context.strokeStyle =
+                        '#ffffff';
+                    context.lineWidth = 3;
+                    context.beginPath();
+                    context.arc(
+                        mx,
+                        my,
+                        48,
+                        0,
+                        Math.PI * 2,
+                    );
+                    context.stroke();
+
+                    /*
+                     * Preserve authoritative server numbering.  A shotgun
+                     * multi-hit therefore keeps each Hider's own foundOrder.
+                     */
+                    const order =
+                        Number(
+                            marker.foundOrder,
+                        ) ||
+                        index + 1;
+
+                    context.fillStyle =
+                        '#d93630';
+                    context.beginPath();
+                    context.arc(
+                        mx + 48,
+                        my - 57,
+                        24,
+                        0,
+                        Math.PI * 2,
+                    );
+                    context.fill();
+
+                    context.fillStyle =
+                        '#ffffff';
+                    context.font =
+                        '900 20px Arial, sans-serif';
+                    context.textAlign =
+                        'center';
+                    context.textBaseline =
+                        'middle';
+                    context.fillText(
+                        '#' +
+                            String(
+                                order,
+                            ),
+                        mx + 48,
+                        my - 56,
+                    );
+
+                    context.fillStyle =
+                        '#25292d';
+                    context.font =
+                        '900 15px Arial, sans-serif';
+                    context.textAlign =
+                        'center';
+                    context.textBaseline =
+                        'alphabetic';
+                    context.fillText(
+                        String(
+                            marker.name ??
+                                'Hider',
+                        ).slice(
+                            0,
+                            13,
+                        ),
+                        mx,
+                        my + 88,
+                    );
+
+                    context.restore();
+                },
+            );
+        }
+
         const memoryPanelY =
             isHunter
                 ? 814
                 : 1104;
+
+        /*
+         * V1010440F_HIDER_NICKNAME_SCOPE_FIX
+         * Hider nickname belongs to the victory-card memory area, where
+         * isHunter/accent/localPlayerName/memoryPanelY are all valid.
+         */
+        if (!isHunter) {
+            context.save();
+            context.fillStyle =
+                accent;
+            context.font =
+                '900 20px Arial, sans-serif';
+            context.textAlign =
+                'left';
+            context.textBaseline =
+                'alphabetic';
+            context.fillText(
+                '@' + localPlayerName,
+                88,
+                memoryPanelY + 106,
+            );
+            context.restore();
+        }
 
         if (isHunter) {
             const hunterPaintAvatar =
@@ -34706,14 +34932,14 @@ const roomPlayers =
                 );
 
             /*
-             * V1010439D_ROBUST_CAMO_BLOCK_REPAIR
-             * Large dedicated Hunter camouflage card.
+             * V1010440E_AUDITED_DIRECT_FOUND_GALLERY / HUNTER_CAMO_SHOWCASE
+             * Larger self-camouflage with nickname.
              */
-            const camoCardX = 520;
+            const camoCardX = 410;
             const camoCardY =
-                memoryPanelY - 24;
-            const camoCardW = 300;
-            const camoCardH = 210;
+                memoryPanelY - 22;
+            const camoCardW = 405;
+            const camoCardH = 230;
 
             context.save();
 
@@ -34722,7 +34948,6 @@ const roomPlayers =
             context.strokeStyle =
                 'rgba(37,41,45,.16)';
             context.lineWidth = 3;
-
             context.beginPath();
             context.roundRect(
                 camoCardX,
@@ -34740,18 +34965,26 @@ const roomPlayers =
                 '900 15px Arial, sans-serif';
             context.textAlign =
                 'left';
-
             context.fillText(
                 'MY CAMOUFLAGE',
                 camoCardX + 20,
-                camoCardY + 30,
+                camoCardY + 31,
             );
 
             context.fillStyle =
                 '#25292d';
             context.font =
-                '900 24px Arial, sans-serif';
+                '900 25px Arial, sans-serif';
+            context.fillText(
+                localPlayerName,
+                camoCardX + 20,
+                camoCardY + 63,
+            );
 
+            context.fillStyle =
+                accent;
+            context.font =
+                '900 17px Arial, sans-serif';
             context.fillText(
                 language === 'ko'
                     ? '내 위장 자랑!'
@@ -34759,19 +34992,18 @@ const roomPlayers =
                         ? 'マイ迷彩'
                         : 'MY LOOK',
                 camoCardX + 20,
-                camoCardY + 60,
+                camoCardY + 91,
             );
 
             context.imageSmoothingEnabled =
                 false;
             context.globalAlpha = 1;
-
             context.drawImage(
                 hunterPaintAvatar,
-                camoCardX + 85,
-                camoCardY + 54,
-                130,
-                195,
+                camoCardX + 230,
+                camoCardY + 10,
+                145,
+                218,
             );
 
             context.restore();
@@ -50598,7 +50830,9 @@ const roomPlayers =
             `${this.getMapDisplayName(this.practiceMap)} · ${this.practiceBotCount} BOT`,
             62,
             990,
-        );
+        ); 
+
+
 
         context.fillStyle =
             '#ffef9c';
