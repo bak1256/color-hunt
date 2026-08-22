@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010388N_HUNTER_FULL_MAP_VICTORY_CARD: Hunter social snapshot = clean full-map 960x540 evidence board. */
     /* V1010388M2_HIDE_ROLE_LABELS_ROBUST: hide gameplay role/survival HUD from social Victory Snapshot only. */
     /* V1010388L_HIDER_FINISH_SCALE_SHARE_FEEDBACK: restore Hider Finished HUD scale + visible modal share acknowledgement. */
     /* V1010388K_CLEAN_CARD_CENTER_CLIPBOARD: capture HUD hard-lock + exact Hider centering + Kakao-ready clipboard share. */
@@ -31392,6 +31393,37 @@ export class GameScene extends Phaser.Scene {
             this.survivalHunterLabelText
                 ?.setVisible(false);
 
+            if (!isHider) {
+                /*
+                 * V1010388N_HUNTER_FULL_MAP_VICTORY_CARD / HUNTER_FULL_MAP_CAPTURE
+                 *
+                 * Hunter Victory Snapshot is a post-match evidence board, NOT
+                 * the last first-person shot frame.
+                 *
+                 * Use the complete logical 960x540 map at zoom=1, scroll=0.
+                 * This makes server FOUND x/y coordinates line up exactly with
+                 * the poster's 960x540 map frame.
+                 */
+                camera
+                    .stopFollow()
+                    .removeBounds()
+                    .setZoom(1)
+                    .setScroll(0, 0);
+
+                /*
+                 * Remove last-shot debris / muzzle flash / pellet trails /
+                 * detection bursts from the commemorative still.
+                 */
+                this.clearAllAimingVisuals();
+                this.clearTransientGameplayVfx();
+
+                this.networkPlayerManager
+                    .clearHunterAimLines();
+
+                this.networkPlayerManager
+                    .setNamesVisible(false);
+            }
+
             if (isHider) {
                 /*
                  * Remove the result reveal ring entirely. The camouflage itself
@@ -31453,7 +31485,16 @@ export class GameScene extends Phaser.Scene {
                 (resolve) => {
                     requestAnimationFrame(
                         () => requestAnimationFrame(
-                            () => resolve(),
+                            () => {
+                                if (!isHider) {
+                                    requestAnimationFrame(
+                                        () => resolve(),
+                                    );
+                                    return;
+                                }
+
+                                resolve();
+                            },
                         ),
                     );
                 },
