@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010437_PERSONAL_HUNTER_CARD_AND_CAMOUFLAGE: per-Hunter FOUND/ALL KILL + Hunter camouflage social memory. */
     /* V1010436D_VICTORY_RESULT_TYPEFIX: strict complete round_result + unified FOUND entry typing. */
     /* V1010436_VICTORY_FOUND_PAINT_AUTHORITATIVE: FOUND count/number/paint survive result races; reconnect untouched. */
     /* V1010435_VICTORY_INVITE_LOADING_POLISH: victory UI + loading + stale invite guards; stable reconnect untouched. */
@@ -34227,8 +34228,13 @@ export class GameScene extends Phaser.Scene {
          * no circle and no FOUND label. Personal attribution remains separate
          * so ALL KILL is awarded only to the Hunter who personally got them all.
          */
+        /*
+         * V1010437_PERSONAL_HUNTER_CARD_AND_CAMOUFLAGE / PERSONAL_FOUND_ONLY
+         * Every Hunter receives the same authoritative team result, but their
+         * social card contains ONLY the Hiders personally found by this client.
+         */
         const displayedFound =
-            [...allFound].sort(
+            [...personalFound].sort(
                 (a, b) =>
                     (
                         Number(
@@ -34243,8 +34249,14 @@ export class GameScene extends Phaser.Scene {
             );
 
         const totalHiders =
-            allFound.length +
-            surviving.length;
+            isHunter
+                ? Math.max(
+                    allFound.length,
+                    allFound.length +
+                        surviving.length,
+                )
+                : allFound.length +
+                    surviving.length;
 
         const personalAllKill =
             isHunter &&
@@ -34865,6 +34877,61 @@ export class GameScene extends Phaser.Scene {
             88,
             memoryPanelY + 76,
         );
+
+        /*
+         * V1010437_PERSONAL_HUNTER_CARD_AND_CAMOUFLAGE / HUNTER_CAMOUFLAGE_MEMORY
+         * Hunters painted themselves too. Preserve that work on the social card.
+         */
+        if (isHunter) {
+            const hunterPaintAvatar =
+                this.buildVictoryPaintedHiderCanvas(
+                    localSessionId,
+                );
+
+            context.save();
+            context.imageSmoothingEnabled =
+                false;
+
+            const avatarX = 575;
+            const avatarY =
+                memoryPanelY + 18;
+
+            context.fillStyle =
+                'rgba(255,255,255,.62)';
+            context.beginPath();
+            context.roundRect(
+                avatarX - 12,
+                avatarY - 6,
+                130,
+                118,
+                22,
+            );
+            context.fill();
+
+            context.drawImage(
+                hunterPaintAvatar,
+                avatarX + 13,
+                avatarY - 4,
+                72,
+                108,
+            );
+
+            context.fillStyle =
+                muted;
+            context.font =
+                '800 13px Arial, sans-serif';
+            context.textAlign =
+                'center';
+            context.fillText(
+                language === 'ko'
+                    ? 'MY CAMOUFLAGE'
+                    : 'MY CAMOUFLAGE',
+                avatarX + 52,
+                avatarY + 108,
+            );
+
+            context.restore();
+        }
 
         context.textAlign =
             'right';
