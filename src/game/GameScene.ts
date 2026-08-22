@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010388F_VICTORY_SHOWCASE_GUARANTEED: winner role fallback + resilient capture + bounded lobby reveal watchdog. */
     /* V1010388D_MAIN_RESTORE_LOBBY_READY_ROBUST: restore guest READY + host start barrier across CRLF/LF sources. */
     /* V1010388_CLIENT_VICTORY_SHOWCASE: winner-only social result poster. */
     /* V1010373_RECONNECT_SINGLE_AUTHORITY_GAMEPLAY_LOCK: reconnect freezes local gameplay until one authoritative Room/player/paint state owns the Scene again. */
@@ -30161,15 +30162,24 @@ export class GameScene extends Phaser.Scene {
          * V1010388_CLIENT_VICTORY_SHOWCASE:
          * reward reveal after the waiting room UI has settled.
          */
-        this.time.delayedCall(
-            320,
-            () => {
-                if (
-                    this.phase === 'lobby' &&
-                    this.victoryShowcaseBlob
-                ) {
-                    this.showMultiplayerVictoryShowcase();
-                }
+        /*
+         * V1010388F_VICTORY_SHOWCASE_GUARANTEED / LOBBY_REVEAL_WATCHDOG
+         * Poster encoding can finish later than a single 320ms callback.
+         */
+        [320, 700, 1400, 2600, 4200].forEach(
+            (delay) => {
+                this.time.delayedCall(
+                    delay,
+                    () => {
+                        if (
+                            this.phase === 'lobby' &&
+                            this.victoryShowcaseBlob &&
+                            !this.victoryShowcaseModal
+                        ) {
+                            this.showMultiplayerVictoryShowcase();
+                        }
+                    },
+                );
             },
         );
 
@@ -30936,10 +30946,27 @@ export class GameScene extends Phaser.Scene {
                 .setVisible(false);
         }
 
+        /*
+         * V1010388F_VICTORY_SHOWCASE_GUARANTEED / WINNER_ROLE_FALLBACK
+         *
+         * round_result can race a reconnect/schema refresh. getLocalPlayer()
+         * may therefore be temporarily missing even though NetworkPlayerManager
+         * still knows the local role. Never lose a victory reward because of
+         * that one-frame state gap.
+         */
         const localRole =
             multiplayerClient
                 .getLocalPlayer()
-                ?.role;
+                ?.role ??
+            (
+                this.networkPlayerManager
+                    ?.isLocalHunter()
+                    ? 'hunter'
+                    : this.networkPlayerManager
+                        ?.isLocalHider()
+                        ? 'hider'
+                        : undefined
+            );
 
         const localWon =
             (
@@ -30951,7 +30978,23 @@ export class GameScene extends Phaser.Scene {
                 localRole === 'hider'
             );
 
+        console.info(
+            '[Color Hunt] victory showcase decision',
+            {
+                winner: result.winner,
+                localRole,
+                localWon,
+            },
+        );
+
         if (localWon) {
+            /*
+             * Store the winner immediately. Poster rendering is async, but the
+             * reward ownership is already final.
+             */
+            this.victoryShowcaseWinner =
+                result.winner;
+
             void this.captureMultiplayerVictoryShowcase(
                 result,
             );
@@ -30964,6 +31007,86 @@ export class GameScene extends Phaser.Scene {
      * V1010388_CLIENT_VICTORY_SHOWCASE
      * Winner-only Instagram-friendly 4:5 (1080x1350) result poster.
      */
+    private async captureVictoryFrameGuaranteed(): Promise<HTMLImageElement> {
+        const delays = [0, 80, 180];
+
+        for (const delay of delays) {
+            if (delay > 0) {
+                await new Promise<void>(
+                    (resolve) =>
+                        window.setTimeout(
+                            resolve,
+                            delay,
+                        ),
+                );
+            }
+
+            const snapshot =
+                await this.captureGameCanvasForShare();
+
+            if (snapshot) {
+                return snapshot;
+            }
+        }
+
+        /*
+         * Last-resort image: direct canvas copy may be unavailable/blank on
+         * some WebGL configurations, but it still yields a valid image object
+         * and therefore NEVER suppresses the victory modal.
+         */
+        const fallbackCanvas =
+            document.createElement('canvas');
+
+        fallbackCanvas.width =
+            this.gameWidth;
+        fallbackCanvas.height =
+            this.gameHeight;
+
+        const fallbackContext =
+            fallbackCanvas.getContext('2d');
+
+        if (fallbackContext) {
+            fallbackContext.fillStyle =
+                '#111827';
+            fallbackContext.fillRect(
+                0,
+                0,
+                fallbackCanvas.width,
+                fallbackCanvas.height,
+            );
+
+            try {
+                fallbackContext.drawImage(
+                    this.game.canvas,
+                    0,
+                    0,
+                    fallbackCanvas.width,
+                    fallbackCanvas.height,
+                );
+            } catch {
+                // Keep the valid dark fallback frame.
+            }
+        }
+
+        const image =
+            new Image();
+
+        await new Promise<void>(
+            (resolve) => {
+                image.onload =
+                    () => resolve();
+                image.onerror =
+                    () => resolve();
+                image.src =
+                    fallbackCanvas.toDataURL(
+                        'image/png',
+                    );
+            },
+        );
+
+        return image;
+    }
+
     private async captureMultiplayerVictoryShowcase(
         result: NetworkRoundResult,
     ): Promise<void> {
@@ -30981,10 +31104,9 @@ export class GameScene extends Phaser.Scene {
         );
 
         const image =
-            await this.captureGameCanvasForShare();
+            await this.captureVictoryFrameGuaranteed();
 
         if (
-            !image ||
             captureSerial !==
                 this.victoryShowcaseCaptureSerial
         ) {
