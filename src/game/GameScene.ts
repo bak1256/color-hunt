@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010388J_VICTORY_CARD_FINAL_VISUALS: exact camouflage FOUND replay + Practice-parity Hider framing + link share. */
     /* V1010388I_INGAME_VICTORY_CLEAN_CARD_CAPTURE: full in-game victory/countdown UI, clean social-card-only capture. */
     /* V1010388H1_REMOVE_UNUSED_AMMO_FINISH_STATE: obsolete Finished-popup ammo flag removed after v388h. */
     /* V1010388H_CLEAN_FINISH_HIDER_HERO_CARD: clean Finished phase + character-first Hider victory poster. */
@@ -4528,6 +4529,16 @@ export class GameScene extends Phaser.Scene {
     private victoryShowcasePreviewUrl = '';
     private victoryShowcaseModal?: HTMLDivElement;
     private victoryShowcaseCaptureSerial = 0;
+
+    /*
+     * V1010388J_VICTORY_CARD_FINAL_VISUALS / ROUND_PAINT_MEMORY
+     *
+     * The normal dead-player visual can fade/hide its RenderTexture. The
+     * Victory Snapshot therefore keeps the actual round strokes separately and
+     * re-renders the Hider camouflage at the FOUND position.
+     */
+    private readonly victoryRoundPaintBySession =
+        new Map<string, NetworkPaintStroke[]>();
 
     /*
      * V1010388I_INGAME_VICTORY_CLEAN_CARD_CAPTURE
@@ -9152,6 +9163,33 @@ export class GameScene extends Phaser.Scene {
         this.networkUnsubscribers.push(
             multiplayerClient.onPaintStroke(
                 (stroke: NetworkPaintStroke) => {
+                    const targetId =
+                        stroke.targetSessionId;
+
+                    if (targetId) {
+                        const previous =
+                            this.victoryRoundPaintBySession
+                                .get(targetId) ??
+                            [];
+
+                        previous.push({
+                            ...stroke,
+                            points:
+                                stroke.points.map(
+                                    (point) => ({
+                                        x: point.x,
+                                        y: point.y,
+                                    }),
+                                ),
+                        });
+
+                        this.victoryRoundPaintBySession
+                            .set(
+                                targetId,
+                                previous.slice(-500),
+                            );
+                    }
+
                     this.applyRemotePaintStroke(stroke);
                 },
             ),
@@ -9222,6 +9260,47 @@ export class GameScene extends Phaser.Scene {
                      * Empty or non-empty, this message is the authoritative
                      * server response we were waiting for.
                      */
+                    /*
+                     * V1010388J_VICTORY_CARD_FINAL_VISUALS / AUTHORITATIVE_PAINT_CACHE
+                     * round_paint_state is the best complete source for every
+                     * player's final camouflage.
+                     */
+                    this.victoryRoundPaintBySession
+                        .clear();
+
+                    strokes.forEach(
+                        (stroke) => {
+                            const targetId =
+                                stroke.targetSessionId;
+
+                            if (!targetId) {
+                                return;
+                            }
+
+                            const previous =
+                                this.victoryRoundPaintBySession
+                                    .get(targetId) ??
+                                [];
+
+                            previous.push({
+                                ...stroke,
+                                points:
+                                    stroke.points.map(
+                                        (point) => ({
+                                            x: point.x,
+                                            y: point.y,
+                                        }),
+                                    ),
+                            });
+
+                            this.victoryRoundPaintBySession
+                                .set(
+                                    targetId,
+                                    previous,
+                                );
+                        },
+                    );
+
                     const wasRecoveryPending =
                         this.recoveryPaintSnapshotPending;
 
@@ -31019,52 +31098,328 @@ export class GameScene extends Phaser.Scene {
      * V1010388_CLIENT_VICTORY_SHOWCASE
      * Winner-only Instagram-friendly 4:5 (1080x1350) result poster.
      */
-    private async captureVictoryFrameForShowcase(): Promise<HTMLImageElement> {
-        this.victoryShowcaseCleanCaptureActive =
-            true;
+    /* V1010388J1_REMOVE_UNUSED_SHOWCASE_WRAPPER: obsolete v388i wrapper removed after role-specific v388j capture. */
+
+    private buildVictoryPaintedHiderCanvas(
+        sessionId: string,
+    ): HTMLCanvasElement {
+        const avatar =
+            document.createElement('canvas');
+
+        avatar.width = 80;
+        avatar.height = 120;
+
+        const context =
+            avatar.getContext('2d');
+
+        if (!context) {
+            return avatar;
+        }
+
+        const insideBody =
+            (
+                x: number,
+                y: number,
+            ): boolean => {
+                const headDx =
+                    x - 40;
+                const headDy =
+                    y - 48;
+
+                return (
+                    headDx * headDx +
+                        headDy * headDy <=
+                        12 * 12 ||
+                    (
+                        x >= 31 &&
+                        x <= 48 &&
+                        y >= 55 &&
+                        y <= 78
+                    ) ||
+                    (
+                        x >= 24 &&
+                        x <= 31 &&
+                        y >= 57 &&
+                        y <= 74
+                    ) ||
+                    (
+                        x >= 48 &&
+                        x <= 55 &&
+                        y >= 57 &&
+                        y <= 74
+                    ) ||
+                    (
+                        x >= 31 &&
+                        x <= 38 &&
+                        y >= 75 &&
+                        y <= 88
+                    ) ||
+                    (
+                        x >= 41 &&
+                        x <= 48 &&
+                        y >= 75 &&
+                        y <= 88
+                    )
+                );
+            };
+
+        const drawPixel =
+            (
+                x: number,
+                y: number,
+                color: string,
+            ): void => {
+                if (
+                    x < 0 ||
+                    x >= 80 ||
+                    y < 0 ||
+                    y >= 120 ||
+                    !insideBody(x, y)
+                ) {
+                    return;
+                }
+
+                context.fillStyle =
+                    color;
+                context.fillRect(
+                    x,
+                    y,
+                    1,
+                    1,
+                );
+            };
 
         /*
-         * Hide every Finished-only overlay that could contaminate the card.
-         * Gameplay actors, background, painted textures and reveal markers are
-         * deliberately NOT touched.
+         * Real gameplay base silhouette.
          */
-        this.countdownPanel
-            ?.setVisible(false);
-        this.countdownText
-            ?.setVisible(false);
-        this.roundReturnLobbyButton
-            ?.setVisible(false);
-        this.timerText
-            ?.setVisible(false);
-        this.phaseText
-            ?.setVisible(false);
-        this.guideText
-            ?.setVisible(false);
-        this.statusText
-            ?.setVisible(false);
+        for (
+            let y = 0;
+            y < 120;
+            y += 1
+        ) {
+            for (
+                let x = 0;
+                x < 80;
+                x += 1
+            ) {
+                if (insideBody(x, y)) {
+                    drawPixel(
+                        x,
+                        y,
+                        '#f5eee2',
+                    );
+                }
+            }
+        }
 
-        await new Promise<void>(
-            (resolve) => {
-                requestAnimationFrame(
-                    () => requestAnimationFrame(
-                        () => resolve(),
-                    ),
+        const localSessionId =
+            multiplayerClient
+                .getSessionId();
+
+        const strokes =
+            sessionId === localSessionId &&
+            this.localPaintHistory.length > 0
+                ? this.localPaintHistory
+                : (
+                    this.victoryRoundPaintBySession
+                        .get(sessionId) ??
+                    []
+                );
+
+        strokes.forEach(
+            (stroke) => {
+                const color =
+                    '#' +
+                    Math.max(
+                        0,
+                        Number(stroke.color) || 0,
+                    )
+                        .toString(16)
+                        .padStart(6, '0')
+                        .slice(-6);
+
+                const radius =
+                    stroke.size <= 1
+                        ? 0
+                        : Math.max(
+                            1,
+                            Math.round(
+                                stroke.size,
+                            ),
+                        );
+
+                stroke.points.forEach(
+                    (point) => {
+                        for (
+                            let oy = -radius;
+                            oy <= radius;
+                            oy += 1
+                        ) {
+                            for (
+                                let ox = -radius;
+                                ox <= radius;
+                                ox += 1
+                            ) {
+                                if (
+                                    stroke.shape !==
+                                        'square' &&
+                                    ox * ox +
+                                        oy * oy >
+                                        radius *
+                                            radius
+                                ) {
+                                    continue;
+                                }
+
+                                drawPixel(
+                                    Math.round(
+                                        point.x + ox,
+                                    ),
+                                    Math.round(
+                                        point.y + oy,
+                                    ),
+                                    color,
+                                );
+                            }
+                        }
+                    },
                 );
             },
         );
 
+        return avatar;
+    }
+
+    /*
+     * V1010388J_VICTORY_CARD_FINAL_VISUALS / ROLE_CAPTURE
+     *
+     * Hider victory uses the SAME practical framing as Hider Practice:
+     * local player only, centered, Paint zoom 3.75 desktop / 4.55 mobile.
+     * The change exists only for the screenshot frame and is restored
+     * immediately afterwards.
+     */
+    private async captureVictoryFrameForRoleShowcase(
+        result: NetworkRoundResult,
+    ): Promise<HTMLImageElement> {
+        const isHider =
+            result.winner === 'hiders';
+
+        const camera =
+            this.cameras.main;
+
+        const savedZoom =
+            camera.zoom;
+        const savedScrollX =
+            camera.scrollX;
+        const savedScrollY =
+            camera.scrollY;
+        const savedPaintWorldZoom =
+            this.paintWorldZoom;
+
+        const finishedUiWasVisible =
+            this.countdownText?.visible ??
+            false;
+        const returnButtonWasVisible =
+            this.roundReturnLobbyButton?.visible ??
+            false;
+
         try {
+            /*
+             * Social card must never contain Finished UI.
+             */
+            this.countdownPanel
+                ?.setVisible(false);
+            this.countdownText
+                ?.setVisible(false);
+            this.roundReturnLobbyButton
+                ?.setVisible(false);
+            this.timerText
+                ?.setVisible(false);
+            this.phaseText
+                ?.setVisible(false);
+            this.guideText
+                ?.setVisible(false);
+            this.statusText
+                ?.setVisible(false);
+
+            if (isHider) {
+                /*
+                 * Remove the result reveal ring entirely. The camouflage itself
+                 * is the trophy.
+                 */
+                this.networkPlayerManager
+                    .clearRevealMarkers();
+
+                this.networkPlayerManager
+                    .showOnlyLocalPlayer();
+
+                this.networkPlayerManager
+                    .setNamesVisible(false);
+
+                this.paintWorldZoom =
+                    this.mobileControlsEnabled
+                        ? 4.55
+                        : 3.75;
+
+                camera
+                    .stopFollow()
+                    .removeBounds()
+                    .setZoom(
+                        this.paintWorldZoom,
+                    );
+
+                this.applyFixedHudForZoom(
+                    this.paintWorldZoom,
+                );
+
+                this.centerPaintCameraOnLocalPlayer();
+            }
+
+            await new Promise<void>(
+                (resolve) => {
+                    requestAnimationFrame(
+                        () => requestAnimationFrame(
+                            () => resolve(),
+                        ),
+                    );
+                },
+            );
+
             return await this.captureVictoryFrameGuaranteed();
         } finally {
-            this.victoryShowcaseCleanCaptureActive =
-                false;
+            this.paintWorldZoom =
+                savedPaintWorldZoom;
+
+            camera
+                .stopFollow()
+                .setZoom(savedZoom)
+                .setScroll(
+                    savedScrollX,
+                    savedScrollY,
+                );
+
+            this.networkPlayerManager
+                .restoreAllPlayerVisibility();
+
+            this.networkPlayerManager
+                .setNamesVisible(false);
 
             /*
-             * If we're still on the Finished screen, immediately reconstruct
-             * the normal victory/countdown presentation for the player.
+             * Rebuild the player's real Finished presentation after the
+             * screenshot-only state is gone.
              */
             if (this.phase === 'finished') {
                 this.updateCountdownUi();
+
+                if (!finishedUiWasVisible) {
+                    this.countdownText
+                        ?.setVisible(false);
+                }
+
+                if (!returnButtonWasVisible) {
+                    this.roundReturnLobbyButton
+                        ?.setVisible(false);
+                }
             }
         }
     }
@@ -31166,7 +31521,9 @@ export class GameScene extends Phaser.Scene {
         );
 
         const image =
-            await this.captureVictoryFrameForShowcase();
+            await this.captureVictoryFrameForRoleShowcase(
+                result,
+            );
 
         if (
             captureSerial !==
@@ -31194,11 +31551,6 @@ export class GameScene extends Phaser.Scene {
                     }>;
                 };
             };
-
-        const localSessionId =
-            multiplayerClient.getRoom()
-                ?.sessionId ??
-            '';
 
         const canvas =
             document.createElement('canvas');
@@ -31475,11 +31827,6 @@ export class GameScene extends Phaser.Scene {
             extended.victoryShowcase
                 ?.foundHiders ??
             [];
-        const survivors =
-            extended.victoryShowcase
-                ?.survivingHiders ??
-            [];
-
         const fallbackFound =
             result.revealedHiders.map(
                 (
@@ -31497,6 +31844,11 @@ export class GameScene extends Phaser.Scene {
                 }),
             );
 
+        /*
+         * V1010388J_VICTORY_CARD_FINAL_VISUALS / MARKER_POLICY
+         * Hunter: FOUND rings stay.
+         * Hider: no ring at all; Practice-style centered camouflage is enough.
+         */
         const markers =
             isHunter
                 ? (
@@ -31504,12 +31856,7 @@ export class GameScene extends Phaser.Scene {
                         ? found
                         : fallbackFound
                 )
-                : survivors.filter(
-                    (entry) =>
-                        !localSessionId ||
-                        entry.sessionId ===
-                            localSessionId,
-                );
+                : [];
 
         markers.forEach(
             (
@@ -31543,6 +31890,29 @@ export class GameScene extends Phaser.Scene {
                         : frameY +
                             frameH /
                             2;
+
+                if (isHunter) {
+                    const paintedAvatar =
+                        this.buildVictoryPaintedHiderCanvas(
+                            marker.sessionId,
+                        );
+
+                    /*
+                     * Network Hider logical art is 80x120. Draw at the same
+                     * world-scale footprint onto the 960x540 match frame.
+                     */
+                    context.save();
+                    context.imageSmoothingEnabled =
+                        false;
+                    context.drawImage(
+                        paintedAvatar,
+                        mx - 40,
+                        my - 60,
+                        80,
+                        120,
+                    );
+                    context.restore();
+                }
 
                 context.save();
                 context.shadowColor =
@@ -31941,7 +32311,7 @@ export class GameScene extends Phaser.Scene {
         const language =
             getLanguage();
 
-        const text =
+        const shareMessage =
             isHunter
                 ? (
                     language === 'ko'
@@ -31953,6 +32323,16 @@ export class GameScene extends Phaser.Scene {
                         ? '끝까지 안 들켰다 🦎 COLOR HUNT 생존 기록'
                         : 'Still hidden 🦎 COLOR HUNT'
                 );
+
+        /*
+         * V1010388J_VICTORY_CARD_FINAL_VISUALS / SHARE_WITH_LINK
+         * Some mobile share targets discard the separate Web Share `url`
+         * when a file is attached. Put the game URL in the text as well.
+         */
+        const text =
+            shareMessage +
+            '\n' +
+            shareUrl;
 
         try {
             if (
@@ -31988,6 +32368,25 @@ export class GameScene extends Phaser.Scene {
             ) {
                 return;
             }
+        }
+
+        /*
+         * Desktop browsers without file Web Share:
+         * keep image download AND copy the playable game link.
+         */
+        try {
+            await navigator.clipboard
+                ?.writeText(
+                    shareUrl,
+                );
+
+            this.showStatus(
+                language === 'ko'
+                    ? '이미지를 저장하고 게임 링크를 복사했습니다.'
+                    : 'Image saved and game link copied.',
+            );
+        } catch {
+            // Download still works even if clipboard permission is denied.
         }
 
         this.downloadMultiplayerVictoryShowcase();
