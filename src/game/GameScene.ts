@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010388Q_ALIVE_HIDER_ONLY_SYMMETRIC_CROWN: only living Hiders get survival cards; crown geometry is perfectly centered. */
     /* V1010388P_FINISHED_DEAD_FADE_BADGE_POSITION: Finished dead-Hider alpha invariant + correctly lifted survivor crown badge. */
     /* V1010388O_DEAD_HIDER_FADE_SURVIVOR_BADGE: dead Hiders stay faded in Finished + Hider card crown/SURVIVED badge. */
     /* V1010388N_HUNTER_FULL_MAP_VICTORY_CARD: Hunter social snapshot = clean full-map 960x540 evidence board. */
@@ -31131,6 +31132,37 @@ export class GameScene extends Phaser.Scene {
                         : undefined
             );
 
+        /*
+         * V1010388Q_ALIVE_HIDER_ONLY_SYMMETRIC_CROWN / SURVIVOR_ONLY_HIDER_CARD
+         *
+         * Hunter card = team win trophy.
+         * Hider card  = personal survival trophy.
+         *
+         * A Hider who was already found/dead must NOT receive "YOU SURVIVED"
+         * just because another Hider survived until the team won.
+         */
+        const localSessionId =
+            multiplayerClient
+                .getSessionId();
+
+        const roomLocalPlayer =
+            localSessionId
+                ? multiplayerClient
+                    .getRoom()
+                    ?.state.players
+                    ?.get(
+                        localSessionId,
+                    )
+                : undefined;
+
+        const localAlive =
+            multiplayerClient
+                .getLocalPlayer()
+                ?.alive ??
+            roomLocalPlayer
+                ?.alive ??
+            false;
+
         const localWon =
             (
                 result.winner === 'hunters' &&
@@ -31138,7 +31170,8 @@ export class GameScene extends Phaser.Scene {
             ) ||
             (
                 result.winner === 'hiders' &&
-                localRole === 'hider'
+                localRole === 'hider' &&
+                localAlive
             );
 
         console.info(
@@ -31146,6 +31179,7 @@ export class GameScene extends Phaser.Scene {
             {
                 winner: result.winner,
                 localRole,
+                localAlive,
                 localWon,
             },
         );
@@ -32152,10 +32186,6 @@ export class GameScene extends Phaser.Scene {
                 badgeY - 24;
             const crownW = 32;
             const crownH = 19;
-            const crownLeft =
-                survivorX -
-                crownW / 2;
-
             context.globalAlpha =
                 0.84;
             context.fillStyle =
@@ -32166,44 +32196,56 @@ export class GameScene extends Phaser.Scene {
             context.lineJoin =
                 'round';
 
+            /*
+             * V1010388Q_ALIVE_HIDER_ONLY_SYMMETRIC_CROWN / SYMMETRIC_CROWN
+             * Every crown point mirrors around survivorX.
+             */
+            const crownBottomY =
+                crownCenterY +
+                crownH / 2;
+            const crownTopY =
+                crownCenterY -
+                crownH / 2;
+            const crownShoulderY =
+                crownTopY +
+                crownH * 0.36;
+            const crownValleyY =
+                crownCenterY;
+
             context.beginPath();
             context.moveTo(
-                crownLeft,
-                crownCenterY +
-                    crownH / 2,
+                survivorX -
+                    crownW * 0.5,
+                crownBottomY,
             );
             context.lineTo(
-                crownLeft + 4,
-                crownCenterY -
-                    crownH / 2 +
-                    5,
+                survivorX -
+                    crownW * 0.39,
+                crownShoulderY,
             );
             context.lineTo(
-                crownLeft + 12,
-                crownCenterY - 1,
+                survivorX -
+                    crownW * 0.18,
+                crownValleyY,
             );
             context.lineTo(
-                crownLeft + 18,
-                crownCenterY -
-                    crownH / 2,
+                survivorX,
+                crownTopY,
             );
             context.lineTo(
-                crownLeft + 25,
-                crownCenterY - 1,
+                survivorX +
+                    crownW * 0.18,
+                crownValleyY,
             );
             context.lineTo(
-                crownLeft +
-                    crownW -
-                    4,
-                crownCenterY -
-                    crownH / 2 +
-                    5,
+                survivorX +
+                    crownW * 0.39,
+                crownShoulderY,
             );
             context.lineTo(
-                crownLeft +
-                    crownW,
-                crownCenterY +
-                    crownH / 2,
+                survivorX +
+                    crownW * 0.5,
+                crownBottomY,
             );
             context.closePath();
             context.fill();
@@ -32211,14 +32253,14 @@ export class GameScene extends Phaser.Scene {
 
             context.beginPath();
             context.moveTo(
-                crownLeft + 2,
+                survivorX -
+                    crownW * 0.44,
                 crownCenterY +
                     crownH / 2,
             );
             context.lineTo(
-                crownLeft +
-                    crownW -
-                    2,
+                survivorX +
+                    crownW * 0.44,
                 crownCenterY +
                     crownH / 2,
             );
