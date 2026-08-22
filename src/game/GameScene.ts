@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010388M2_HIDE_ROLE_LABELS_ROBUST: hide gameplay role/survival HUD from social Victory Snapshot only. */
     /* V1010388L_HIDER_FINISH_SCALE_SHARE_FEEDBACK: restore Hider Finished HUD scale + visible modal share acknowledgement. */
     /* V1010388K_CLEAN_CARD_CENTER_CLIPBOARD: capture HUD hard-lock + exact Hider centering + Kakao-ready clipboard share. */
     /* V1010388J_VICTORY_CARD_FINAL_VISUALS: exact camouflage FOUND replay + Practice-parity Hider framing + link share. */
@@ -31325,6 +31326,24 @@ export class GameScene extends Phaser.Scene {
             this.roundReturnLobbyButton?.visible ??
             false;
 
+        /*
+         * V1010388M2_HIDE_ROLE_LABELS_ROBUST / SAVE_ROLE_HUD
+         * These labels belong to gameplay only. Remember their state so the
+         * social-card capture can hide them without changing normal gameplay.
+         */
+        const survivalHudGraphicsWasVisible =
+            this.survivalHudGraphics?.visible ??
+            false;
+        const survivalHudTextWasVisible =
+            this.survivalHudText?.visible ??
+            false;
+        const survivalHiderLabelWasVisible =
+            this.survivalHiderLabelText?.visible ??
+            false;
+        const survivalHunterLabelWasVisible =
+            this.survivalHunterLabelText?.visible ??
+            false;
+
         const previousCleanCaptureActive =
             this.victoryShowcaseCleanCaptureActive;
 
@@ -31357,6 +31376,20 @@ export class GameScene extends Phaser.Scene {
             this.guideText
                 ?.setVisible(false);
             this.statusText
+                ?.setVisible(false);
+
+            /*
+             * V1010388M2_HIDE_ROLE_LABELS_ROBUST / CLEAN_ROLE_HUD
+             * Prevent "하이더 / 헌터" role labels from appearing in the
+             * Victory Snapshot. This affects capture frames only.
+             */
+            this.survivalHudGraphics
+                ?.setVisible(false);
+            this.survivalHudText
+                ?.setVisible(false);
+            this.survivalHiderLabelText
+                ?.setVisible(false);
+            this.survivalHunterLabelText
                 ?.setVisible(false);
 
             if (isHider) {
@@ -31462,6 +31495,26 @@ export class GameScene extends Phaser.Scene {
 
             this.networkPlayerManager
                 .setNamesVisible(false);
+
+            /*
+             * V1010388M2_HIDE_ROLE_LABELS_ROBUST / RESTORE_ROLE_HUD
+             */
+            this.survivalHudGraphics
+                ?.setVisible(
+                    survivalHudGraphicsWasVisible,
+                );
+            this.survivalHudText
+                ?.setVisible(
+                    survivalHudTextWasVisible,
+                );
+            this.survivalHiderLabelText
+                ?.setVisible(
+                    survivalHiderLabelWasVisible,
+                );
+            this.survivalHunterLabelText
+                ?.setVisible(
+                    survivalHunterLabelWasVisible,
+                );
 
             /*
              * Rebuild the player's real Finished presentation after the
