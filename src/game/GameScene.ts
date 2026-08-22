@@ -35976,20 +35976,26 @@ export class GameScene extends Phaser.Scene {
             this.isPainting = false;
 
             /*
-             * V1010423_ATOMIC_HUNT_VISUAL_HANDOFF_RESTORE
-             * Preserve the exact Paint raster on the Paint -> Hunt boundary.
-             * The final history still goes to the authoritative server, but
-             * NEVER clear/rebuild/replay the visible texture here.
+             * V1010430_V369_HUNT_NO_RECONNECT_SNAPSHOT
+             *
+             * Restore the proven v369 Hunt-start rule:
+             * a normal Paint -> Hunt transition is NOT reconnect recovery.
+             *
+             * Do not send the whole local paint history through
+             * sendReconnectPaintSnapshot() here.
+             *
+             * The visible raster already exists locally and normal paint_stroke
+             * traffic already synchronized connected peers during Paint.
+             * Full snapshot traffic stays reserved for ACTUAL reconnect recovery.
              */
             if (
                 this.networkPlayerManager
                     .isLocalHider() &&
                 this.localPaintHistory.length > 0
             ) {
-                multiplayerClient
-                    .sendReconnectPaintSnapshot(
-                        this.localPaintHistory,
-                    );
+                this.rebuildLocalPaintFromHistory(
+                    false,
+                );
             }
 
             this.clearStatus();
