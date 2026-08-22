@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010388_CLIENT_VICTORY_SHOWCASE: winner-only social result poster. */
     /* V1010386M_MAP_NAME_HARD_CENTER: reset legacy offsets and center Practice map name under thumbnail. */
     /* V1010386L_MAP_NAME_THUMB_CENTER: practice map name centers on thumbnail column. */
     /* V1010386K_RESPONSIVE_PRACTICE_CAROUSEL: both arrows always visible; thumbnail yields width; map name truly centered. */
@@ -4505,6 +4506,16 @@ export class GameScene extends Phaser.Scene {
     private readonly gameplayCameraZoom = 1.65;
     private roundResultWinner: 'hunters' | 'hiders' | null = null;
     private roundEndedByAmmoDepletion = false;
+
+    /*
+     * V1010388_CLIENT_VICTORY_SHOWCASE
+     * Capture during Finished, present after returning to Lobby.
+     */
+    private victoryShowcaseBlob?: Blob;
+    private victoryShowcaseWinner?: 'hunters' | 'hiders';
+    private victoryShowcasePreviewUrl = '';
+    private victoryShowcaseModal?: HTMLDivElement;
+    private victoryShowcaseCaptureSerial = 0;
     private roundReturnLobbyButton?: Phaser.GameObjects.Text;
     private lastPhaseRecoveryAt = 0;
     private phaseExpiredSince = 0;
@@ -33063,6 +33074,22 @@ export class GameScene extends Phaser.Scene {
 
         this.phase = 'lobby';
 
+        /*
+         * V1010388_CLIENT_VICTORY_SHOWCASE:
+         * reward reveal after the waiting room UI has settled.
+         */
+        this.time.delayedCall(
+            320,
+            () => {
+                if (
+                    this.phase === 'lobby' &&
+                    this.victoryShowcaseBlob
+                ) {
+                    this.showMultiplayerVictoryShowcase();
+                }
+            },
+        );
+
         this.survivalHudGraphics
             ?.setVisible(false);
         this.survivalHudText
@@ -33808,8 +33835,14 @@ export class GameScene extends Phaser.Scene {
                 .setText('')
                 .setVisible(false);
         } else {
+            /*
+             * V1010388_CLIENT_VICTORY_SHOWCASE:
+             * briefly reveal final painted Hiders for the winner's capture.
+             */
             this.networkPlayerManager
-                .clearRevealMarkers();
+                .revealHiders(
+                    result.revealedHiders,
+                );
 
             this.phaseText
                 .setText('')
@@ -33820,7 +33853,897 @@ export class GameScene extends Phaser.Scene {
                 .setVisible(false);
         }
 
+        const localRole =
+            multiplayerClient
+                .getLocalPlayer()
+                ?.role;
 
+        const localWon =
+            (
+                result.winner === 'hunters' &&
+                localRole === 'hunter'
+            ) ||
+            (
+                result.winner === 'hiders' &&
+                localRole === 'hider'
+            );
+
+        if (localWon) {
+            void this.captureMultiplayerVictoryShowcase(
+                result,
+            );
+        }
+
+    }
+
+
+    /*
+     * V1010388_CLIENT_VICTORY_SHOWCASE
+     * Winner-only Instagram-friendly 4:5 (1080x1350) result poster.
+     */
+    private async captureMultiplayerVictoryShowcase(
+        result: NetworkRoundResult,
+    ): Promise<void> {
+        const captureSerial =
+            ++this.victoryShowcaseCaptureSerial;
+
+        await new Promise<void>(
+            (resolve) => {
+                requestAnimationFrame(
+                    () => requestAnimationFrame(
+                        () => resolve(),
+                    ),
+                );
+            },
+        );
+
+        const image =
+            await this.captureGameCanvasForShare();
+
+        if (
+            !image ||
+            captureSerial !==
+                this.victoryShowcaseCaptureSerial
+        ) {
+            return;
+        }
+
+        const extended =
+            result as NetworkRoundResult & {
+                victoryShowcase?: {
+                    activeMap?: string;
+                    foundHiders?: Array<{
+                        sessionId: string;
+                        name?: string;
+                        x: number;
+                        y: number;
+                        foundOrder?: number;
+                    }>;
+                    survivingHiders?: Array<{
+                        sessionId: string;
+                        name?: string;
+                        x: number;
+                        y: number;
+                    }>;
+                };
+            };
+
+        const localSessionId =
+            multiplayerClient.getRoom()
+                ?.sessionId ??
+            '';
+
+        const canvas =
+            document.createElement('canvas');
+        canvas.width = 1080;
+        canvas.height = 1350;
+
+        const context =
+            canvas.getContext('2d');
+
+        if (!context) {
+            return;
+        }
+
+        const winner =
+            result.winner;
+        const isHunter =
+            winner === 'hunters';
+
+        const bg =
+            context.createLinearGradient(
+                0,
+                0,
+                1080,
+                1350,
+            );
+
+        bg.addColorStop(
+            0,
+            isHunter
+                ? '#170b08'
+                : '#06170e',
+        );
+        bg.addColorStop(
+            0.48,
+            isHunter
+                ? '#27130f'
+                : '#102a19',
+        );
+        bg.addColorStop(
+            1,
+            '#070a10',
+        );
+
+        context.fillStyle = bg;
+        context.fillRect(
+            0,
+            0,
+            1080,
+            1350,
+        );
+
+        const glow =
+            context.createRadialGradient(
+                isHunter ? 890 : 180,
+                130,
+                10,
+                isHunter ? 890 : 180,
+                130,
+                620,
+            );
+
+        glow.addColorStop(
+            0,
+            isHunter
+                ? 'rgba(255,104,62,.30)'
+                : 'rgba(74,246,137,.24)',
+        );
+        glow.addColorStop(
+            1,
+            'rgba(0,0,0,0)',
+        );
+
+        context.fillStyle = glow;
+        context.fillRect(
+            0,
+            0,
+            1080,
+            720,
+        );
+
+        const language =
+            getLanguage();
+
+        const title =
+            isHunter
+                ? (
+                    language === 'ko'
+                        ? '내가 다 찾았다!'
+                        : language === 'ja'
+                            ? '全部見つけた！'
+                            : 'I FOUND THEM!'
+                )
+                : (
+                    language === 'ko'
+                        ? '끝까지 살아남았다!'
+                        : language === 'ja'
+                            ? '最後まで生き残った！'
+                            : 'STILL HIDDEN!'
+                );
+
+        context.fillStyle =
+            isHunter
+                ? '#ffad79'
+                : '#87f8ae';
+        context.font =
+            '900 25px Arial, sans-serif';
+        context.fillText(
+            isHunter
+                ? 'HUNTER VICTORY'
+                : 'HIDER VICTORY',
+            62,
+            78,
+        );
+
+        context.fillStyle = '#ffffff';
+        context.font =
+            '900 66px Arial, sans-serif';
+        context.fillText(
+            title,
+            60,
+            158,
+        );
+
+        context.fillStyle =
+            'rgba(255,255,255,.66)';
+        context.font =
+            '700 22px Arial, sans-serif';
+        context.fillText(
+            isHunter
+                ? (
+                    language === 'ko'
+                        ? '숨은 흔적까지, 오늘의 사냥 기록.'
+                        : 'Every hiding spot. One victory.'
+                )
+                : (
+                    language === 'ko'
+                        ? '끝까지 들키지 않은 나의 위장.'
+                        : 'Camouflaged. Hidden. Survived.'
+                ),
+            62,
+            204,
+        );
+
+        const frameX = 60;
+        const frameY = 252;
+        const frameW = 960;
+        const frameH = 540;
+
+        context.save();
+        context.beginPath();
+        context.roundRect(
+            frameX,
+            frameY,
+            frameW,
+            frameH,
+            34,
+        );
+        context.clip();
+        context.drawImage(
+            image,
+            frameX,
+            frameY,
+            frameW,
+            frameH,
+        );
+
+        const fade =
+            context.createLinearGradient(
+                0,
+                frameY + 330,
+                0,
+                frameY + frameH,
+            );
+        fade.addColorStop(
+            0,
+            'rgba(0,0,0,0)',
+        );
+        fade.addColorStop(
+            1,
+            'rgba(0,0,0,.32)',
+        );
+        context.fillStyle = fade;
+        context.fillRect(
+            frameX,
+            frameY,
+            frameW,
+            frameH,
+        );
+        context.restore();
+
+        context.strokeStyle =
+            'rgba(255,255,255,.34)';
+        context.lineWidth = 2;
+        context.beginPath();
+        context.roundRect(
+            frameX,
+            frameY,
+            frameW,
+            frameH,
+            34,
+        );
+        context.stroke();
+
+        const found =
+            extended.victoryShowcase
+                ?.foundHiders ??
+            [];
+        const survivors =
+            extended.victoryShowcase
+                ?.survivingHiders ??
+            [];
+
+        const fallbackFound =
+            result.revealedHiders.map(
+                (
+                    hider,
+                    index,
+                ) => ({
+                    sessionId:
+                        hider.sessionId,
+                    x:
+                        hider.x,
+                    y:
+                        hider.y,
+                    foundOrder:
+                        index + 1,
+                }),
+            );
+
+        const markers =
+            isHunter
+                ? (
+                    found.length > 0
+                        ? found
+                        : fallbackFound
+                )
+                : survivors.filter(
+                    (entry) =>
+                        !localSessionId ||
+                        entry.sessionId ===
+                            localSessionId,
+                );
+
+        markers.forEach(
+            (
+                marker,
+                index,
+            ) => {
+                const mx =
+                    frameX +
+                    Phaser.Math.Clamp(
+                        Number(marker.x) || 0,
+                        0,
+                        this.gameWidth,
+                    );
+                const my =
+                    frameY +
+                    Phaser.Math.Clamp(
+                        Number(marker.y) || 0,
+                        0,
+                        this.gameHeight,
+                    );
+
+                context.save();
+                context.shadowColor =
+                    isHunter
+                        ? 'rgba(255,91,68,.86)'
+                        : 'rgba(76,255,145,.78)';
+                context.shadowBlur = 22;
+                context.strokeStyle =
+                    '#ffffff';
+                context.lineWidth = 7;
+                context.beginPath();
+                context.arc(
+                    mx,
+                    my,
+                    isHunter ? 38 : 46,
+                    0,
+                    Math.PI * 2,
+                );
+                context.stroke();
+
+                context.strokeStyle =
+                    isHunter
+                        ? '#ff5b44'
+                        : '#58ed8d';
+                context.lineWidth = 4;
+                context.beginPath();
+                context.arc(
+                    mx,
+                    my,
+                    isHunter ? 30 : 37,
+                    0,
+                    Math.PI * 2,
+                );
+                context.stroke();
+                context.shadowBlur = 0;
+
+                const foundOrder =
+                    'foundOrder' in marker &&
+                    Number(marker.foundOrder) > 0
+                        ? Number(marker.foundOrder)
+                        : index + 1;
+
+                const label =
+                    isHunter
+                        ? 'FOUND ' +
+                            String(foundOrder)
+                                .padStart(2, '0')
+                        : 'YOU SURVIVED';
+
+                context.font =
+                    '900 17px Arial, sans-serif';
+
+                const textWidth =
+                    context.measureText(label)
+                        .width;
+                const pillW =
+                    textWidth + 28;
+                const pillH = 32;
+                const pillX =
+                    Phaser.Math.Clamp(
+                        mx - pillW / 2,
+                        frameX + 10,
+                        frameX +
+                            frameW -
+                            pillW -
+                            10,
+                    );
+                const pillY =
+                    Math.max(
+                        frameY + 10,
+                        my - 74,
+                    );
+
+                context.fillStyle =
+                    isHunter
+                        ? 'rgba(255,71,56,.94)'
+                        : 'rgba(30,185,92,.94)';
+                context.beginPath();
+                context.roundRect(
+                    pillX,
+                    pillY,
+                    pillW,
+                    pillH,
+                    16,
+                );
+                context.fill();
+
+                context.fillStyle =
+                    '#ffffff';
+                context.textAlign =
+                    'center';
+                context.textBaseline =
+                    'middle';
+                context.fillText(
+                    label,
+                    pillX + pillW / 2,
+                    pillY + pillH / 2 + 1,
+                );
+                context.restore();
+            },
+        );
+
+        context.textAlign = 'left';
+        context.textBaseline =
+            'alphabetic';
+
+        const roomState =
+            multiplayerClient.getRoom()
+                ?.state as {
+                    activeMap?: string;
+                } | undefined;
+
+        const activeMap =
+            extended.victoryShowcase
+                ?.activeMap ??
+            roomState?.activeMap ??
+            'forest';
+
+        context.fillStyle =
+            'rgba(255,255,255,.09)';
+        context.beginPath();
+        context.roundRect(
+            60,
+            838,
+            960,
+            168,
+            30,
+        );
+        context.fill();
+
+        context.fillStyle =
+            'rgba(255,255,255,.52)';
+        context.font =
+            '800 17px Arial, sans-serif';
+        context.fillText(
+            'MATCH MEMORY',
+            88,
+            882,
+        );
+
+        context.fillStyle = '#ffffff';
+        context.font =
+            '900 34px Arial, sans-serif';
+        context.fillText(
+            this.getMapDisplayName(
+                activeMap,
+            ),
+            88,
+            930,
+        );
+
+        context.textAlign = 'right';
+        context.fillStyle =
+            isHunter
+                ? '#ffb087'
+                : '#8bf3ad';
+        context.font =
+            '900 32px Arial, sans-serif';
+        context.fillText(
+            isHunter
+                ? String(
+                    Math.max(
+                        found.length,
+                        result.revealedHiders.length,
+                    ),
+                ) + ' FOUND'
+                : 'SURVIVED',
+            990,
+            930,
+        );
+
+        context.fillStyle =
+            'rgba(255,255,255,.56)';
+        context.font =
+            '700 18px Arial, sans-serif';
+        context.fillText(
+            isHunter
+                ? 'HUNT COMPLETE'
+                : 'HIDE COMPLETE',
+            990,
+            965,
+        );
+
+        context.textAlign = 'left';
+        context.fillStyle = '#ffffff';
+        context.font =
+            '900 50px Arial, sans-serif';
+        context.fillText(
+            'COLOR HUNT',
+            60,
+            1112,
+        );
+
+        context.fillStyle =
+            'rgba(255,255,255,.56)';
+        context.font =
+            '700 21px Arial, sans-serif';
+        context.fillText(
+            'CAMOUFLAGE · HIDE · HUNT',
+            62,
+            1148,
+        );
+
+        context.fillStyle =
+            isHunter
+                ? 'rgba(255,128,82,.15)'
+                : 'rgba(83,239,142,.13)';
+        context.beginPath();
+        context.roundRect(
+            60,
+            1192,
+            430,
+            58,
+            29,
+        );
+        context.fill();
+
+        context.fillStyle =
+            isHunter
+                ? '#ffc1a2'
+                : '#a4f7be';
+        context.font =
+            '900 19px Arial, sans-serif';
+        context.fillText(
+            isHunter
+                ? '#COLORHUNT  #HUNTERWIN'
+                : '#COLORHUNT  #HIDERWIN',
+            86,
+            1229,
+        );
+
+        context.textAlign = 'right';
+        context.fillStyle =
+            'rgba(255,255,255,.42)';
+        context.font =
+            '700 17px Arial, sans-serif';
+        context.fillText(
+            this.getPracticeShareUrl()
+                .replace(
+                    /^https?:\/\//,
+                    '',
+                )
+                .replace(
+                    /\/$/,
+                    '',
+                ),
+            1018,
+            1228,
+        );
+
+        context.font =
+            '700 15px Arial, sans-serif';
+        context.fillStyle =
+            'rgba(255,255,255,.25)';
+        context.fillText(
+            new Date()
+                .toLocaleDateString(),
+            1018,
+            1288,
+        );
+
+        const blob =
+            await new Promise<Blob | null>(
+                (resolve) => {
+                    canvas.toBlob(
+                        resolve,
+                        'image/png',
+                        1,
+                    );
+                },
+            );
+
+        if (
+            !blob ||
+            captureSerial !==
+                this.victoryShowcaseCaptureSerial
+        ) {
+            return;
+        }
+
+        this.victoryShowcaseBlob =
+            blob;
+        this.victoryShowcaseWinner =
+            winner;
+    }
+
+    private downloadMultiplayerVictoryShowcase(): void {
+        const blob =
+            this.victoryShowcaseBlob;
+
+        if (!blob) {
+            return;
+        }
+
+        const url =
+            URL.createObjectURL(blob);
+        const anchor =
+            document.createElement('a');
+
+        anchor.href = url;
+        anchor.download =
+            'color-hunt-' +
+            (
+                this.victoryShowcaseWinner ===
+                    'hunters'
+                    ? 'hunter-victory-'
+                    : 'hider-victory-'
+            ) +
+            Date.now() +
+            '.png';
+
+        document.body.appendChild(
+            anchor,
+        );
+        anchor.click();
+        anchor.remove();
+
+        window.setTimeout(
+            () => URL.revokeObjectURL(url),
+            1_000,
+        );
+    }
+
+    private async shareMultiplayerVictoryShowcase(): Promise<void> {
+        const blob =
+            this.victoryShowcaseBlob;
+
+        if (!blob) {
+            return;
+        }
+
+        const isHunter =
+            this.victoryShowcaseWinner ===
+            'hunters';
+
+        const file =
+            new File(
+                [blob],
+                isHunter
+                    ? 'color-hunt-hunter-victory.png'
+                    : 'color-hunt-hider-victory.png',
+                {
+                    type: 'image/png',
+                },
+            );
+
+        const shareUrl =
+            this.getPracticeShareUrl();
+        const language =
+            getLanguage();
+
+        const text =
+            isHunter
+                ? (
+                    language === 'ko'
+                        ? '다 찾았다 😎 COLOR HUNT 승리 기록'
+                        : 'I found them all 😎 COLOR HUNT'
+                )
+                : (
+                    language === 'ko'
+                        ? '끝까지 안 들켰다 🦎 COLOR HUNT 생존 기록'
+                        : 'Still hidden 🦎 COLOR HUNT'
+                );
+
+        try {
+            if (
+                navigator.share &&
+                (
+                    !navigator.canShare ||
+                    navigator.canShare({
+                        files: [file],
+                    })
+                )
+            ) {
+                await navigator.share({
+                    title: 'COLOR HUNT',
+                    text,
+                    url: shareUrl,
+                    files: [file],
+                });
+                return;
+            }
+
+            if (navigator.share) {
+                await navigator.share({
+                    title: 'COLOR HUNT',
+                    text,
+                    url: shareUrl,
+                });
+                return;
+            }
+        } catch (error) {
+            if (
+                error instanceof DOMException &&
+                error.name === 'AbortError'
+            ) {
+                return;
+            }
+        }
+
+        this.downloadMultiplayerVictoryShowcase();
+    }
+
+    private closeMultiplayerVictoryShowcase(): void {
+        this.victoryShowcaseModal
+            ?.remove();
+        this.victoryShowcaseModal =
+            undefined;
+
+        if (
+            this.victoryShowcasePreviewUrl
+        ) {
+            URL.revokeObjectURL(
+                this.victoryShowcasePreviewUrl,
+            );
+            this.victoryShowcasePreviewUrl =
+                '';
+        }
+
+        this.victoryShowcaseBlob =
+            undefined;
+        this.victoryShowcaseWinner =
+            undefined;
+    }
+
+    private showMultiplayerVictoryShowcase(): void {
+        if (
+            !this.victoryShowcaseBlob ||
+            !this.victoryShowcaseWinner ||
+            this.victoryShowcaseModal
+        ) {
+            return;
+        }
+
+        this.victoryShowcasePreviewUrl =
+            URL.createObjectURL(
+                this.victoryShowcaseBlob,
+            );
+
+        const isHunter =
+            this.victoryShowcaseWinner ===
+            'hunters';
+        const language =
+            getLanguage();
+
+        const overlay =
+            document.createElement('div');
+        overlay.className =
+            'colorhunt-victory-showcase-overlay';
+
+        const card =
+            document.createElement('div');
+        card.className =
+            'colorhunt-victory-showcase-card ' +
+            (
+                isHunter
+                    ? 'is-hunter'
+                    : 'is-hider'
+            );
+
+        const title =
+            isHunter
+                ? (
+                    language === 'ko'
+                        ? '내가 다 찾았다!'
+                        : 'I FOUND THEM!'
+                )
+                : (
+                    language === 'ko'
+                        ? '끝까지 살아남았다!'
+                        : 'STILL HIDDEN!'
+                );
+
+        const closeLabel =
+            language === 'ko'
+                ? '닫기'
+                : 'Close';
+        const saveLabel =
+            language === 'ko'
+                ? '저장'
+                : 'Save';
+        const shareLabel =
+            language === 'ko'
+                ? '공유하기'
+                : 'Share';
+
+        card.innerHTML =
+            '<style>' +
+            '.colorhunt-victory-showcase-overlay{position:fixed;inset:0;z-index:2147483000;display:grid;place-items:center;padding:18px;background:radial-gradient(circle at 50% 18%,rgba(255,255,255,.09),transparent 36%),rgba(3,7,12,.80);backdrop-filter:blur(18px) saturate(1.15);-webkit-backdrop-filter:blur(18px) saturate(1.15);animation:chVictoryBackdrop .42s ease both}' +
+            '.colorhunt-victory-showcase-card{width:min(94vw,560px);max-height:min(94vh,820px);overflow:auto;border:1px solid rgba(255,255,255,.16);border-radius:30px;padding:18px;color:#fff;background:linear-gradient(180deg,rgba(23,27,36,.97),rgba(8,11,17,.99));box-shadow:0 30px 90px rgba(0,0,0,.48),inset 0 1px 0 rgba(255,255,255,.10);transform-origin:50% 72%;animation:chVictoryPop .62s cubic-bezier(.2,.9,.2,1.1) both;font-family:Inter,Pretendard,system-ui,sans-serif}' +
+            '.colorhunt-victory-showcase-card.is-hunter{box-shadow:0 30px 90px rgba(0,0,0,.48),0 0 70px rgba(255,104,61,.13),inset 0 1px 0 rgba(255,255,255,.10)}' +
+            '.colorhunt-victory-showcase-card.is-hider{box-shadow:0 30px 90px rgba(0,0,0,.48),0 0 70px rgba(77,238,139,.13),inset 0 1px 0 rgba(255,255,255,.10)}' +
+            '.colorhunt-victory-showcase-head{display:flex;align-items:end;justify-content:space-between;gap:14px;padding:3px 4px 14px}.colorhunt-victory-showcase-kicker{font-size:11px;font-weight:950;letter-spacing:.18em;opacity:.58}.colorhunt-victory-showcase-title{margin-top:4px;font-size:clamp(25px,5vw,34px);line-height:1;font-weight:950;letter-spacing:-.04em}.is-hunter .colorhunt-victory-showcase-title{color:#ffb087}.is-hider .colorhunt-victory-showcase-title{color:#93f5b2}.colorhunt-victory-showcase-badge{flex:0 0 auto;padding:7px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);font-size:11px;font-weight:900}.colorhunt-victory-showcase-preview{display:block;width:100%;height:auto;border-radius:22px;box-shadow:0 18px 42px rgba(0,0,0,.34);background:#111}.colorhunt-victory-showcase-caption{margin:12px 5px 15px;color:rgba(255,255,255,.62);font-size:12px;font-weight:700;text-align:center}.colorhunt-victory-showcase-actions{display:grid;grid-template-columns:.8fr 1fr 1.2fr;gap:9px}.colorhunt-victory-showcase-actions button{min-height:46px;border:0;border-radius:15px;color:#fff;background:rgba(255,255,255,.08);font:inherit;font-size:13px;font-weight:900;cursor:pointer}.colorhunt-victory-showcase-actions [data-victory-share]{color:#09100c;background:' +
+            (isHunter ? '#ffb087' : '#8df0ac') +
+            '}@keyframes chVictoryBackdrop{from{opacity:0}to{opacity:1}}@keyframes chVictoryPop{0%{opacity:0;transform:translateY(34px) scale(.88) rotate(-1.5deg)}58%{opacity:1;transform:translateY(-3px) scale(1.015) rotate(.3deg)}100%{opacity:1;transform:translateY(0) scale(1)}}@media(max-height:650px){.colorhunt-victory-showcase-card{width:min(88vw,430px);padding:12px;border-radius:22px}.colorhunt-victory-showcase-actions button{min-height:40px}}' +
+            '</style>' +
+            '<div class="colorhunt-victory-showcase-head"><div><div class="colorhunt-victory-showcase-kicker">VICTORY SNAPSHOT</div><div class="colorhunt-victory-showcase-title">' +
+            title +
+            '</div></div><div class="colorhunt-victory-showcase-badge">4:5 · SOCIAL</div></div>' +
+            '<img class="colorhunt-victory-showcase-preview" src="' +
+            this.victoryShowcasePreviewUrl +
+            '" alt="COLOR HUNT victory snapshot" />' +
+            '<div class="colorhunt-victory-showcase-caption">' +
+            (
+                language === 'ko'
+                    ? '승리한 플레이어에게만 남는 이번 판의 기념 스냅샷'
+                    : 'A victory-only memory from this match'
+            ) +
+            '</div>' +
+            '<div class="colorhunt-victory-showcase-actions">' +
+            '<button type="button" data-victory-close>' +
+            closeLabel +
+            '</button>' +
+            '<button type="button" data-victory-save>' +
+            saveLabel +
+            '</button>' +
+            '<button type="button" data-victory-share>' +
+            shareLabel +
+            '</button></div>';
+
+        overlay.appendChild(card);
+        document.body.appendChild(
+            overlay,
+        );
+
+        this.victoryShowcaseModal =
+            overlay;
+
+        card.querySelector(
+            '[data-victory-close]',
+        )?.addEventListener(
+            'click',
+            () => this.closeMultiplayerVictoryShowcase(),
+        );
+
+        card.querySelector(
+            '[data-victory-save]',
+        )?.addEventListener(
+            'click',
+            () => this.downloadMultiplayerVictoryShowcase(),
+        );
+
+        card.querySelector(
+            '[data-victory-share]',
+        )?.addEventListener(
+            'click',
+            () => {
+                void this.shareMultiplayerVictoryShowcase();
+            },
+        );
     }
 
     private applyNetworkPhase(
