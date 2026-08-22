@@ -79,6 +79,8 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010436D_VICTORY_RESULT_TYPEFIX: strict complete round_result + unified FOUND entry typing. */
+    /* V1010436_VICTORY_FOUND_PAINT_AUTHORITATIVE: FOUND count/number/paint survive result races; reconnect untouched. */
     /* V1010435_VICTORY_INVITE_LOADING_POLISH: victory UI + loading + stale invite guards; stable reconnect untouched. */
     /* V1010434_VICTORY_SOCIAL_CARD_POLISH: social victory poster polish; reconnect subsystem untouched. */
     /* V1010428B_PAINT_SNAPSHOT_VISUAL_NOOP: round paint snapshots never toggle Hunt actor visibility. */
@@ -33533,6 +33535,7 @@ export class GameScene extends Phaser.Scene {
 
     private buildVictoryPaintedHiderCanvas(
         sessionId: string,
+        authoritativeStrokes?: NetworkPaintStroke[],
     ): HTMLCanvasElement {
         const avatar =
             document.createElement('canvas');
@@ -33648,13 +33651,18 @@ export class GameScene extends Phaser.Scene {
                 .getSessionId();
 
         const strokes =
-            sessionId === localSessionId &&
-            this.localPaintHistory.length > 0
-                ? this.localPaintHistory
+            authoritativeStrokes &&
+            authoritativeStrokes.length > 0
+                ? authoritativeStrokes
                 : (
-                    this.victoryRoundPaintBySession
-                        .get(sessionId) ??
-                    []
+                    sessionId === localSessionId &&
+                    this.localPaintHistory.length > 0
+                        ? this.localPaintHistory
+                        : (
+                            this.victoryRoundPaintBySession
+                                .get(sessionId) ??
+                            []
+                        )
                 );
 
         strokes.forEach(
@@ -34103,6 +34111,7 @@ export class GameScene extends Phaser.Scene {
                         y: number;
                         foundOrder?: number;
                         foundByHunterSessionId?: string;
+                        paintStrokes?: NetworkPaintStroke[];
                     }>;
                     survivingHiders?: Array<{
                         sessionId: string;
@@ -34120,10 +34129,47 @@ export class GameScene extends Phaser.Scene {
         const language =
             getLanguage();
 
-        const allFound =
+        type VictoryFoundEntry = {
+            sessionId: string;
+            name?: string;
+            x: number;
+            y: number;
+            foundOrder?: number;
+            foundAt?: number;
+            foundByHunterSessionId?: string;
+            paintStrokes?: NetworkPaintStroke[];
+        };
+
+        const serverFound:
+            VictoryFoundEntry[] =
             extended.victoryShowcase
                 ?.foundHiders ??
             [];
+
+        const fallbackFound:
+            VictoryFoundEntry[] =
+            result.revealedHiders.map(
+                (
+                    hider,
+                    index,
+                ) => ({
+                    sessionId:
+                        hider.sessionId,
+                    x:
+                        hider.x,
+                    y:
+                        hider.y,
+                    foundOrder:
+                        index + 1,
+                }),
+            );
+
+        const allFound:
+            VictoryFoundEntry[] =
+            serverFound.length > 0
+                ? serverFound
+                : fallbackFound;
+
         const surviving =
             extended.victoryShowcase
                 ?.survivingHiders ??
@@ -34645,6 +34691,7 @@ export class GameScene extends Phaser.Scene {
                     const paintedAvatar =
                         this.buildVictoryPaintedHiderCanvas(
                             marker.sessionId,
+                            marker.paintStrokes,
                         );
 
                     context.save();

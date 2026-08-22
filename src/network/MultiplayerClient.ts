@@ -187,6 +187,30 @@ export type NetworkRoundResult = {
     y: number;
   }>;
   durationMs: number;
+  /*
+   * V1010436_VICTORY_FOUND_PAINT_AUTHORITATIVE
+   * Authoritative victory metadata. foundHiders may also contain the exact
+   * final camouflage snapshot captured by the server at hit time.
+   */
+  victoryShowcase?: {
+    activeMap?: string;
+    foundHiders?: Array<{
+      sessionId: string;
+      name?: string;
+      x: number;
+      y: number;
+      foundOrder?: number;
+      foundAt?: number;
+      foundByHunterSessionId?: string;
+      paintStrokes?: NetworkPaintStroke[];
+    }>;
+    survivingHiders?: Array<{
+      sessionId: string;
+      name?: string;
+      x: number;
+      y: number;
+    }>;
+  };
 };
 
 export type RoundResultHandler = (
