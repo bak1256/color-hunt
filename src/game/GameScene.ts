@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010438_PERSONAL_FOUND_VISUAL_AND_FOLD_CLOSE: stable personal FOUND, clear markers, big camo, close-to-fold. */
     /* V1010437_PERSONAL_HUNTER_CARD_AND_CAMOUFLAGE: per-Hunter FOUND/ALL KILL + Hunter camouflage social memory. */
     /* V1010436D_VICTORY_RESULT_TYPEFIX: strict complete round_result + unified FOUND entry typing. */
     /* V1010436_VICTORY_FOUND_PAINT_AUTHORITATIVE: FOUND count/number/paint survive result races; reconnect untouched. */
@@ -34112,6 +34113,7 @@ export class GameScene extends Phaser.Scene {
                         y: number;
                         foundOrder?: number;
                         foundByHunterSessionId?: string;
+                        foundByHunterClientKey?: string;
                         paintStrokes?: NetworkPaintStroke[];
                     }>;
                     survivingHiders?: Array<{
@@ -34138,6 +34140,7 @@ export class GameScene extends Phaser.Scene {
             foundOrder?: number;
             foundAt?: number;
             foundByHunterSessionId?: string;
+            foundByHunterClientKey?: string;
             paintStrokes?: NetworkPaintStroke[];
         };
 
@@ -34180,6 +34183,10 @@ export class GameScene extends Phaser.Scene {
             multiplayerClient.getSessionId() ??
             '';
 
+        const localStableClientKey =
+            multiplayerClient
+                .getStableClientKeyForUi();
+
         const roomPlayers =
             multiplayerClient.getRoom()
                 ?.state.players;
@@ -34195,7 +34202,15 @@ export class GameScene extends Phaser.Scene {
                     .length
                 : 0;
 
-        const hasFinderAttribution =
+        const hasStableFinderAttribution =
+            allFound.some(
+                (entry) =>
+                    Boolean(
+                        entry.foundByHunterClientKey,
+                    ),
+            );
+
+        const hasSessionFinderAttribution =
             allFound.some(
                 (entry) =>
                     Boolean(
@@ -34204,22 +34219,29 @@ export class GameScene extends Phaser.Scene {
             );
 
         /*
-         * New server metadata is per-Hunter.
-         * Compatibility: a legacy result with exactly one Hunter can safely
-         * attribute every found Hider to that only Hunter.
+         * V1010438_PERSONAL_FOUND_VISUAL_AND_FOLD_CLOSE / STABLE_PERSONAL_FOUND
+         *
+         * clientKey survives a Colyseus session replacement; sessionId does not.
+         * Prefer clientKey whenever the v438 server supplied it.
          */
         const personalFound =
             !isHunter
                 ? []
-                : hasFinderAttribution
+                : hasStableFinderAttribution
                     ? allFound.filter(
                         (entry) =>
-                            entry.foundByHunterSessionId ===
-                            localSessionId,
+                            entry.foundByHunterClientKey ===
+                            localStableClientKey,
                     )
-                    : hunterCount <= 1
-                        ? allFound
-                        : [];
+                    : hasSessionFinderAttribution
+                        ? allFound.filter(
+                            (entry) =>
+                                entry.foundByHunterSessionId ===
+                                localSessionId,
+                        )
+                        : hunterCount <= 1
+                            ? allFound
+                            : [];
 
         /*
          * V1010435_VICTORY_INVITE_LOADING_POLISH / TEAM_FOUND_DISPLAY
@@ -34707,45 +34729,52 @@ export class GameScene extends Phaser.Scene {
                         );
 
                     context.save();
+                    context.globalAlpha = 1;
                     context.imageSmoothingEnabled =
                         false;
+
+                    /*
+                     * V1010438_PERSONAL_FOUND_VISUAL_AND_FOLD_CLOSE / STRONG_FOUND_MARKER
+                     * Found Hider must read immediately even on a visually busy map.
+                     */
                     context.drawImage(
                         paintedAvatar,
-                        mx - 40,
-                        my - 60,
-                        80,
-                        120,
+                        mx - 46,
+                        my - 69,
+                        92,
+                        138,
                     );
 
                     context.shadowColor =
-                        'rgba(224,80,62,.72)';
-                    context.shadowBlur = 18;
+                        'rgba(215,54,48,.52)';
+                    context.shadowBlur = 16;
+
                     context.strokeStyle =
-                        '#ffffff';
-                    context.lineWidth = 7;
+                        '#d83d35';
+                    context.lineWidth = 9;
                     context.beginPath();
                     context.arc(
                         mx,
                         my,
-                        38,
+                        48,
                         0,
                         Math.PI * 2,
                     );
                     context.stroke();
 
+                    context.shadowBlur = 0;
                     context.strokeStyle =
-                        '#ef6656';
+                        'rgba(255,255,255,.98)';
                     context.lineWidth = 4;
                     context.beginPath();
                     context.arc(
                         mx,
                         my,
-                        30,
+                        39,
                         0,
                         Math.PI * 2,
                     );
                     context.stroke();
-                    context.shadowBlur = 0;
 
                     const foundOrder =
                         Number(
@@ -34888,46 +34917,70 @@ export class GameScene extends Phaser.Scene {
                     localSessionId,
                 );
 
-            context.save();
-            context.imageSmoothingEnabled =
-                false;
+            /*
+             * V1010438_PERSONAL_FOUND_VISUAL_AND_FOLD_CLOSE / LARGE_HUNTER_CAMOUFLAGE_CARD
+             * Give the Hunter's own painting a real showcase instead of a tiny
+             * icon squeezed into MATCH MEMORY.
+             */
+            const camoCardX = 585;
+            const camoCardY =
+                memoryPanelY - 8;
+            const camoCardW = 210;
+            const camoCardH = 170;
 
-            const avatarX = 575;
-            const avatarY =
-                memoryPanelY + 18;
+            context.save();
 
             context.fillStyle =
-                'rgba(255,255,255,.62)';
+                'rgba(255,255,255,.94)';
+            context.strokeStyle =
+                'rgba(37,41,45,.11)';
+            context.lineWidth = 2;
             context.beginPath();
             context.roundRect(
-                avatarX - 12,
-                avatarY - 6,
-                130,
-                118,
-                22,
+                camoCardX,
+                camoCardY,
+                camoCardW,
+                camoCardH,
+                28,
             );
             context.fill();
+            context.stroke();
 
-            context.drawImage(
-                hunterPaintAvatar,
-                avatarX + 13,
-                avatarY - 4,
-                72,
-                108,
+            context.fillStyle =
+                '#71767b';
+            context.font =
+                '800 14px Arial, sans-serif';
+            context.textAlign =
+                'left';
+            context.fillText(
+                'MY CAMOUFLAGE',
+                camoCardX + 18,
+                camoCardY + 28,
             );
 
             context.fillStyle =
-                muted;
+                '#25292d';
             context.font =
-                '800 13px Arial, sans-serif';
-            context.textAlign =
-                'center';
+                '900 21px Arial, sans-serif';
             context.fillText(
                 language === 'ko'
-                    ? 'MY CAMOUFLAGE'
-                    : 'MY CAMOUFLAGE',
-                avatarX + 52,
-                avatarY + 108,
+                    ? '내 위장 자랑!'
+                    : language === 'ja'
+                        ? 'マイ迷彩'
+                        : 'MY LOOK',
+                camoCardX + 18,
+                camoCardY + 54,
+            );
+
+            context.globalAlpha = 1;
+            context.imageSmoothingEnabled =
+                false;
+            context.drawImage(
+                hunterPaintAvatar,
+                camoCardX + 70,
+                camoCardY + 50,
+                80,
+                120,
             );
 
             context.restore();
@@ -35855,8 +35908,14 @@ export class GameScene extends Phaser.Scene {
                 '';
         }
 
+        /*
+         * V1010438_PERSONAL_FOUND_VISUAL_AND_FOLD_CLOSE / CLOSE_MEANS_FOLD
+         *
+         * Closing never destroys this round's memory.
+         * Keep it reopenable in Lobby until leave-room / next-round cleanup.
+         * The checkbox still controls whether FUTURE cards open folded.
+         */
         if (
-            this.isVictoryShowcaseFoldedByDefault() &&
             this.phase === 'lobby' &&
             this.victoryShowcaseBlob &&
             this.victoryShowcaseWinner
@@ -35866,7 +35925,7 @@ export class GameScene extends Phaser.Scene {
         }
 
         this.removeCollapsedVictoryShowcase(
-            true,
+            false,
         );
     }
 

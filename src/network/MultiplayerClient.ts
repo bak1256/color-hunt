@@ -202,6 +202,7 @@ export type NetworkRoundResult = {
       foundOrder?: number;
       foundAt?: number;
       foundByHunterSessionId?: string;
+      foundByHunterClientKey?: string;
       paintStrokes?: NetworkPaintStroke[];
     }>;
     survivingHiders?: Array<{
@@ -4220,6 +4221,15 @@ this.room = room;
         );
       },
     );
+  }
+
+  /*
+   * V1010438_PERSONAL_FOUND_VISUAL_AND_FOLD_CLOSE / PUBLIC_STABLE_ID
+   * Read-only identity for UI attribution. It uses the SAME key already sent
+   * to the server for reconnect handoff.
+   */
+  getStableClientKeyForUi(): string {
+    return this.getStableClientKey();
   }
 
   private getStableClientKey(): string {
