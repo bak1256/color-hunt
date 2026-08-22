@@ -7800,14 +7800,20 @@ export class GameScene extends Phaser.Scene {
              * Name belongs to column 2 so it is geometrically centered under
              * the image even when the two arrow columns are present.
              */
+            /*
+             * V1010419_PRACTICE_ARROW_HUG_THUMBNAIL
+             * Keep both arrows hugging the rendered thumbnail rather than the
+             * old 420px-wide middle TRACK.
+             */
             .colorhunt-practice-map-picker {
                 display: grid !important;
-                grid-template-columns: 56px minmax(210px, 420px) 56px !important;
+                grid-template-columns: 52px fit-content(420px) 52px !important;
                 grid-template-rows: auto auto !important;
                 align-items: center !important;
                 justify-content: center !important;
-                gap: 10px 14px !important;
-                width: 100% !important;
+                column-gap: 7px !important;
+                row-gap: 10px !important;
+                width: fit-content !important;
                 max-width: 100% !important;
                 margin: 12px auto 4px !important;
                 box-sizing: border-box !important;
@@ -7891,13 +7897,16 @@ export class GameScene extends Phaser.Scene {
                 }
 
                 .colorhunt-practice-map-picker {
-                    grid-template-columns: 44px minmax(0, 1fr) 44px !important;
-                    gap: 8px !important;
+                    grid-template-columns: 42px fit-content(420px) 42px !important;
+                    column-gap: 5px !important;
+                    row-gap: 8px !important;
+                    width: fit-content !important;
+                    max-width: 100% !important;
                     padding-inline: 2px !important;
                 }
 
                 .colorhunt-practice-map-preview {
-                    width: min(100%, 420px) !important;
+                    width: min(calc(100vw - 112px), 420px) !important;
                     min-width: 0 !important;
                     max-width: 420px !important;
                 }
