@@ -4697,6 +4697,12 @@ export class GameScene extends Phaser.Scene {
     private straightLineStartWorld?: Phaser.Math.Vector2;
     private straightLinePreview?: Phaser.GameObjects.Graphics;
     private straightLineModeActive = false;
+    /*
+     * V1010411_RESTORE_EXPLICIT_LINE_TOOL
+     * Straight-line drawing is selected explicitly from the mobile paint dock.
+     * Holding a normal brush must never silently change into LINE mode.
+     */
+    private straightLineToolSelected = false;
     private undoPaintButton?: Phaser.GameObjects.Text;
     private redoPaintButton?: Phaser.GameObjects.Text;
     private mobilePaintPrecisionRing?: Phaser.GameObjects.Arc;
@@ -7634,7 +7640,7 @@ export class GameScene extends Phaser.Scene {
                 hunt: '사냥 · WASD 이동 · 마우스 조준 · 좌클릭 발사 · SPACE 방구 탐지',
                 mobileLobby: '대기실 · 버튼 터치 · 채팅칸 터치',
                 mobilePaint: '색칠 · 손가락으로 칠하기 · 핀치 확대/축소 · 아래 도구로 붓 변경',
-                mobileStraight: '직선 · 브러시를 길게 누르면 주황색 이펙트와 함께 직선 모드가 켜집니다',
+                mobileStraight: '직선 · 아래 도구의 직선 버튼을 선택한 뒤 드래그하세요',
                 mobileHunt: '사냥 · 왼쪽 이동 · 오른쪽 조준 · FIRE 발사',
             },
             ja: {
@@ -7647,7 +7653,7 @@ export class GameScene extends Phaser.Scene {
                 hunt: 'ハント · WASD移動 · マウス照準 · 左クリック射撃 · SPACEでおなら探知',
                 mobileLobby: 'ロビー · ボタン操作 · 入力欄タップでチャット',
                 mobilePaint: 'ペイント · 指で塗る · ピンチズーム · 下のツールでブラシ変更',
-                mobileStraight: '直線 · ブラシを長押しするとオレンジの合図で直線モードになります',
+                mobileStraight: '直線 · 下の直線ツールを選んでドラッグしてください',
                 mobileHunt: 'ハント · 左で移動 · 右で照準 · FIREで射撃',
             },
             en: {
@@ -7660,7 +7666,7 @@ export class GameScene extends Phaser.Scene {
                 hunt: 'Hunt · WASD move · Mouse aim · Left click fire · SPACE fart detector',
                 mobileLobby: 'Lobby · Tap buttons · Tap chat field to type',
                 mobilePaint: 'Paint · Paint with one finger · Pinch to zoom · Bottom tools change brush',
-                mobileStraight: 'Straight line · Long-press the brush until the orange cue appears, then drag',
+                mobileStraight: 'Straight line · Select the LINE tool below, then drag',
                 mobileHunt: 'Hunt · Left move · Right aim · FIRE shoots',
             },
             zh: {
@@ -7673,7 +7679,7 @@ export class GameScene extends Phaser.Scene {
                 hunt: '狩猎：WASD/方向键移动 · 鼠标瞄准 · 左键射击 · Space放屁探测',
                 mobileLobby: '大厅：点击屏幕按钮 · 点击聊天输入框聊天',
                 mobilePaint: '涂色 · 单指涂色 · 双指缩放 · 使用底部工具切换画笔',
-                mobileStraight: '直线 · 长按画笔，出现橙色提示后拖动即可画直线',
+                mobileStraight: '直线 · 选择下方直线工具后拖动绘制',
                 mobileHunt: '狩猎：左侧移动 · 右侧瞄准 · FIRE按钮射击',
             },
         } as const;
@@ -7962,6 +7968,9 @@ export class GameScene extends Phaser.Scene {
         const squareSvg =
             `<svg viewBox="0 0 32 32" aria-hidden="true"><rect x="8" y="8" width="16" height="16" rx="2"/><path d="M5 27L12 20"/></svg>`;
 
+        const lineSvg =
+            `<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M7 25L25 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><circle cx="7" cy="25" r="2.5"/><circle cx="25" cy="7" r="2.5"/></svg>`;
+
         const dropperSvg =
             `<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M20 5l7 7-4 4-2-2-9 9-5 2 2-5 9-9-2-2z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 25h8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>`;
 
@@ -7976,6 +7985,8 @@ export class GameScene extends Phaser.Scene {
             tr('원형'),
             circleSvg,
             () => {
+                this.straightLineToolSelected =
+                    false;
                 this.activateMobileBrushTool(
                     'circle',
                 );
@@ -7987,9 +7998,29 @@ export class GameScene extends Phaser.Scene {
             tr('사각형'),
             squareSvg,
             () => {
+                this.straightLineToolSelected =
+                    false;
                 this.activateMobileBrushTool(
                     'square',
                 );
+            },
+        );
+
+        makeTool(
+            'line',
+            tr('직선'),
+            lineSvg,
+            () => {
+                this.finishActivePaintStroke();
+                this.isPainting = false;
+                this.eyedropperArmed = false;
+                this.eyedropperPointerId = -1;
+                this.straightLineToolSelected = true;
+                this.straightLineModeActive = false;
+                this.clearStraightLinePreview();
+                this.hideEyedropperMagnifier();
+                this.updateEyedropperButtonUi();
+                this.syncMobilePaintDockUi();
             },
         );
 
@@ -8015,6 +8046,8 @@ export class GameScene extends Phaser.Scene {
                  * Re-tapping it keeps the eyedropper selected and cannot
                  * accidentally resurrect a brush-only pointer state.
                  */
+                this.straightLineToolSelected =
+                    false;
                 this.activateMobileEyedropperTool();
 
                 /*
@@ -8406,6 +8439,7 @@ export class GameScene extends Phaser.Scene {
             ?.classList.toggle(
                 'is-active',
                 !this.eyedropperArmed &&
+                    !this.straightLineToolSelected &&
                     this.brushShape ===
                         'circle',
             );
@@ -8415,8 +8449,16 @@ export class GameScene extends Phaser.Scene {
             ?.classList.toggle(
                 'is-active',
                 !this.eyedropperArmed &&
+                    !this.straightLineToolSelected &&
                     this.brushShape ===
                         'square',
+            );
+
+        this.mobilePaintToolButtons
+            .get('line')
+            ?.classList.toggle(
+                'is-active',
+                this.straightLineToolSelected,
             );
 
         this.mobilePaintToolButtons
@@ -39478,101 +39520,13 @@ export class GameScene extends Phaser.Scene {
             .setVisible(true);
     }
 
-    private showMobileStraightLineReadyFx(
-        pointer: Phaser.Input.Pointer,
-    ): void {
-        if (
-            !this.mobileControlsEnabled ||
-            this.phase !== 'paint'
-        ) {
-            return;
-        }
+    /*
+     * V1010411C_REMOVE_OBSOLETE_LINE_READY_FX
+     * The old long-hold straight-line activation was removed in v411b.
+     * Its orange "LINE READY" feedback helper is therefore intentionally gone.
+     * Explicit LINE selection now uses the toolbar button's active state.
+     */
 
-        const target =
-            this.getPaintPreviewWorldPoint(pointer);
-        const zoom =
-            Math.max(0.01, this.cameras.main.zoom);
-
-        const fx =
-            this.add.graphics()
-                .setDepth(6510);
-
-        fx.lineStyle(6 / zoom, 0xf59e0b, 1);
-        fx.strokeCircle(target.x, target.y, 32 / zoom);
-        fx.lineStyle(2 / zoom, 0xffffff, 1);
-        fx.strokeCircle(target.x, target.y, 43 / zoom);
-
-        const language = getLanguage();
-        const labelCopy = {
-            ko: '직선 모드 ON  ↔  드래그해서 직선 칠하기',
-            ja: '直線モード ON  ↔  ドラッグで直線',
-            en: 'LINE MODE ON  ↔  DRAG TO PAINT A LINE',
-            zh: '直线模式 ON  ↔  拖动绘制直线',
-        } as const;
-
-        /*
-         * Keep the message crisp: no scale tween. A thick black backing and
-         * high-resolution text make the state unmistakable on small phones.
-         */
-        const label =
-            this.add.text(
-                target.x,
-                target.y - 62 / zoom,
-                labelCopy[language] ?? labelCopy.en,
-                {
-                    fontFamily: 'Arial, sans-serif',
-                    /*
-                     * Render at a normal fixed font size, then cancel camera
-                     * zoom with object scale. This keeps the glyph texture
-                     * crisp even when the paint camera is heavily zoomed.
-                     */
-                    fontSize: '18px',
-                    fontStyle: 'bold',
-                    color: '#ffffff',
-                    backgroundColor: 'rgba(15, 23, 42, 0.96)',
-                    stroke: '#111827',
-                    strokeThickness: 2,
-                    padding: {
-                        x: 12,
-                        y: 8,
-                    },
-                },
-            )
-                .setOrigin(0.5)
-                .setDepth(6511)
-                .setScale(1 / zoom)
-                .setResolution(
-                    Math.max(
-                        2,
-                        Math.ceil(window.devicePixelRatio || 1),
-                    ),
-                );
-
-        try {
-            navigator.vibrate?.([35, 35, 55]);
-        } catch {
-            // Haptics are best-effort only.
-        }
-
-        this.tweens.add({
-            targets: fx,
-            alpha: 0,
-            scaleX: 1.2,
-            scaleY: 1.2,
-            duration: 520,
-            ease: 'Quad.easeOut',
-            onComplete: () => fx.destroy(),
-        });
-
-        this.tweens.add({
-            targets: label,
-            alpha: 0,
-            delay: 900,
-            duration: 260,
-            ease: 'Linear',
-            onComplete: () => label.destroy(),
-        });
-    }
 
     private hideMobilePaintPrecisionGuide(): void {
         this.mobilePaintPrecisionRing
@@ -39953,53 +39907,12 @@ export class GameScene extends Phaser.Scene {
             );
 
         /*
-         * Longer hold arms straight-line mode. The orange handle/ring is the
-         * tactile visual acknowledgement; from here dragging aims a line and
-         * release commits it.
+         * V1010411_RESTORE_EXPLICIT_LINE_TOOL
+         * Long hold remains a normal paint gesture.
+         * LINE is selected only from the dedicated toolbar button.
          */
-        this.mobilePaintLineModeEvent =
-            this.time.delayedCall(
-                /*
-                 * v0.10.10.236.5:
-                 * Slightly faster than the old 650ms while still clearly
-                 * separated from the 120ms dot hold.
-                 */
-                560,
-                () => {
-                    if (
-                        pointer.id !== this.mobilePendingPaintPointerId ||
-                        !pointer.isDown ||
-                        !this.mobilePendingPaintStartScreen
-                    ) {
-                        return;
-                    }
-
-                    const moved =
-                        Phaser.Math.Distance.Between(
-                            this.mobilePendingPaintStartScreen.x,
-                            this.mobilePendingPaintStartScreen.y,
-                            pointer.x,
-                            pointer.y,
-                        );
-
-                    if (moved > 8) {
-                        return;
-                    }
-
-                    if (!this.commitMobilePendingDot()) {
-                        return;
-                    }
-
-                    this.straightLineModeActive = true;
-                    this.mobilePendingPaintPointerId = -1;
-                    this.mobilePaintHoldDotEvent?.remove(false);
-                    this.mobilePaintHoldDotEvent = undefined;
-                    this.mobilePaintLineModeEvent = undefined;
-                    this.updateMobilePaintPrecisionGuide(pointer);
-                    this.showMobileStraightLineReadyFx(pointer);
-                    this.updateStraightLinePreview(pointer);
-                },
-            );
+        this.mobilePaintLineModeEvent?.remove(false);
+        this.mobilePaintLineModeEvent = undefined;
     }
 
     private beginMobilePaintAfterDrag(
@@ -40680,6 +40593,73 @@ export class GameScene extends Phaser.Scene {
                         this.getPaintInputWorldPoint(
                             pointer,
                         );
+
+
+                    /*
+                     * V1010411_RESTORE_EXPLICIT_LINE_TOOL / POINTER_DOWN
+                     * LINE is an explicit one-shot tool.
+                     */
+                    if (
+                        this.straightLineToolSelected
+                    ) {
+                        this.finishActivePaintStroke();
+                        this.isPainting = false;
+                        this.clearStraightLinePreview();
+
+                        if (
+                            this.mobileControlsEnabled
+                        ) {
+                            this.captureMobilePaintPointer(
+                                pointer,
+                            );
+                        }
+
+                        const startPoint =
+                            this.networkPlayerManager
+                                .paintLocalPlayer(
+                                    paintTarget.x,
+                                    paintTarget.y,
+                                    this.brushTextureKey,
+                                    this.paintColor,
+                                    this.brushSize,
+                                    this.brushShape,
+                                );
+
+                        if (!startPoint) {
+                            if (
+                                this.mobileControlsEnabled
+                            ) {
+                                this.releaseMobilePaintPointer(
+                                    pointer,
+                                );
+                            }
+                            return;
+                        }
+
+                        this.playPaintSound();
+                        this.isPainting = true;
+                        this.activeStrokeTargetSessionId =
+                            this.networkPlayerManager
+                                .getLocalSessionId() ?? '';
+                        this.activeStrokePoints = [
+                            startPoint,
+                        ];
+                        this.currentStrokeHistoryPoints = [
+                            startPoint,
+                        ];
+                        this.straightLineStart = {
+                            x: startPoint.x,
+                            y: startPoint.y,
+                        };
+                        this.straightLineStartWorld =
+                            paintTarget.clone();
+                        this.straightLineModeActive =
+                            true;
+                        this.updateStraightLinePreview(
+                            pointer,
+                        );
+                        return;
+                    }
 
                     /*
                      * V1010403C_MOBILE_PAINT_SURGICAL_RECOVERY / EYEDROPPER_NEXT_TOUCH_IMMEDIATE
@@ -41428,6 +41408,22 @@ export class GameScene extends Phaser.Scene {
                     undefined;
                 this.straightLineModeActive =
                     false;
+
+                /*
+                 * V1010411_RESTORE_EXPLICIT_LINE_TOOL / ONE_SHOT_RESET
+                 * After one line, return to the existing Circle/Square brush.
+                 */
+                if (
+                    this.straightLineToolSelected
+                ) {
+                    this.straightLineToolSelected =
+                        false;
+                    this.syncMobilePaintDockUi();
+                    this.highlightBrushShape(
+                        this.brushShape,
+                    );
+                }
+
                 this.clearStraightLinePreview();
 
                 this.hideMobilePaintPrecisionGuide();
