@@ -40099,6 +40099,15 @@ export class GameScene extends Phaser.Scene {
                         return;
                     }
 
+                    /*
+                     * V1010418_PRECISION_OUTSIDE_BODY_HOLD_FINAL
+                     * 520ms is the authority, not whether the initial pixel is
+                     * paintable.  If touch-down is outside the body,
+                     * commitMobilePendingDot() may return false; keep the held
+                     * gesture armed so drag-in can paint the first legal pixel.
+                     */
+                    this.mobilePaintHoldArmed = true;
+
                     if (
                         this.commitMobilePendingDot()
                     ) {
@@ -40170,6 +40179,118 @@ export class GameScene extends Phaser.Scene {
             undefined;
     }
 
+    /*
+     * V1010418_MOBILE_LINE_HOLD_520
+     * LINE selection is persistent, but every individual mobile line stroke
+     * has to earn a fresh 520ms hold before a line origin is created.
+     */
+    private scheduleMobileStraightLineHold(
+        pointer: Phaser.Input.Pointer,
+    ): void {
+        this.cancelMobilePaintHoldTimers();
+        this.mobilePaintDotCommitted = false;
+        this.mobilePaintHoldArmed = false;
+
+        this.mobilePaintHoldDotEvent =
+            this.time.delayedCall(
+                520,
+                () => {
+                    if (
+                        !this.straightLineToolSelected ||
+                        pointer.id !==
+                            this.mobilePendingPaintPointerId ||
+                        !pointer.isDown ||
+                        this.phase !== 'paint'
+                    ) {
+                        return;
+                    }
+
+                    this.mobilePaintHoldArmed = true;
+                    this.tryBeginArmedMobileStraightLine(
+                        pointer,
+                    );
+                },
+            );
+    }
+
+    private tryBeginArmedMobileStraightLine(
+        pointer: Phaser.Input.Pointer,
+    ): boolean {
+        if (
+            !this.mobileControlsEnabled ||
+            !this.straightLineToolSelected ||
+            !this.mobilePaintHoldArmed ||
+            pointer.id !==
+                this.mobilePendingPaintPointerId ||
+            !pointer.isDown ||
+            this.phase !== 'paint'
+        ) {
+            return false;
+        }
+
+        const target =
+            this.getPaintInputWorldPoint(
+                pointer,
+            );
+
+        const startPoint =
+            this.networkPlayerManager
+                .paintLocalPlayer(
+                    target.x,
+                    target.y,
+                    this.brushTextureKey,
+                    this.paintColor,
+                    this.brushSize,
+                    this.brushShape,
+                );
+
+        /*
+         * The hold may have armed outside the character. Keep the same held
+         * gesture alive; POINTER_MOVE will retry when it enters a legal pixel.
+         */
+        if (!startPoint) {
+            this.showMobilePendingPaintPreview(
+                pointer,
+            );
+            return true;
+        }
+
+        this.playPaintSound();
+        this.isPainting = true;
+        this.activeStrokeTargetSessionId =
+            this.networkPlayerManager
+                .getLocalSessionId() ?? '';
+        this.activeStrokePoints = [
+            startPoint,
+        ];
+        this.currentStrokeHistoryPoints = [
+            startPoint,
+        ];
+        this.straightLineStart = {
+            x: startPoint.x,
+            y: startPoint.y,
+        };
+        this.straightLineStartWorld =
+            target.clone();
+        this.straightLineModeActive = true;
+
+        this.mobilePaintDotCommitted = true;
+        this.mobilePendingPaintPointerId = -1;
+        this.mobilePendingPaintStartScreen = undefined;
+        this.mobilePendingPaintStartWorld = undefined;
+        this.mobilePaintHoldDotEvent?.remove(false);
+        this.mobilePaintHoldDotEvent = undefined;
+
+        if (this.practiceMode === 'hider') {
+            this.markPracticeHiderPaintStarted();
+        }
+
+        this.updateStraightLinePreview(
+            pointer,
+        );
+        return true;
+    }
+
     private beginMobilePaintAfterDrag(
         pointer: Phaser.Input.Pointer,
     ): boolean {
@@ -40195,6 +40316,41 @@ export class GameScene extends Phaser.Scene {
                 pointer.x,
                 pointer.y,
             );
+
+        /*
+         * V1010418_MOBILE_LINE_HOLD_520
+         * Before 520ms, movement only repositions the prospective line start.
+         * Once armed, the first legal pixel entered becomes the line origin.
+         */
+        if (
+            this.mobileControlsEnabled &&
+            this.straightLineToolSelected
+        ) {
+            if (!this.mobilePaintHoldArmed) {
+                if (movedScreenPixels >= 3) {
+                    this.mobilePendingPaintStartScreen
+                        .set(
+                            pointer.x,
+                            pointer.y,
+                        );
+                    this.mobilePendingPaintStartWorld
+                        .copy(
+                            this.getPaintInputWorldPoint(
+                                pointer,
+                            ),
+                        );
+                }
+
+                this.showMobilePendingPaintPreview(
+                    pointer,
+                );
+                return true;
+            }
+
+            return this.tryBeginArmedMobileStraightLine(
+                pointer,
+            );
+        }
 
         /*
          * V1010365_MOBILE_PRECISION_CUSTOMIZATION_PAINT / HUNTER_DRAG_IS_AIM
@@ -40877,8 +41033,34 @@ export class GameScene extends Phaser.Scene {
                             this.captureMobilePaintPointer(
                                 pointer,
                             );
+
+                            this.mobilePendingPaintPointerId =
+                                pointer.id;
+                            this.mobilePendingPaintStartScreen =
+                                new Phaser.Math.Vector2(
+                                    pointer.x,
+                                    pointer.y,
+                                );
+                            this.mobilePendingPaintStartWorld =
+                                paintTarget.clone();
+                            this.mobilePaintDotCommitted =
+                                false;
+                            this.mobilePaintHoldArmed =
+                                false;
+
+                            this.showMobilePendingPaintPreview(
+                                pointer,
+                            );
+                            this.scheduleMobileStraightLineHold(
+                                pointer,
+                            );
+                            return;
                         }
 
+                        /*
+                         * Desktop explicit LINE keeps the existing immediate
+                         * pointer-down origin. The 520ms contract is mobile-only.
+                         */
                         const startPoint =
                             this.networkPlayerManager
                                 .paintLocalPlayer(
@@ -40891,13 +41073,6 @@ export class GameScene extends Phaser.Scene {
                                 );
 
                         if (!startPoint) {
-                            if (
-                                this.mobileControlsEnabled
-                            ) {
-                                this.releaseMobilePaintPointer(
-                                    pointer,
-                                );
-                            }
                             return;
                         }
 
@@ -41605,6 +41780,7 @@ export class GameScene extends Phaser.Scene {
                         this.isPainting;
 
                     this.clearMobilePendingPaint();
+                    this.mobilePaintHoldArmed = false;
                     this.isPainting = false;
 
                     if (committedDot) {
@@ -41673,6 +41849,7 @@ export class GameScene extends Phaser.Scene {
                     undefined;
                 this.straightLineModeActive =
                     false;
+                this.mobilePaintHoldArmed = false;
 
                 /*
                  * V1010417_PERSISTENT_LINE_TOOL
