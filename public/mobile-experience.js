@@ -26,6 +26,17 @@
     window.matchMedia?.('(display-mode: standalone)').matches ||
     navigator.standalone === true;
 
+  /*
+   * V1010409_INAPP_LANDSCAPE_SAFE_MERGE
+   * KakaoTalk / LINE / Instagram / Facebook / Naver WebViews often reject
+   * fullscreen and/or orientation lock. Detect them so we can show a manual
+   * rotation hint without ever CSS-rotating the game root.
+   */
+  const inAppBrowser =
+    /KAKAOTALK|KakaoTalk|Line\/|NAVER|Instagram|FBAN|FBAV|; wv\)|\bwv\b/i
+      .test(ua);
+
+
   const languageCandidates = [
     ...(navigator.languages ?? []),
     navigator.language,
@@ -304,36 +315,255 @@
     installButton.textContent = copy.install;
   };
 
-  async function requestFullscreenLandscape() {
-    try {
-      const root =
-        document.documentElement;
+  let inAppRotateHintTimer = null;
+
+  function showInAppRotateHint() {
+    let hint =
+      document.getElementById(
+        'colorhunt-inapp-rotate-hint',
+      );
+
+    if (!hint) {
+      hint = document.createElement('div');
+      hint.id =
+        'colorhunt-inapp-rotate-hint';
+
+      const title =
+        language === 'ja'
+          ? 'スマホを横向きにしてください'
+          : language === 'zh'
+            ? '请将手机横向旋转'
+            : language === 'en'
+              ? 'Rotate your phone sideways'
+              : '휴대폰을 가로로 돌려주세요';
+
+      const body =
+        language === 'ja'
+          ? '画面が回転しない場合は、スマホの自動回転（横画面）をオンにしてください。'
+          : language === 'zh'
+            ? '如果画面没有旋转，请开启手机的自动旋转（横屏模式）。'
+            : language === 'en'
+              ? 'If the screen does not rotate, enable Auto-rotate on your phone.'
+              : '화면이 돌아가지 않으면 휴대폰의 자동 회전(가로 모드)을 켜주세요.';
+
+      const close =
+        language === 'ja'
+          ? '確認'
+          : language === 'zh'
+            ? '确认'
+            : language === 'en'
+              ? 'OK'
+              : '확인';
+
+      hint.innerHTML =
+        `<div class="ch-inapp-rotate-card">
+          <div class="ch-inapp-rotate-icon" aria-hidden="true">📱↻</div>
+          <strong>${title}</strong>
+          <span>${body}</span>
+          <button type="button" data-ch-rotate-close>${close}</button>
+        </div>`;
 
       if (
-        !document.fullscreenElement &&
-        root.requestFullscreen
+        !document.getElementById(
+          'colorhunt-inapp-rotate-hint-style',
+        )
       ) {
-        await root.requestFullscreen({
-          navigationUI: 'hide',
-        });
+        const style =
+          document.createElement('style');
+
+        style.id =
+          'colorhunt-inapp-rotate-hint-style';
+
+        style.textContent = `
+          #colorhunt-inapp-rotate-hint {
+            position: fixed;
+            inset: 0;
+            z-index: 2147483647;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            box-sizing: border-box;
+            background: rgba(4, 24, 15, .72);
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+          }
+          #colorhunt-inapp-rotate-hint .ch-inapp-rotate-card {
+            width: min(88vw, 380px);
+            box-sizing: border-box;
+            border: 3px solid #315f3e;
+            border-radius: 18px;
+            padding: 22px 20px 18px;
+            background: #f8fff0;
+            color: #183522;
+            box-shadow: 0 16px 44px rgba(0,0,0,.28);
+            text-align: center;
+            font-family: inherit;
+          }
+          #colorhunt-inapp-rotate-hint .ch-inapp-rotate-icon {
+            margin-bottom: 10px;
+            font-size: 42px;
+            line-height: 1;
+          }
+          #colorhunt-inapp-rotate-hint strong {
+            display: block;
+            margin-bottom: 9px;
+            font-size: 20px;
+            line-height: 1.35;
+          }
+          #colorhunt-inapp-rotate-hint span {
+            display: block;
+            font-size: 13px;
+            line-height: 1.55;
+            opacity: .78;
+          }
+          #colorhunt-inapp-rotate-hint button {
+            width: 100%;
+            margin-top: 16px;
+            border: 0;
+            border-radius: 11px;
+            padding: 12px 16px;
+            background: #48bd70;
+            color: #fff;
+            font: inherit;
+            font-weight: 800;
+          }
+        `;
+
+        document.head.appendChild(style);
       }
-    } catch {
-      // iOS Safari may not allow document fullscreen. Orientation UI still works.
+
+      document.body.appendChild(hint);
+
+      hint.querySelector(
+        '[data-ch-rotate-close]',
+      )?.addEventListener(
+        'click',
+        () => {
+          hint?.remove();
+        },
+      );
     }
 
-    try {
-      const profile =
-        viewportProfile();
+    if (inAppRotateHintTimer) {
+      clearTimeout(
+        inAppRotateHintTimer,
+      );
+    }
 
+    inAppRotateHintTimer =
+      setTimeout(
+        () => {
+          document.getElementById(
+            'colorhunt-inapp-rotate-hint',
+          )?.remove();
+        },
+        9000,
+      );
+  }
+
+  async function requestFullscreenLandscape() {
+    const root =
+      document.documentElement;
+
+    try {
       if (
-        screen.orientation?.lock
+        !document.fullscreenElement &&
+        !document.webkitFullscreenElement
       ) {
+        const requestFullscreen =
+          root.requestFullscreen?.bind(root) ||
+          root.webkitRequestFullscreen?.bind(root) ||
+          root.msRequestFullscreen?.bind(root);
+
+        if (requestFullscreen) {
+          const result =
+            requestFullscreen.length > 0
+              ? requestFullscreen({
+                  navigationUI: 'hide',
+                })
+              : requestFullscreen();
+
+          if (
+            result &&
+            typeof result.then === 'function'
+          ) {
+            await result;
+          }
+        }
+      }
+    } catch {
+      // In-app WebViews and iOS may reject fullscreen.
+    }
+
+    const profile =
+      viewportProfile();
+
+    let lockSucceeded = false;
+
+    try {
+      if (screen.orientation?.lock) {
         await screen.orientation.lock(
           profile.preferredOrientation,
         );
+        lockSucceeded = true;
       }
     } catch {
-      // Orientation lock is best-effort only.
+      lockSucceeded = false;
+    }
+
+    /*
+     * Keep legacy Android/WebView orientation support from the last safe
+     * in-app patch. Large Fold/tablet profiles still use the CURRENT preferred
+     * orientation instead of forcing landscape.
+     */
+    if (!lockSucceeded) {
+      try {
+        const legacyLock =
+          screen.lockOrientation ||
+          screen.mozLockOrientation ||
+          screen.msLockOrientation;
+
+        if (legacyLock) {
+          lockSucceeded =
+            legacyLock.call(
+              screen,
+              profile.preferredOrientation,
+            ) !== false;
+        }
+      } catch {
+        lockSucceeded = false;
+      }
+    }
+
+    await new Promise(
+      (resolve) =>
+        setTimeout(resolve, 220),
+    );
+
+    const viewport =
+      getViewport();
+
+    const wantedLandscape =
+      profile.preferredOrientation ===
+        'landscape';
+
+    const physicallyLandscape =
+      viewport.width >=
+        viewport.height;
+
+    /*
+     * V1010409_INAPP_LANDSCAPE_SAFE_MERGE
+     * For compact phone-style sessions, Kakao/LINE/etc. can reject real
+     * rotation. Keep the current responsive game untouched and show the user
+     * a short manual-rotation hint. Never CSS-rotate or scale #root.
+     */
+    if (
+      wantedLandscape &&
+      !physicallyLandscape &&
+      (!lockSucceeded || inAppBrowser)
+    ) {
+      showInAppRotateHint();
     }
 
     settleViewport();
