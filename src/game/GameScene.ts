@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010388I_INGAME_VICTORY_CLEAN_CARD_CAPTURE: full in-game victory/countdown UI, clean social-card-only capture. */
     /* V1010388H1_REMOVE_UNUSED_AMMO_FINISH_STATE: obsolete Finished-popup ammo flag removed after v388h. */
     /* V1010388H_CLEAN_FINISH_HIDER_HERO_CARD: clean Finished phase + character-first Hider victory poster. */
     /* V1010388G_AUTHORITATIVE_ROUND_RESULT_FIX: final server round_result outranks one-patch stale alive Schema. */
@@ -4527,6 +4528,15 @@ export class GameScene extends Phaser.Scene {
     private victoryShowcasePreviewUrl = '';
     private victoryShowcaseModal?: HTMLDivElement;
     private victoryShowcaseCaptureSerial = 0;
+
+    /*
+     * V1010388I_INGAME_VICTORY_CLEAN_CARD_CAPTURE
+     * TRUE only for the one/two render frames used to create the social card.
+     * updateCountdownUi() respects this flag so the card never contains the
+     * Finished overlay, while the player still sees the normal Finished UI.
+     */
+    private victoryShowcaseCleanCaptureActive = false;
+
     private roundReturnLobbyButton?: Phaser.GameObjects.Text;
     private lastPhaseRecoveryAt = 0;
     private phaseExpiredSince = 0;
@@ -26379,7 +26389,10 @@ export class GameScene extends Phaser.Scene {
         this.countdownText.setVisible(visible);
         this.roundReturnLobbyButton
             ?.setText(tr('대기실로 이동'))
-            .setVisible(isRoundEnd);
+            .setVisible(
+                isRoundEnd &&
+                !this.victoryShowcaseCleanCaptureActive,
+            );
 
         if (!visible) {
             return;
@@ -26476,35 +26489,49 @@ export class GameScene extends Phaser.Scene {
             }
 
             /*
-             * V1010388H_CLEAN_FINISH_HIDER_HERO_CARD / SILENT_FINISHED
+             * V1010388I_INGAME_VICTORY_CLEAN_CARD_CAPTURE / PLAYER_FACING_FINISHED_UI
              *
-             * Victory is celebrated by the social Victory Snapshot AFTER
-             * returning to the waiting room. Keep the final gameplay frame
-             * clean here: no HUNTER/HIDER VICTORY, GAME OVER, ammo message,
-             * or giant countdown covering the player's camouflage.
+             * The real match-ending presentation remains fully visible to the
+             * player. Only the separate social-card capture suppresses it.
              */
+            const victoryText =
+                effectiveWinner === 'hunters'
+                    ? tr('HUNTER 승리!')
+                    : effectiveWinner === 'hiders'
+                        ? tr('HIDER 승리!')
+                        : tr('ROUND OVER');
+
             this.countdownPanel
-                .setVisible(false)
+                .setVisible(
+                    !this.victoryShowcaseCleanCaptureActive,
+                )
                 .setFillStyle(0x000000, 0)
                 .setAlpha(0);
 
             this.countdownText
-                .setText('')
-                .setVisible(false);
+                .setFontSize(48)
+                .setColor(
+                    effectiveWinner === 'hunters'
+                        ? '#d32f2f'
+                        : '#1f2937',
+                )
+                .setText(
+                    [
+                        victoryText,
+                        tr('게임 종료'),
+                        String(remaining),
+                    ].join('\n'),
+                )
+                .setVisible(
+                    !this.victoryShowcaseCleanCaptureActive,
+                );
+
+            this.roundReturnLobbyButton
+                ?.setVisible(
+                    !this.victoryShowcaseCleanCaptureActive,
+                );
 
             this.timerText
-                .setText('')
-                .setVisible(false);
-
-            this.phaseText
-                .setText('')
-                .setVisible(false);
-
-            this.guideText
-                .setText('')
-                .setVisible(false);
-
-            this.statusText
                 .setText('')
                 .setVisible(false);
 
@@ -30992,6 +31019,56 @@ export class GameScene extends Phaser.Scene {
      * V1010388_CLIENT_VICTORY_SHOWCASE
      * Winner-only Instagram-friendly 4:5 (1080x1350) result poster.
      */
+    private async captureVictoryFrameForShowcase(): Promise<HTMLImageElement> {
+        this.victoryShowcaseCleanCaptureActive =
+            true;
+
+        /*
+         * Hide every Finished-only overlay that could contaminate the card.
+         * Gameplay actors, background, painted textures and reveal markers are
+         * deliberately NOT touched.
+         */
+        this.countdownPanel
+            ?.setVisible(false);
+        this.countdownText
+            ?.setVisible(false);
+        this.roundReturnLobbyButton
+            ?.setVisible(false);
+        this.timerText
+            ?.setVisible(false);
+        this.phaseText
+            ?.setVisible(false);
+        this.guideText
+            ?.setVisible(false);
+        this.statusText
+            ?.setVisible(false);
+
+        await new Promise<void>(
+            (resolve) => {
+                requestAnimationFrame(
+                    () => requestAnimationFrame(
+                        () => resolve(),
+                    ),
+                );
+            },
+        );
+
+        try {
+            return await this.captureVictoryFrameGuaranteed();
+        } finally {
+            this.victoryShowcaseCleanCaptureActive =
+                false;
+
+            /*
+             * If we're still on the Finished screen, immediately reconstruct
+             * the normal victory/countdown presentation for the player.
+             */
+            if (this.phase === 'finished') {
+                this.updateCountdownUi();
+            }
+        }
+    }
+
     private async captureVictoryFrameGuaranteed(): Promise<HTMLImageElement> {
         const delays = [0, 80, 180];
 
@@ -31089,7 +31166,7 @@ export class GameScene extends Phaser.Scene {
         );
 
         const image =
-            await this.captureVictoryFrameGuaranteed();
+            await this.captureVictoryFrameForShowcase();
 
         if (
             captureSerial !==
