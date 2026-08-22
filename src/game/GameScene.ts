@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010388O_DEAD_HIDER_FADE_SURVIVOR_BADGE: dead Hiders stay faded in Finished + Hider card crown/SURVIVED badge. */
     /* V1010388N_HUNTER_FULL_MAP_VICTORY_CARD: Hunter social snapshot = clean full-map 960x540 evidence board. */
     /* V1010388M2_HIDE_ROLE_LABELS_ROBUST: hide gameplay role/survival HUD from social Victory Snapshot only. */
     /* V1010388L_HIDER_FINISH_SCALE_SHARE_FEEDBACK: restore Hider Finished HUD scale + visible modal share acknowledgement. */
@@ -31534,6 +31535,21 @@ export class GameScene extends Phaser.Scene {
             this.networkPlayerManager
                 .restoreAllPlayerVisibility();
 
+            /*
+             * V1010388O_DEAD_HIDER_FADE_SURVIVOR_BADGE / RESTORE_DEAD_HIDER_FADE
+             *
+             * restoreAllPlayerVisibility() is only a capture cleanup helper.
+             * During Finished, dead Hiders must go straight back to their
+             * authoritative semi-transparent state instead of keeping the
+             * fully opaque camouflage used by the social-card snapshot.
+             */
+            if (
+                this.phase === 'finished'
+            ) {
+                this.networkPlayerManager
+                    .syncPlayersFromCurrentRoom();
+            }
+
             this.networkPlayerManager
                 .setNamesVisible(false);
 
@@ -31563,6 +31579,19 @@ export class GameScene extends Phaser.Scene {
              */
             if (this.phase === 'finished') {
                 this.updateCountdownUi();
+
+                this.time.delayedCall(
+                    60,
+                    () => {
+                        if (
+                            this.phase ===
+                                'finished'
+                        ) {
+                            this.networkPlayerManager
+                                .syncPlayersFromCurrentRoom();
+                        }
+                    },
+                );
 
                 if (!finishedUiWasVisible) {
                     this.countdownText
@@ -31975,6 +32004,169 @@ export class GameScene extends Phaser.Scene {
             34,
         );
         context.stroke();
+
+        /*
+         * V1010388O_DEAD_HIDER_FADE_SURVIVOR_BADGE / HIDER_SURVIVOR_BADGE
+         *
+         * Practice-style survivor decoration:
+         *   translucent gold crown
+         *   green rounded YOU SURVIVED badge
+         *
+         * The Hider snapshot camera already places the local character at the
+         * exact center of this frame, so the badge can be anchored relative to
+         * frame center without leaking into the real game scene.
+         */
+        if (!isHunter) {
+            const survivorX =
+                frameX +
+                frameW / 2;
+
+            /*
+             * Keep enough clearance above the centered 80x120-ish character.
+             */
+            const badgeY =
+                frameY +
+                frameH / 2 -
+                122;
+
+            const badgeW = 178;
+            const badgeH = 38;
+            const badgeX =
+                survivorX -
+                badgeW / 2;
+
+            context.save();
+
+            /*
+             * Soft mint shadow similar to the Practice record treatment.
+             */
+            context.shadowColor =
+                'rgba(64,181,106,.34)';
+            context.shadowBlur = 16;
+
+            context.fillStyle =
+                'rgba(53,151,88,.86)';
+            context.beginPath();
+            context.roundRect(
+                badgeX,
+                badgeY,
+                badgeW,
+                badgeH,
+                19,
+            );
+            context.fill();
+
+            context.shadowBlur = 0;
+            context.strokeStyle =
+                'rgba(230,255,235,.58)';
+            context.lineWidth = 2;
+            context.stroke();
+
+            context.fillStyle =
+                'rgba(255,255,255,.96)';
+            context.font =
+                '900 18px Arial, sans-serif';
+            context.textAlign =
+                'center';
+            context.textBaseline =
+                'middle';
+            context.fillText(
+                'YOU SURVIVED',
+                survivorX,
+                badgeY +
+                    badgeH / 2 +
+                    1,
+            );
+
+            /*
+             * Small outlined crown above the pill.
+             */
+            const crownCenterY =
+                badgeY - 20;
+            const crownW = 36;
+            const crownH = 22;
+            const crownLeft =
+                survivorX -
+                crownW / 2;
+
+            context.globalAlpha =
+                0.84;
+            context.fillStyle =
+                'rgba(255,209,74,.30)';
+            context.strokeStyle =
+                'rgba(255,213,75,.96)';
+            context.lineWidth = 3;
+            context.lineJoin =
+                'round';
+
+            context.beginPath();
+            context.moveTo(
+                crownLeft,
+                crownCenterY +
+                    crownH / 2,
+            );
+            context.lineTo(
+                crownLeft + 4,
+                crownCenterY -
+                    crownH / 2 +
+                    5,
+            );
+            context.lineTo(
+                crownLeft + 12,
+                crownCenterY - 1,
+            );
+            context.lineTo(
+                crownLeft + 18,
+                crownCenterY -
+                    crownH / 2,
+            );
+            context.lineTo(
+                crownLeft + 25,
+                crownCenterY - 1,
+            );
+            context.lineTo(
+                crownLeft +
+                    crownW -
+                    4,
+                crownCenterY -
+                    crownH / 2 +
+                    5,
+            );
+            context.lineTo(
+                crownLeft +
+                    crownW,
+                crownCenterY +
+                    crownH / 2,
+            );
+            context.closePath();
+            context.fill();
+            context.stroke();
+
+            context.beginPath();
+            context.moveTo(
+                crownLeft + 2,
+                crownCenterY +
+                    crownH / 2,
+            );
+            context.lineTo(
+                crownLeft +
+                    crownW -
+                    2,
+                crownCenterY +
+                    crownH / 2,
+            );
+            context.stroke();
+
+            context.restore();
+
+            /*
+             * Marker drawing below expects default text alignment.
+             */
+            context.textAlign =
+                'left';
+            context.textBaseline =
+                'alphabetic';
+        }
 
         const found =
             extended.victoryShowcase
