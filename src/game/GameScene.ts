@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010442_CLEAN_VICTORY_CAPTURE_NO_LIVE_CANVAS: victory capture never falls back to live gameplay canvas. */
     /* V1010440F_HIDER_NICKNAME_SCOPE_FIX: Hider nickname rendered only inside victory-card capture scope. */
     /* V1010440E_AUDITED_DIRECT_FOUND_GALLERY: direct personal FOUND + nicknames + larger victory portraits. */
     /* V1010439G_MEMORY_PANEL_Y_RELOCATE: memoryPanelY restored at statement scope. */
@@ -33999,8 +34000,17 @@ export class GameScene extends Phaser.Scene {
         }
     }
 
+    /*
+     * V1010442_CLEAN_VICTORY_CAPTURE_NO_LIVE_CANVAS
+     *
+     * Victory poster capture is allowed to use ONLY the clean screenshot path.
+     * Never copy this.game.canvas as a last resort: that canvas may already be
+     * rendering the Hunt/Finished HUD and caused one Hunter's card to contain
+     * the exact gunfire moment.
+     */
     private async captureVictoryFrameGuaranteed(): Promise<HTMLImageElement> {
-        const delays = [0, 80, 180];
+        const delays =
+            [0, 80, 180, 320, 520];
 
         for (const delay of delays) {
             if (delay > 0) {
@@ -34013,6 +34023,21 @@ export class GameScene extends Phaser.Scene {
                 );
             }
 
+            /*
+             * Let Phaser/WebGL commit the capture-only visibility/camera state
+             * before asking the renderer for a snapshot.
+             */
+            await new Promise<void>(
+                (resolve) => {
+                    requestAnimationFrame(
+                        () =>
+                            requestAnimationFrame(
+                                () => resolve(),
+                            ),
+                    );
+                },
+            );
+
             const snapshot =
                 await this.captureGameCanvasForShare();
 
@@ -34022,9 +34047,10 @@ export class GameScene extends Phaser.Scene {
         }
 
         /*
-         * Last-resort image: direct canvas copy may be unavailable/blank on
-         * some WebGL configurations, but it still yields a valid image object
-         * and therefore NEVER suppresses the victory modal.
+         * Extremely rare WebGL snapshot failure:
+         * return a valid neutral frame rather than a dirty live gameplay frame.
+         * The victory modal still appears and, importantly, can never show
+         * crosshair/HUD/last-shot debris.
          */
         const fallbackCanvas =
             document.createElement('canvas');
@@ -34038,8 +34064,25 @@ export class GameScene extends Phaser.Scene {
             fallbackCanvas.getContext('2d');
 
         if (fallbackContext) {
+            const gradient =
+                fallbackContext.createLinearGradient(
+                    0,
+                    0,
+                    fallbackCanvas.width,
+                    fallbackCanvas.height,
+                );
+
+            gradient.addColorStop(
+                0,
+                '#f5f2ec',
+            );
+            gradient.addColorStop(
+                1,
+                '#e9edf0',
+            );
+
             fallbackContext.fillStyle =
-                '#111827';
+                gradient;
             fallbackContext.fillRect(
                 0,
                 0,
@@ -34047,17 +34090,27 @@ export class GameScene extends Phaser.Scene {
                 fallbackCanvas.height,
             );
 
-            try {
-                fallbackContext.drawImage(
-                    this.game.canvas,
-                    0,
-                    0,
-                    fallbackCanvas.width,
-                    fallbackCanvas.height,
-                );
-            } catch {
-                // Keep the valid dark fallback frame.
-            }
+            fallbackContext.fillStyle =
+                'rgba(37,41,45,.68)';
+            fallbackContext.font =
+                '800 22px Arial, sans-serif';
+            fallbackContext.textAlign =
+                'center';
+            fallbackContext.fillText(
+                'COLOR HUNT',
+                fallbackCanvas.width / 2,
+                fallbackCanvas.height / 2 - 8,
+            );
+
+            fallbackContext.font =
+                '700 14px Arial, sans-serif';
+            fallbackContext.fillStyle =
+                'rgba(37,41,45,.46)';
+            fallbackContext.fillText(
+                'VICTORY MEMORY',
+                fallbackCanvas.width / 2,
+                fallbackCanvas.height / 2 + 20,
+            );
         }
 
         const image =

@@ -707,6 +707,17 @@ this.phaseChangedHandlers.forEach(
   private personalVictoryFoundHiders:
     any[] = [];
 
+  /*
+   * V1010441_LOCAL_SHOT_FOUND_IDS
+   * shot_fired is broadcast by the authoritative server and already carries
+   * shooterId + exact hitIds. Remember only THIS browser's own hit IDs.
+   * round_result later upgrades those IDs to full authoritative entries
+   * (name/position/foundOrder/paintStrokes), so FOUND no longer depends on
+   * recipient-specific event timing.
+   */
+  private readonly personalVictoryFoundSessionIds =
+    new Set<string>();
+
   getPersonalVictoryFoundHiders():
     any[] {
     return this.personalVictoryFoundHiders
@@ -3028,6 +3039,27 @@ this.room = room;
     >(
       "shot_fired",
       (shot) => {
+        /*
+         * V1010441_LOCAL_SHOT_FOUND_IDS / HIT_ID_LEDGER
+         * This message is server-authoritative.  Because it contains shooterId,
+         * each Hunter can deterministically remember only their own catches.
+         */
+        if (
+          String(shot?.shooterId ?? "") ===
+          String(room.sessionId ?? "") &&
+          Array.isArray(shot?.hitIds)
+        ) {
+          shot.hitIds.forEach(
+            (sessionId) => {
+              const id =
+                String(sessionId ?? "");
+              if (id) {
+                this.personalVictoryFoundSessionIds.add(id);
+              }
+            },
+          );
+        }
+
         this.shotFiredHandlers
           .forEach(
             (handler) => {
@@ -3120,14 +3152,49 @@ this.room = room;
           result.victoryShowcase
             ?.personalFoundHiders;
 
-        if (
+        const authoritativeTeamFound =
           Array.isArray(
-            personalized,
-          ) &&
+            result.victoryShowcase
+              ?.foundHiders,
+          )
+            ? result.victoryShowcase
+                ?.foundHiders ?? []
+            : [];
+
+        /*
+         * V1010441_LOCAL_SHOT_FOUND_IDS / RESULT_UPGRADE
+         * Priority:
+         * 1) server recipient-personalized list
+         * 2) locally remembered authoritative shot hitIds, upgraded from the
+         *    authoritative team FOUND list
+         * 3) earlier hunter_personal_found cache
+         */
+        const shotDerivedPersonal =
+          authoritativeTeamFound.filter(
+            (entry) =>
+              this.personalVictoryFoundSessionIds
+                .has(
+                  String(
+                    entry?.sessionId ?? "",
+                  ),
+                ),
+          );
+
+        if (
+          Array.isArray(personalized) &&
           personalized.length > 0
         ) {
           this.personalVictoryFoundHiders =
             personalized.map(
+              (entry) => ({
+                ...entry,
+              }),
+            );
+        } else if (
+          shotDerivedPersonal.length > 0
+        ) {
+          this.personalVictoryFoundHiders =
+            shotDerivedPersonal.map(
               (entry) => ({
                 ...entry,
               }),
@@ -3165,6 +3232,8 @@ this.room = room;
       () => {
         this.personalVictoryFoundHiders =
           [];
+        this.personalVictoryFoundSessionIds
+          .clear();
 
         this.resetRoundHandlers
           .forEach(
