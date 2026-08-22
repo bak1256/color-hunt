@@ -36006,11 +36006,29 @@ export class GameScene extends Phaser.Scene {
                 .setVisible(false);
 
             /*
-             * V1010423_ATOMIC_HUNT_VISUAL_HANDOFF_RESTORE / NO_PRE_HUNT_VISUAL_NORMALIZE
-             * Do not sync positions, normalize role bodies, stabilize every
-             * Hider, or reveal the whole room while Paint still owns the frame.
+             * V1010432B_RESTORE_V369_PRE_HUNT_VISUAL_ORDER
+             *
+             * Restore the known-good v369 Paint -> Hunt visual order.
+             * Settle authoritative actor state/pose BEFORE revealing remotes.
+             *
+             * No reconnect/full-paint network calls are added here.
              */
+            this.networkPlayerManager
+                .syncPlayersFromCurrentRoom();
+
+            this.networkPlayerManager
+                .syncLobbyPositionsFromState();
+
+            this.networkPlayerManager
+                .normalizeLocalPlayerForGameplay();
+
+            this.networkPlayerManager
+                .stabilizeHidersForHunt();
+
             this.resetPaintWorldZoom();
+
+            this.networkPlayerManager
+                .restoreAllPlayerVisibility();
 
             this.setHunterPaintBlind(false);
             this.setPaintPaletteVisible(false);
@@ -49396,26 +49414,9 @@ export class GameScene extends Phaser.Scene {
 
         if (this.isMultiplayerSession()) {
             /*
-             * V1010431_HUNT_FIRST_VISIBILITY_HANDOFF
-             *
-             * Paint intentionally hides every remote network actor with
-             * showOnlyLocalPlayer(). Hunt must undo that exactly ONCE.
-             *
-             * This is visibility-only. Do NOT request/replay paint snapshots
-             * and do NOT touch reconnect ownership/transport here.
+             * V1010432B_RESTORE_V369_PRE_HUNT_VISUAL_ORDER / START_HUNT_NO_REVEAL
+             * Reveal is completed BEFORE startHunt(), matching v369.
              */
-            this.networkPlayerManager
-                .restoreAllPlayerVisibility();
-
-            this.networkPlayerManager
-                .stabilizeHidersForHunt();
-
-            this.networkPlayerManager
-                .setNamesVisible(false);
-
-            this.networkPlayerManager
-                .setHunterGunsVisible();
-
             this.hideLegacySinglePlayerActors();
 
             this.hiders.forEach(
