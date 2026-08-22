@@ -402,7 +402,7 @@ const en: Dict = {
   "상태":"Status",
 
   '위장하고, 숨고, 찾아내세요!':'Camouflage, hide, and hunt!','방을 만드는 중...':'Creating room...','플레이어 연결 중...':'Connecting player...','방을 만들지 못했습니다.':'Could not create room.',
-  '방에 참가하는 중...':'Joining room...','의상 로딩 중...':'Loading outfits...','방에 참가할 수 없습니다. 이미 종료된 방일 수 있습니다.':'Unable to join. The room may have ended.','방 ID 또는 비밀번호를 확인하세요.':'Check the room ID or password.','방에 참가할 수 없습니다. 이미 사라진 방일 수 있습니다.':'Unable to join. The room may no longer exist.',
+  '방에 참가하는 중...':'Joining room...','의상 로딩 중...':'Loading outfits...','방에 참가할 수 없습니다. 이미 종료된 방일 수 있습니다.':'Unable to join. The room may have ended.','방 ID 또는 비밀번호를 확인하세요.':'Check the room ID or password.','방에 참가할 수 없습니다. 이미 사라진 방일 수 있습니다.':'Unable to join. The room may no longer exist.','방이 가득 찼습니다. 잠시 후 다시 시도하세요.':'Room is full. Please try again shortly.',
   '게임을 시작할 수 없습니다.':'Unable to start the game.','헌터의 총알이 모두 떨어졌습니다!':'Hunters are out of ammo!','게임을 계속할 수 없어 대기실로 돌아갑니다.':'The round cannot continue. Returning to the lobby.',
   '헌터의 탄약이 모두 소진되었습니다. HIDER 승리!':'Hunters are out of ammo. HIDER wins!','서버 연결이 끊겼습니다. 메인 화면으로 돌아갑니다.':'Server disconnected. Returning to the main menu.',
   '초대 링크를 만들 수 없습니다.':'Could not create an invite link.','초대 링크를 복사했습니다!':'Invite link copied!','취소':'Cancel','닉네임':'Nickname','방 이름':'Room name','비밀번호':'Password',

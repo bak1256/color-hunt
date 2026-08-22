@@ -5483,10 +5483,23 @@ export class GameScene extends Phaser.Scene {
 
             this.showMainMenu();
 
+            const joinErrorText = String(
+                (error as { message?: unknown })?.message ??
+                error ??
+                '',
+            ).toLowerCase();
+            const roomFullError =
+                joinErrorText.includes('full') ||
+                joinErrorText.includes('maxclients') ||
+                joinErrorText.includes('max clients') ||
+                joinErrorText.includes('capacity');
+
             this.showStatus(
-                pending.isPrivate
-                    ? tr('방 ID 또는 비밀번호를 확인하세요.')
-                    : tr('방에 참가할 수 없습니다. 이미 사라진 방일 수 있습니다.'),
+                roomFullError
+                    ? tr('방이 가득 찼습니다. 잠시 후 다시 시도하세요.')
+                    : pending.isPrivate
+                        ? tr('방 ID 또는 비밀번호를 확인하세요.')
+                        : tr('방에 참가할 수 없습니다. 이미 사라진 방일 수 있습니다.'),
             );
 
             if (!pending.isPrivate) {
@@ -17475,6 +17488,47 @@ export class GameScene extends Phaser.Scene {
                 this.showInviteGameInProgressModal();
                 return;
             }
+
+            /*
+             * V1010387_CLIENT_FULL_ROOM_JOIN_GUARD
+             * Prevent invite/private/public join attempts when the status API
+             * already reports that the room is full.
+             */
+            const statusAny = status as {
+                clients?: number;
+                playerCount?: number;
+                maxClients?: number;
+                metadata?: {
+                    playerCount?: number;
+                    maxClients?: number;
+                };
+            };
+            const statusPlayerCount = Number(
+                statusAny.playerCount ??
+                statusAny.metadata?.playerCount ??
+                statusAny.clients,
+            );
+            const statusMaxClients = Number(
+                statusAny.maxClients ??
+                statusAny.metadata?.maxClients,
+            );
+
+            if (
+                Number.isFinite(statusPlayerCount) &&
+                Number.isFinite(statusMaxClients) &&
+                statusMaxClients > 0 &&
+                statusPlayerCount >= statusMaxClients
+            ) {
+                this.setModalBusy(false);
+                this.showStatus(
+                    tr('방이 가득 찼습니다. 잠시 후 다시 시도하세요.'),
+                );
+
+                if (!isPrivate) {
+                    void this.refreshPublicRoomList(false);
+                }
+                return;
+            }
         } catch (error) {
             console.warn(
                 '[Color Hunt] final room-status check failed; using server join guard',
@@ -27738,9 +27792,36 @@ export class GameScene extends Phaser.Scene {
                                 room,
                             );
 
+                        /*
+                         * V1010387_CLIENT_FULL_ROOM_LIST_GUARD
+                         * Keep full rooms visible, but disable joining.
+                         */
+                        const metadataCount = Number(
+                            room.metadata?.playerCount,
+                        );
+                        const transportCount = Number(
+                            room.clients,
+                        );
+                        const roomMaxClients = Math.max(
+                            0,
+                            Number(room.maxClients) || 0,
+                        );
+                        const roomActualCount = Number.isFinite(metadataCount)
+                            ? metadataCount
+                            : transportCount;
+                        const displayPlayerCount = Math.max(
+                            0,
+                            Math.min(
+                                roomMaxClients || roomActualCount,
+                                Math.floor(roomActualCount),
+                            ),
+                        );
+                        const roomIsFull =
+                            roomMaxClients > 0 &&
+                            displayPlayerCount >= roomMaxClients;
                         const available =
-                            phase ===
-                            'lobby';
+                            phase === 'lobby' &&
+                            !roomIsFull;
 
                         row.disabled =
                             !available;
@@ -27769,52 +27850,23 @@ export class GameScene extends Phaser.Scene {
                             </span>
 
                             <span class="ch-lobby-room-count">
-                                ${(() => {
-                                    /*
-                                     * v0.10.10.223:
-                                     * Colyseus room.clients can briefly include a stale socket while
-                                     * background reconnect handoff is in progress. When the room API
-                                     * exposes authoritative playerCount metadata, prefer it so the
-                                     * public lobby reflects actual players instead of transport sockets.
-                                     */
-                                    const metadataCount = Number(
-                                        room.metadata?.playerCount,
-                                    );
-                                    const transportCount = Number(
-                                        room.clients,
-                                    );
-                                    const maxClients = Math.max(
-                                        0,
-                                        Number(room.maxClients) || 0,
-                                    );
-                                    const actualCount = Number.isFinite(metadataCount)
-                                        ? metadataCount
-                                        : transportCount;
-
-                                    return Math.max(
-                                        0,
-                                        Math.min(
-                                            maxClients || actualCount,
-                                            Math.floor(actualCount),
-                                        ),
-                                    );
-                                })()} / ${room.maxClients}
+                                ${displayPlayerCount} / ${roomMaxClients || room.maxClients}
                             </span>
 
                             <span class="ch-lobby-room-status ${
                                 available
                                     ? 'is-open'
-                                    : 'is-playing'
+                                    : roomIsFull && phase === 'lobby'
+                                        ? 'is-full'
+                                        : 'is-playing'
                             }">
                                 <i aria-hidden="true"></i>
                                 ${
                                     available
-                                        ? trPhase(
-                                            phase,
-                                        )
-                                        : tr(
-                                            '게임중',
-                                        )
+                                        ? trPhase(phase)
+                                        : roomIsFull && phase === 'lobby'
+                                            ? 'FULL'
+                                            : tr('게임중')
                                 }
                             </span>
 
