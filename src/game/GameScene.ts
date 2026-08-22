@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010408_FINGER_DIRECT_TOUCH_COORDINATE: Finger paints at touch point; Precision Brush alone uses offset coordinates. */
     /* V1010404_CLIENT_MAP12_16_FOREST_GUARD: playable client maps are map1..map16; Forest remains lobby-only. */
     /* V1010403C_MOBILE_PAINT_SURGICAL_RECOVERY: Finger/Precision Paint restored by additive surgery; latest feature fields preserved. */
     /* V1010402_CLIENT_FULL_ROOM_SAFE_RECOVERY: restore 10/10 client join guard without touching Paint/reconnect/victory code. */
@@ -38816,7 +38817,22 @@ export class GameScene extends Phaser.Scene {
     private getPaintInputWorldPoint(
         pointer: Phaser.Input.Pointer,
     ): Phaser.Math.Vector2 {
-        if (!this.mobileControlsEnabled) {
+        /*
+         * V1010408_FINGER_DIRECT_TOUCH_COORDINATE
+         *
+         * Restore the known-good input contract:
+         *
+         * Finger Paint    -> paint EXACTLY under the fingertip.
+         * Precision Brush -> keep the visible diagonal-brush offset.
+         *
+         * Do not hide an offset bug visually; choose the correct world point
+         * at the single authoritative coordinate function.
+         */
+        if (
+            !this.mobileControlsEnabled ||
+            this.mobilePaintInputMode ===
+                'finger'
+        ) {
             return this.getPointerWorldPoint(
                 pointer,
             );
