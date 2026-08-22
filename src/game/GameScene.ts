@@ -38958,10 +38958,17 @@ export class GameScene extends Phaser.Scene {
     private updateMobilePaintPrecisionGuide(
         pointer: Phaser.Input.Pointer,
     ): void {
+        /* V1010407_FINGER_PRECISION_VISUAL_AUTHORITY: Finger Paint never owns the precision-brush visual. */
         if (
             !this.mobileControlsEnabled ||
-            this.phase !== 'paint'
+            this.phase !== 'paint' ||
+            this.mobilePaintInputMode !== 'brush'
         ) {
+            this.mobilePaintPrecisionRing?.setVisible(false);
+            this.mobilePaintPrecisionCrosshair?.setVisible(false);
+            this.mobilePaintPrecisionHandle
+                ?.clear()
+                .setVisible(false);
             return;
         }
 
@@ -39194,6 +39201,17 @@ export class GameScene extends Phaser.Scene {
     }
 
     private showMobileIdleBrushGuide(): void {
+        if (
+            this.mobilePaintInputMode !== 'brush'
+        ) {
+            this.mobilePaintPrecisionRing?.setVisible(false);
+            this.mobilePaintPrecisionCrosshair?.setVisible(false);
+            this.mobilePaintPrecisionHandle
+                ?.clear()
+                .setVisible(false);
+            return;
+        }
+
         if (
             !this.mobileControlsEnabled ||
             this.phase !== 'paint' ||
