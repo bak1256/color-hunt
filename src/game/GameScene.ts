@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010388L_HIDER_FINISH_SCALE_SHARE_FEEDBACK: restore Hider Finished HUD scale + visible modal share acknowledgement. */
     /* V1010388K_CLEAN_CARD_CENTER_CLIPBOARD: capture HUD hard-lock + exact Hider centering + Kakao-ready clipboard share. */
     /* V1010388J_VICTORY_CARD_FINAL_VISUALS: exact camouflage FOUND replay + Practice-parity Hider framing + link share. */
     /* V1010388I_INGAME_VICTORY_CLEAN_CARD_CAPTURE: full in-game victory/countdown UI, clean social-card-only capture. */
@@ -31441,6 +31442,21 @@ export class GameScene extends Phaser.Scene {
                     savedScrollY,
                 );
 
+            /*
+             * V1010388L_HIDER_FINISH_SCALE_SHARE_FEEDBACK / RESTORE_FINISHED_HUD_SCALE
+             *
+             * Hider capture called applyFixedHudForZoom(3.75/4.55), which
+             * inversely scales fixed HUD elements. Restore their scale together
+             * with the camera so HIDER 승리 / 게임 종료 / countdown and the
+             * Return-to-Lobby button remain full-size in the real game.
+             */
+            this.applyFixedHudForZoom(
+                Math.max(
+                    1,
+                    savedZoom,
+                ),
+            );
+
             this.networkPlayerManager
                 .restoreAllPlayerVisibility();
 
@@ -32326,6 +32342,90 @@ export class GameScene extends Phaser.Scene {
         );
     }
 
+    private showVictoryShowcaseShareFeedback(
+        message: string,
+    ): void {
+        const modal =
+            this.victoryShowcaseModal;
+
+        if (!modal) {
+            return;
+        }
+
+        const feedback =
+            modal.querySelector<HTMLElement>(
+                '[data-victory-feedback]',
+            );
+
+        const shareButton =
+            modal.querySelector<HTMLButtonElement>(
+                '[data-victory-share]',
+            );
+
+        if (feedback) {
+            feedback.textContent =
+                message;
+            feedback.classList.add(
+                'is-visible',
+            );
+        }
+
+        if (shareButton) {
+            const original =
+                shareButton.dataset
+                    .originalLabel ??
+                shareButton.textContent ??
+                '';
+
+            shareButton.dataset
+                .originalLabel =
+                original;
+
+            shareButton.textContent =
+                '✓ ' +
+                (
+                    getLanguage() === 'ko'
+                        ? '복사됨'
+                        : 'Copied'
+                );
+
+            shareButton.disabled =
+                true;
+
+            window.setTimeout(
+                () => {
+                    if (
+                        !shareButton
+                            .isConnected
+                    ) {
+                        return;
+                    }
+
+                    shareButton.disabled =
+                        false;
+                    shareButton.textContent =
+                        original;
+                },
+                1_800,
+            );
+        }
+
+        window.setTimeout(
+            () => {
+                if (
+                    feedback
+                        ?.isConnected
+                ) {
+                    feedback.classList
+                        .remove(
+                            'is-visible',
+                        );
+                }
+            },
+            3_200,
+        );
+    }
+
     private async copyVictoryShowcaseToClipboard(
         blob: Blob,
         text: string,
@@ -32526,18 +32626,18 @@ export class GameScene extends Phaser.Scene {
                 clipboardResult !==
                     'failed'
             ) {
-                this.showStatus(
+                this.showVictoryShowcaseShareFeedback(
                     clipboardResult ===
                         'image-and-text'
                         ? (
                             language === 'ko'
-                                ? '승리카드 이미지와 게임 링크를 복사했습니다. 카톡에서 붙여넣기 하세요.'
-                                : 'Victory image and game link copied. Paste it into chat.'
+                                ? '✓ 승리카드 + 게임 링크 복사 완료 · 카톡에서 붙여넣기 하세요!'
+                                : '✓ Victory card + game link copied · Paste it into chat!'
                         )
                         : (
                             language === 'ko'
-                                ? '게임 링크를 복사했습니다. 이미지 복사가 지원되지 않아 이미지는 저장합니다.'
-                                : 'Game link copied. This browser cannot copy the image, so the image will be saved.'
+                                ? '✓ 게임 링크 복사 완료 · 이미지는 자동 저장합니다.'
+                                : '✓ Game link copied · Saving the image.'
                         ),
                 );
 
@@ -32568,6 +32668,13 @@ export class GameScene extends Phaser.Scene {
                     url: shareUrl,
                     files: [file],
                 });
+
+                this.showVictoryShowcaseShareFeedback(
+                    language === 'ko'
+                        ? '✓ 공유 완료!'
+                        : '✓ Shared!',
+                );
+
                 return;
             }
 
@@ -32577,6 +32684,13 @@ export class GameScene extends Phaser.Scene {
                     text,
                     url: shareUrl,
                 });
+
+                this.showVictoryShowcaseShareFeedback(
+                    language === 'ko'
+                        ? '✓ 게임 링크 공유 완료!'
+                        : '✓ Game link shared!',
+                );
+
                 return;
             }
         } catch (error) {
@@ -32594,25 +32708,25 @@ export class GameScene extends Phaser.Scene {
                 text,
             );
 
-        this.showStatus(
+        this.showVictoryShowcaseShareFeedback(
             clipboardResult ===
                 'image-and-text'
                 ? (
                     language === 'ko'
-                        ? '승리카드 이미지와 게임 링크를 복사했습니다.'
-                        : 'Victory image and game link copied.'
+                        ? '✓ 승리카드 + 게임 링크 복사 완료 · 카톡에서 붙여넣기 하세요!'
+                        : '✓ Victory card + game link copied · Paste it into chat!'
                 )
                 : clipboardResult ===
                     'text'
                     ? (
                         language === 'ko'
-                            ? '게임 링크를 복사했습니다. 이미지는 저장합니다.'
-                            : 'Game link copied. Saving image.'
+                            ? '✓ 게임 링크 복사 완료 · 이미지는 저장합니다.'
+                            : '✓ Game link copied · Saving image.'
                     )
                     : (
                         language === 'ko'
-                            ? '클립보드 복사가 차단되어 이미지만 저장합니다.'
-                            : 'Clipboard was blocked. Saving image only.'
+                            ? '클립보드 권한이 차단되었습니다 · 이미지만 저장합니다.'
+                            : 'Clipboard permission blocked · Saving image only.'
                     ),
         );
 
@@ -32713,9 +32827,9 @@ export class GameScene extends Phaser.Scene {
             '.colorhunt-victory-showcase-card{width:min(94vw,560px);max-height:min(94vh,820px);overflow:auto;border:1px solid rgba(255,255,255,.16);border-radius:30px;padding:18px;color:#fff;background:linear-gradient(180deg,rgba(23,27,36,.97),rgba(8,11,17,.99));box-shadow:0 30px 90px rgba(0,0,0,.48),inset 0 1px 0 rgba(255,255,255,.10);transform-origin:50% 72%;animation:chVictoryPop .62s cubic-bezier(.2,.9,.2,1.1) both;font-family:Inter,Pretendard,system-ui,sans-serif}' +
             '.colorhunt-victory-showcase-card.is-hunter{box-shadow:0 30px 90px rgba(0,0,0,.48),0 0 70px rgba(255,104,61,.13),inset 0 1px 0 rgba(255,255,255,.10)}' +
             '.colorhunt-victory-showcase-card.is-hider{box-shadow:0 30px 90px rgba(0,0,0,.48),0 0 70px rgba(77,238,139,.13),inset 0 1px 0 rgba(255,255,255,.10)}' +
-            '.colorhunt-victory-showcase-head{display:flex;align-items:end;justify-content:space-between;gap:14px;padding:3px 4px 14px}.colorhunt-victory-showcase-kicker{font-size:11px;font-weight:950;letter-spacing:.18em;opacity:.58}.colorhunt-victory-showcase-title{margin-top:4px;font-size:clamp(25px,5vw,34px);line-height:1;font-weight:950;letter-spacing:-.04em}.is-hunter .colorhunt-victory-showcase-title{color:#ffb087}.is-hider .colorhunt-victory-showcase-title{color:#93f5b2}.colorhunt-victory-showcase-badge{flex:0 0 auto;padding:7px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);font-size:11px;font-weight:900}.colorhunt-victory-showcase-preview{display:block;width:100%;height:auto;border-radius:22px;box-shadow:0 18px 42px rgba(0,0,0,.34);background:#111}.colorhunt-victory-showcase-caption{margin:12px 5px 15px;color:rgba(255,255,255,.62);font-size:12px;font-weight:700;text-align:center}.colorhunt-victory-showcase-actions{display:grid;grid-template-columns:.8fr 1fr 1.2fr;gap:9px}.colorhunt-victory-showcase-actions button{min-height:46px;border:0;border-radius:15px;color:#fff;background:rgba(255,255,255,.08);font:inherit;font-size:13px;font-weight:900;cursor:pointer}.colorhunt-victory-showcase-actions [data-victory-share]{color:#09100c;background:' +
+            '.colorhunt-victory-showcase-head{display:flex;align-items:end;justify-content:space-between;gap:14px;padding:3px 4px 14px}.colorhunt-victory-showcase-kicker{font-size:11px;font-weight:950;letter-spacing:.18em;opacity:.58}.colorhunt-victory-showcase-title{margin-top:4px;font-size:clamp(25px,5vw,34px);line-height:1;font-weight:950;letter-spacing:-.04em}.is-hunter .colorhunt-victory-showcase-title{color:#ffb087}.is-hider .colorhunt-victory-showcase-title{color:#93f5b2}.colorhunt-victory-showcase-badge{flex:0 0 auto;padding:7px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);font-size:11px;font-weight:900}.colorhunt-victory-showcase-preview{display:block;width:100%;height:auto;border-radius:22px;box-shadow:0 18px 42px rgba(0,0,0,.34);background:#111}.colorhunt-victory-showcase-caption{margin:12px 5px 15px;color:rgba(255,255,255,.62);font-size:12px;font-weight:700;text-align:center}.colorhunt-victory-showcase-feedback{display:none;margin:0 5px 12px;padding:10px 12px;border:1px solid rgba(143,255,184,.34);border-radius:13px;background:rgba(49,183,101,.16);color:#bfffd2;font-size:12px;font-weight:900;text-align:center;animation:chVictoryFeedback .22s ease both}.colorhunt-victory-showcase-feedback.is-visible{display:block}.colorhunt-victory-showcase-actions{display:grid;grid-template-columns:.8fr 1fr 1.2fr;gap:9px}.colorhunt-victory-showcase-actions button{min-height:46px;border:0;border-radius:15px;color:#fff;background:rgba(255,255,255,.08);font:inherit;font-size:13px;font-weight:900;cursor:pointer}.colorhunt-victory-showcase-actions [data-victory-share]{color:#09100c;background:' +
             (isHunter ? '#ffb087' : '#8df0ac') +
-            '}@keyframes chVictoryBackdrop{from{opacity:0}to{opacity:1}}@keyframes chVictoryPop{0%{opacity:0;transform:translateY(34px) scale(.88) rotate(-1.5deg)}58%{opacity:1;transform:translateY(-3px) scale(1.015) rotate(.3deg)}100%{opacity:1;transform:translateY(0) scale(1)}}@media(max-height:650px){.colorhunt-victory-showcase-card{width:min(88vw,430px);padding:12px;border-radius:22px}.colorhunt-victory-showcase-actions button{min-height:40px}}' +
+            '}@keyframes chVictoryFeedback{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}@keyframes chVictoryBackdrop{from{opacity:0}to{opacity:1}}@keyframes chVictoryPop{0%{opacity:0;transform:translateY(34px) scale(.88) rotate(-1.5deg)}58%{opacity:1;transform:translateY(-3px) scale(1.015) rotate(.3deg)}100%{opacity:1;transform:translateY(0) scale(1)}}@media(max-height:650px){.colorhunt-victory-showcase-card{width:min(88vw,430px);padding:12px;border-radius:22px}.colorhunt-victory-showcase-actions button{min-height:40px}}' +
             '</style>' +
             '<div class="colorhunt-victory-showcase-head"><div><div class="colorhunt-victory-showcase-kicker">VICTORY SNAPSHOT</div><div class="colorhunt-victory-showcase-title">' +
             title +
@@ -32730,6 +32844,7 @@ export class GameScene extends Phaser.Scene {
                     : 'A victory-only memory from this match'
             ) +
             '</div>' +
+            '<div class="colorhunt-victory-showcase-feedback" data-victory-feedback></div>' +
             '<div class="colorhunt-victory-showcase-actions">' +
             '<button type="button" data-victory-close>' +
             closeLabel +
