@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010388K_CLEAN_CARD_CENTER_CLIPBOARD: capture HUD hard-lock + exact Hider centering + Kakao-ready clipboard share. */
     /* V1010388J_VICTORY_CARD_FINAL_VISUALS: exact camouflage FOUND replay + Practice-parity Hider framing + link share. */
     /* V1010388I_INGAME_VICTORY_CLEAN_CARD_CAPTURE: full in-game victory/countdown UI, clean social-card-only capture. */
     /* V1010388H1_REMOVE_UNUSED_AMMO_FINISH_STATE: obsolete Finished-popup ammo flag removed after v388h. */
@@ -31323,6 +31324,21 @@ export class GameScene extends Phaser.Scene {
             this.roundReturnLobbyButton?.visible ??
             false;
 
+        const previousCleanCaptureActive =
+            this.victoryShowcaseCleanCaptureActive;
+
+        /*
+         * V1010388K_CLEAN_CARD_CENTER_CLIPBOARD / HARD_CLEAN_CAPTURE
+         *
+         * updateCountdownUi() runs every Phaser frame. Merely hiding the
+         * Finished widgets once is not enough: they are re-shown before
+         * renderer.snapshot(). Hold this flag for the entire capture window so
+         * HUNTER/HIDER 승리 · 게임 종료 · countdown · return button can NEVER
+         * enter the social card.
+         */
+        this.victoryShowcaseCleanCaptureActive =
+            true;
+
         try {
             /*
              * Social card must never contain Finished UI.
@@ -31372,7 +31388,31 @@ export class GameScene extends Phaser.Scene {
                     this.paintWorldZoom,
                 );
 
-                this.centerPaintCameraOnLocalPlayer();
+                /*
+                 * V1010388K_CLEAN_CARD_CENTER_CLIPBOARD / HIDER_EXACT_CENTER
+                 *
+                 * centerPaintCameraOnLocalPlayer() only operates during Paint,
+                 * therefore it is a no-op during Finished. Use the real local
+                 * network container directly, force it fully visible/opaque,
+                 * and put its world position at the exact camera center.
+                 */
+                const localTarget =
+                    this.networkPlayerManager
+                        .getLocalPlayerContainer();
+
+                if (localTarget) {
+                    localTarget
+                        .setVisible(true)
+                        .setAlpha(1);
+
+                    camera
+                        .stopFollow()
+                        .removeBounds()
+                        .centerOn(
+                            localTarget.x,
+                            localTarget.y,
+                        );
+                }
             }
 
             await new Promise<void>(
@@ -31387,6 +31427,9 @@ export class GameScene extends Phaser.Scene {
 
             return await this.captureVictoryFrameGuaranteed();
         } finally {
+            this.victoryShowcaseCleanCaptureActive =
+                previousCleanCaptureActive;
+
             this.paintWorldZoom =
                 savedPaintWorldZoom;
 
@@ -32283,6 +32326,131 @@ export class GameScene extends Phaser.Scene {
         );
     }
 
+    private async copyVictoryShowcaseToClipboard(
+        blob: Blob,
+        text: string,
+    ): Promise<'image-and-text' | 'text' | 'failed'> {
+        /*
+         * V1010388K_CLEAN_CARD_CENTER_CLIPBOARD / KAKAO_CLIPBOARD
+         *
+         * Desktop KakaoTalk paste expects actual clipboard data. Web Share
+         * does NOT populate the clipboard, so explicitly write image/png and
+         * text/plain when the browser allows it.
+         */
+        try {
+            const ClipboardItemCtor =
+                (
+                    window as unknown as {
+                        ClipboardItem?: new (
+                            items: Record<
+                                string,
+                                Blob
+                            >,
+                        ) => unknown;
+                    }
+                ).ClipboardItem;
+
+            const clipboard =
+                navigator.clipboard as
+                    | (
+                        Clipboard & {
+                            write?: (
+                                items: unknown[],
+                            ) => Promise<void>;
+                        }
+                    )
+                    | undefined;
+
+            if (
+                ClipboardItemCtor &&
+                clipboard?.write
+            ) {
+                const item =
+                    new ClipboardItemCtor({
+                        'image/png':
+                            blob,
+                        'text/plain':
+                            new Blob(
+                                [text],
+                                {
+                                    type:
+                                        'text/plain',
+                                },
+                            ),
+                    });
+
+                await clipboard.write(
+                    [item],
+                );
+
+                return 'image-and-text';
+            }
+        } catch {
+            // Fall through to text clipboard.
+        }
+
+        try {
+            if (
+                navigator.clipboard
+                    ?.writeText
+            ) {
+                await navigator.clipboard
+                    .writeText(text);
+
+                return 'text';
+            }
+        } catch {
+            // Fall through to legacy synchronous text copy.
+        }
+
+        /*
+         * document.execCommand('copy') still works in many desktop browsers
+         * and, importantly, executes inside the original button gesture.
+         */
+        try {
+            const textarea =
+                document.createElement(
+                    'textarea',
+                );
+
+            textarea.value =
+                text;
+            textarea.setAttribute(
+                'readonly',
+                '',
+            );
+            textarea.style.position =
+                'fixed';
+            textarea.style.opacity =
+                '0';
+            textarea.style.pointerEvents =
+                'none';
+
+            document.body.appendChild(
+                textarea,
+            );
+
+            textarea.select();
+            textarea.setSelectionRange(
+                0,
+                textarea.value.length,
+            );
+
+            const copied =
+                document.execCommand(
+                    'copy',
+                );
+
+            textarea.remove();
+
+            return copied
+                ? 'text'
+                : 'failed';
+        } catch {
+            return 'failed';
+        }
+    }
+
     private async shareMultiplayerVictoryShowcase(): Promise<void> {
         const blob =
             this.victoryShowcaseBlob;
@@ -32334,6 +32502,56 @@ export class GameScene extends Phaser.Scene {
             '\n' +
             shareUrl;
 
+        /*
+         * V1010388K_CLEAN_CARD_CENTER_CLIPBOARD / DESKTOP_SHARE_IS_CLIPBOARD
+         *
+         * On desktop the expected workflow is:
+         *   Share -> open KakaoTalk -> Ctrl+V.
+         * Prefer clipboard there. Mobile/coarse-pointer devices keep the
+         * familiar native share sheet.
+         */
+        const coarsePointer =
+            window.matchMedia(
+                '(pointer: coarse)',
+            ).matches;
+
+        if (!coarsePointer) {
+            const clipboardResult =
+                await this.copyVictoryShowcaseToClipboard(
+                    blob,
+                    text,
+                );
+
+            if (
+                clipboardResult !==
+                    'failed'
+            ) {
+                this.showStatus(
+                    clipboardResult ===
+                        'image-and-text'
+                        ? (
+                            language === 'ko'
+                                ? '승리카드 이미지와 게임 링크를 복사했습니다. 카톡에서 붙여넣기 하세요.'
+                                : 'Victory image and game link copied. Paste it into chat.'
+                        )
+                        : (
+                            language === 'ko'
+                                ? '게임 링크를 복사했습니다. 이미지 복사가 지원되지 않아 이미지는 저장합니다.'
+                                : 'Game link copied. This browser cannot copy the image, so the image will be saved.'
+                        ),
+                );
+
+                if (
+                    clipboardResult ===
+                        'text'
+                ) {
+                    this.downloadMultiplayerVictoryShowcase();
+                }
+
+                return;
+            }
+        }
+
         try {
             if (
                 navigator.share &&
@@ -32370,26 +32588,40 @@ export class GameScene extends Phaser.Scene {
             }
         }
 
-        /*
-         * Desktop browsers without file Web Share:
-         * keep image download AND copy the playable game link.
-         */
-        try {
-            await navigator.clipboard
-                ?.writeText(
-                    shareUrl,
-                );
-
-            this.showStatus(
-                language === 'ko'
-                    ? '이미지를 저장하고 게임 링크를 복사했습니다.'
-                    : 'Image saved and game link copied.',
+        const clipboardResult =
+            await this.copyVictoryShowcaseToClipboard(
+                blob,
+                text,
             );
-        } catch {
-            // Download still works even if clipboard permission is denied.
-        }
 
-        this.downloadMultiplayerVictoryShowcase();
+        this.showStatus(
+            clipboardResult ===
+                'image-and-text'
+                ? (
+                    language === 'ko'
+                        ? '승리카드 이미지와 게임 링크를 복사했습니다.'
+                        : 'Victory image and game link copied.'
+                )
+                : clipboardResult ===
+                    'text'
+                    ? (
+                        language === 'ko'
+                            ? '게임 링크를 복사했습니다. 이미지는 저장합니다.'
+                            : 'Game link copied. Saving image.'
+                    )
+                    : (
+                        language === 'ko'
+                            ? '클립보드 복사가 차단되어 이미지만 저장합니다.'
+                            : 'Clipboard was blocked. Saving image only.'
+                    ),
+        );
+
+        if (
+            clipboardResult !==
+                'image-and-text'
+        ) {
+            this.downloadMultiplayerVictoryShowcase();
+        }
     }
 
     private closeMultiplayerVictoryShowcase(): void {
