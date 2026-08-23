@@ -8161,7 +8161,7 @@ export class GameScene extends Phaser.Scene {
                 ? '✨ Paint Assist'
                 : language === 'zh'
                     ? '✨ 上色助手'
-                    : '✨ 색칠 도와주기';
+                    : '✨ 색칠 도움받기';
     }
 
     private getPaintAssistUsedLabel(): string {
@@ -8174,7 +8174,7 @@ export class GameScene extends Phaser.Scene {
                 ? '✓ Assist Used'
                 : language === 'zh'
                     ? '✓ 已使用助手'
-                    : '✓ 도우미 사용됨';
+                    : '✓ 색칠 도움받음';
     }
 
     private getPaintSkillBadge(): {
@@ -8244,7 +8244,7 @@ export class GameScene extends Phaser.Scene {
                     ? '✨ Paint Assist'
                     : language === 'zh'
                         ? '✨ 上色助手'
-                        : '✨ 색칠 도와주기';
+                        : '✨ 색칠 도움받기';
         const description =
             language === 'ja'
                 ? '今いる場所の背景色を参考に、キャラクターのおよそ40%をドット風に自動で塗ります。完璧な迷彩にはせず、遊びやすいスタートを作ります。'
@@ -8260,7 +8260,7 @@ export class GameScene extends Phaser.Scene {
                     ? 'Win without Paint Assist to earn the Paint Master badge on your victory card. Win after using it and your card will show the Paint Rookie badge. Use Paint Assist?'
                     : language === 'zh'
                         ? '不使用助手获胜时，胜利卡会显示“上色高手”徽章；使用助手后获胜则显示“上色新芽”徽章。仍要使用吗？'
-                        : '색칠 도와주기 없이 승리하면 승리 카드에 「색칠고수」 마크가, 색칠 도와주기로 게임 승리 시 「색칠새싹」 마크가 표시됩니다. 그래도 괜찮은가요?';
+                        : '색칠 도움받기 없이 승리하면 승리 카드에 「색칠고수」 마크가, 색칠 도움받기 사용 후 게임 승리 시 「색칠새싹」 마크가 표시됩니다. 그래도 괜찮은가요?';
         const noLabel =
             language === 'ja'
                 ? 'いいえ'
@@ -8473,8 +8473,8 @@ export class GameScene extends Phaser.Scene {
          * A coarser 5 px sampling lattice gives us more breathing room than
          * v450e's regular 4 px matrix. Jitter below hides the lattice itself.
          */
-        const dotStep = 5;
-        const edgeProbe = 4;
+        const dotStep = 3;
+        const edgeProbe = 3;
 
         for (
             let localY = 2;
@@ -8566,12 +8566,12 @@ export class GameScene extends Phaser.Scene {
                  */
                 const keepPercent =
                     edgeStrength >= 150
-                        ? 62
+                        ? 84
                         : edgeStrength >= 95
-                            ? 54
+                            ? 74
                             : edgeStrength >= 55
-                                ? 46
-                                : 38;
+                                ? 64
+                                : 52;
 
                 const hash =
                     (
@@ -8623,18 +8623,16 @@ export class GameScene extends Phaser.Scene {
                  * - occasional second nearby blob, never a connecting line
                  */
                 const size =
-                    2 +
-                    (
-                        (hash >>> 9) %
-                        5
-                    );
+                    edgeStrength >= 95
+                        ? 2 + ((hash >>> 9) % 3)
+                        : 2 + ((hash >>> 9) % 4);
 
                 const jitterX =
-                    ((hash >>> 13) % 7) -
-                    3;
+                    ((hash >>> 13) % 5) -
+                    2;
                 const jitterY =
-                    ((hash >>> 17) % 7) -
-                    3;
+                    ((hash >>> 17) % 5) -
+                    2;
 
                 const pointX =
                     localX +
@@ -8656,7 +8654,7 @@ export class GameScene extends Phaser.Scene {
                  * between points, and still uses the same true background color.
                  */
                 if (
-                    ((hash >>> 22) % 3) ===
+                    ((hash >>> 22) % 4) ===
                     0
                 ) {
                     const angleIndex =
