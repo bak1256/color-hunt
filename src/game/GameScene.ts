@@ -8156,11 +8156,11 @@ export class GameScene extends Phaser.Scene {
             getLanguage();
 
         return language === 'ja'
-            ? '✨ 色塗りサポート'
+            ? '✨ 色塗りを手伝ってもらう'
             : language === 'en'
-                ? '✨ Paint Assist'
+                ? '✨ Get Paint Help'
                 : language === 'zh'
-                    ? '✨ 上色助手'
+                    ? '✨ 获取上色帮助'
                     : '✨ 색칠 도움받기';
     }
 
@@ -8169,11 +8169,11 @@ export class GameScene extends Phaser.Scene {
             getLanguage();
 
         return language === 'ja'
-            ? '✓ サポート使用済み'
+            ? '✓ 色塗りサポート済み'
             : language === 'en'
-                ? '✓ Assist Used'
+                ? '✓ Paint Help Received'
                 : language === 'zh'
-                    ? '✓ 已使用助手'
+                    ? '✓ 已获得上色帮助'
                     : '✓ 색칠 도움받음';
     }
 
@@ -8239,11 +8239,11 @@ export class GameScene extends Phaser.Scene {
 
         const title =
             language === 'ja'
-                ? '✨ 色塗りサポート'
+                ? '✨ 色塗りを手伝ってもらう'
                 : language === 'en'
-                    ? '✨ Paint Assist'
+                    ? '✨ Get Paint Help'
                     : language === 'zh'
-                        ? '✨ 上色助手'
+                        ? '✨ 获取上色帮助'
                         : '✨ 색칠 도움받기';
         const description =
             language === 'ja'
@@ -8411,7 +8411,7 @@ export class GameScene extends Phaser.Scene {
         const quantizeChannel =
             (value: number): number =>
                 Phaser.Math.Clamp(
-                    Math.round(value / 12) * 12,
+                    Math.round(value / 8) * 8,
                     0,
                     255,
                 );
@@ -8473,8 +8473,8 @@ export class GameScene extends Phaser.Scene {
          * A coarser 5 px sampling lattice gives us more breathing room than
          * v450e's regular 4 px matrix. Jitter below hides the lattice itself.
          */
-        const dotStep = 3;
-        const edgeProbe = 3;
+        const dotStep = 2;
+        const edgeProbe = 2;
 
         for (
             let localY = 2;
@@ -8566,12 +8566,12 @@ export class GameScene extends Phaser.Scene {
                  */
                 const keepPercent =
                     edgeStrength >= 150
-                        ? 84
+                        ? 92
                         : edgeStrength >= 95
-                            ? 74
+                            ? 84
                             : edgeStrength >= 55
-                                ? 64
-                                : 52;
+                                ? 72
+                                : 60;
 
                 const hash =
                     (
@@ -8624,15 +8624,15 @@ export class GameScene extends Phaser.Scene {
                  */
                 const size =
                     edgeStrength >= 95
-                        ? 2 + ((hash >>> 9) % 3)
-                        : 2 + ((hash >>> 9) % 4);
+                        ? 1 + ((hash >>> 9) % 3)
+                        : 2 + ((hash >>> 9) % 3);
 
                 const jitterX =
-                    ((hash >>> 13) % 5) -
-                    2;
+                    ((hash >>> 13) % 3) -
+                    1;
                 const jitterY =
-                    ((hash >>> 17) % 5) -
-                    2;
+                    ((hash >>> 17) % 3) -
+                    1;
 
                 const pointX =
                     localX +
@@ -8654,7 +8654,7 @@ export class GameScene extends Phaser.Scene {
                  * between points, and still uses the same true background color.
                  */
                 if (
-                    ((hash >>> 22) % 4) ===
+                    ((hash >>> 22) % 5) ===
                     0
                 ) {
                     const angleIndex =
@@ -9130,9 +9130,60 @@ export class GameScene extends Phaser.Scene {
         const redoSvg =
             `<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M20 9l7 6-7 6"/><path d="M25 15H14c-6 0-9 4-9 9"/></svg>`;
 
+        const paintToolLabel = (
+            key:
+                | 'circle'
+                | 'square'
+                | 'line'
+                | 'eyedropper'
+                | 'undo'
+                | 'redo',
+        ): string => {
+            const language =
+                getLanguage();
+            const labels = {
+                ko: {
+                    circle: '원형',
+                    square: '사각형',
+                    line: '직선',
+                    eyedropper: '스포이드',
+                    undo: '되돌리기',
+                    redo: '다시 실행',
+                },
+                ja: {
+                    circle: '丸筆',
+                    square: '角筆',
+                    line: '直線',
+                    eyedropper: 'スポイト',
+                    undo: '元に戻す',
+                    redo: 'やり直す',
+                },
+                en: {
+                    circle: 'Round',
+                    square: 'Square',
+                    line: 'Line',
+                    eyedropper: 'Eyedropper',
+                    undo: 'Undo',
+                    redo: 'Redo',
+                },
+                zh: {
+                    circle: '圆形',
+                    square: '方形',
+                    line: '直线',
+                    eyedropper: '吸管',
+                    undo: '撤销',
+                    redo: '重做',
+                },
+            } as const;
+
+            return labels[
+                language
+            ][key];
+        };
+
         makeTool(
             'circle',
-            tr('원형'),
+            paintToolLabel('circle'),
             circleSvg,
             () => {
                 this.straightLineToolSelected =
@@ -9145,7 +9196,7 @@ export class GameScene extends Phaser.Scene {
 
         makeTool(
             'square',
-            tr('사각형'),
+            paintToolLabel('square'),
             squareSvg,
             () => {
                 this.straightLineToolSelected =
@@ -9158,7 +9209,7 @@ export class GameScene extends Phaser.Scene {
 
         makeTool(
             'line',
-            tr('직선'),
+            paintToolLabel('line'),
             lineSvg,
             () => {
                 this.finishActivePaintStroke();
@@ -9176,7 +9227,7 @@ export class GameScene extends Phaser.Scene {
 
         makeTool(
             'eyedropper',
-            tr('스포이드'),
+            paintToolLabel('eyedropper'),
             dropperSvg,
             () => {
                 const localIsHunter =
@@ -9210,7 +9261,7 @@ export class GameScene extends Phaser.Scene {
 
         makeTool(
             'undo',
-            tr('되돌리기'),
+            paintToolLabel('undo'),
             undoSvg,
             () => {
                 this.finishActivePaintStroke();
@@ -9222,7 +9273,7 @@ export class GameScene extends Phaser.Scene {
 
         makeTool(
             'redo',
-            tr('다시 실행'),
+            paintToolLabel('redo'),
             redoSvg,
             () => {
                 this.finishActivePaintStroke();
