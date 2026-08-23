@@ -100,7 +100,7 @@ export class GameScene extends Phaser.Scene {
     /* V1010426B_RECONNECT_STORM_VISUAL_CONVERGENCE: reconnect recovery no longer repeatedly rebuilds Hunt visuals. */
     /* V1010420_VICTORY_PC_MOBILE_PARITY: Hunter/Hider victory capture + Share behavior are role-authoritative and device-independent. */
     /* V1010408_FINGER_DIRECT_TOUCH_COORDINATE: Finger paints at touch point; Precision Brush alone uses offset coordinates. */
-    /* V1010404_CLIENT_MAP12_16_FOREST_GUARD: playable client maps are map1..map16; Forest remains lobby-only. */
+    /* V1010404_CLIENT_MAP12_16_FOREST_GUARD: playable client maps are map1..map17; Forest remains lobby-only. */
     /* V1010403C_MOBILE_PAINT_SURGICAL_RECOVERY: Finger/Precision Paint restored by additive surgery; latest feature fields preserved. */
     /* V1010402_CLIENT_FULL_ROOM_SAFE_RECOVERY: restore 10/10 client join guard without touching Paint/reconnect/victory code. */
     /* V1010401_LOST_LOBBY_FEATURES_SAFE_RECOVERY: final lobby profile/preview state restored surgically. */
@@ -4598,7 +4598,7 @@ export class GameScene extends Phaser.Scene {
     private readonly selectableMaps = [
         'random',
         ...Array.from(
-            { length: 16 },
+            { length: 17 },
             (_, index) =>
                 `map${index + 1}`,
         ),
@@ -5199,7 +5199,7 @@ export class GameScene extends Phaser.Scene {
 
         for (
             let index = 1;
-            index <= 16;
+            index <= 17;
             index += 1
         ) {
             this.load.image(
@@ -13125,7 +13125,7 @@ export class GameScene extends Phaser.Scene {
 
         const mapOptions =
             Array.from(
-                { length: 16 },
+                { length: 17 },
                 (
                     _,
                     index,
@@ -13666,11 +13666,11 @@ export class GameScene extends Phaser.Scene {
 
         const syncPracticeMapPreview = (): void => {
             const selected = mapSelect?.value ?? this.practiceMap;
-            if (mapPreview && /^map(?:[1-9]|1[0-6])$/.test(selected)) {
+            if (mapPreview && /^map(?:[1-9]|1[0-7])$/.test(selected)) {
                 mapPreview.src = `/assets/backgrounds/${selected}.png`;
                 mapPreview.alt = `${tr('연습 맵 미리보기')} · ${this.getMapDisplayName(selected)}`;
             }
-            if (mapName && /^map(?:[1-9]|1[0-6])$/.test(selected)) {
+            if (mapName && /^map(?:[1-9]|1[0-7])$/.test(selected)) {
                 mapName.textContent = this.getMapDisplayName(selected);
             }
         };
@@ -13682,7 +13682,7 @@ export class GameScene extends Phaser.Scene {
 
             const match = /^map(\d+)$/.exec(mapSelect.value);
             const current = match ? Number(match[1]) : 1;
-            const total = 11;
+            const total = 17;
             const next = ((current - 1 + delta + total) % total) + 1;
             mapSelect.value = `map${next}`;
             this.practiceMap = mapSelect.value;
@@ -14059,7 +14059,7 @@ export class GameScene extends Phaser.Scene {
                     mapSelect?.value ??
                     'map1';
 
-                if (/^map(?:[1-9]|1[0-6])$/.test(selected)) {
+                if (/^map(?:[1-9]|1[0-7])$/.test(selected)) {
                     this.practiceMap = selected;
                     syncPracticeMapPreview();
                 }
@@ -27957,7 +27957,7 @@ export class GameScene extends Phaser.Scene {
                     }
 
                     const match =
-                        /^map(?:[1-9]|1[0-6])$/
+                        /^map(?:[1-9]|1[0-7])$/
                             .exec(
                                 rawSelected,
                             );
@@ -28959,6 +28959,8 @@ export class GameScene extends Phaser.Scene {
                     '대충의 나라',
                 map16:
                     '스틱액션의 나라',
+                map17:
+                    'MAP 17',
             };
 
         const key =
@@ -28977,7 +28979,7 @@ export class GameScene extends Phaser.Scene {
         mapName: string,
     ): string {
         const match =
-            /^map([1-9]|1[0-6])$/.exec(
+            /^map([1-9]|1[0-7])$/.exec(
                 mapName,
             );
 
@@ -31085,7 +31087,7 @@ export class GameScene extends Phaser.Scene {
 
             for (
                 let index = 0;
-                index <= 16;
+                index <= 17;
                 index += 1
             ) {
                 const t =
