@@ -1,3 +1,4 @@
+/* V1010451I_HUNTER_CARD_DIRECT_FULL_MAP_ASSET: Hunter card background uses the direct full round-map texture, never a live Hunt screenshot. */
 /* V1010451H2_AUTHORITATIVE_FOUND_PAINT_ROBUST: robustly prefer exact server hit-time paint snapshot for Hunter FOUND avatars. */
 /* V1010451G_TERMINAL_UI_BARRIER: prevent stale Paint/Hunt callbacks from resurrecting UI after terminal lobby return. */
 /* V1010451F_ASSIST_CAPTURE_TERMINAL_CLEANUP_CARD_POLISH: Paint Help full authoritative replay + cleaner victory tiles + terminal mobile lobby reset. */
@@ -37010,6 +37011,56 @@ export class GameScene extends Phaser.Scene {
         const language =
             getLanguage();
 
+        /*
+         * V1010451I_HUNTER_CARD_DIRECT_FULL_MAP_ASSET / DIRECT_MAP_SOURCE
+         *
+         * Hunter Victory is an evidence board of the WHOLE map, not a camera
+         * screenshot. Read the exact round map texture directly so no Hunt HUD,
+         * joystick, darkness mask, muzzle flash, or last-shot frame can leak in.
+         */
+        let hunterFullMapSource:
+            CanvasImageSource | undefined;
+
+        if (isHunter) {
+            const roundMapName =
+                String(
+                    extended.victoryShowcase
+                        ?.activeMap ??
+                    multiplayerClient.getActiveMap() ??
+                    '',
+                );
+
+            const roundMapTextureKey =
+                this.getBackgroundTextureKey(
+                    roundMapName,
+                );
+
+            if (
+                this.textures.exists(
+                    roundMapTextureKey,
+                )
+            ) {
+                const textureSource =
+                    this.textures
+                        .get(
+                            roundMapTextureKey,
+                        )
+                        .getSourceImage();
+
+                if (
+                    textureSource instanceof HTMLImageElement ||
+                    textureSource instanceof HTMLCanvasElement ||
+                    (
+                        typeof ImageBitmap !== 'undefined' &&
+                        textureSource instanceof ImageBitmap
+                    )
+                ) {
+                    hunterFullMapSource =
+                        textureSource;
+                }
+            }
+        }
+
         type VictoryFoundEntry = {
             sessionId: string;
             name?: string;
@@ -37495,17 +37546,36 @@ const roomPlayers =
         );
         context.clip();
 
-        context.drawImage(
-            image,
-            sourceX,
-            sourceY,
-            sourceW,
-            sourceH,
-            frameX,
-            frameY,
-            frameW,
-            frameH,
-        );
+        /*
+         * V1010451I_HUNTER_CARD_DIRECT_FULL_MAP_ASSET / FULL_MAP_FRAME
+         *
+         * Hunter: always draw the raw round map asset at full 960x540.
+         * Hider: preserve the existing close-up role screenshot behavior.
+         */
+        if (
+            isHunter &&
+            hunterFullMapSource
+        ) {
+            context.drawImage(
+                hunterFullMapSource,
+                frameX,
+                frameY,
+                frameW,
+                frameH,
+            );
+        } else {
+            context.drawImage(
+                image,
+                sourceX,
+                sourceY,
+                sourceW,
+                sourceH,
+                frameX,
+                frameY,
+                frameW,
+                frameH,
+            );
+        }
 
         /*
          * Only a light bottom readability wash — no dark Hunt-vision look.
