@@ -823,6 +823,13 @@ Object.assign(zh, {
   '헌터를 피해 숨자!':'躲开猎人，藏起来！'
 });
 
+
+/* V1010450ZD_ALL_HIDERS_READY_BUBBLE_I18N */
+Object.assign(ko, {'모두 준비 완료! 바로 찾기 시작 가능!':'모두 준비 완료! 바로 찾기 시작 가능!'});
+Object.assign(ja, {'모두 준비 완료! 바로 찾기 시작 가능!':'みんな準備完了！すぐに探索開始できます！'});
+Object.assign(en, {'모두 준비 완료! 바로 찾기 시작 가능!':'Everyone is ready! You can start hunting now!'});
+Object.assign(zh, {'모두 준비 완료! 바로 찾기 시작 가능!':'大家都准备好了！现在可以立即开始寻找！'});
+
 const dictionaries: Record<GameLanguage, Dict> = { ko, ja, en, zh };
 
 /* v0.10.10.201: complete Practice Ground localization. */

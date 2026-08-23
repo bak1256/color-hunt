@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010450ZD_HUNTER_PAINT_HELP_AND_READY_BUBBLE: Hunters never see Paint Help; all-Hiders-ready shows a persistent comic bubble above Start Now until Hunt begins. */
     /* V1010450ZB_VICTORY_AND_LOBBY_TOOL_CLEANUP: victory Close stays closed; Lobby hard-cleans mobile eyedropper/paint previews. */
     /* V1010450Z_MAIN_HUNT_INTRO_AND_READY_RESET: clean role-goal Hunt intros + explicit post-round lobby READY reset. */
     /* V1010450Y_SAFE_PRECREATE_ROLE_GUARDS: Paint Help role checks tolerate NetworkPlayerManager being undefined during create(). */
@@ -749,6 +750,8 @@ export class GameScene extends Phaser.Scene {
     }
 
     private destroyPaintReadyDomButton(): void {
+        this.hideAllHidersReadyBubble();
+
         this.paintReadyDomButton
             ?.remove();
 
@@ -1014,6 +1017,60 @@ export class GameScene extends Phaser.Scene {
         return aliveCount;
     }
 
+    private hideAllHidersReadyBubble(): void {
+        document.querySelector('.colorhunt-all-hiders-ready-bubble')?.remove();
+    }
+
+    private updateAllHidersReadyBubble(
+        button: HTMLButtonElement,
+        show: boolean,
+    ): void {
+        if (!show) {
+            this.hideAllHidersReadyBubble();
+            return;
+        }
+
+        let bubble=document.querySelector(
+            '.colorhunt-all-hiders-ready-bubble'
+        ) as HTMLDivElement | null;
+
+        if (!bubble) {
+            bubble=document.createElement('div');
+            bubble.className='colorhunt-all-hiders-ready-bubble';
+            bubble.textContent=tr('모두 준비 완료! 바로 찾기 시작 가능!');
+            Object.assign(bubble.style,{
+                position:'fixed',zIndex:'2147482400',pointerEvents:'none',
+                maxWidth:'230px',padding:'9px 13px',
+                border:'2px solid rgba(35,45,39,.88)',borderRadius:'15px',
+                background:'rgba(255,252,225,.90)',color:'#24382d',
+                boxShadow:'0 5px 14px rgba(0,0,0,.16)',
+                fontFamily:'"Arial Black","Noto Sans KR",Arial,sans-serif',
+                fontSize:this.mobileControlsEnabled?'13px':'14px',
+                fontWeight:'900',lineHeight:'1.25',textAlign:'center',
+                whiteSpace:'normal'
+            });
+            const tail=document.createElement('div');
+            Object.assign(tail.style,{
+                position:'absolute',left:'50%',bottom:'-9px',
+                width:'16px',height:'16px',
+                transform:'translateX(-50%) rotate(45deg)',
+                background:'rgba(255,252,225,.90)',
+                borderRight:'2px solid rgba(35,45,39,.88)',
+                borderBottom:'2px solid rgba(35,45,39,.88)'
+            });
+            bubble.appendChild(tail);
+            document.body.appendChild(bubble);
+        }
+
+        const rect=button.getBoundingClientRect();
+        bubble.style.left=Math.round(rect.left+rect.width/2)+'px';
+        bubble.style.top=Math.max(
+            10,
+            Math.round(rect.top-bubble.offsetHeight-14)
+        )+'px';
+        bubble.style.transform='translateX(-50%)';
+    }
+
     private updatePaintReadyButton(): void {
         const legacyButton =
             this.paintReadyButton;
@@ -1064,6 +1121,7 @@ export class GameScene extends Phaser.Scene {
             !visible;
 
         if (!visible) {
+            this.hideAllHidersReadyBubble();
             return;
         }
 
@@ -1176,6 +1234,7 @@ export class GameScene extends Phaser.Scene {
             );
 
         if (role === 'hider') {
+            this.hideAllHidersReadyBubble();
             button.classList
                 .remove(
                     'is-hunter-waiting',
@@ -1254,6 +1313,7 @@ export class GameScene extends Phaser.Scene {
         if (
             this.allHidersPaintReady
         ) {
+            this.updateAllHidersReadyBubble(button,true);
             const label =
                 document.createElement(
                     'span',
@@ -1267,6 +1327,8 @@ export class GameScene extends Phaser.Scene {
             );
             return;
         }
+
+        this.hideAllHidersReadyBubble();
 
         const label =
             document.createElement(
@@ -9537,13 +9599,21 @@ export class GameScene extends Phaser.Scene {
         }
 
         if (this.paintAssistButton) {
-            const canAssist =
+            /* V1010450ZD_HIDER_ONLY_ASSIST_VISIBILITY */
+            const localRole=multiplayerClient.getLocalPlayer()?.role;
+            const localIsHunter=
+                this.practiceMode==='hunter' ||
+                localRole==='hunter' ||
+                this.networkPlayerManager?.isLocalHunter?.();
+            const localIsHider=
+                this.practiceMode==='hider' ||
+                localRole==='hider' ||
+                this.networkPlayerManager?.isLocalHider?.();
+            const canAssist=
                 visible &&
-                this.phase === 'paint' &&
-                (
-                    this.practiceMode === 'hider' ||
-                    this.isMultiplayerSession()
-                );
+                this.phase==='paint' &&
+                localIsHider &&
+                !localIsHunter;
 
             this.paintAssistButton.hidden =
                 !canAssist;
@@ -52158,6 +52228,8 @@ const roomPlayers =
     }
 
     private startHunt(): void {
+        this.hideAllHidersReadyBubble();
+
         this.time.delayedCall(
             0,
             () => {
