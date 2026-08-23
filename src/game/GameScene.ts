@@ -8057,6 +8057,45 @@ export class GameScene extends Phaser.Scene {
             }
 
             /*
+             * V1010450H_DESKTOP_PRACTICE_WIDE
+             *
+             * Desktop has plenty of horizontal room. Keep the mobile/Fold
+             * practice layout exactly as-is, but let the desktop Practice
+             * Ground breathe instead of staying in the narrow mobile-like card.
+             */
+            @media (min-width: 761px) and (pointer: fine) {
+                .colorhunt-practice-card {
+                    width: min(820px, calc(100vw - 72px)) !important;
+                    max-width: 820px !important;
+                    min-width: 700px !important;
+                    box-sizing: border-box !important;
+                }
+
+                .colorhunt-practice-map-picker {
+                    grid-template-columns: 56px fit-content(500px) 56px !important;
+                    column-gap: 10px !important;
+                    margin-top: 14px !important;
+                }
+
+                .colorhunt-practice-map-preview {
+                    width: min(46vw, 500px) !important;
+                    max-width: 500px !important;
+                    height: min(25.875vw, 281px) !important;
+                    max-height: 281px !important;
+                    aspect-ratio: 16 / 9 !important;
+                }
+
+                .colorhunt-practice-map-arrow {
+                    width: 56px !important;
+                    height: 76px !important;
+                }
+
+                .colorhunt-practice-mode-grid {
+                    column-gap: 14px !important;
+                }
+            }
+
+            /*
              * Compact/Fold/mobile: arrows remain visible, while the thumbnail
              * yields width first. No second row of paint buttons is allowed.
              */
