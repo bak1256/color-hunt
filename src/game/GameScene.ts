@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010450Y_SAFE_PRECREATE_ROLE_GUARDS: Paint Help role checks tolerate NetworkPlayerManager being undefined during create(). */
     /* V1010450X_HIDER_PRACTICE_CLEAN_UI: Hider hard-hides GAS, Paint Help is Hider-only, and practice starts with fading text-only paint prompt. */
     /* V1010450W_AIM_FIRE_GAP: separate mobile Aim joystick and FIRE outer strokes by about 2px. */
     /* V1010450V_HUNTER_FART_DISCOVERY_HINT: GAS visible from Hunt start; delayed localized comic fart hint; larger mobile FIRE/FART labels. */
@@ -8237,7 +8238,7 @@ export class GameScene extends Phaser.Scene {
             this.paintAssistModal ||
             this.practiceMode === 'hunter' ||
             this.networkPlayerManager
-                .isLocalHunter() ||
+                ?.isLocalHunter?.() ||
             multiplayerClient
                 .getLocalPlayer()
                 ?.role === 'hunter'
@@ -8356,7 +8357,7 @@ export class GameScene extends Phaser.Scene {
             this.paintAssistUsedThisRound ||
             this.practiceMode === 'hunter' ||
             this.networkPlayerManager
-                .isLocalHunter() ||
+                ?.isLocalHunter?.() ||
             multiplayerClient
                 .getLocalPlayer()
                 ?.role === 'hunter'
@@ -8992,7 +8993,7 @@ export class GameScene extends Phaser.Scene {
         const paintAssistAllowed =
             this.practiceMode !== 'hunter' &&
             !this.networkPlayerManager
-                .isLocalHunter() &&
+                ?.isLocalHunter?.() &&
             multiplayerClient
                 .getLocalPlayer()
                 ?.role !== 'hunter';
@@ -19807,7 +19808,7 @@ export class GameScene extends Phaser.Scene {
         if (
             this.phase === 'hunt' &&
             this.networkPlayerManager
-                .isLocalHunter() &&
+                ?.isLocalHunter?.() &&
             gameplayDocumentFocused &&
             !this.gameplayDocumentWasFocused
         ) {
