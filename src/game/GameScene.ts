@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010450Z_MAIN_HUNT_INTRO_AND_READY_RESET: clean role-goal Hunt intros + explicit post-round lobby READY reset. */
     /* V1010450Y_SAFE_PRECREATE_ROLE_GUARDS: Paint Help role checks tolerate NetworkPlayerManager being undefined during create(). */
     /* V1010450X_HIDER_PRACTICE_CLEAN_UI: Hider hard-hides GAS, Paint Help is Hider-only, and practice starts with fading text-only paint prompt. */
     /* V1010450W_AIM_FIRE_GAP: separate mobile Aim joystick and FIRE outer strokes by about 2px. */
@@ -16923,6 +16924,66 @@ export class GameScene extends Phaser.Scene {
         this.showPracticeStartBanner(
             tr('연습 시작! 위장한 봇을 모두 찾아보세요.'),
         );
+    }
+
+    private showMainMatchHuntIntroText(
+        localIsHunter: boolean,
+    ): void {
+        document.querySelector('.colorhunt-main-hunt-intro')?.remove();
+
+        const text=document.createElement('div');
+        text.className='colorhunt-main-hunt-intro';
+        text.textContent=localIsHunter
+            ? tr('하이더를 찾자!')
+            : tr('헌터를 피해 숨자!');
+
+        Object.assign(text.style,{
+            position:'fixed',
+            zIndex:'2147482500',
+            pointerEvents:'none',
+            left:'50%',
+            top:'96px',
+            transform:'translateX(-50%) translateY(-4px)',
+            color:localIsHunter?'#ffd85a':'#ffffff',
+            fontFamily:'"Arial Black","Noto Sans KR",Arial,sans-serif',
+            fontSize:this.mobileControlsEnabled?'23px':'30px',
+            fontWeight:'950',
+            lineHeight:'1.1',
+            letterSpacing:'-0.7px',
+            whiteSpace:'nowrap',
+            WebkitTextStroke:'2px #111111',
+            paintOrder:'stroke fill',
+            textShadow:'0 3px 0 rgba(0,0,0,.42)',
+            opacity:'0',
+            transition:'opacity 180ms ease, transform 180ms ease'
+        });
+
+        document.body.appendChild(text);
+
+        const place=():void=>{
+            if(!document.body.contains(text))return;
+            const rect=this.game.canvas.getBoundingClientRect();
+            text.style.left=Math.round(rect.left+rect.width/2)+'px';
+            text.style.top=Math.round(
+                rect.top+Math.max(
+                    62,
+                    rect.height*(this.mobileControlsEnabled?0.105:0.115)
+                )
+            )+'px';
+        };
+
+        place();
+        requestAnimationFrame(place);
+        requestAnimationFrame(()=>{
+            text.style.opacity='1';
+            text.style.transform='translateX(-50%) translateY(0)';
+        });
+
+        window.setTimeout(()=>{
+            text.style.opacity='0';
+            text.style.transform='translateX(-50%) translateY(-4px)';
+            window.setTimeout(()=>text.remove(),260);
+        },1500);
     }
 
     private showPracticePaintIntroText(): void {
@@ -38193,6 +38254,10 @@ const roomPlayers =
                 phaseEndsAt - Date.now(),
             );
 
+        const returnedToLobbyAfterRound =
+            phase === 'lobby' &&
+            this.phase === 'finished';
+
         this.phaseEndTime =
             this.time.now +
             remainingMs;
@@ -38339,6 +38404,29 @@ const roomPlayers =
                 );
 
             this.resetGameplayCamera();
+
+            if (
+                returnedToLobbyAfterRound &&
+                multiplayerClient.isConnected()
+            ) {
+                if (!multiplayerClient.isHost()) {
+                    multiplayerClient.sendLobbyReady(false);
+                }
+
+                [0,120,360,800].forEach((delay)=>{
+                    this.time.delayedCall(delay,()=>{
+                        if (
+                            this.phase !== 'lobby' ||
+                            !multiplayerClient.isConnected()
+                        ) return;
+
+                        multiplayerClient.requestLobbyReadyState();
+                        this.updateWaitingRoomDom();
+                        this.updateLobbyUi();
+                    });
+                });
+            }
+
             this.enterLobbyPhase();
             return;
         }
@@ -52190,6 +52278,11 @@ const roomPlayers =
             multiplayerClient
                 .getLocalPlayer()
                 ?.role === 'hunter';
+
+        if (this.isMultiplayerSession()) {
+            this.clearStatus();
+            this.showMainMatchHuntIntroText(localIsHunter);
+        }
 
         if (
             this.isMultiplayerSession() &&

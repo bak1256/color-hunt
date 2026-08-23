@@ -804,6 +804,25 @@ Object.assign(zh, {
   '색칠을 연습하자!':'来练习上色吧！'
 });
 
+
+/* V1010450Z_MAIN_HUNT_INTRO_I18N */
+Object.assign(ko, {
+  '하이더를 찾자!':'하이더를 찾자!',
+  '헌터를 피해 숨자!':'헌터를 피해 숨자!'
+});
+Object.assign(ja, {
+  '하이더를 찾자!':'ハイダーを探そう！',
+  '헌터를 피해 숨자!':'ハンターから隠れよう！'
+});
+Object.assign(en, {
+  '하이더를 찾자!':'Find the Hiders!',
+  '헌터를 피해 숨자!':'Hide from the Hunters!'
+});
+Object.assign(zh, {
+  '하이더를 찾자!':'找到躲藏者！',
+  '헌터를 피해 숨자!':'躲开猎人，藏起来！'
+});
+
 const dictionaries: Record<GameLanguage, Dict> = { ko, ja, en, zh };
 
 /* v0.10.10.201: complete Practice Ground localization. */
