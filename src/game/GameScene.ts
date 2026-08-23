@@ -8699,18 +8699,34 @@ export class GameScene extends Phaser.Scene {
                  * legible. Flat regions use slightly larger dots for the
                  * beginner-friendly "partly colored-in" look.
                  */
+                /*
+                 * V1010450N_ROUNDED_PROJECTED_DOTS
+                 *
+                 * v450m finally samples the correct world position, but the
+                 * 1~2px detail stamps still read as square/pixel blocks.
+                 * Keep the exact background sampling, while drawing it with
+                 * visibly round 3~6px circular dabs like the earlier organic
+                 * version. Detailed regions stay smaller than flat regions so
+                 * recognizable shapes are not swallowed.
+                 */
                 const size =
-                    edgeStrength >= 95
-                        ? 1 +
+                    edgeStrength >= 150
+                        ? 3 +
                             (
                                 (detailHash >>> 9) %
                                 2
                             )
-                        : 2 +
-                            (
-                                (detailHash >>> 9) %
-                                3
-                            );
+                        : edgeStrength >= 95
+                            ? 3 +
+                                (
+                                    (detailHash >>> 9) %
+                                    3
+                                )
+                            : 4 +
+                                (
+                                    (detailHash >>> 9) %
+                                    3
+                                );
 
                 /*
                  * No random positional jitter in detailed regions. Moving a
