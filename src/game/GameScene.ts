@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010450W_AIM_FIRE_GAP: separate mobile Aim joystick and FIRE outer strokes by about 2px. */
     /* V1010450V_HUNTER_FART_DISCOVERY_HINT: GAS visible from Hunt start; delayed localized comic fart hint; larger mobile FIRE/FART labels. */
     /* V1010450E_PROJECTED_BACKGROUND_DOT_ASSIST: project hidden background into avatar, erase about half, retain edge-aware dot guide; bold text-only timer. */
     /* V1010450D_BACKGROUND_SHAPE_ASSIST: 45% beginner assist follows local background color/contours; Practice paint timer is text-only. */
@@ -2415,8 +2416,14 @@ export class GameScene extends Phaser.Scene {
          */
         const aimY =
             this.gameHeight - 190;
+        /*
+         * V1010450W_AIM_FIRE_GAP
+         * Aim joystick outer edge and FIRE outer stroke used to touch/overlap.
+         * Shift FIRE/GAS 7px right, leaving a visible ~2px safety gap while
+         * keeping both buttons comfortably inside the mobile viewport.
+         */
         const fireX =
-            this.gameWidth - 64;
+            this.gameWidth - 57;
         const fireY =
             aimY;
 
