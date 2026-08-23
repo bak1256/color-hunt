@@ -1,3 +1,4 @@
+/* V1010451F_ASSIST_CAPTURE_TERMINAL_CLEANUP_CARD_POLISH: Paint Help full authoritative replay + cleaner victory tiles + terminal mobile lobby reset. */
 /* V1010451E2_TERMINAL_REJOIN_AND_FOUND_POSITIONS_ROBUST: long-away active-round rejection + authoritative Hunter FOUND positions. */
 import Phaser from 'phaser';
 import {
@@ -8983,10 +8984,35 @@ export class GameScene extends Phaser.Scene {
                 if (
                     this.isMultiplayerSession()
                 ) {
-                    multiplayerClient
-                        .sendPaintStroke(
-                            stroke,
-                        );
+                    /*
+                     * V1010451F_ASSIST_CAPTURE_TERMINAL_CLEANUP_CARD_POLISH / ASSIST_NETWORK_CHUNKING
+                     *
+                     * Keep every Paint Help dab authoritative. The server clips
+                     * one paint_stroke payload to 300 points, so large helper
+                     * buckets must be split before sending.
+                     */
+                    const maxNetworkPoints =
+                        240;
+
+                    for (
+                        let pointIndex = 0;
+                        pointIndex <
+                            stroke.points.length;
+                        pointIndex +=
+                            maxNetworkPoints
+                    ) {
+                        multiplayerClient
+                            .sendPaintStroke({
+                                ...stroke,
+                                points:
+                                    stroke.points
+                                        .slice(
+                                            pointIndex,
+                                            pointIndex +
+                                                maxNetworkPoints,
+                                        ),
+                            });
+                    }
                 }
 
                 assistStrokes.push(
@@ -12498,18 +12524,9 @@ export class GameScene extends Phaser.Scene {
                     ) {
                         void (
                             async () => {
-                                await this.leaveCurrentRoomToLobby();
+                                await this.forceTerminalRejoinReturnToMainLobby();
 
-                                const language =
-                                    getLanguage();
-
-                                this.showStatus(
-                                    language === 'ko'
-                                        ? '자리를 비운 동안 게임이 시작되었습니다. 현재 게임에는 재참가할 수 없어 메인 로비로 돌아왔습니다.'
-                                        : language === 'ja'
-                                            ? '離席中にゲームが開始されました。進行中のゲームには再参加できないため、メインロビーに戻りました。'
-                                            : 'The game started while you were away. You cannot rejoin the active round, so you were returned to the main lobby.',
-                                );
+                                /* V1010451F1_REMOVE_UNUSED_TERMINAL_LANGUAGE: localized terminal copy now lives inside forceTerminalRejoinReturnToMainLobby(). */
                             }
                         )();
 
@@ -31114,6 +31131,219 @@ export class GameScene extends Phaser.Scene {
 
     }
 
+    private async forceTerminalRejoinReturnToMainLobby(): Promise<void> {
+        /*
+         * V1010451F_ASSIST_CAPTURE_TERMINAL_CLEANUP_CARD_POLISH / HARD_TERMINAL_LOBBY_RESET
+         *
+         * A server rejection can arrive while a fresh-room handshake still owns
+         * roomTransitionInProgress. The normal leaveCurrentRoomToLobby() path
+         * therefore used to return early, leaving finger/paint palette/BGM and
+         * other room UI layered over the public lobby.
+         */
+        this.roomTransitionInProgress =
+            false;
+
+        this.finishActivePaintStroke();
+        this.isPainting = false;
+
+        this.recoveryPaintSnapshotPending =
+            false;
+        this.recoveryPaintSnapshotDeadline =
+            0;
+        this.reconnectGameplayLocked =
+            false;
+        this.reconnectGameplayUnlockNotBefore =
+            0;
+
+        this.resetMobileMoveControl();
+        this.mobileTouchPoints.clear();
+        this.mobileAimPointerId = -1;
+        this.mobileFirePointerId = -1;
+        this.mobileFartPointerId = -1;
+
+        this.destroyMobilePaintDock();
+        this.destroyPaintReadyDomButton();
+        this.destroyControlsHelpUi();
+        this.destroyHunterControlsBottomHint();
+        this.destroyPracticeDesktopHint();
+        this.destroyWaitingRoomDom();
+
+        this.paintAssistModal?.remove();
+        this.paintAssistModal =
+            undefined;
+        this.paintAssistButton?.remove();
+        this.paintAssistButton =
+            undefined;
+
+        this.setPaintPaletteVisible(
+            false,
+        );
+        this.setHunterCamoPaletteVisible(
+            false,
+        );
+
+        this.setHunterPaintBlind(false);
+        this.hideHuntTensionUi();
+        this.clearAllAimingVisuals();
+        this.hideLegacySinglePlayerActors();
+        this.resetGameplayCamera();
+        this.resetPaintWorldZoom();
+
+        this.hideChatUi(
+            true,
+        );
+
+        this.clearVictoryShowcaseForRoundLifecycle();
+
+        try {
+            await multiplayerClient.disconnect();
+        } catch {
+            // The rejected transport may already be closed by the server.
+        }
+
+        this.multiplayerSessionActive =
+            false;
+        this.localNetworkPlayerReady =
+            false;
+        this.roomHandshakeCompletedId =
+            '';
+        this.networkPlayerCount =
+            0;
+
+        this.networkPlayerManager
+            .clearAllPlayers();
+
+        this.enterLobbyPhase();
+
+        this.currentBackgroundTextureKey =
+            'forest-background';
+        this.backgroundImage
+            .setTexture(
+                'forest-background',
+            )
+            .setDisplaySize(
+                this.gameWidth,
+                this.gameHeight,
+            );
+
+        this.showMainMenu();
+
+        /*
+         * Public lobby uses its own inline BGM button. Suppress any old floating
+         * Phaser BGM chip left from the rejected room.
+         */
+        this.setUnifiedBgmButtonVisible(
+            false,
+        );
+
+        this.roomTransitionInProgress =
+            false;
+
+        document
+            .querySelector(
+                '.colorhunt-terminal-rejoin-overlay',
+            )
+            ?.remove();
+
+        const language =
+            getLanguage();
+
+        const title =
+            language === 'ko'
+                ? '게임이 이미 시작됐어요'
+                : language === 'ja'
+                    ? 'ゲームはすでに開始しています'
+                    : language === 'zh'
+                        ? '游戏已经开始'
+                        : 'The game already started';
+
+        const description =
+            language === 'ko'
+                ? '자리를 비운 동안 게임이 시작되었습니다. 현재 진행 중인 게임에는 재참가할 수 없어 메인 로비로 돌아왔습니다.'
+                : language === 'ja'
+                    ? '離席中にゲームが開始されました。進行中のゲームには再参加できないため、メインロビーに戻りました。'
+                    : language === 'zh'
+                        ? '你离开期间游戏已经开始。当前对局无法重新加入，因此已返回主大厅。'
+                        : 'The game started while you were away. You cannot rejoin the active round, so you were returned to the main lobby.';
+
+        const confirmLabel =
+            language === 'ko'
+                ? '확인'
+                : language === 'ja'
+                    ? '確認'
+                    : language === 'zh'
+                        ? '确认'
+                        : 'OK';
+
+        const overlay =
+            document.createElement(
+                'div',
+            );
+
+        overlay.className =
+            'colorhunt-terminal-rejoin-overlay';
+
+        overlay.innerHTML = `
+            <style>
+                .colorhunt-terminal-rejoin-overlay{
+                    position:fixed;inset:0;z-index:2147483640;
+                    display:grid;place-items:center;padding:18px;
+                    background:rgba(13,20,18,.46);
+                    backdrop-filter:blur(7px);
+                    -webkit-backdrop-filter:blur(7px);
+                    font-family:Inter,Pretendard,Arial,sans-serif
+                }
+                .colorhunt-terminal-rejoin-card{
+                    width:min(88vw,440px);box-sizing:border-box;
+                    padding:26px 24px 22px;border-radius:24px;
+                    border:2px solid rgba(67,120,82,.28);
+                    background:rgba(255,253,242,.98);
+                    box-shadow:0 24px 70px rgba(16,34,26,.28);
+                    color:#294c39;text-align:center
+                }
+                .colorhunt-terminal-rejoin-icon{
+                    width:46px;height:46px;margin:0 auto 12px;
+                    display:grid;place-items:center;border-radius:50%;
+                    border:2px solid rgba(55,110,77,.34);
+                    font-size:25px;font-weight:950
+                }
+                .colorhunt-terminal-rejoin-card h2{
+                    margin:0;font-size:23px;line-height:1.2;font-weight:950
+                }
+                .colorhunt-terminal-rejoin-card p{
+                    margin:12px 0 20px;font-size:14px;line-height:1.55;
+                    font-weight:750;color:#52695d
+                }
+                .colorhunt-terminal-rejoin-card button{
+                    width:100%;min-height:46px;border:0;border-radius:14px;
+                    background:#43845e;color:#fff;font:900 15px Arial,sans-serif;
+                    box-shadow:0 7px 18px rgba(44,105,69,.20);cursor:pointer
+                }
+            </style>
+            <div class="colorhunt-terminal-rejoin-card" role="dialog" aria-modal="true">
+                <div class="colorhunt-terminal-rejoin-icon">ⓘ</div>
+                <h2>${title}</h2>
+                <p>${description}</p>
+                <button type="button" data-terminal-rejoin-ok>${confirmLabel}</button>
+            </div>
+        `;
+
+        overlay
+            .querySelector(
+                '[data-terminal-rejoin-ok]',
+            )
+            ?.addEventListener(
+                'click',
+                () => {
+                    overlay.remove();
+                },
+            );
+
+        document.body.appendChild(
+            overlay,
+        );
+    }
+
     private async leaveCurrentRoomToLobby(): Promise<void> {
         if (
             this.roomTransitionInProgress
@@ -37340,8 +37570,13 @@ const roomPlayers =
                      * Let a little of the captured map show through each Hider
                      * result tile instead of covering it with solid white.
                      */
+                    /*
+                     * V1010451F_ASSIST_CAPTURE_TERMINAL_CLEANUP_CARD_POLISH / CLEARER_FOUND_BACKGROUND
+                     * Keep the commemorative glass tile, but expose enough of
+                     * the map to immediately understand where the Hider hid.
+                     */
                     context.fillStyle =
-                        'rgba(255,255,255,.72)';
+                        'rgba(255,255,255,.34)';
                     context.beginPath();
                     context.roundRect(
                         mx - 62,
@@ -37602,13 +37837,30 @@ const roomPlayers =
             context.imageSmoothingEnabled =
                 false;
             context.globalAlpha = 1;
+            /*
+             * V1010451F_ASSIST_CAPTURE_TERMINAL_CLEANUP_CARD_POLISH / BIGGER_HUNTER_SELF_CAMO
+             * Keep the approved card dimensions; enlarge only the avatar.
+             */
+            context.save();
+            context.beginPath();
+            context.roundRect(
+                camoCardX + 190,
+                camoCardY + 4,
+                207,
+                camoCardH - 8,
+                22,
+            );
+            context.clip();
+
             context.drawImage(
                 hunterPaintAvatar,
-                camoCardX + 230,
-                camoCardY + 10,
-                145,
-                218,
+                camoCardX + 202,
+                camoCardY - 17,
+                188,
+                282,
             );
+
+            context.restore();
 
             context.restore();
         }
