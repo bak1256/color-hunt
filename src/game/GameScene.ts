@@ -8379,19 +8379,20 @@ export class GameScene extends Phaser.Scene {
             0;
 
         /*
-         * V1010450F_ORGANIC_PROJECTED_GUIDE
+         * V1010450I_SPARSE_PROJECTED_DOTS
          *
-         * Beginner assist is now a softened projection of the REAL background
-         * hidden by the avatar:
+         * Return to the readable v450e idea, but remove the machine-like grid.
          *
-         * - keep roughly 47~58% in ordinary areas so the assist stays helpful
-         *   without becoming a near-finished camouflage;
-         * - preserve high-contrast background boundaries at a reduced 70~80%;
-         * - sample a tiny neighborhood so the projection is intentionally
-         *   "smudged", not a perfect screenshot copy;
-         * - mix 2/3/4/5 px round dots;
-         * - extend many retained dots into short 2~5-point runs, so clusters
-         *   read like rough hand-painted strokes rather than a uniform matrix.
+         * 1) Sample the REAL background hidden behind the avatar.
+         * 2) Keep the sampled color almost intact. Do not invent connecting
+         *    strokes and do not drag unrelated colors across complex scenery.
+         * 3) Retain only a sparse subset so this remains a beginner guide,
+         *    not an automatic finished camouflage.
+         * 4) Use irregular positions and mixed 2~6 px round dots so the
+         *    projection looks broken-up / softly smudged instead of a fixed
+         *    cross-grid.
+         * 5) High-contrast background edges are retained a little more often,
+         *    so recognizable silhouettes still survive through the gaps.
          */
         type AssistRgb = {
             r: number;
@@ -8410,56 +8411,10 @@ export class GameScene extends Phaser.Scene {
         const quantizeChannel =
             (value: number): number =>
                 Phaser.Math.Clamp(
-                    Math.round(value / 20) * 20,
+                    Math.round(value / 12) * 12,
                     0,
                     255,
                 );
-
-        const mixRgb = (
-            colors: AssistRgb[],
-        ): AssistRgb => {
-            const count =
-                Math.max(
-                    1,
-                    colors.length,
-                );
-
-            return {
-                r:
-                    colors.reduce(
-                        (
-                            total,
-                            color,
-                        ) =>
-                            total +
-                            color.r,
-                        0,
-                    ) /
-                    count,
-                g:
-                    colors.reduce(
-                        (
-                            total,
-                            color,
-                        ) =>
-                            total +
-                            color.g,
-                        0,
-                    ) /
-                    count,
-                b:
-                    colors.reduce(
-                        (
-                            total,
-                            color,
-                        ) =>
-                            total +
-                            color.b,
-                        0,
-                    ) /
-                    count,
-            };
-        };
 
         const colorBuckets =
             new Map<
@@ -8514,7 +8469,11 @@ export class GameScene extends Phaser.Scene {
             });
         };
 
-        const dotStep = 4;
+        /*
+         * A coarser 5 px sampling lattice gives us more breathing room than
+         * v450e's regular 4 px matrix. Jitter below hides the lattice itself.
+         */
+        const dotStep = 5;
         const edgeProbe = 4;
 
         for (
@@ -8599,14 +8558,20 @@ export class GameScene extends Phaser.Scene {
                         ),
                     );
 
+                /*
+                 * More sparse than v450f/g.
+                 * Flat areas keep about 38%; obvious contours keep about 62%.
+                 * This prevents complex maps from turning into noisy camouflage
+                 * while still leaving recognizable pieces of the true backdrop.
+                 */
                 const keepPercent =
                     edgeStrength >= 150
-                        ? 80
+                        ? 62
                         : edgeStrength >= 95
-                            ? 70
+                            ? 54
                             : edgeStrength >= 55
-                                ? 58
-                                : 47;
+                                ? 46
+                                : 38;
 
                 const hash =
                     (
@@ -8630,181 +8595,103 @@ export class GameScene extends Phaser.Scene {
                 }
 
                 /*
-                 * Blur only a LITTLE: center gets the strongest vote, nearby
-                 * samples soften hard photographic detail while keeping the
-                 * background's large shapes and color boundaries recognizable.
+                 * Keep the TRUE sampled background color. Only a light
+                 * quantization is applied so adjacent tiny color variations
+                 * melt together visually instead of exploding into noise.
                  */
-                const blurDirection =
-                    (hash >>> 5) % 4;
-                const nearbyColor =
-                    blurDirection === 0
-                        ? leftColor
-                        : blurDirection === 1
-                            ? rightColor
-                            : blurDirection === 2
-                                ? upColor
-                                : downColor;
-
-                const softenedColor =
-                    edgeStrength >= 95
-                        ? centerColor
-                        : mixRgb([
-                            centerColor,
-                            centerColor,
-                            nearbyColor,
-                        ]);
-
                 const r =
                     quantizeChannel(
-                        softenedColor.r,
+                        centerColor.r,
                     );
                 const g =
                     quantizeChannel(
-                        softenedColor.g,
+                        centerColor.g,
                     );
                 const b =
                     quantizeChannel(
-                        softenedColor.b,
+                        centerColor.b,
                     );
                 const color =
                     r << 16 |
                     g << 8 |
                     b;
 
-                const baseSize =
+                /*
+                 * Break the old regular cross pattern:
+                 * - larger/random dot sizes
+                 * - wider position jitter
+                 * - occasional second nearby blob, never a connecting line
+                 */
+                const size =
                     2 +
                     (
-                        (hash >>> 10) %
-                        4
+                        (hash >>> 9) %
+                        5
                     );
 
                 const jitterX =
-                    ((hash >>> 14) % 5) -
-                    2;
+                    ((hash >>> 13) % 7) -
+                    3;
                 const jitterY =
-                    ((hash >>> 17) % 5) -
-                    2;
+                    ((hash >>> 17) % 7) -
+                    3;
 
-                const startX =
+                const pointX =
                     localX +
                     jitterX;
-                const startY =
+                const pointY =
                     localY +
                     jitterY;
 
+                addPoint(
+                    color,
+                    size,
+                    pointX,
+                    pointY,
+                );
+
                 /*
-                 * Follow the locally calmer color direction. It tends to run
-                 * along a bush/path/wall region instead of crossing straight
-                 * through a strong boundary.
+                 * About one third of retained samples get a second soft blob.
+                 * It creates a smeared cluster without drawing a visible line
+                 * between points, and still uses the same true background color.
                  */
-                const horizontalChange =
-                    colorDistance(
-                        leftColor,
-                        rightColor,
-                    );
-                const verticalChange =
-                    colorDistance(
-                        upColor,
-                        downColor,
-                    );
-
-                let directionX =
-                    0;
-                let directionY =
-                    0;
-
                 if (
-                    horizontalChange <
-                    verticalChange
+                    ((hash >>> 22) % 3) ===
+                    0
                 ) {
-                    directionX =
-                        (hash & 1)
-                            ? 1
-                            : -1;
-                } else {
-                    directionY =
-                        (hash & 1)
-                            ? 1
-                            : -1;
-                }
-
-                /*
-                 * Some marks stay as single dots. Most become short uneven
-                 * dotted strokes. With variable sizes this produces the
-                 * "big/small dots connected into rough lines" look.
-                 */
-                const runLength =
-                    edgeStrength >= 95
-                        ? 2 +
-                            (
-                                (hash >>> 20) %
-                                3
-                            )
-                        : 1 +
-                            (
-                                (hash >>> 20) %
-                                5
-                            );
-
-                for (
-                    let runIndex = 0;
-                    runIndex <
-                    runLength;
-                    runIndex += 1
-                ) {
-                    const wobble =
-                        (
-                            (
-                                hash >>>
-                                (
-                                    22 +
-                                    runIndex %
-                                        6
-                                )
-                            ) %
-                            3
-                        ) -
-                        1;
-
-                    const pointSize =
-                        Phaser.Math.Clamp(
-                            baseSize +
-                                (
-                                    runIndex % 2 ===
-                                    0
-                                        ? 0
-                                        : wobble
-                                ),
-                            2,
-                            5,
-                        );
-
-                    const spacing =
-                        2.2;
+                    const angleIndex =
+                        (hash >>> 24) %
+                        8;
+                    const offsets = [
+                        [3, 0],
+                        [2, 2],
+                        [0, 3],
+                        [-2, 2],
+                        [-3, 0],
+                        [-2, -2],
+                        [0, -3],
+                        [2, -2],
+                    ] as const;
+                    const offset =
+                        offsets[
+                            angleIndex
+                        ];
 
                     addPoint(
                         color,
-                        pointSize,
-                        startX +
-                            directionX *
-                                runIndex *
-                                spacing +
-                            (
-                                directionY !==
-                                0
-                                    ? wobble
-                                    : 0
-                            ),
-                        startY +
-                            directionY *
-                                runIndex *
-                                spacing +
-                            (
-                                directionX !==
-                                0
-                                    ? wobble
-                                    : 0
-                            ),
+                        Phaser.Math.Clamp(
+                            size +
+                                (
+                                    ((hash >>> 28) % 3) -
+                                    1
+                                ),
+                            2,
+                            6,
+                        ),
+                        pointX +
+                            offset[0],
+                        pointY +
+                            offset[1],
                     );
                 }
             }
@@ -8892,12 +8779,12 @@ export class GameScene extends Phaser.Scene {
 
         this.showStatus(
             getLanguage() === 'ja'
-                ? '✨ 背景をやわらかく投影し、大小のドットと短い線で塗りガイドを作りました！'
+                ? '✨ 隠れた背景を大小のドットでまばらに投影しました。あとは自分で仕上げてみよう！'
                 : getLanguage() === 'en'
-                    ? '✨ Soft-projected the background into mixed dots and rough short guide strokes!'
+                    ? '✨ Projected the hidden background as sparse mixed-size dots. Finish the rest yourself!'
                     : getLanguage() === 'zh'
-                        ? '✨ 已柔化投影背景，并用大小不一的点和短线生成上色引导！'
-                        : '✨ 뒷배경을 살짝 뭉개 투영하고 크고 작은 도트와 짧은 선으로 밑그림을 만들었어요!',
+                        ? '✨ 已把被遮住的背景用大小不一的稀疏圆点投影出来，剩下的自己完成吧！'
+                        : '✨ 가려진 뒷배경을 크고 작은 듬성듬성 도트로 투영했어요. 나머지는 직접 완성해보세요!',
         );
     }
 
