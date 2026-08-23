@@ -12361,6 +12361,51 @@ export class GameScene extends Phaser.Scene {
                     this.resyncGameplayAfterConnectionRecovery();
 
                     /*
+                     * V1010451_SHARE_AND_REJOIN_BOUNDARY / LOBBY_MOVEMENT_RECOVERY
+                     *
+                     * Returning from Kakao/background can reconnect after the
+                     * server has already returned this client to Lobby. A stale
+                     * Hunt/Paint recovery flag must not keep lobby movement
+                     * permanently locked.
+                     */
+                    this.time.delayedCall(
+                        120,
+                        () => {
+                            const authoritativePhase =
+                                multiplayerClient.getPhase();
+
+                            if (
+                                authoritativePhase !== 'lobby' ||
+                                !multiplayerClient.isConnected()
+                            ) {
+                                return;
+                            }
+
+                            this.recoveryPaintSnapshotPending =
+                                false;
+                            this.recoveryPaintSnapshotDeadline =
+                                0;
+
+                            this.networkPlayerManager
+                                .syncPlayersFromCurrentRoom();
+                            this.networkPlayerManager
+                                .forceLobbyPositionsFromState();
+                            this.networkPlayerManager
+                                .resetLocalPredictionAfterRecovery();
+
+                            this.resetMobileMoveControl();
+                            this.mobileTouchPoints.clear();
+
+                            this.reconnectGameplayLocked =
+                                false;
+                            this.reconnectGameplayUnlockNotBefore =
+                                0;
+
+                            this.updateLobbyUi();
+                        },
+                    );
+
+                    /*
                      * Preserve the local camouflage source and republish it only
                      * after the authoritative player/phase has been restored.
                      */
@@ -37793,26 +37838,23 @@ const roomPlayers =
         );
     }
 
-    private async copyVictoryShowcaseToClipboard(
+    /*
+     * V1010451_SHARE_AND_REJOIN_BOUNDARY / IMAGE_ONLY_SHARE
+     *
+     * Do not mix text/plain and image/png in one ClipboardItem. KakaoTalk and
+     * some Chromium/Android clipboard bridges may choose the text flavor and
+     * paste only the URL. Victory Share now means IMAGE; link sharing is a
+     * separate explicit action.
+     */
+    private async copyVictoryImageOnlyToClipboard(
         blob: Blob,
-        text: string,
-    ): Promise<'image-and-text' | 'text' | 'failed'> {
-        /*
-         * V1010388K_CLEAN_CARD_CENTER_CLIPBOARD / KAKAO_CLIPBOARD
-         *
-         * Desktop KakaoTalk paste expects actual clipboard data. Web Share
-         * does NOT populate the clipboard, so explicitly write image/png and
-         * text/plain when the browser allows it.
-         */
+    ): Promise<boolean> {
         try {
             const ClipboardItemCtor =
                 (
                     window as unknown as {
                         ClipboardItem?: new (
-                            items: Record<
-                                string,
-                                Blob
-                            >,
+                            items: Record<string, Blob>,
                         ) => unknown;
                     }
                 ).ClipboardItem;
@@ -37829,59 +37871,52 @@ const roomPlayers =
                     | undefined;
 
             if (
-                ClipboardItemCtor &&
-                clipboard?.write
+                !ClipboardItemCtor ||
+                !clipboard?.write
             ) {
-                const item =
-                    new ClipboardItemCtor({
-                        'image/png':
-                            blob,
-                        'text/plain':
-                            new Blob(
-                                [text],
-                                {
-                                    type:
-                                        'text/plain',
-                                },
-                            ),
-                    });
-
-                await clipboard.write(
-                    [item],
-                );
-
-                return 'image-and-text';
+                return false;
             }
+
+            await clipboard.write([
+                new ClipboardItemCtor({
+                    'image/png': blob,
+                }),
+            ]);
+
+            return true;
         } catch {
-            // Fall through to text clipboard.
+            return false;
         }
+    }
+
+    private async copyVictoryGameLink(): Promise<void> {
+        const url =
+            this.getPracticeShareUrl();
+        const language =
+            getLanguage();
 
         try {
-            if (
-                navigator.clipboard
-                    ?.writeText
-            ) {
-                await navigator.clipboard
-                    .writeText(text);
+            await navigator.clipboard
+                ?.writeText(url);
 
-                return 'text';
-            }
+            this.showVictoryShowcaseShareFeedback(
+                language === 'ko'
+                    ? '✓ 게임 링크를 복사했어요!'
+                    : language === 'ja'
+                        ? '✓ ゲームリンクをコピーしました！'
+                        : '✓ Game link copied!',
+            );
+            return;
         } catch {
-            // Fall through to legacy synchronous text copy.
+            // Fall through to the synchronous clipboard fallback.
         }
 
-        /*
-         * document.execCommand('copy') still works in many desktop browsers
-         * and, importantly, executes inside the original button gesture.
-         */
         try {
             const textarea =
                 document.createElement(
                     'textarea',
                 );
-
-            textarea.value =
-                text;
+            textarea.value = url;
             textarea.setAttribute(
                 'readonly',
                 '',
@@ -37890,31 +37925,42 @@ const roomPlayers =
                 'fixed';
             textarea.style.opacity =
                 '0';
-            textarea.style.pointerEvents =
-                'none';
-
             document.body.appendChild(
                 textarea,
             );
-
             textarea.select();
-            textarea.setSelectionRange(
-                0,
-                textarea.value.length,
-            );
 
             const copied =
                 document.execCommand(
                     'copy',
                 );
-
             textarea.remove();
 
-            return copied
-                ? 'text'
-                : 'failed';
+            this.showVictoryShowcaseShareFeedback(
+                copied
+                    ? (
+                        language === 'ko'
+                            ? '✓ 게임 링크를 복사했어요!'
+                            : language === 'ja'
+                                ? '✓ ゲームリンクをコピーしました！'
+                                : '✓ Game link copied!'
+                    )
+                    : (
+                        language === 'ko'
+                            ? '링크 복사에 실패했어요.'
+                            : language === 'ja'
+                                ? 'リンクのコピーに失敗しました。'
+                                : 'Could not copy the game link.'
+                    ),
+            );
         } catch {
-            return 'failed';
+            this.showVictoryShowcaseShareFeedback(
+                language === 'ko'
+                    ? '링크 복사에 실패했어요.'
+                    : language === 'ja'
+                        ? 'リンクのコピーに失敗しました。'
+                        : 'Could not copy the game link.',
+            );
         }
     }
 
@@ -37929,6 +37975,8 @@ const roomPlayers =
         const isHunter =
             this.victoryShowcaseWinner ===
             'hunters';
+        const language =
+            getLanguage();
 
         const file =
             new File(
@@ -37941,166 +37989,86 @@ const roomPlayers =
                 },
             );
 
-        const shareUrl =
-            this.getPracticeShareUrl();
-        const language =
-            getLanguage();
-
-        const shareMessage =
-            isHunter
-                ? (
-                    language === 'ko'
-                        ? '다 찾았다 😎 COLOR HUNT 승리 기록'
-                        : 'I found them all 😎 COLOR HUNT'
-                )
-                : (
-                    language === 'ko'
-                        ? '끝까지 안 들켰다 🦎 COLOR HUNT 생존 기록'
-                        : 'Still hidden 🦎 COLOR HUNT'
-                );
+        const coarsePointer =
+            window.matchMedia?.(
+                '(pointer: coarse)',
+            ).matches ??
+            false;
 
         /*
-         * V1010388J_VICTORY_CARD_FINAL_VISUALS / SHARE_WITH_LINK
-         * Some mobile share targets discard the separate Web Share `url`
-         * when a file is attached. Put the game URL in the text as well.
+         * Mobile: use the OS share sheet with the IMAGE FILE ONLY.
+         * KakaoTalk receives an actual image attachment instead of a URL/text
+         * flavor competing with image/png.
          */
-        const text =
-            shareMessage +
-            '\n' +
-            shareUrl;
-
-        /*
-         * V1010388K_CLEAN_CARD_CENTER_CLIPBOARD / DESKTOP_SHARE_IS_CLIPBOARD
-         *
-         * On desktop the expected workflow is:
-         *   Share -> open KakaoTalk -> Ctrl+V.
-         * Prefer clipboard there. Mobile/coarse-pointer devices keep the
-         * familiar native share sheet.
-         */
-        /* V1010420_VICTORY_PC_MOBILE_PARITY / SHARE_PC_PARITY
-         * Mobile and desktop now use the SAME clipboard-first Share path.
-         * navigator.share remains only as a fallback when clipboard is unavailable.
-         */
-        /* V1010420B_FIX_SHARE_SCOPE: primary clipboard attempt is separate from fallback attempt. */
-        const primaryClipboardResult =
-            await this.copyVictoryShowcaseToClipboard(
-                blob,
-                text,
-            );
-
         if (
-            primaryClipboardResult !==
-                'failed'
+            coarsePointer &&
+            navigator.share &&
+            (
+                !navigator.canShare ||
+                navigator.canShare({
+                    files: [file],
+                })
+            )
         ) {
-            this.showVictoryShowcaseShareFeedback(
-                primaryClipboardResult ===
-                    'image-and-text'
-                    ? (
-                        language === 'ko'
-                            ? '✓ 승리카드 + 게임 링크 복사 완료 · 카톡에서 붙여넣기 하세요!'
-                            : '✓ Victory card + game link copied · Paste it into chat!'
-                    )
-                    : (
-                        language === 'ko'
-                            ? '✓ 게임 링크 복사 완료 · 이미지는 자동 저장합니다.'
-                            : '✓ Game link copied · Saving the image.'
-                    ),
+            try {
+                await navigator.share({
+                    title:
+                        'COLOR HUNT',
+                    files:
+                        [file],
+                });
+
+                this.showVictoryShowcaseShareFeedback(
+                    language === 'ko'
+                        ? '✓ 승리카드 이미지를 공유했어요!'
+                        : language === 'ja'
+                            ? '✓ 勝利カード画像を共有しました！'
+                            : '✓ Victory card image shared!',
+                );
+                return;
+            } catch (error) {
+                if (
+                    error instanceof DOMException &&
+                    error.name ===
+                        'AbortError'
+                ) {
+                    return;
+                }
+            }
+        }
+
+        /*
+         * Desktop (and mobile fallback): clipboard contains image/png ONLY.
+         * Ctrl+V / paste therefore cannot silently prefer the game URL.
+         */
+        const copied =
+            await this.copyVictoryImageOnlyToClipboard(
+                blob,
             );
 
-            if (
-                primaryClipboardResult ===
-                    'text'
-            ) {
-                this.downloadMultiplayerVictoryShowcase();
-            }
-
+        if (copied) {
+            this.showVictoryShowcaseShareFeedback(
+                language === 'ko'
+                    ? '✓ 승리카드 이미지 복사 완료 · 카톡에서 붙여넣기 하세요!'
+                    : language === 'ja'
+                        ? '✓ 勝利カード画像をコピーしました。チャットに貼り付けてください！'
+                        : '✓ Victory card image copied · Paste it into chat!',
+            );
             return;
         }
 
-        try {
-            if (
-                navigator.share &&
-                (
-                    !navigator.canShare ||
-                    navigator.canShare({
-                        files: [file],
-                    })
-                )
-            ) {
-                await navigator.share({
-                    title: 'COLOR HUNT',
-                    text,
-                    url: shareUrl,
-                    files: [file],
-                });
-
-                this.showVictoryShowcaseShareFeedback(
-                    language === 'ko'
-                        ? '✓ 공유 완료!'
-                        : '✓ Shared!',
-                );
-
-                return;
-            }
-
-            if (navigator.share) {
-                await navigator.share({
-                    title: 'COLOR HUNT',
-                    text,
-                    url: shareUrl,
-                });
-
-                this.showVictoryShowcaseShareFeedback(
-                    language === 'ko'
-                        ? '✓ 게임 링크 공유 완료!'
-                        : '✓ Game link shared!',
-                );
-
-                return;
-            }
-        } catch (error) {
-            if (
-                error instanceof DOMException &&
-                error.name === 'AbortError'
-            ) {
-                return;
-            }
-        }
-
-        const clipboardResult =
-            await this.copyVictoryShowcaseToClipboard(
-                blob,
-                text,
-            );
-
+        /*
+         * Browser clipboard image support is unavailable. Never replace the
+         * requested image share with a URL; save the PNG and explain clearly.
+         */
+        this.downloadMultiplayerVictoryShowcase();
         this.showVictoryShowcaseShareFeedback(
-            clipboardResult ===
-                'image-and-text'
-                ? (
-                    language === 'ko'
-                        ? '✓ 승리카드 + 게임 링크 복사 완료 · 카톡에서 붙여넣기 하세요!'
-                        : '✓ Victory card + game link copied · Paste it into chat!'
-                )
-                : clipboardResult ===
-                    'text'
-                    ? (
-                        language === 'ko'
-                            ? '✓ 게임 링크 복사 완료 · 이미지는 저장합니다.'
-                            : '✓ Game link copied · Saving image.'
-                    )
-                    : (
-                        language === 'ko'
-                            ? '클립보드 권한이 차단되었습니다 · 이미지만 저장합니다.'
-                            : 'Clipboard permission blocked · Saving image only.'
-                    ),
+            language === 'ko'
+                ? '이미지 복사가 지원되지 않아 승리카드를 저장했어요.'
+                : language === 'ja'
+                    ? '画像コピーに対応していないため、勝利カードを保存しました。'
+                    : 'Image clipboard is unavailable, so the victory card was saved.',
         );
-
-        if (
-            clipboardResult !==
-                'image-and-text'
-        ) {
-            this.downloadMultiplayerVictoryShowcase();
-        }
     }
 
     private isVictoryShowcaseFoldedByDefault(): boolean {
@@ -38520,8 +38488,16 @@ const roomPlayers =
                 : 'Save';
         const shareLabel =
             language === 'ko'
-                ? '공유하기'
-                : 'Share';
+                ? '이미지 공유'
+                : language === 'ja'
+                    ? '画像を共有'
+                    : 'Share image';
+        const linkLabel =
+            language === 'ko'
+                ? '게임 링크'
+                : language === 'ja'
+                    ? 'ゲームリンク'
+                    : 'Game link';
         const foldLabel =
             language === 'ko'
                 ? '앞으로 접어두기'
@@ -38535,9 +38511,9 @@ const roomPlayers =
             '.colorhunt-victory-showcase-card{width:min(96vw,560px);height:min(98dvh,900px);max-height:98dvh;overflow:hidden;border:1px solid rgba(255,255,255,.72);border-radius:24px;padding:10px;color:#26343d;background:linear-gradient(180deg,rgba(255,249,243,.98),rgba(238,248,247,.99));box-shadow:0 30px 90px rgba(20,37,48,.30),inset 0 1px 0 rgba(255,255,255,.80);transform-origin:50% 72%;animation:chVictoryPop .62s cubic-bezier(.2,.9,.2,1.1) both;font-family:Inter,Pretendard,system-ui,sans-serif;display:flex;flex-direction:column;box-sizing:border-box}' +
             '.colorhunt-victory-showcase-card.is-hunter{background:linear-gradient(180deg,#faf8f5,#eee9e3);box-shadow:0 30px 90px rgba(38,42,46,.22),0 0 58px rgba(201,111,85,.12)}' +
             '.colorhunt-victory-showcase-card.is-hider{background:linear-gradient(180deg,#f8faf7,#e7eee9);box-shadow:0 30px 90px rgba(38,50,44,.20),0 0 58px rgba(83,123,104,.12)}' +
-            '.colorhunt-victory-showcase-head{display:flex;align-items:end;justify-content:space-between;gap:14px;padding:3px 4px 14px}.colorhunt-victory-showcase-kicker{font-size:11px;font-weight:950;letter-spacing:.18em;opacity:.58}.colorhunt-victory-showcase-title{margin-top:4px;font-size:clamp(25px,5vw,34px);line-height:1;font-weight:950;letter-spacing:-.04em}.is-hunter .colorhunt-victory-showcase-title{color:#ffb087}.is-hider .colorhunt-victory-showcase-title{color:#93f5b2}.colorhunt-victory-showcase-badge{flex:0 0 auto;padding:7px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);font-size:11px;font-weight:900}.colorhunt-victory-showcase-preview{display:block;width:auto;max-width:100%;height:auto;max-height:calc(100% - 64px);min-height:0;object-fit:contain;align-self:center;flex:1 1 auto;border-radius:18px;box-shadow:0 18px 42px rgba(0,0,0,.34);background:#111}.colorhunt-victory-showcase-caption{display:none;margin:0;color:rgba(255,255,255,.62);font-size:12px;font-weight:700;text-align:center}.colorhunt-victory-showcase-feedback{display:none;margin:0 5px 12px;padding:10px 12px;border:1px solid rgba(143,255,184,.34);border-radius:13px;background:rgba(49,183,101,.16);color:#bfffd2;font-size:12px;font-weight:900;text-align:center;animation:chVictoryFeedback .22s ease both}.colorhunt-victory-showcase-feedback.is-visible{display:block}.colorhunt-victory-showcase-fold{display:flex;align-items:center;justify-content:center;gap:8px;flex:0 0 auto;margin:7px 0 0;color:rgba(37,41,45,.72);font-size:11px;font-weight:800;user-select:none}.colorhunt-victory-showcase-fold input{width:17px;height:17px;accent-color:#537b68;cursor:pointer}.colorhunt-victory-showcase-actions{display:grid;grid-template-columns:.8fr 1fr 1.2fr;gap:7px;flex:0 0 auto;margin-top:7px}.colorhunt-victory-showcase-actions button{min-height:42px;border:1px solid rgba(37,41,45,.16);border-radius:13px;color:#25292d;background:rgba(255,255,255,.88);box-shadow:0 3px 10px rgba(37,41,45,.08);font:inherit;font-size:13px;font-weight:900;cursor:pointer}.colorhunt-victory-showcase-actions [data-victory-share]{border-color:transparent;color:#fff;background:' +
+            '.colorhunt-victory-showcase-head{display:flex;align-items:end;justify-content:space-between;gap:14px;padding:3px 4px 14px}.colorhunt-victory-showcase-kicker{font-size:11px;font-weight:950;letter-spacing:.18em;opacity:.58}.colorhunt-victory-showcase-title{margin-top:4px;font-size:clamp(25px,5vw,34px);line-height:1;font-weight:950;letter-spacing:-.04em}.is-hunter .colorhunt-victory-showcase-title{color:#ffb087}.is-hider .colorhunt-victory-showcase-title{color:#93f5b2}.colorhunt-victory-showcase-badge{flex:0 0 auto;padding:7px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);font-size:11px;font-weight:900}.colorhunt-victory-showcase-preview{display:block;width:auto;max-width:100%;height:auto;max-height:calc(100% - 64px);min-height:0;object-fit:contain;align-self:center;flex:1 1 auto;border-radius:18px;box-shadow:0 18px 42px rgba(0,0,0,.34);background:#111}.colorhunt-victory-showcase-caption{display:none;margin:0;color:rgba(255,255,255,.62);font-size:12px;font-weight:700;text-align:center}.colorhunt-victory-showcase-feedback{display:none;margin:0 5px 12px;padding:10px 12px;border:1px solid rgba(143,255,184,.34);border-radius:13px;background:rgba(49,183,101,.16);color:#bfffd2;font-size:12px;font-weight:900;text-align:center;animation:chVictoryFeedback .22s ease both}.colorhunt-victory-showcase-feedback.is-visible{display:block}.colorhunt-victory-showcase-fold{display:flex;align-items:center;justify-content:center;gap:8px;flex:0 0 auto;margin:7px 0 0;color:rgba(37,41,45,.72);font-size:11px;font-weight:800;user-select:none}.colorhunt-victory-showcase-fold input{width:17px;height:17px;accent-color:#537b68;cursor:pointer}.colorhunt-victory-showcase-actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;flex:0 0 auto;margin-top:6px}.colorhunt-victory-showcase-actions button{min-height:42px;border:1px solid rgba(37,41,45,.16);border-radius:13px;color:#25292d;background:rgba(255,255,255,.88);box-shadow:0 3px 10px rgba(37,41,45,.08);font:inherit;font-size:13px;font-weight:900;cursor:pointer}.colorhunt-victory-showcase-actions [data-victory-share]{border-color:transparent;color:#fff;background:' +
             (isHunter ? '#c96f55' : '#537b68') +
-            '}@keyframes chVictoryFeedback{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}@keyframes chVictoryBackdrop{from{opacity:0}to{opacity:1}}@keyframes chVictoryPop{0%{opacity:0;transform:translateY(34px) scale(.88) rotate(-1.5deg)}58%{opacity:1;transform:translateY(-3px) scale(1.015) rotate(.3deg)}100%{opacity:1;transform:translateY(0) scale(1)}}@media(max-height:650px){.colorhunt-victory-showcase-overlay{padding:2px}.colorhunt-victory-showcase-card{width:min(94vw,430px);height:99dvh;max-height:99dvh;padding:6px;border-radius:18px}.colorhunt-victory-showcase-preview{max-height:calc(100% - 54px);border-radius:14px}.colorhunt-victory-showcase-actions{margin-top:5px;gap:5px}.colorhunt-victory-showcase-actions button{min-height:38px;font-size:12px}}' +
+            '}.colorhunt-victory-showcase-actions [data-victory-link]{background:rgba(255,255,255,.72)}@keyframes chVictoryFeedback{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}@keyframes chVictoryBackdrop{from{opacity:0}to{opacity:1}}@keyframes chVictoryPop{0%{opacity:0;transform:translateY(34px) scale(.88) rotate(-1.5deg)}58%{opacity:1;transform:translateY(-3px) scale(1.015) rotate(.3deg)}100%{opacity:1;transform:translateY(0) scale(1)}}@media(max-height:650px){.colorhunt-victory-showcase-overlay{padding:2px}.colorhunt-victory-showcase-card{width:min(94vw,430px);height:99dvh;max-height:99dvh;padding:5px;border-radius:17px}.colorhunt-victory-showcase-preview{max-height:calc(100% - 50px);border-radius:13px}.colorhunt-victory-showcase-fold{margin-top:4px;font-size:10px}.colorhunt-victory-showcase-feedback{margin:0 3px 5px;padding:6px 8px}.colorhunt-victory-showcase-actions{margin-top:4px;gap:4px}.colorhunt-victory-showcase-actions button{min-height:35px;font-size:10px;padding:3px}}' +
             '</style>' +
             /* V1010421_VICTORY_MODAL_ONE_SCREEN: poster already contains the victory title. */
             '<img class="colorhunt-victory-showcase-preview" src="' +
@@ -38564,6 +38540,9 @@ const roomPlayers =
             '</button>' +
             '<button type="button" data-victory-share>' +
             shareLabel +
+            '</button>' +
+            '<button type="button" data-victory-link>' +
+            linkLabel +
             '</button></div>';
 
         overlay.appendChild(card);
@@ -38617,6 +38596,15 @@ const roomPlayers =
             'click',
             () => {
                 void this.shareMultiplayerVictoryShowcase();
+            },
+        );
+
+        card.querySelector(
+            '[data-victory-link]',
+        )?.addEventListener(
+            'click',
+            () => {
+                void this.copyVictoryGameLink();
             },
         );
     }
