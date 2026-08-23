@@ -8345,8 +8345,9 @@ export class GameScene extends Phaser.Scene {
          * Beginner assist is now a softened projection of the REAL background
          * hidden by the avatar:
          *
-         * - keep roughly 58~64% overall instead of the sparse ~50% grid;
-         * - preserve high-contrast background boundaries more strongly;
+         * - keep roughly 47~58% in ordinary areas so the assist stays helpful
+         *   without becoming a near-finished camouflage;
+         * - preserve high-contrast background boundaries at a reduced 70~80%;
          * - sample a tiny neighborhood so the projection is intentionally
          *   "smudged", not a perfect screenshot copy;
          * - mix 2/3/4/5 px round dots;
@@ -8561,12 +8562,12 @@ export class GameScene extends Phaser.Scene {
 
                 const keepPercent =
                     edgeStrength >= 150
-                        ? 90
+                        ? 80
                         : edgeStrength >= 95
-                            ? 80
+                            ? 70
                             : edgeStrength >= 55
-                                ? 69
-                                : 58;
+                                ? 58
+                                : 47;
 
                 const hash =
                     (
