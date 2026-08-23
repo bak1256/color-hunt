@@ -8586,12 +8586,12 @@ export class GameScene extends Phaser.Scene {
                  */
                 const keepPercent =
                     edgeStrength >= 150
-                        ? 58
+                        ? 52
                         : edgeStrength >= 95
-                            ? 48
+                            ? 43
                             : edgeStrength >= 55
-                                ? 40
-                                : 30;
+                                ? 35
+                                : 26;
 
                 /*
                  * V1010450L_COHERENT_BACKGROUND_PATCHES
@@ -15014,6 +15014,24 @@ export class GameScene extends Phaser.Scene {
                             textureX,
                             textureY,
                         ) => {
+                            /*
+                             * V1010450R_PRACTICE_BOT_PAINT_HELP_PARITY
+                             *
+                             * Hunter Practice bots now use the SAME visual idea
+                             * as Hider Paint Help:
+                             * - sample the real background directly under the bot
+                             * - retain sparse, rounded-looking color islands
+                             * - leave the rest visually white/unpainted
+                             *
+                             * Difficulty still matters:
+                             * Very Easy  ~22% background guide
+                             * Easy       ~28%
+                             * Normal     ~35%  (default)
+                             * Hard       ~43%
+                             * Very Hard  ~52%
+                             *
+                             * Color accuracy also improves with difficulty.
+                             */
                             const difficultyRatio =
                                 Phaser.Math.Clamp(
                                     (
@@ -15025,123 +15043,146 @@ export class GameScene extends Phaser.Scene {
                                     1,
                                 );
 
+                            const targetCoverage =
+                                Phaser.Math.Linear(
+                                    22,
+                                    52,
+                                    difficultyRatio,
+                                );
+
                             /*
-                             * V1010450C_ROUGH_BRUSH_STREAK_BOTS
-                             * Rotate texture coordinates before quantizing them.
-                             * Wide U cells + narrow V cells form long diagonal
-                             * brush swipes instead of square mosaic blocks.
+                             * Build irregular circular-ish islands from a
+                             * deterministic 7px cell grid. colorAt() is still
+                             * called per character pixel by
+                             * applyPracticeFullCamouflage(), but skipped pixels
+                             * return the natural unpainted Hider white.
                              */
-                            const angle =
-                                (
-                                    -32 +
-                                    index * 17
-                                ) *
-                                Math.PI /
-                                180;
-                            const cosA =
-                                Math.cos(angle);
-                            const sinA =
-                                Math.sin(angle);
-                            const centeredX =
-                                textureX -
-                                40;
-                            const centeredY =
-                                textureY -
-                                60;
-                            const rotatedU =
-                                centeredX * cosA +
-                                centeredY * sinA;
-                            const rotatedV =
-                                -centeredX * sinA +
-                                centeredY * cosA;
-                            const strokeLength =
-                                Phaser.Math.Linear(
-                                    24,
-                                    14,
-                                    difficultyRatio,
-                                );
-                            const strokeWidth =
-                                Phaser.Math.Linear(
-                                    6.5,
-                                    3.5,
-                                    difficultyRatio,
-                                );
-                            const bandU =
+                            const cellSize = 7;
+                            const cellX =
                                 Math.floor(
-                                    rotatedU /
-                                    strokeLength,
+                                    textureX /
+                                        cellSize,
                                 );
-                            const bandV =
+                            const cellY =
                                 Math.floor(
-                                    rotatedV /
-                                    strokeWidth,
+                                    textureY /
+                                        cellSize,
                                 );
-                            const sampleU =
+                            const seed =
                                 (
-                                    bandU +
-                                    0.5
-                                ) *
-                                strokeLength;
-                            const sampleV =
+                                    Math.imul(
+                                        cellX + 31,
+                                        73856093,
+                                    ) ^
+                                    Math.imul(
+                                        cellY + 47,
+                                        19349663,
+                                    ) ^
+                                    Math.imul(
+                                        index + 1,
+                                        83492791,
+                                    )
+                                ) >>>
+                                0;
+
+                            const keepCell =
+                                seed %
+                                    100 <
+                                targetCoverage;
+
+                            if (!keepCell) {
+                                return 0xf5eee2;
+                            }
+
+                            /*
+                             * Only the center portion of a kept cell is colored,
+                             * turning square grid cells into rounded blobs.
+                             */
+                            const localCellX =
                                 (
-                                    bandV +
-                                    0.5
+                                    textureX %
+                                    cellSize
+                                ) -
+                                (
+                                    cellSize -
+                                    1
+                                ) /
+                                    2;
+                            const localCellY =
+                                (
+                                    textureY %
+                                    cellSize
+                                ) -
+                                (
+                                    cellSize -
+                                    1
+                                ) /
+                                    2;
+                            const radius =
+                                2.35 +
+                                (
+                                    (seed >>> 9) %
+                                    3
                                 ) *
-                                strokeWidth;
-                            const wobble =
-                                Math.sin(
-                                    bandU * 1.73 +
-                                    bandV * 0.37 +
-                                    index,
-                                ) *
-                                Phaser.Math.Linear(
-                                    4.2,
-                                    1.8,
-                                    difficultyRatio,
-                                );
-                            const sampleTextureX =
-                                40 +
-                                sampleU * cosA -
-                                (sampleV + wobble) * sinA;
-                            const sampleTextureY =
-                                60 +
-                                sampleU * sinA +
-                                (sampleV + wobble) * cosA;
+                                    0.55;
+
+                            if (
+                                localCellX *
+                                    localCellX +
+                                    localCellY *
+                                        localCellY >
+                                radius *
+                                    radius
+                            ) {
+                                return 0xf5eee2;
+                            }
 
                             const sampled =
                                 this.samplePracticeBackgroundRgb(
                                     sampler,
                                     hider.centerX +
                                         (
-                                            sampleTextureX -
+                                            textureX -
                                             40
                                         ),
                                     hider.centerY +
                                         (
-                                            sampleTextureY -
+                                            textureY -
                                             60
                                         ),
                                 );
 
+                            /*
+                             * Easier difficulties intentionally drift from the
+                             * sampled color. Normal+ quickly approaches the
+                             * real hidden background.
+                             */
                             const maxError =
                                 Phaser.Math.Linear(
-                                    118,
-                                    20,
+                                    76,
+                                    8,
                                     difficultyRatio,
                                 );
-
-                            const seed =
+                            const pixelSeed =
                                 (
-                                    (bandU * 73856093) ^
-                                    (bandV * 19349663) ^
-                                    ((index + 1) * 83492791)
+                                    seed ^
+                                    Math.imul(
+                                        textureX + 73,
+                                        2654435761,
+                                    ) ^
+                                    Math.imul(
+                                        textureY + 19,
+                                        1597334677,
+                                    )
                                 ) >>>
                                 0;
-
                             const error =
                                 (
-                                    (seed % 1001) /
-                                    500 -
+                                    (
+                                        pixelSeed %
+                                        1001
+                                    ) /
+                                        500 -
                                     1
                                 ) *
                                 maxError;
@@ -15150,39 +15191,35 @@ export class GameScene extends Phaser.Scene {
                                 Phaser.Math.Clamp(
                                     Math.round(
                                         sampled.r +
-                                        error,
+                                            error,
                                     ),
                                     0,
                                     255,
                                 );
-
                             const green =
                                 Phaser.Math.Clamp(
                                     Math.round(
                                         sampled.g +
-                                        error *
-                                            0.82,
+                                            error *
+                                                0.78,
                                     ),
                                     0,
                                     255,
                                 );
-
                             const b =
                                 Phaser.Math.Clamp(
                                     Math.round(
                                         sampled.b +
-                                        error *
-                                            0.68,
+                                            error *
+                                                0.64,
                                     ),
                                     0,
                                     255,
                                 );
 
                             return (
-                                r <<
-                                    16 |
-                                green <<
-                                    8 |
+                                r << 16 |
+                                green << 8 |
                                 b
                             );
                         },
