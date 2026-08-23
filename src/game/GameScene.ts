@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010450C_PRACTICE_VISUAL_POLISH: map16 cap, fixed 16:9 thumbnails, aligned Practice top-right rail, rough brush-streak camouflage. */
     /* V1010450_PAINT_ASSIST_AND_PRACTICE_DIFFICULTY: beginner paint assist, victory skill badges, five-step Hunter Practice difficulty, safer Practice exit positioning. */
     /* V1010448_LOBBY_ROUND_PAINT_HARD_ISOLATION: finished-round paint is scrubbed before lobby avatar presets are rebuilt. */
     /* V1010444_RESULT_IDENTITY_FALLBACK: personal FOUND can be reconstructed from one final result payload. */
@@ -100,7 +101,7 @@ export class GameScene extends Phaser.Scene {
     /* V1010426B_RECONNECT_STORM_VISUAL_CONVERGENCE: reconnect recovery no longer repeatedly rebuilds Hunt visuals. */
     /* V1010420_VICTORY_PC_MOBILE_PARITY: Hunter/Hider victory capture + Share behavior are role-authoritative and device-independent. */
     /* V1010408_FINGER_DIRECT_TOUCH_COORDINATE: Finger paints at touch point; Precision Brush alone uses offset coordinates. */
-    /* V1010404_CLIENT_MAP12_16_FOREST_GUARD: playable client maps are map1..map17; Forest remains lobby-only. */
+    /* V1010404_CLIENT_MAP12_16_FOREST_GUARD: playable client maps are map1..map16; Forest remains lobby-only. */
     /* V1010403C_MOBILE_PAINT_SURGICAL_RECOVERY: Finger/Precision Paint restored by additive surgery; latest feature fields preserved. */
     /* V1010402_CLIENT_FULL_ROOM_SAFE_RECOVERY: restore 10/10 client join guard without touching Paint/reconnect/victory code. */
     /* V1010401_LOST_LOBBY_FEATURES_SAFE_RECOVERY: final lobby profile/preview state restored surgically. */
@@ -4598,7 +4599,7 @@ export class GameScene extends Phaser.Scene {
     private readonly selectableMaps = [
         'random',
         ...Array.from(
-            { length: 17 },
+            { length: 16 },
             (_, index) =>
                 `map${index + 1}`,
         ),
@@ -5199,7 +5200,7 @@ export class GameScene extends Phaser.Scene {
 
         for (
             let index = 1;
-            index <= 17;
+            index <= 16;
             index += 1
         ) {
             this.load.image(
@@ -8002,9 +8003,10 @@ export class GameScene extends Phaser.Scene {
                 width: min(48vw, 420px) !important;
                 min-width: 210px !important;
                 max-width: 420px !important;
-                aspect-ratio: auto !important;
-                height: auto !important;
-                object-fit: contain !important;
+                height: min(27vw, 236px) !important;
+                aspect-ratio: 16 / 9 !important;
+                object-fit: cover !important;
+                object-position: center center !important;
                 justify-self: center !important;
                 border-radius: 14px !important;
             }
@@ -8086,6 +8088,9 @@ export class GameScene extends Phaser.Scene {
                     width: min(calc(100vw - 112px), 420px) !important;
                     min-width: 0 !important;
                     max-width: 420px !important;
+                    height: min(calc((100vw - 112px) * 0.5625), 236px) !important;
+                    aspect-ratio: 16 / 9 !important;
+                    object-fit: cover !important;
                 }
 
                 .colorhunt-practice-map-arrow {
@@ -8322,11 +8327,7 @@ export class GameScene extends Phaser.Scene {
         const sampler =
             this.createCurrentPaintBackgroundSampler();
 
-        const grouped =
-            new Map<
-                number,
-                NetworkPaintPoint[]
-            >();
+        const assistStrokes: NetworkPaintStroke[] = [];
         const seedBase =
             Math.floor(
                 centerX * 31 +
@@ -8335,134 +8336,130 @@ export class GameScene extends Phaser.Scene {
             ) >>>
             0;
 
-        for (let y = 7; y <= 113; y += 7) {
-            for (let x = 7; x <= 73; x += 7) {
-                const hash =
-                    (
-                        (x * 73856093) ^
-                        (y * 19349663) ^
-                        seedBase
-                    ) >>>
-                    0;
+        /*
+         * V1010450C_ROUGH_BRUSH_STREAK_ASSIST
+         * Instead of a square 7px sampling grid, draw short hand-painted
+         * streaks at mixed angles. Dense points make each stroke read as one
+         * quick brush swipe while the avatar mask clips overflow naturally.
+         */
+        const strokeCount = 23;
 
-                /* Roughly 40% coverage; the production silhouette mask clips
-                 * points outside the body automatically. */
-                if (hash % 100 >= 43) {
-                    continue;
-                }
+        for (let strokeIndex = 0; strokeIndex < strokeCount; strokeIndex += 1) {
+            const hash =
+                (
+                    seedBase ^
+                    ((strokeIndex + 1) * 2654435761)
+                ) >>>
+                0;
+            const startX =
+                7 +
+                (hash % 67);
+            const startY =
+                8 +
+                ((hash >>> 8) % 103);
+            const angle =
+                (
+                    -55 +
+                    ((hash >>> 16) % 111)
+                ) *
+                Math.PI /
+                180;
+            const length =
+                13 +
+                ((hash >>> 4) % 17);
+            const brushSize =
+                5 +
+                ((hash >>> 23) % 3);
+            const step = 2.1;
+            const points: NetworkPaintPoint[] = [];
 
-                const jitterX =
-                    (
-                        (hash >>> 8) % 3
-                    ) -
-                    1;
-                const jitterY =
-                    (
-                        (hash >>> 12) % 3
-                    ) -
-                    1;
+            for (let distance = 0; distance <= length; distance += step) {
+                const wobble =
+                    Math.sin(
+                        distance * 0.72 +
+                        strokeIndex,
+                    ) *
+                    1.15;
                 const pointX =
                     Phaser.Math.Clamp(
-                        x + jitterX,
+                        startX +
+                        Math.cos(angle) * distance +
+                        Math.cos(angle + Math.PI / 2) * wobble,
                         0,
                         80,
                     );
                 const pointY =
                     Phaser.Math.Clamp(
-                        y + jitterY,
+                        startY +
+                        Math.sin(angle) * distance +
+                        Math.sin(angle + Math.PI / 2) * wobble,
                         0,
                         120,
                     );
-                const sampled =
-                    this.samplePracticeBackgroundRgb(
-                        sampler,
-                        centerX +
-                            (
-                                pointX -
-                                40
-                            ),
-                        centerY +
-                            (
-                                pointY -
-                                60
-                            ),
-                    );
-                const quantize =
-                    (value: number): number =>
-                        Phaser.Math.Clamp(
-                            Math.round(
-                                value / 48,
-                            ) * 48,
-                            0,
-                            255,
-                        );
-                const color =
-                    quantize(sampled.r) << 16 |
-                    quantize(sampled.g) << 8 |
-                    quantize(sampled.b);
 
-                const points =
-                    grouped.get(color) ??
-                    [];
                 points.push({
                     x: pointX,
                     y: pointY,
                 });
-                grouped.set(
-                    color,
-                    points,
-                );
             }
+
+            const middle =
+                points[Math.floor(points.length / 2)] ??
+                {
+                    x: startX,
+                    y: startY,
+                };
+            const sampled =
+                this.samplePracticeBackgroundRgb(
+                    sampler,
+                    centerX +
+                        (middle.x - 40),
+                    centerY +
+                        (middle.y - 60),
+                );
+            const quantize =
+                (value: number): number =>
+                    Phaser.Math.Clamp(
+                        Math.round(value / 32) * 32,
+                        0,
+                        255,
+                    );
+            const color =
+                quantize(sampled.r) << 16 |
+                quantize(sampled.g) << 8 |
+                quantize(sampled.b);
+            const stroke: NetworkPaintStroke = {
+                targetSessionId,
+                color,
+                size: brushSize,
+                shape: 'circle',
+                points,
+            };
+
+            stroke.points.forEach(
+                (point) => {
+                    this.networkPlayerManager
+                        .stampLocalPaintPoint(
+                            point.x,
+                            point.y,
+                            this.brushTextureKey,
+                            stroke.color,
+                            stroke.size,
+                            stroke.shape,
+                        );
+                },
+            );
+
+            if (this.isMultiplayerSession()) {
+                multiplayerClient.sendPaintStroke(stroke);
+            }
+
+            assistStrokes.push(stroke);
         }
 
-        const assistStrokes:
-            NetworkPaintStroke[] =
-            [];
-
-        grouped.forEach(
-            (points, color) => {
-                const stroke:
-                    NetworkPaintStroke = {
-                        targetSessionId,
-                        color,
-                        size: 7,
-                        shape: 'square',
-                        points,
-                    };
-
-                stroke.points.forEach(
-                    (point) => {
-                        this.networkPlayerManager
-                            .stampLocalPaintPoint(
-                                point.x,
-                                point.y,
-                                this.brushTextureKey,
-                                stroke.color,
-                                stroke.size,
-                                stroke.shape,
-                            );
-                    },
-                );
-
-                if (this.isMultiplayerSession()) {
-                    multiplayerClient
-                        .sendPaintStroke(
-                            stroke,
-                        );
-                }
-
-                assistStrokes.push(
-                    stroke,
-                );
-            },
-        );
-
-        this.localPaintHistory.push(
-            ...assistStrokes,
-        );
+        this.localPaintHistory.push(...assistStrokes);
         this.redoPaintHistory = [];
-        this.paintAssistUsedThisRound =
-            true;
+        this.paintAssistUsedThisRound = true;
 
         if (this.practiceMode === 'hider') {
             this.markPracticeHiderPaintStarted();
@@ -8471,20 +8468,18 @@ export class GameScene extends Phaser.Scene {
         if (this.paintAssistButton) {
             this.paintAssistButton.textContent =
                 this.getPaintAssistUsedLabel();
-            this.paintAssistButton.disabled =
-                true;
-            this.paintAssistButton.style.opacity =
-                '0.66';
+            this.paintAssistButton.disabled = true;
+            this.paintAssistButton.style.opacity = '0.66';
         }
 
         this.showStatus(
             getLanguage() === 'ja'
-                ? '✨ 約40%をドット風にサポートしました！'
+                ? '✨ 約40%をラフなブラシ跡でサポートしました！'
                 : getLanguage() === 'en'
-                    ? '✨ Paint Assist filled about 40%!'
+                    ? '✨ Paint Assist added rough brush strokes to about 40%!'
                     : getLanguage() === 'zh'
-                        ? '✨ 已用像素点辅助填涂约40%！'
-                        : '✨ 약 40%를 도트 느낌으로 색칠해드렸어요!',
+                        ? '✨ 已用粗糙笔触辅助填涂约40%！'
+                        : '✨ 약 40%를 거친 붓질 느낌으로 색칠해드렸어요!',
         );
     }
 
@@ -9811,7 +9806,7 @@ export class GameScene extends Phaser.Scene {
 
             this.controlsHelpRoot.style.setProperty(
                 '--controls-top',
-                `${Math.round(canvasRect.top + 86)}px`,
+                `${Math.round(canvasRect.top + 88)}px`,
             );
             return;
         }
@@ -13125,7 +13120,7 @@ export class GameScene extends Phaser.Scene {
 
         const mapOptions =
             Array.from(
-                { length: 17 },
+                { length: 16 },
                 (
                     _,
                     index,
@@ -13666,11 +13661,11 @@ export class GameScene extends Phaser.Scene {
 
         const syncPracticeMapPreview = (): void => {
             const selected = mapSelect?.value ?? this.practiceMap;
-            if (mapPreview && /^map(?:[1-9]|1[0-7])$/.test(selected)) {
+            if (mapPreview && /^map(?:[1-9]|1[0-6])$/.test(selected)) {
                 mapPreview.src = `/assets/backgrounds/${selected}.png`;
                 mapPreview.alt = `${tr('연습 맵 미리보기')} · ${this.getMapDisplayName(selected)}`;
             }
-            if (mapName && /^map(?:[1-9]|1[0-7])$/.test(selected)) {
+            if (mapName && /^map(?:[1-9]|1[0-6])$/.test(selected)) {
                 mapName.textContent = this.getMapDisplayName(selected);
             }
         };
@@ -13682,7 +13677,7 @@ export class GameScene extends Phaser.Scene {
 
             const match = /^map(\d+)$/.exec(mapSelect.value);
             const current = match ? Number(match[1]) : 1;
-            const total = 17;
+            const total = 16;
             const next = ((current - 1 + delta + total) % total) + 1;
             mapSelect.value = `map${next}`;
             this.practiceMap = mapSelect.value;
@@ -14059,7 +14054,7 @@ export class GameScene extends Phaser.Scene {
                     mapSelect?.value ??
                     'map1';
 
-                if (/^map(?:[1-9]|1[0-7])$/.test(selected)) {
+                if (/^map(?:[1-9]|1[0-6])$/.test(selected)) {
                     this.practiceMap = selected;
                     syncPracticeMapPreview();
                 }
@@ -14611,43 +14606,87 @@ export class GameScene extends Phaser.Scene {
                                 );
 
                             /*
-                             * V1010450: Hunter Practice camouflage now looks
-                             * like deliberate pixel/dot brush dabs instead of
-                             * near-perfect per-pixel sampling. 20 -> 60 changes
-                             * both color accuracy and dab size.
+                             * V1010450C_ROUGH_BRUSH_STREAK_BOTS
+                             * Rotate texture coordinates before quantizing them.
+                             * Wide U cells + narrow V cells form long diagonal
+                             * brush swipes instead of square mosaic blocks.
                              */
-                            const dabSize =
-                                Math.round(
-                                    Phaser.Math.Linear(
-                                        9,
-                                        5,
-                                        difficultyRatio,
-                                    ),
+                            const angle =
+                                (
+                                    -32 +
+                                    index * 17
+                                ) *
+                                Math.PI /
+                                180;
+                            const cosA =
+                                Math.cos(angle);
+                            const sinA =
+                                Math.sin(angle);
+                            const centeredX =
+                                textureX -
+                                40;
+                            const centeredY =
+                                textureY -
+                                60;
+                            const rotatedU =
+                                centeredX * cosA +
+                                centeredY * sinA;
+                            const rotatedV =
+                                -centeredX * sinA +
+                                centeredY * cosA;
+                            const strokeLength =
+                                Phaser.Math.Linear(
+                                    24,
+                                    14,
+                                    difficultyRatio,
                                 );
-
-                            const blockX =
+                            const strokeWidth =
+                                Phaser.Math.Linear(
+                                    6.5,
+                                    3.5,
+                                    difficultyRatio,
+                                );
+                            const bandU =
                                 Math.floor(
-                                    textureX /
-                                    dabSize,
+                                    rotatedU /
+                                    strokeLength,
                                 );
-
-                            const blockY =
+                            const bandV =
                                 Math.floor(
-                                    textureY /
-                                    dabSize,
+                                    rotatedV /
+                                    strokeWidth,
                                 );
-
+                            const sampleU =
+                                (
+                                    bandU +
+                                    0.5
+                                ) *
+                                strokeLength;
+                            const sampleV =
+                                (
+                                    bandV +
+                                    0.5
+                                ) *
+                                strokeWidth;
+                            const wobble =
+                                Math.sin(
+                                    bandU * 1.73 +
+                                    bandV * 0.37 +
+                                    index,
+                                ) *
+                                Phaser.Math.Linear(
+                                    4.2,
+                                    1.8,
+                                    difficultyRatio,
+                                );
                             const sampleTextureX =
-                                blockX *
-                                    dabSize +
-                                dabSize *
-                                    0.5;
-
+                                40 +
+                                sampleU * cosA -
+                                (sampleV + wobble) * sinA;
                             const sampleTextureY =
-                                blockY *
-                                    dabSize +
-                                dabSize *
-                                    0.5;
+                                60 +
+                                sampleU * sinA +
+                                (sampleV + wobble) * cosA;
 
                             const sampled =
                                 this.samplePracticeBackgroundRgb(
@@ -14673,30 +14712,15 @@ export class GameScene extends Phaser.Scene {
 
                             const seed =
                                 (
-                                    (
-                                        blockX *
-                                        73856093
-                                    ) ^
-                                    (
-                                        blockY *
-                                        19349663
-                                    ) ^
-                                    (
-                                        (
-                                            index +
-                                            1
-                                        ) *
-                                        83492791
-                                    )
+                                    (bandU * 73856093) ^
+                                    (bandV * 19349663) ^
+                                    ((index + 1) * 83492791)
                                 ) >>>
                                 0;
 
                             const error =
                                 (
-                                    (
-                                        seed %
-                                        1001
-                                    ) /
+                                    (seed % 1001) /
                                     500 -
                                     1
                                 ) *
@@ -15449,14 +15473,15 @@ export class GameScene extends Phaser.Scene {
                 const visibleRight =
                     Phaser.Math.Clamp(
                         Math.min(
-                            rect.right,
+                            rect.right -
+                                10,
                             window.innerWidth -
-                                8,
+                                10,
                         ),
                         buttonWidth +
                             8,
                         window.innerWidth -
-                            8,
+                            10,
                     );
                 const left =
                     Phaser.Math.Clamp(
@@ -15489,6 +15514,16 @@ export class GameScene extends Phaser.Scene {
                 button.style.setProperty(
                     'top',
                     `${Math.round(rect.top + 48)}px`,
+                    'important',
+                );
+                button.style.setProperty(
+                    'min-height',
+                    '34px',
+                    'important',
+                );
+                button.style.setProperty(
+                    'box-sizing',
+                    'border-box',
                     'important',
                 );
 
@@ -27957,7 +27992,7 @@ export class GameScene extends Phaser.Scene {
                     }
 
                     const match =
-                        /^map(?:[1-9]|1[0-7])$/
+                        /^map(?:[1-9]|1[0-6])$/
                             .exec(
                                 rawSelected,
                             );
@@ -28959,8 +28994,6 @@ export class GameScene extends Phaser.Scene {
                     '대충의 나라',
                 map16:
                     '스틱액션의 나라',
-                map17:
-                    'MAP 17',
             };
 
         const key =
@@ -28979,7 +29012,7 @@ export class GameScene extends Phaser.Scene {
         mapName: string,
     ): string {
         const match =
-            /^map([1-9]|1[0-7])$/.exec(
+            /^map([1-9]|1[0-6])$/.exec(
                 mapName,
             );
 
@@ -31087,7 +31120,7 @@ export class GameScene extends Phaser.Scene {
 
             for (
                 let index = 0;
-                index <= 17;
+                index <= 16;
                 index += 1
             ) {
                 const t =
