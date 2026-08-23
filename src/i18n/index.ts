@@ -789,6 +789,21 @@ Object.assign(zh, {
     '找不到吗？💨 点“放屁”按钮探测！用鼻子找也算本事！'
 });
 
+
+/* V1010450X_PRACTICE_PAINT_INTRO_I18N */
+Object.assign(ko, {
+  '색칠을 연습하자!':'색칠을 연습하자!'
+});
+Object.assign(ja, {
+  '색칠을 연습하자!':'色塗りを練習しよう！'
+});
+Object.assign(en, {
+  '색칠을 연습하자!':'Practice Painting!'
+});
+Object.assign(zh, {
+  '색칠을 연습하자!':'来练习上色吧！'
+});
+
 const dictionaries: Record<GameLanguage, Dict> = { ko, ja, en, zh };
 
 /* v0.10.10.201: complete Practice Ground localization. */

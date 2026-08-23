@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010450X_HIDER_PRACTICE_CLEAN_UI: Hider hard-hides GAS, Paint Help is Hider-only, and practice starts with fading text-only paint prompt. */
     /* V1010450W_AIM_FIRE_GAP: separate mobile Aim joystick and FIRE outer strokes by about 2px. */
     /* V1010450V_HUNTER_FART_DISCOVERY_HINT: GAS visible from Hunt start; delayed localized comic fart hint; larger mobile FIRE/FART labels. */
     /* V1010450E_PROJECTED_BACKGROUND_DOT_ASSIST: project hidden background into avatar, erase about half, retain edge-aware dot guide; bold text-only timer. */
@@ -8233,7 +8234,13 @@ export class GameScene extends Phaser.Scene {
         if (
             this.phase !== 'paint' ||
             this.paintAssistUsedThisRound ||
-            this.paintAssistModal
+            this.paintAssistModal ||
+            this.practiceMode === 'hunter' ||
+            this.networkPlayerManager
+                .isLocalHunter() ||
+            multiplayerClient
+                .getLocalPlayer()
+                ?.role === 'hunter'
         ) {
             return;
         }
@@ -8346,7 +8353,13 @@ export class GameScene extends Phaser.Scene {
     private applyPaintAssist(): void {
         if (
             this.phase !== 'paint' ||
-            this.paintAssistUsedThisRound
+            this.paintAssistUsedThisRound ||
+            this.practiceMode === 'hunter' ||
+            this.networkPlayerManager
+                .isLocalHunter() ||
+            multiplayerClient
+                .getLocalPlayer()
+                ?.role === 'hunter'
         ) {
             return;
         }
@@ -8972,6 +8985,21 @@ export class GameScene extends Phaser.Scene {
         assistButton.textContent =
             this.getPaintAssistButtonLabel();
 
+        /*
+         * V1010450X_HIDER_ONLY_PAINT_HELP
+         * Paint Help is a Hider accessibility aid. Hunters must paint manually.
+         */
+        const paintAssistAllowed =
+            this.practiceMode !== 'hunter' &&
+            !this.networkPlayerManager
+                .isLocalHunter() &&
+            multiplayerClient
+                .getLocalPlayer()
+                ?.role !== 'hunter';
+
+        assistButton.hidden =
+            !paintAssistAllowed;
+
         Object.assign(
             assistButton.style,
             {
@@ -9007,12 +9035,17 @@ export class GameScene extends Phaser.Scene {
             },
         );
 
-        document.body.appendChild(
-            assistButton,
-        );
+        if (paintAssistAllowed) {
+            document.body.appendChild(
+                assistButton,
+            );
 
-        this.paintAssistButton =
-            assistButton;
+            this.paintAssistButton =
+                assistButton;
+        } else {
+            this.paintAssistButton =
+                undefined;
+        }
 
         const precisionHint =
             document.createElement(
@@ -16891,6 +16924,120 @@ export class GameScene extends Phaser.Scene {
         );
     }
 
+    private showPracticePaintIntroText(): void {
+        document
+            .querySelector(
+                '.colorhunt-practice-paint-intro',
+            )
+            ?.remove();
+
+        const text =
+            document.createElement('div');
+
+        text.className =
+            'colorhunt-practice-paint-intro';
+        text.textContent =
+            tr('색칠을 연습하자!');
+
+        Object.assign(
+            text.style,
+            {
+                position: 'fixed',
+                zIndex: '2147482500',
+                pointerEvents: 'none',
+                left: '50%',
+                top: '96px',
+                transform:
+                    'translateX(-50%) translateY(-4px)',
+                color: '#ffffff',
+                fontFamily:
+                    '"Arial Black", "Noto Sans KR", Arial, sans-serif',
+                fontSize:
+                    this.mobileControlsEnabled
+                        ? '22px'
+                        : '28px',
+                fontWeight: '950',
+                lineHeight: '1.1',
+                letterSpacing: '-0.6px',
+                whiteSpace: 'nowrap',
+                WebkitTextStroke:
+                    '2px #111111',
+                paintOrder:
+                    'stroke fill',
+                textShadow:
+                    '0 3px 0 rgba(0,0,0,.38)',
+                opacity: '0',
+                transition:
+                    'opacity 180ms ease, transform 180ms ease',
+            },
+        );
+
+        document.body.appendChild(text);
+
+        const place =
+            (): void => {
+                if (
+                    !document.body.contains(
+                        text,
+                    )
+                ) {
+                    return;
+                }
+
+                const rect =
+                    this.game.canvas
+                        .getBoundingClientRect();
+
+                text.style.left =
+                    `${Math.round(
+                        rect.left +
+                            rect.width /
+                                2,
+                    )}px`;
+
+                text.style.top =
+                    `${Math.round(
+                        rect.top +
+                            Math.max(
+                                62,
+                                rect.height *
+                                    (
+                                        this.mobileControlsEnabled
+                                            ? 0.105
+                                            : 0.115
+                                    ),
+                            ),
+                    )}px`;
+            };
+
+        place();
+        requestAnimationFrame(place);
+
+        requestAnimationFrame(
+            () => {
+                text.style.opacity =
+                    '1';
+                text.style.transform =
+                    'translateX(-50%) translateY(0)';
+            },
+        );
+
+        window.setTimeout(
+            () => {
+                text.style.opacity =
+                    '0';
+                text.style.transform =
+                    'translateX(-50%) translateY(-4px)';
+
+                window.setTimeout(
+                    () => text.remove(),
+                    260,
+                );
+            },
+            1500,
+        );
+    }
+
     private showPracticeStartBanner(
         _message: string,
     ): void {
@@ -18329,13 +18476,17 @@ export class GameScene extends Phaser.Scene {
         this.createPracticeExitButton();
         this.createPracticeHiderRecordBar();
 
-        this.showPracticeStartBanner(
-            tr('연습 시작! 자유롭게 색칠해보세요.'),
-        );
+        /*
+         * No beige status strip on Hider Practice start.
+         * Match the bold, outlined camouflage-record typography instead.
+         */
+        this.showPracticePaintIntroText();
 
-        this.showStatus(
-            tr('자유 연습 · 본게임과 같은 이동·색칠·확대·스포이드 조작을 연습해보세요.'),
-        );
+        /*
+         * Hider UI is now authoritative: clear any GAS card left by a stale
+         * Hunter role/mode transition.
+         */
+        this.updateFartHud();
     }
 
     private openCreateRoomModal(
@@ -49348,14 +49499,20 @@ const roomPlayers =
                 .getLocalPlayer()
                 ?.role;
 
+        /*
+         * V1010450X_HIDER_GAS_HARD_HIDE
+         * Hider Practice owns no Hunter GAS UI, even if a stale multiplayer
+         * Hunter role survives for a frame while switching modes.
+         */
         const visible =
+            this.practiceMode !== 'hider' &&
             this.phase === 'hunt' &&
             (
+                this.practiceMode ===
+                    'hunter' ||
                 this.networkPlayerManager
                     ?.isLocalHunter() ||
-                localRole === 'hunter' ||
-                this.practiceMode ===
-                    'hunter'
+                localRole === 'hunter'
             );
 
         /*
