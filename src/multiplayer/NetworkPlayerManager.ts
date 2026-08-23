@@ -47,6 +47,7 @@ type NetworkPlayerView = {
 };
 
 export class NetworkPlayerManager {
+  /* V1010451K_EXACT_REMOTE_PAINT_DABS: remote players replay the sender's exact paint dabs; never connect unrelated Paint Help bucket points. */
   /* V1010373_RECONNECT_SINGLE_AUTHORITY_GAMEPLAY_LOCK: stale reconnect echoes cannot move the local actor; prediction is rebased once after recovery. */
   /* V1010370_LARGE_ROOM_TRANSPORT_BUDGET: movement snapshots/fallback authority ~=15Hz for 3-10 player rooms; local prediction unchanged. */
   /* V1010364_P0_MULTIPLAYER_STABILITY: cap movement transport to 20Hz while keeping local rendering frame-rate smooth. */
@@ -3096,89 +3097,32 @@ export class NetworkPlayerManager {
     }
 
     /*
-     * V1010338_CRITICAL_GAMEPLAY_TRIPLE_FIX / REMOTE_PAINT_RASTER_CONTINUITY
+     * V1010451K_EXACT_REMOTE_PAINT_DABS / EXACT_SERIALIZED_REPLAY
      *
-     * Replay the path, not just isolated serialized points.
-     * This closes 1px diagonal/rounding holes while the exact character mask
-     * still prevents paint outside the body.
+     * The sender already records the exact raster dabs it rendered locally.
+     * Replay ONLY those serialized dabs.
+     *
+     * This is especially important for Paint Help: one stroke is a color/size
+     * BUCKET of unrelated dots spread across the body, not a continuous path.
+     * Connecting bucket points here made the Hunter see extra paint that did
+     * not exist on the Hider's own screen.
+     *
+     * Manual brush continuity is preserved because GameScene already inserts
+     * interpolated points into activeStrokePoints before network transmission.
      */
-    let previousPoint:
-      NetworkPaintPoint |
-      undefined;
-
-    stroke.points.forEach((point) => {
-      const pixelX =
-        Math.round(point.x);
-      const pixelY =
-        Math.round(point.y);
-
-      if (previousPoint) {
-        const fromX =
-          Math.round(previousPoint.x);
-        const fromY =
-          Math.round(previousPoint.y);
-
-        const distance =
-          Phaser.Math.Distance.Between(
-            fromX,
-            fromY,
-            pixelX,
-            pixelY,
-          );
-
-        const steps =
-          Math.max(
-            1,
-            Math.ceil(
-              distance /
-                (
-                  stroke.size <= 1
-                    ? 1
-                    : 0.65
-                ),
-            ),
-          );
-
-        for (
-          let step = 1;
-          step <= steps;
-          step += 1
-        ) {
-          const t =
-            step / steps;
-
-          this.stampMaskedPaintBrush(
-            view,
-            Phaser.Math.Linear(
-              fromX,
-              pixelX,
-              t,
-            ),
-            Phaser.Math.Linear(
-              fromY,
-              pixelY,
-              t,
-            ),
-            stroke.color,
-            stroke.size,
-            stroke.shape,
-            false,
-          );
-        }
-      } else {
+    stroke.points.forEach(
+      (point) => {
         this.stampMaskedPaintBrush(
           view,
-          pixelX,
-          pixelY,
+          Math.round(point.x),
+          Math.round(point.y),
           stroke.color,
           stroke.size,
           stroke.shape,
           false,
         );
-      }
-
-      previousPoint = point;
-    });
+      },
+    );
 
     this.renderPaintTexture(
       view.paintLayer.texture,
