@@ -8351,20 +8351,40 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
+        /*
+         * V1010450M_ACTUAL_RENDERED_PAINT_POSITION
+         *
+         * Paint Assist must sample the background hidden by the avatar at its
+         * CURRENT rendered world position.
+         *
+         * The old Practice branch always sampled gameWidth/2, gameHeight/2.
+         * That was only correct before the Hider moved. After walking to a cat,
+         * sign, fountain, etc. the helper still copied the background from the
+         * original center spawn, which explains why both shape AND color could
+         * be completely different from what was visibly behind the avatar.
+         *
+         * Prefer NetworkPlayerManager's rendered container position in Practice
+         * and multiplayer. It is the same position that owns the 80x120 paint
+         * texture (-40,-60 local offset). Fall back only if the view is absent.
+         */
+        const renderedPosition =
+            this.networkPlayerManager
+                .getPlayerPosition(
+                    targetSessionId,
+                );
+
         const centerX =
-            this.practiceMode === 'hider'
-                ? this.gameWidth / 2
-                : Number(
-                    localPlayer?.x ??
-                        this.gameWidth / 2,
-                );
+            renderedPosition?.x ??
+            Number(
+                localPlayer?.x ??
+                    this.gameWidth / 2,
+            );
         const centerY =
-            this.practiceMode === 'hider'
-                ? this.gameHeight / 2
-                : Number(
-                    localPlayer?.y ??
-                        this.gameHeight / 2,
-                );
+            renderedPosition?.y ??
+            Number(
+                localPlayer?.y ??
+                    this.gameHeight / 2,
+            );
         const sampler =
             this.createCurrentPaintBackgroundSampler();
 
