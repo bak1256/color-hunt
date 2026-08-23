@@ -1,3 +1,4 @@
+/* V1010451G_TERMINAL_UI_BARRIER: prevent stale Paint/Hunt callbacks from resurrecting UI after terminal lobby return. */
 /* V1010451F_ASSIST_CAPTURE_TERMINAL_CLEANUP_CARD_POLISH: Paint Help full authoritative replay + cleaner victory tiles + terminal mobile lobby reset. */
 /* V1010451E2_TERMINAL_REJOIN_AND_FOUND_POSITIONS_ROBUST: long-away active-round rejection + authoritative Hunter FOUND positions. */
 import Phaser from 'phaser';
@@ -618,6 +619,14 @@ export class GameScene extends Phaser.Scene {
         false;
 
     private reconnectGameplayUnlockNotBefore =
+        0;
+
+    /*
+     * V1010451G_TERMINAL_UI_BARRIER
+     * While returning from a rejected long-background reconnect, block any
+     * stale Paint/Hunt delayed callback from resurrecting room-only UI.
+     */
+    private terminalLobbyCleanupUntil =
         0;
 
     private knownAliveState =
@@ -9058,6 +9067,16 @@ export class GameScene extends Phaser.Scene {
     }
 
     private createMobilePaintDock(): void {
+        /*
+         * V1010451G_TERMINAL_UI_BARRIER / BLOCK_DOCK_RECREATE
+         */
+        if (
+            Date.now() <
+            this.terminalLobbyCleanupUntil
+        ) {
+            return;
+        }
+
         this.ensureFinalPaintPracticeLayoutCss();
         if (
             this.mobilePaintDock
@@ -31140,6 +31159,14 @@ export class GameScene extends Phaser.Scene {
          * therefore used to return early, leaving finger/paint palette/BGM and
          * other room UI layered over the public lobby.
          */
+        /*
+         * V1010451G_TERMINAL_UI_BARRIER / BEGIN_BARRIER
+         * Keep stale room callbacks muted long enough for all delayed Paint
+         * startup/recovery work to drain.
+         */
+        this.terminalLobbyCleanupUntil =
+            Date.now() + 4_000;
+
         this.roomTransitionInProgress =
             false;
 
@@ -31227,6 +31254,100 @@ export class GameScene extends Phaser.Scene {
             );
 
         this.showMainMenu();
+
+        /*
+         * V1010451G_TERMINAL_UI_BARRIER / RESIDUE_SWEEP
+         *
+         * v451f cleaned once, but previously queued Paint/Hunt callbacks could
+         * recreate DOM controls a frame later. Sweep a few times while the
+         * barrier above prevents new dock/BGM creation.
+         */
+        const sweepTerminalResidue =
+            (): void => {
+                this.destroyMobilePaintDock();
+                this.destroyPaintReadyDomButton();
+
+                this.setPaintPaletteVisible(
+                    false,
+                );
+                this.setHunterCamoPaletteVisible(
+                    false,
+                );
+
+                this.paletteObjects.forEach(
+                    (object) => {
+                        (
+                            object as Phaser.GameObjects.GameObject & {
+                                setVisible?: (
+                                    value: boolean,
+                                ) => unknown;
+                            }
+                        ).setVisible?.(false);
+                    },
+                );
+
+                this.hunterCamoPaletteObjects.forEach(
+                    (object) => {
+                        (
+                            object as Phaser.GameObjects.GameObject & {
+                                setVisible?: (
+                                    value: boolean,
+                                ) => unknown;
+                            }
+                        ).setVisible?.(false);
+                    },
+                );
+
+                document
+                    .querySelectorAll(
+                        [
+                            '.colorhunt-paint-dock',
+                            '.colorhunt-paint-mode-toggle',
+                            '.colorhunt-paint-assist-toggle',
+                            '.colorhunt-paint-assist-overlay',
+                            '.colorhunt-paint-ready-dom',
+                        ].join(','),
+                    )
+                    .forEach(
+                        (element) => {
+                            element.remove();
+                        },
+                    );
+
+                this.unifiedBgmButton
+                    ?.style
+                    .setProperty(
+                        'display',
+                        'none',
+                        'important',
+                    );
+            };
+
+        sweepTerminalResidue();
+
+        [
+            80,
+            220,
+            520,
+            1100,
+            1900,
+        ].forEach(
+            (delay) => {
+                this.time.delayedCall(
+                    delay,
+                    () => {
+                        if (
+                            multiplayerClient
+                                .isConnected()
+                        ) {
+                            return;
+                        }
+
+                        sweepTerminalResidue();
+                    },
+                );
+            },
+        );
 
         /*
          * Public lobby uses its own inline BGM button. Suppress any old floating
@@ -34972,6 +35093,20 @@ export class GameScene extends Phaser.Scene {
     private setUnifiedBgmButtonVisible(
         visible: boolean,
     ): void {
+        /*
+         * V1010451G_TERMINAL_UI_BARRIER / BLOCK_FLOATING_BGM_RECREATE
+         * Public lobby owns its inline BGM control. During terminal cleanup the
+         * old floating room BGM must stay hidden even if a stale callback asks
+         * to show it.
+         */
+        if (
+            visible &&
+            Date.now() <
+                this.terminalLobbyCleanupUntil
+        ) {
+            visible = false;
+        }
+
         if (
             !this.unifiedBgmButton
         ) {
