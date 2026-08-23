@@ -17269,6 +17269,7 @@ export class GameScene extends Phaser.Scene {
 
     /*
      * V1010451M_FIRST_PLAY_GUIDES
+     * V1010451M2_ZH_GUIDES
      * Lightweight, one-time onboarding for invite-link players.
      */
     private showFirstPlayGuide(
@@ -17288,7 +17289,7 @@ export class GameScene extends Phaser.Scene {
             <div class="colorhunt-first-play-card" role="dialog" aria-modal="true">
                 <strong>${title}</strong>
                 <p>${body}</p>
-                <button type="button">${getLanguage() === 'ja' ? '確認' : getLanguage() === 'en' ? 'OK' : '확인'}</button>
+                <button type="button">${getLanguage() === 'ja' ? '確認' : getLanguage() === 'en' ? 'OK' : getLanguage() === 'zh' ? '确认' : '확인'}</button>
             </div>
         `;
         Object.assign(overlay.style, {
@@ -17334,14 +17335,16 @@ export class GameScene extends Phaser.Scene {
 
     private showFirstWaitingRoomGuide(): void {
         const language = getLanguage();
-        const title = language === 'ja' ? '基本操作' : language === 'en' ? 'Basic controls' : '기본 조작';
+        const title = language === 'ja' ? '基本操作' : language === 'en' ? 'Basic controls' : language === 'zh' ? '基本操作' : '기본 조작';
         const body = this.mobileControlsEnabled
             ? language === 'ja' ? '画面のジョイスティックで移動します。\nまずは待機部屋で動いてみましょう！'
                 : language === 'en' ? 'Move with the on-screen joystick.\nTry moving around while you wait!'
-                    : '화면의 조이스틱으로 이동해요.\n대기방에서 한번 움직여보세요!'
+                    : language === 'zh' ? '使用屏幕上的虚拟摇杆移动。\n先在等待房间里试着移动一下吧！'
+                        : '화면의 조이스틱으로 이동해요.\n대기방에서 한번 움직여보세요!'
             : language === 'ja' ? 'WASDキーで移動します。\nまずは待機部屋で動いてみましょう！'
                 : language === 'en' ? 'Move with the WASD keys.\nTry moving around while you wait!'
-                    : 'WASD로 이동해요.\n대기방에서 한번 움직여보세요!';
+                    : language === 'zh' ? '使用WASD键移动。\n先在等待房间里试着移动一下吧！'
+                        : 'WASD로 이동해요.\n대기방에서 한번 움직여보세요!';
         this.showFirstPlayGuide('colorhunt-guide-waiting-v1', title, body);
     }
 
@@ -17350,15 +17353,17 @@ export class GameScene extends Phaser.Scene {
         const language = getLanguage();
         const localIsHunter = this.networkPlayerManager?.isLocalHunter() || multiplayerClient.getLocalPlayer()?.role === 'hunter';
         const title = localIsHunter
-            ? language === 'ja' ? 'あなたはハンター！' : language === 'en' ? 'You are the Hunter!' : '당신은 헌터!'
-            : language === 'ja' ? 'あなたはハイダー！' : language === 'en' ? 'You are a Hider!' : '당신은 하이더!';
+            ? language === 'ja' ? 'あなたはハンター！' : language === 'en' ? 'You are the Hunter!' : language === 'zh' ? '你是猎人！' : '당신은 헌터!'
+            : language === 'ja' ? 'あなたはハイダー！' : language === 'en' ? 'You are a Hider!' : language === 'zh' ? '你是躲藏者！' : '당신은 하이더!';
         const body = localIsHunter
             ? language === 'ja' ? '背景に隠れているプレイヤーを見つけて撃ちましょう。'
                 : language === 'en' ? 'Find the players hiding in the background and shoot them.'
-                    : '배경에 숨어있는 플레이어를 찾아 쏘세요.'
+                    : language === 'zh' ? '找出藏在背景中的玩家并射击！'
+                        : '배경에 숨어있는 플레이어를 찾아 쏘세요.'
             : language === 'ja' ? '周りの背景に似せてキャラクターを塗り、うまく隠れましょう。'
                 : language === 'en' ? 'Paint your character to match the surroundings and hide.'
-                    : '주변 배경과 비슷하게 캐릭터를 칠해 숨어보세요.';
+                    : language === 'zh' ? '把角色涂成和周围背景相似的颜色，隐藏起来吧！'
+                        : '주변 배경과 비슷하게 캐릭터를 칠해 숨어보세요.';
         this.showFirstPlayGuide(localIsHunter ? 'colorhunt-guide-role-hunter-v1' : 'colorhunt-guide-role-hider-v1', title, body);
     }
 
@@ -17367,14 +17372,16 @@ export class GameScene extends Phaser.Scene {
         const language = getLanguage();
         const localIsHunter = this.networkPlayerManager?.canLocalControlHunter() || multiplayerClient.getLocalPlayer()?.role === 'hunter';
         if (!localIsHunter) return;
-        const title = language === 'ja' ? 'ハント開始！' : language === 'en' ? 'Hunt started!' : '헌트 시작!';
+        const title = language === 'ja' ? 'ハント開始！' : language === 'en' ? 'Hunt started!' : language === 'zh' ? '狩猎开始！' : '헌트 시작!';
         const body = this.mobileControlsEnabled
             ? language === 'ja' ? 'ジョイスティックで移動・発射ボタンで攻撃\n怪しい場所を探してみましょう！'
                 : language === 'en' ? 'Joystick to move · Fire button to shoot\nLook for anything suspicious!'
-                    : '조이스틱 이동 · 발사 버튼\n수상한 곳을 찾아보세요!'
+                    : language === 'zh' ? '虚拟摇杆移动 · 点击发射按钮射击\n找找看有没有可疑的地方！'
+                        : '조이스틱 이동 · 발사 버튼\n수상한 곳을 찾아보세요!'
             : language === 'ja' ? 'WASDで移動・クリックで発射\n怪しい場所を探してみましょう！'
                 : language === 'en' ? 'WASD to move · Click to shoot\nLook for anything suspicious!'
-                    : 'WASD 이동 · 클릭 발사\n수상한 곳을 찾아보세요!';
+                    : language === 'zh' ? 'WASD移动 · 点击射击\n找找看有没有可疑的地方！'
+                        : 'WASD 이동 · 클릭 발사\n수상한 곳을 찾아보세요!';
         this.showFirstPlayGuide('colorhunt-guide-hunt-hunter-v1', title, body);
     }
 
