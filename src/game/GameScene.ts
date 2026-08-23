@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010450V_HUNTER_FART_DISCOVERY_HINT: GAS visible from Hunt start; delayed localized comic fart hint; larger mobile FIRE/FART labels. */
     /* V1010450E_PROJECTED_BACKGROUND_DOT_ASSIST: project hidden background into avatar, erase about half, retain edge-aware dot guide; bold text-only timer. */
     /* V1010450D_BACKGROUND_SHAPE_ASSIST: 45% beginner assist follows local background color/contours; Practice paint timer is text-only. */
     /* V1010450C_PRACTICE_VISUAL_POLISH: map16 cap, fixed 16:9 thumbnails, aligned Practice top-right rail, rough brush-streak camouflage. */
@@ -2528,7 +2529,7 @@ export class GameScene extends Phaser.Scene {
             this.add.circle(
                 fireX,
                 fireY,
-                46,
+                49,
                 0xb53535,
                 0.62,
             )
@@ -2551,11 +2552,11 @@ export class GameScene extends Phaser.Scene {
                 'FIRE',
                 {
                     fontFamily: 'monospace',
-                    fontSize: '16px',
+                    fontSize: '21px',
                     fontStyle: 'bold',
                     color: '#ffffff',
                     stroke: '#5b1111',
-                    strokeThickness: 3,
+                    strokeThickness: 4,
                     align: 'center',
                 },
             )
@@ -2568,7 +2569,7 @@ export class GameScene extends Phaser.Scene {
             this.add.circle(
                 fartX,
                 fartY,
-                43,
+                47,
                 0x2f8f72,
                 0.78,
             )
@@ -2605,11 +2606,11 @@ export class GameScene extends Phaser.Scene {
                 mobileFartLabelCopy(),
                 {
                     fontFamily: 'monospace',
-                    fontSize: '13px',
+                    fontSize: '17px',
                     fontStyle: 'bold',
                     color: '#ffffff',
                     stroke: '#124737',
-                    strokeThickness: 3,
+                    strokeThickness: 4,
                     align: 'center',
                 },
             )
@@ -4933,6 +4934,10 @@ export class GameScene extends Phaser.Scene {
     /* V1010258_HUNTER_CONTROLS_HINT_EXACT: desktop Hunter controls hint shared by Practice / multiplayer Hunt. */
     private hunterControlsBottomHint?: HTMLDivElement;
     private hunterControlsHintMoveStartedAt = 0;
+
+    /* V1010450V_HUNTER_FART_HINT_BUBBLE: one delayed comic hint per Hunt. */
+    private hunterFartHintBubble?: HTMLDivElement;
+    private hunterFartHintTimer?: Phaser.Time.TimerEvent;
 
     private practiceRevealConfirmButton?: HTMLButtonElement;
     private practiceRevealMarkers: Phaser.GameObjects.GameObject[] = [];
@@ -16282,6 +16287,330 @@ export class GameScene extends Phaser.Scene {
             },
             900,
         );
+    }
+
+    private destroyHunterFartHintBubble(): void {
+        this.hunterFartHintTimer?.remove(false);
+        this.hunterFartHintTimer = undefined;
+
+        this.hunterFartHintBubble?.remove();
+        this.hunterFartHintBubble = undefined;
+    }
+
+    private showHunterFartHintBubble(): void {
+        if (
+            this.phase !== 'hunt' ||
+            (
+                this.practiceMode !== 'hunter' &&
+                !this.networkPlayerManager
+                    .isLocalHunter() &&
+                multiplayerClient
+                    .getLocalPlayer()
+                    ?.role !== 'hunter'
+            )
+        ) {
+            return;
+        }
+
+        this.hunterFartHintBubble?.remove();
+
+        const bubble =
+            document.createElement('div');
+
+        bubble.className =
+            'colorhunt-hunter-fart-tip';
+
+        const mobile =
+            this.mobileControlsEnabled;
+
+        bubble.textContent =
+            mobile
+                ? tr('못 찾겠다면… 💨 방구 버튼으로 탐지! 코로 찾는 것도 실력이지!')
+                : tr('못 찾겠다면… 💨 SPACE로 방구 탐지! 코로 찾는 것도 실력이지!');
+
+        Object.assign(
+            bubble.style,
+            {
+                position: 'fixed',
+                zIndex: '2147483000',
+                pointerEvents: 'none',
+                boxSizing: 'border-box',
+                maxWidth: mobile
+                    ? '210px'
+                    : '340px',
+                padding: mobile
+                    ? '10px 12px'
+                    : '11px 16px',
+                borderRadius: '18px',
+                border:
+                    '2px solid rgba(255,255,255,.78)',
+                background:
+                    'rgba(24, 34, 30, .70)',
+                color: '#fff8d9',
+                fontFamily:
+                    '"Arial Black", "Noto Sans KR", Arial, sans-serif',
+                fontSize: mobile
+                    ? '15px'
+                    : '17px',
+                fontWeight: '900',
+                lineHeight: '1.35',
+                letterSpacing: '-0.2px',
+                textAlign: 'center',
+                textShadow:
+                    '0 2px 2px rgba(0,0,0,.85)',
+                boxShadow:
+                    '0 8px 24px rgba(0,0,0,.24)',
+                opacity: '0',
+                transition:
+                    'opacity 180ms ease, transform 180ms ease',
+            },
+        );
+
+        const tail =
+            document.createElement('span');
+
+        Object.assign(
+            tail.style,
+            {
+                position: 'absolute',
+                width: '0',
+                height: '0',
+                filter:
+                    'drop-shadow(0 2px 1px rgba(0,0,0,.2))',
+            },
+        );
+
+        bubble.appendChild(tail);
+        document.body.appendChild(bubble);
+        this.hunterFartHintBubble = bubble;
+
+        const placeBubble =
+            (): void => {
+                if (
+                    this.hunterFartHintBubble !==
+                    bubble
+                ) {
+                    return;
+                }
+
+                const rect =
+                    this.game.canvas
+                        .getBoundingClientRect();
+
+                if (mobile) {
+                    /*
+                     * Point to the real mobile GAS button, but keep the bubble
+                     * to its left so the button itself remains touchable/visible.
+                     */
+                    const targetX =
+                        rect.left +
+                        (
+                            (
+                                this.gameWidth -
+                                64
+                            ) /
+                            this.gameWidth
+                        ) *
+                            rect.width;
+                    const targetY =
+                        rect.top +
+                        (
+                            (
+                                this.gameHeight -
+                                302
+                            ) /
+                            this.gameHeight
+                        ) *
+                            rect.height;
+
+                    const width =
+                        Math.min(
+                            210,
+                            Math.max(
+                                150,
+                                rect.width *
+                                    0.42,
+                            ),
+                        );
+
+                    bubble.style.width =
+                        `${Math.round(width)}px`;
+                    bubble.style.left =
+                        `${Math.round(
+                            Math.max(
+                                rect.left + 8,
+                                targetX -
+                                    width -
+                                    36,
+                            ),
+                        )}px`;
+                    bubble.style.top =
+                        `${Math.round(
+                            Phaser.Math.Clamp(
+                                targetY - 44,
+                                rect.top + 10,
+                                rect.bottom - 92,
+                            ),
+                        )}px`;
+
+                    Object.assign(
+                        tail.style,
+                        {
+                            right: '-17px',
+                            top: '50%',
+                            bottom: 'auto',
+                            left: 'auto',
+                            transform:
+                                'translateY(-50%)',
+                            borderTop:
+                                '10px solid transparent',
+                            borderBottom:
+                                '10px solid transparent',
+                            borderLeft:
+                                '18px solid rgba(24,34,30,.70)',
+                            borderRight:
+                                '0 solid transparent',
+                        },
+                    );
+                } else {
+                    /*
+                     * Desktop: small bottom bubble points down toward the
+                     * keyboard/control area without covering the playfield.
+                     */
+                    const x =
+                        rect.left +
+                        rect.width /
+                            2;
+                    const y =
+                        rect.bottom -
+                        104;
+
+                    bubble.style.width =
+                        'auto';
+                    bubble.style.left =
+                        `${Math.round(x)}px`;
+                    bubble.style.top =
+                        `${Math.round(y)}px`;
+                    bubble.style.transform =
+                        'translate(-50%, -100%)';
+
+                    Object.assign(
+                        tail.style,
+                        {
+                            left: '50%',
+                            bottom: '-17px',
+                            right: 'auto',
+                            top: 'auto',
+                            transform:
+                                'translateX(-50%)',
+                            borderLeft:
+                                '11px solid transparent',
+                            borderRight:
+                                '11px solid transparent',
+                            borderTop:
+                                '18px solid rgba(24,34,30,.70)',
+                            borderBottom:
+                                '0 solid transparent',
+                        },
+                    );
+                }
+            };
+
+        placeBubble();
+        requestAnimationFrame(
+            placeBubble,
+        );
+        window.setTimeout(
+            placeBubble,
+            100,
+        );
+        window.addEventListener(
+            'resize',
+            placeBubble,
+            {
+                passive: true,
+                once: true,
+            },
+        );
+
+        requestAnimationFrame(
+            () => {
+                if (
+                    this.hunterFartHintBubble ===
+                    bubble
+                ) {
+                    bubble.style.opacity =
+                        '1';
+
+                    if (!mobile) {
+                        bubble.style.transform =
+                            'translate(-50%, -100%)';
+                    }
+                }
+            },
+        );
+
+        window.setTimeout(
+            () => {
+                if (
+                    this.hunterFartHintBubble !==
+                    bubble
+                ) {
+                    return;
+                }
+
+                bubble.style.opacity =
+                    '0';
+
+                window.setTimeout(
+                    () => {
+                        if (
+                            this.hunterFartHintBubble ===
+                            bubble
+                        ) {
+                            bubble.remove();
+                            this.hunterFartHintBubble =
+                                undefined;
+                        }
+                    },
+                    240,
+                );
+            },
+            5200,
+        );
+    }
+
+    private scheduleHunterFartHintBubble(): void {
+        this.destroyHunterFartHintBubble();
+
+        if (
+            this.phase !== 'hunt' ||
+            (
+                this.practiceMode !== 'hunter' &&
+                !this.networkPlayerManager
+                    .isLocalHunter() &&
+                multiplayerClient
+                    .getLocalPlayer()
+                    ?.role !== 'hunter'
+            )
+        ) {
+            return;
+        }
+
+        /*
+         * Long enough that it feels like a rescue hint, not a tutorial popup.
+         * One appearance per Hunt, then it fades by itself.
+         */
+        this.hunterFartHintTimer =
+            this.time.delayedCall(
+                20_000,
+                () => {
+                    this.hunterFartHintTimer =
+                        undefined;
+
+                    this.showHunterFartHintBubble();
+                },
+            );
     }
 
     private destroyHunterControlsBottomHint(): void {
@@ -51586,6 +51915,14 @@ const roomPlayers =
         this.phase = 'hunt';
         this.syncPhaseMusic();
 
+        /*
+         * V1010450V_PRACTICE_GAS_VISIBLE_FROM_ZERO
+         * Practice initializes GAS while phase='paint', so the old update hid
+         * the card and no later update occurred until the first fart. Refresh
+         * immediately after Hunt becomes authoritative so GAS 0% is visible.
+         */
+        this.updateFartHud();
+
         if (this.isMultiplayerSession()) {
             /*
              * V1010432B_RESTORE_V369_PRE_HUNT_VISUAL_ORDER / START_HUNT_NO_REVEAL
@@ -51696,6 +52033,12 @@ const roomPlayers =
             this.createHunterControlsBottomHint();
         } else {
             this.destroyHunterControlsBottomHint();
+        }
+
+        if (localIsHunter) {
+            this.scheduleHunterFartHintBubble();
+        } else {
+            this.destroyHunterFartHintBubble();
         }
 
         this.ammoText.setVisible(
