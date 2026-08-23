@@ -1,3 +1,4 @@
+/* V1010451J_ASSIST_READY_FINAL_PARITY: assisted Hider publishes one complete final paint raster before READY=true, guaranteeing Hunter/Hider Hunt parity. */
 /* V1010451I_HUNTER_CARD_DIRECT_FULL_MAP_ASSET: Hunter card background uses the direct full round-map texture, never a live Hunt screenshot. */
 /* V1010451H2_AUTHORITATIVE_FOUND_PAINT_ROBUST: robustly prefer exact server hit-time paint snapshot for Hunter FOUND avatars. */
 /* V1010451G_TERMINAL_UI_BARRIER: prevent stale Paint/Hunt callbacks from resurrecting UI after terminal lobby return. */
@@ -686,6 +687,23 @@ export class GameScene extends Phaser.Scene {
                 desiredReady;
             this.pendingPaintReadyIntentUntil =
                 Date.now() + 3800;
+
+            /*
+             * V1010451J_ASSIST_READY_FINAL_PARITY / READY_AFTER_FINAL_PAINT
+             *
+             * Finish any pointer still down, then publish Paint Help's complete
+             * final camouflage before READY=true. Colyseus/WebSocket ordering
+             * keeps these paint_stroke messages ahead of this client's READY.
+             */
+            if (
+                desiredReady &&
+                this.paintAssistUsedThisRound
+            ) {
+                this.finishActivePaintStroke();
+                this.isPainting = false;
+
+                this.broadcastAssistedFinalPaintBeforeReady();
+            }
 
             multiplayerClient
                 .sendPaintReady(
@@ -46218,6 +46236,107 @@ const roomPlayers =
         this.straightLineModeActive =
             false;
         this.clearStraightLinePreview();
+    }
+
+    private broadcastAssistedFinalPaintBeforeReady(): void {
+        /*
+         * V1010451J_ASSIST_READY_FINAL_PARITY / FINAL_ASSIST_PARITY
+         *
+         * Only Paint Help needs this authoritative final pass. Normal manual
+         * strokes already arrive as continuous live paint traffic.
+         */
+        if (
+            !this.paintAssistUsedThisRound ||
+            !this.isMultiplayerSession() ||
+            !multiplayerClient.isConnected()
+        ) {
+            return;
+        }
+
+        const sessionId =
+            multiplayerClient.getSessionId();
+
+        if (!sessionId) {
+            return;
+        }
+
+        /*
+         * First make the Hider's own visible raster exactly equal to its saved
+         * round history. This is the same state we are about to send to peers.
+         */
+        this.rebuildLocalPaintFromHistory(
+            false,
+        );
+
+        /*
+         * Dense legal white reset. 14 * 21 = 294 points, deliberately below the
+         * server's 300-point paint_stroke cap.
+         */
+        const resetPoints:
+            NetworkPaintPoint[] = [];
+
+        for (
+            let y = 0;
+            y <= 120;
+            y += 6
+        ) {
+            for (
+                let x = 0;
+                x <= 80;
+                x += 6
+            ) {
+                resetPoints.push({
+                    x,
+                    y,
+                });
+            }
+        }
+
+        multiplayerClient.sendPaintStroke({
+            targetSessionId:
+                sessionId,
+            color:
+                0xf5eee2,
+            size:
+                8,
+            shape:
+                'square',
+            points:
+                resetPoints,
+        });
+
+        /*
+         * Paint Help buckets can be large. Keep every point authoritative while
+         * staying safely below the server's per-message slice(0, 300).
+         */
+        const maxNetworkPoints =
+            240;
+
+        this.localPaintHistory.forEach(
+            (stroke) => {
+                for (
+                    let pointIndex = 0;
+                    pointIndex <
+                        stroke.points.length;
+                    pointIndex +=
+                        maxNetworkPoints
+                ) {
+                    multiplayerClient
+                        .sendPaintStroke({
+                            ...stroke,
+                            targetSessionId:
+                                sessionId,
+                            points:
+                                stroke.points
+                                    .slice(
+                                        pointIndex,
+                                        pointIndex +
+                                            maxNetworkPoints,
+                                    ),
+                        });
+                }
+            },
+        );
     }
 
     private rebuildLocalPaintFromHistory(
