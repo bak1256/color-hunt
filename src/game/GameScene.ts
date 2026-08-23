@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010450_PAINT_ASSIST_AND_PRACTICE_DIFFICULTY: beginner paint assist, victory skill badges, five-step Hunter Practice difficulty, safer Practice exit positioning. */
     /* V1010448_LOBBY_ROUND_PAINT_HARD_ISOLATION: finished-round paint is scrubbed before lobby avatar presets are rebuilt. */
     /* V1010444_RESULT_IDENTITY_FALLBACK: personal FOUND can be reconstructed from one final result payload. */
     /* V1010443_FREEZE_PERSONAL_FOUND_IN_ROUND_RESULT: personal FOUND survives async poster capture/reset timing. */
@@ -4530,6 +4531,9 @@ export class GameScene extends Phaser.Scene {
         'finger' |
         'brush' = 'finger';
     private mobilePaintModeButton?: HTMLButtonElement;
+    private paintAssistButton?: HTMLButtonElement;
+    private paintAssistModal?: HTMLDivElement;
+    private paintAssistUsedThisRound = false;
     private mobilePrecisionBrushHint?: HTMLDivElement;
     private mobileBrushSizePreviewTimer?: number;
 
@@ -4919,7 +4923,7 @@ export class GameScene extends Phaser.Scene {
         | null = null;
     private practiceMap = 'map1';
     private practiceBotCount = 3;
-    private practiceBotPrecision = 65;
+    private practiceBotPrecision = 40;
     private practiceExitButton?: HTMLButtonElement;
     private practiceDesktopHint?: HTMLDivElement;
 
@@ -8101,6 +8105,389 @@ export class GameScene extends Phaser.Scene {
         );
     }
 
+    private getPaintAssistButtonLabel(): string {
+        const language =
+            getLanguage();
+
+        return language === 'ja'
+            ? '✨ 色塗りサポート'
+            : language === 'en'
+                ? '✨ Paint Assist'
+                : language === 'zh'
+                    ? '✨ 上色助手'
+                    : '✨ 색칠 도와주기';
+    }
+
+    private getPaintAssistUsedLabel(): string {
+        const language =
+            getLanguage();
+
+        return language === 'ja'
+            ? '✓ サポート使用済み'
+            : language === 'en'
+                ? '✓ Assist Used'
+                : language === 'zh'
+                    ? '✓ 已使用助手'
+                    : '✓ 도우미 사용됨';
+    }
+
+    private getPaintSkillBadge(): {
+        emoji: string;
+        label: string;
+        color: string;
+        background: string;
+    } {
+        const language =
+            getLanguage();
+
+        if (this.paintAssistUsedThisRound) {
+            return {
+                emoji: '🐣',
+                label:
+                    language === 'ja'
+                        ? '色塗りひよこ'
+                        : language === 'en'
+                            ? 'Paint Rookie'
+                            : language === 'zh'
+                                ? '上色新芽'
+                                : '색칠새싹',
+                color: '#7a5708',
+                background: '#fff0a8',
+            };
+        }
+
+        return {
+            emoji: '🏅',
+            label:
+                language === 'ja'
+                    ? '色塗りマスター'
+                    : language === 'en'
+                        ? 'Paint Master'
+                        : language === 'zh'
+                            ? '上色高手'
+                            : '색칠고수',
+            color: '#6a3d00',
+            background: '#ffd56b',
+        };
+    }
+
+    private openPaintAssistConfirmModal(): void {
+        if (
+            this.phase !== 'paint' ||
+            this.paintAssistUsedThisRound ||
+            this.paintAssistModal
+        ) {
+            return;
+        }
+
+        const language =
+            getLanguage();
+        const overlay =
+            document.createElement('div');
+        overlay.className =
+            'colorhunt-paint-assist-overlay';
+        overlay.setAttribute(
+            'role',
+            'dialog',
+        );
+
+        const title =
+            language === 'ja'
+                ? '✨ 色塗りサポート'
+                : language === 'en'
+                    ? '✨ Paint Assist'
+                    : language === 'zh'
+                        ? '✨ 上色助手'
+                        : '✨ 색칠 도와주기';
+        const description =
+            language === 'ja'
+                ? '今いる場所の背景色を参考に、キャラクターのおよそ40%をドット風に自動で塗ります。完璧な迷彩にはせず、遊びやすいスタートを作ります。'
+                : language === 'en'
+                    ? 'Using the background at your current position, about 40% of your character will be painted automatically with rough pixel-like dabs. It gives you a head start, not perfect camouflage.'
+                    : language === 'zh'
+                        ? '根据你当前位置的背景颜色，自动用像素点笔触填涂角色约40%。它只提供轻松的起步，不会生成完美伪装。'
+                        : '현재 위치의 배경색을 참고해 캐릭터의 약 40%를 도트처럼 자동 채색합니다. 완벽한 위장이 아니라, 누구나 쉽게 시작할 수 있게 도와주는 정도예요.';
+        const warning =
+            language === 'ja'
+                ? 'サポートなしで勝利すると勝利カードに「色塗りマスター」マーク、サポートを使って勝利すると「色塗りひよこ」マークが表示されます。それでも使いますか？'
+                : language === 'en'
+                    ? 'Win without Paint Assist to earn the Paint Master badge on your victory card. Win after using it and your card will show the Paint Rookie badge. Use Paint Assist?'
+                    : language === 'zh'
+                        ? '不使用助手获胜时，胜利卡会显示“上色高手”徽章；使用助手后获胜则显示“上色新芽”徽章。仍要使用吗？'
+                        : '색칠 도와주기 없이 승리하면 승리 카드에 「색칠고수」 마크가, 색칠 도와주기로 게임 승리 시 「색칠새싹」 마크가 표시됩니다. 그래도 괜찮은가요?';
+        const noLabel =
+            language === 'ja'
+                ? 'いいえ'
+                : language === 'en'
+                    ? 'No'
+                    : language === 'zh'
+                        ? '否'
+                        : '아니오';
+        const yesLabel =
+            language === 'ja'
+                ? 'はい、手伝って！'
+                : language === 'en'
+                    ? 'Yes, help me!'
+                    : language === 'zh'
+                        ? '好，帮我上色！'
+                        : '예, 도와주세요';
+
+        overlay.innerHTML = `
+            <style>
+                .colorhunt-paint-assist-overlay{position:fixed;inset:0;z-index:2147483100;display:grid;place-items:center;padding:18px;background:rgba(8,12,18,.72);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+                .colorhunt-paint-assist-card{width:min(92vw,520px);box-sizing:border-box;padding:24px;border:2px solid rgba(255,218,91,.82);border-radius:24px;background:linear-gradient(180deg,#fff9d9,#fff4b6);box-shadow:0 28px 80px rgba(0,0,0,.34);color:#3f3413;font-family:Inter,Pretendard,Arial,sans-serif}
+                .colorhunt-paint-assist-card h2{margin:0 0 12px;font-size:25px;line-height:1.15;font-weight:950}.colorhunt-paint-assist-card p{margin:0;font-size:14px;line-height:1.55;font-weight:750}.colorhunt-paint-assist-warning{margin-top:14px!important;padding:13px 14px;border-radius:15px;background:rgba(255,255,255,.72);border:1px solid rgba(151,110,16,.22)}
+                .colorhunt-paint-assist-badges{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}.colorhunt-paint-assist-badges span{padding:7px 10px;border-radius:999px;background:#fff;border:1px solid rgba(108,76,8,.18);font-size:12px;font-weight:950}
+                .colorhunt-paint-assist-actions{display:grid;grid-template-columns:1fr 1.35fr;gap:9px;margin-top:18px}.colorhunt-paint-assist-actions button{min-height:46px;border:0;border-radius:14px;font:900 14px Arial,sans-serif;cursor:pointer}.colorhunt-paint-assist-actions [data-assist-no]{background:#fff;color:#665f50}.colorhunt-paint-assist-actions [data-assist-yes]{background:#e0ad25;color:#352600;box-shadow:0 8px 18px rgba(120,82,0,.20)}
+            </style>
+            <div class="colorhunt-paint-assist-card">
+                <h2>${title}</h2>
+                <p>${description}</p>
+                <div class="colorhunt-paint-assist-badges"><span>🏅 ${language === 'ko' ? '색칠고수' : language === 'ja' ? '色塗りマスター' : language === 'zh' ? '上色高手' : 'Paint Master'}</span><span>🐣 ${language === 'ko' ? '색칠새싹' : language === 'ja' ? '色塗りひよこ' : language === 'zh' ? '上色新芽' : 'Paint Rookie'}</span></div>
+                <p class="colorhunt-paint-assist-warning">${warning}</p>
+                <div class="colorhunt-paint-assist-actions">
+                    <button type="button" data-assist-no>${noLabel}</button>
+                    <button type="button" data-assist-yes>${yesLabel}</button>
+                </div>
+            </div>
+        `;
+
+        const close =
+            (): void => {
+                overlay.remove();
+                if (this.paintAssistModal === overlay) {
+                    this.paintAssistModal =
+                        undefined;
+                }
+            };
+
+        overlay.querySelector(
+            '[data-assist-no]',
+        )?.addEventListener(
+            'click',
+            close,
+        );
+
+        overlay.querySelector(
+            '[data-assist-yes]',
+        )?.addEventListener(
+            'click',
+            () => {
+                close();
+                this.applyPaintAssist();
+            },
+        );
+
+        document.body.appendChild(
+            overlay,
+        );
+        this.paintAssistModal =
+            overlay;
+    }
+
+    private applyPaintAssist(): void {
+        if (
+            this.phase !== 'paint' ||
+            this.paintAssistUsedThisRound
+        ) {
+            return;
+        }
+
+        const localPlayer =
+            multiplayerClient.getLocalPlayer();
+        const targetSessionId =
+            this.practiceMode === 'hider'
+                ? this.practiceHiderSessionId
+                : multiplayerClient.getSessionId() ??
+                    '';
+
+        if (!targetSessionId) {
+            return;
+        }
+
+        const centerX =
+            this.practiceMode === 'hider'
+                ? this.gameWidth / 2
+                : Number(
+                    localPlayer?.x ??
+                        this.gameWidth / 2,
+                );
+        const centerY =
+            this.practiceMode === 'hider'
+                ? this.gameHeight / 2
+                : Number(
+                    localPlayer?.y ??
+                        this.gameHeight / 2,
+                );
+        const sampler =
+            this.createCurrentPaintBackgroundSampler();
+
+        const grouped =
+            new Map<
+                number,
+                NetworkPaintPoint[]
+            >();
+        const seedBase =
+            Math.floor(
+                centerX * 31 +
+                centerY * 17 +
+                Date.now() / 1000,
+            ) >>>
+            0;
+
+        for (let y = 7; y <= 113; y += 7) {
+            for (let x = 7; x <= 73; x += 7) {
+                const hash =
+                    (
+                        (x * 73856093) ^
+                        (y * 19349663) ^
+                        seedBase
+                    ) >>>
+                    0;
+
+                /* Roughly 40% coverage; the production silhouette mask clips
+                 * points outside the body automatically. */
+                if (hash % 100 >= 43) {
+                    continue;
+                }
+
+                const jitterX =
+                    (
+                        (hash >>> 8) % 3
+                    ) -
+                    1;
+                const jitterY =
+                    (
+                        (hash >>> 12) % 3
+                    ) -
+                    1;
+                const pointX =
+                    Phaser.Math.Clamp(
+                        x + jitterX,
+                        0,
+                        80,
+                    );
+                const pointY =
+                    Phaser.Math.Clamp(
+                        y + jitterY,
+                        0,
+                        120,
+                    );
+                const sampled =
+                    this.samplePracticeBackgroundRgb(
+                        sampler,
+                        centerX +
+                            (
+                                pointX -
+                                40
+                            ),
+                        centerY +
+                            (
+                                pointY -
+                                60
+                            ),
+                    );
+                const quantize =
+                    (value: number): number =>
+                        Phaser.Math.Clamp(
+                            Math.round(
+                                value / 48,
+                            ) * 48,
+                            0,
+                            255,
+                        );
+                const color =
+                    quantize(sampled.r) << 16 |
+                    quantize(sampled.g) << 8 |
+                    quantize(sampled.b);
+
+                const points =
+                    grouped.get(color) ??
+                    [];
+                points.push({
+                    x: pointX,
+                    y: pointY,
+                });
+                grouped.set(
+                    color,
+                    points,
+                );
+            }
+        }
+
+        const assistStrokes:
+            NetworkPaintStroke[] =
+            [];
+
+        grouped.forEach(
+            (points, color) => {
+                const stroke:
+                    NetworkPaintStroke = {
+                        targetSessionId,
+                        color,
+                        size: 7,
+                        shape: 'square',
+                        points,
+                    };
+
+                stroke.points.forEach(
+                    (point) => {
+                        this.networkPlayerManager
+                            .stampLocalPaintPoint(
+                                point.x,
+                                point.y,
+                                this.brushTextureKey,
+                                stroke.color,
+                                stroke.size,
+                                stroke.shape,
+                            );
+                    },
+                );
+
+                if (this.isMultiplayerSession()) {
+                    multiplayerClient
+                        .sendPaintStroke(
+                            stroke,
+                        );
+                }
+
+                assistStrokes.push(
+                    stroke,
+                );
+            },
+        );
+
+        this.localPaintHistory.push(
+            ...assistStrokes,
+        );
+        this.redoPaintHistory = [];
+        this.paintAssistUsedThisRound =
+            true;
+
+        if (this.practiceMode === 'hider') {
+            this.markPracticeHiderPaintStarted();
+        }
+
+        if (this.paintAssistButton) {
+            this.paintAssistButton.textContent =
+                this.getPaintAssistUsedLabel();
+            this.paintAssistButton.disabled =
+                true;
+            this.paintAssistButton.style.opacity =
+                '0.66';
+        }
+
+        this.showStatus(
+            getLanguage() === 'ja'
+                ? '✨ 約40%をドット風にサポートしました！'
+                : getLanguage() === 'en'
+                    ? '✨ Paint Assist filled about 40%!'
+                    : getLanguage() === 'zh'
+                        ? '✨ 已用像素点辅助填涂约40%！'
+                        : '✨ 약 40%를 도트 느낌으로 색칠해드렸어요!',
+        );
+    }
+
     private createMobilePaintDock(): void {
         this.ensureFinalPaintPracticeLayoutCss();
         if (
@@ -8197,6 +8584,59 @@ export class GameScene extends Phaser.Scene {
 
         this.mobilePaintModeButton =
             modeButton;
+
+        const assistButton =
+            document.createElement(
+                'button',
+            );
+
+        assistButton.type = 'button';
+        assistButton.className =
+            'colorhunt-paint-assist-toggle';
+        assistButton.textContent =
+            this.getPaintAssistButtonLabel();
+
+        Object.assign(
+            assistButton.style,
+            {
+                position: 'fixed',
+                zIndex: '2141',
+                minWidth: '126px',
+                minHeight: '46px',
+                padding: '7px 12px',
+                border: '2px solid #c79b27',
+                borderRadius: '13px',
+                background: 'rgba(255,219,88,.72)',
+                color: '#4d3a08',
+                boxShadow:
+                    '0 4px 14px rgba(97,72,10,.22)',
+                fontFamily:
+                    'Arial, sans-serif',
+                fontWeight: '900',
+                fontSize: '13px',
+                lineHeight: '1.15',
+                whiteSpace: 'pre-line',
+                textAlign: 'center',
+                cursor: 'pointer',
+                touchAction: 'manipulation',
+            },
+        );
+
+        assistButton.addEventListener(
+            'pointerdown',
+            (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                this.openPaintAssistConfirmModal();
+            },
+        );
+
+        document.body.appendChild(
+            assistButton,
+        );
+
+        this.paintAssistButton =
+            assistButton;
 
         const precisionHint =
             document.createElement(
@@ -8633,6 +9073,33 @@ export class GameScene extends Phaser.Scene {
                     : 'none';
         }
 
+        if (this.paintAssistButton) {
+            const canAssist =
+                visible &&
+                this.phase === 'paint' &&
+                (
+                    this.practiceMode === 'hider' ||
+                    this.isMultiplayerSession()
+                );
+
+            this.paintAssistButton.hidden =
+                !canAssist;
+            this.paintAssistButton.style.display =
+                canAssist
+                    ? 'block'
+                    : 'none';
+            this.paintAssistButton.textContent =
+                this.paintAssistUsedThisRound
+                    ? this.getPaintAssistUsedLabel()
+                    : this.getPaintAssistButtonLabel();
+            this.paintAssistButton.disabled =
+                this.paintAssistUsedThisRound;
+            this.paintAssistButton.style.opacity =
+                this.paintAssistUsedThisRound
+                    ? '0.66'
+                    : '1';
+        }
+
         if (!visible) {
             if (
                 this.mobilePrecisionBrushHint
@@ -9044,6 +9511,18 @@ export class GameScene extends Phaser.Scene {
             this.mobilePaintModeButton.style.transform =
                 'translateY(-50%)';
 
+            if (this.paintAssistButton) {
+                const modeRect =
+                    this.mobilePaintModeButton
+                        .getBoundingClientRect();
+                this.paintAssistButton.style.left =
+                    `${Math.round(modeRect.left)}px`;
+                this.paintAssistButton.style.top =
+                    `${Math.round(modeRect.top - 54)}px`;
+                this.paintAssistButton.style.transform =
+                    'none';
+            }
+
             if (
                 this.mobilePrecisionBrushHint
             ) {
@@ -9061,6 +9540,34 @@ export class GameScene extends Phaser.Scene {
                         buttonRect.bottom + 8,
                     )}px`;
             }
+        } else if (this.paintAssistButton) {
+            const buttonWidth =
+                this.paintAssistButton.offsetWidth ||
+                126;
+            const visibleCanvasLeft =
+                Math.max(
+                    8,
+                    rect.left,
+                );
+            const x =
+                Phaser.Math.Clamp(
+                    visibleCanvasLeft +
+                        18,
+                    8,
+                    Math.max(
+                        8,
+                        window.innerWidth -
+                            buttonWidth -
+                            8,
+                    ),
+                );
+
+            this.paintAssistButton.style.left =
+                `${Math.round(x)}px`;
+            this.paintAssistButton.style.top =
+                `${Math.round(rect.top + rect.height * 0.42)}px`;
+            this.paintAssistButton.style.transform =
+                'translateY(-50%)';
         }
     }
 
@@ -9069,6 +9576,11 @@ export class GameScene extends Phaser.Scene {
             ?.remove();
 
         this.mobilePaintModeButton
+            ?.remove();
+
+        this.paintAssistButton
+            ?.remove();
+        this.paintAssistModal
             ?.remove();
 
         this.mobilePrecisionBrushHint
@@ -9081,6 +9593,10 @@ export class GameScene extends Phaser.Scene {
         this.mobilePaintDock =
             undefined;
         this.mobilePaintModeButton =
+            undefined;
+        this.paintAssistButton =
+            undefined;
+        this.paintAssistModal =
             undefined;
         this.mobilePrecisionBrushHint =
             undefined;
@@ -12510,6 +13026,87 @@ export class GameScene extends Phaser.Scene {
             : `${seconds.toFixed(2)}s`;
     }
 
+    private getPracticeDifficultyTitle(): string {
+        const language =
+            getLanguage();
+
+        return language === 'ja'
+            ? '難易度'
+            : language === 'en'
+                ? 'Difficulty'
+                : language === 'zh'
+                    ? '难度'
+                    : '난이도';
+    }
+
+    private getPracticeDifficultyLabel(
+        value:
+            number,
+    ): string {
+        const normalized =
+            value <= 20
+                ? 20
+                : value <= 30
+                    ? 30
+                    : value <= 40
+                        ? 40
+                        : value <= 50
+                            ? 50
+                            : 60;
+        const language =
+            getLanguage();
+
+        const labels =
+            language === 'ja'
+                ? {
+                    20: 'とても簡単',
+                    30: '簡単',
+                    40: '普通',
+                    50: '難しい',
+                    60: '😈 とても難しい',
+                }
+                : language === 'en'
+                    ? {
+                        20: 'Very Easy',
+                        30: 'Easy',
+                        40: 'Normal',
+                        50: 'Hard',
+                        60: '😈 Very Hard',
+                    }
+                    : language === 'zh'
+                        ? {
+                            20: '非常简单',
+                            30: '简单',
+                            40: '普通',
+                            50: '困难',
+                            60: '😈 非常困难',
+                        }
+                        : {
+                            20: '아주 쉬움',
+                            30: '쉬움',
+                            40: '보통',
+                            50: '어려움',
+                            60: '😈 아주 어려움',
+                        };
+
+        return labels[
+            normalized as keyof typeof labels
+        ];
+    }
+
+    private getPracticeDifficultyScaleHint(): string {
+        const language =
+            getLanguage();
+
+        return language === 'ja'
+            ? 'とても簡単 ← 迷彩の自然さ → とても難しい'
+            : language === 'en'
+                ? 'Very Easy ← camouflage strength → Very Hard'
+                : language === 'zh'
+                    ? '非常简单 ← 伪装强度 → 非常困难'
+                    : '아주 쉬움 ← 위장 자연스러움 → 아주 어려움';
+    }
+
     private openPracticeGroundModal(): void {
         this.ensureFinalPaintPracticeLayoutCss();
 
@@ -12650,12 +13247,12 @@ export class GameScene extends Phaser.Scene {
 
                         <div class="colorhunt-practice-control">
                             <label>
-                                <span>${tr('위장 정밀도')}</span>
-                                <b data-bot-precision-value>${this.practiceBotPrecision}%</b>
+                                <span>${this.getPracticeDifficultyTitle()}</span>
+                                <b data-bot-precision-value>${this.getPracticeDifficultyLabel(this.practiceBotPrecision)}</b>
                             </label>
-                            <input data-bot-precision type="range" min="50" max="95" step="5" value="${this.practiceBotPrecision}">
+                            <input data-bot-precision type="range" min="20" max="60" step="10" value="${this.practiceBotPrecision}">
                             <div class="colorhunt-practice-difficulty-row">
-                                <small>${tr('높을수록 배경과 더 비슷하게 숨습니다.')}</small>
+                                <small>${this.getPracticeDifficultyScaleHint()}</small>
                                 <b data-practice-difficulty></b>
                             </div>
                         </div>
@@ -13179,7 +13776,7 @@ export class GameScene extends Phaser.Scene {
                                 : tr('맵 미상');
 
                         row.innerHTML =
-                            `<b>${index + 1}</b><span>${this.formatPracticeTime(record.elapsedMs)}</span><small>🗺️ ${rankingMap} · ${record.botCount} BOT · ${record.precision}%</small>`;
+                            `<b>${index + 1}</b><span>${this.formatPracticeTime(record.elapsedMs)}</span><small>🗺️ ${rankingMap} · ${record.botCount} BOT · ${this.getPracticeDifficultyLabel(record.precision)}</small>`;
 
                         rankingRoot.appendChild(
                             row,
@@ -13329,33 +13926,77 @@ export class GameScene extends Phaser.Scene {
 
         const updateDifficultyUi =
             (): void => {
+                const hard =
+                    this.practiceBotPrecision ===
+                    50;
                 const extreme =
-                    this.practiceBotPrecision >=
-                    85;
+                    this.practiceBotPrecision ===
+                    60;
 
+                precision?.classList.toggle(
+                    'is-hard',
+                    hard,
+                );
                 precision?.classList.toggle(
                     'is-extreme',
                     extreme,
                 );
 
+                if (precision) {
+                    precision.style.accentColor =
+                        extreme
+                            ? '#a61f2b'
+                            : hard
+                                ? '#df5b4e'
+                                : '#6f9a72';
+                }
+
+                precisionValue?.classList.toggle(
+                    'is-hard',
+                    hard,
+                );
                 precisionValue?.classList.toggle(
                     'is-extreme',
                     extreme,
                 );
 
                 card.classList.toggle(
+                    'practice-is-hard',
+                    hard,
+                );
+                card.classList.toggle(
                     'practice-is-extreme',
                     extreme,
                 );
 
+                if (precisionValue) {
+                    precisionValue.textContent =
+                        this.getPracticeDifficultyLabel(
+                            this.practiceBotPrecision,
+                        );
+                    precisionValue.style.color =
+                        extreme
+                            ? '#9d1725'
+                            : hard
+                                ? '#cf4439'
+                                : '';
+                    precisionValue.style.fontWeight =
+                        hard || extreme
+                            ? '950'
+                            : '';
+                }
+
                 if (difficultyLabel) {
                     difficultyLabel.textContent =
                         extreme
-                            ? `🔥 ${tr('핵어려움')}`
-                            : '';
+                            ? '😈🔥'
+                            : hard
+                                ? '🔥'
+                                : '';
                     difficultyLabel.classList.toggle(
                         'is-visible',
-                        extreme,
+                        hard ||
+                            extreme,
                     );
                 }
             };
@@ -13372,11 +14013,11 @@ export class GameScene extends Phaser.Scene {
                             Number(
                                 precision.value,
                             ) /
-                            5,
+                            10,
                         ) *
-                            5,
-                        50,
-                        95,
+                            10,
+                        20,
+                        60,
                     );
 
                 precision.value =
@@ -13386,7 +14027,9 @@ export class GameScene extends Phaser.Scene {
 
                 if (precisionValue) {
                     precisionValue.textContent =
-                        `${this.practiceBotPrecision}%`;
+                        this.getPracticeDifficultyLabel(
+                            this.practiceBotPrecision,
+                        );
                 }
 
                 updateDifficultyUi();
@@ -13528,7 +14171,10 @@ export class GameScene extends Phaser.Scene {
                 );
     }
 
-    private createPracticeBackgroundSampler():
+    private createBackgroundSampler(
+        textureKey:
+            string,
+    ):
         | {
             data:
                 Uint8ClampedArray;
@@ -13538,11 +14184,6 @@ export class GameScene extends Phaser.Scene {
                 number;
         }
         | null {
-        const textureKey =
-            this.getBackgroundTextureKey(
-                this.practiceMap,
-            );
-
         try {
             const texture =
                 this.textures.get(
@@ -13608,12 +14249,44 @@ export class GameScene extends Phaser.Scene {
             error
         ) {
             console.warn(
-                '[Color Hunt] Practice background sampling fallback',
+                '[Color Hunt] background sampling fallback',
                 error,
             );
 
             return null;
         }
+    }
+
+    private createPracticeBackgroundSampler():
+        | {
+            data:
+                Uint8ClampedArray;
+            width:
+                number;
+            height:
+                number;
+        }
+        | null {
+        return this.createBackgroundSampler(
+            this.getBackgroundTextureKey(
+                this.practiceMap,
+            ),
+        );
+    }
+
+    private createCurrentPaintBackgroundSampler():
+        | {
+            data:
+                Uint8ClampedArray;
+            width:
+                number;
+            height:
+                number;
+        }
+        | null {
+        return this.createBackgroundSampler(
+            this.currentBackgroundTextureKey,
+        );
     }
 
     private samplePracticeBackgroundRgb(
@@ -13926,60 +14599,76 @@ export class GameScene extends Phaser.Scene {
                             textureX,
                             textureY,
                         ) => {
-                            const worldX =
-                                hider.centerX +
-                                (
-                                    textureX -
-                                    40
+                            const difficultyRatio =
+                                Phaser.Math.Clamp(
+                                    (
+                                        this.practiceBotPrecision -
+                                        20
+                                    ) /
+                                        40,
+                                    0,
+                                    1,
                                 );
-
-                            const worldY =
-                                hider.centerY +
-                                (
-                                    textureY -
-                                    60
-                                );
-
-                            const sampled =
-                                this.samplePracticeBackgroundRgb(
-                                    sampler,
-                                    worldX,
-                                    worldY,
-                                );
-
-                            const ratio =
-                                (
-                                    this.practiceBotPrecision -
-                                    50
-                                ) /
-                                45;
 
                             /*
-                             * 50%: larger hand-painted color mismatch.
-                             * 80%: very close to the exact map pixel.
-                             * Coverage remains 100% at every difficulty.
+                             * V1010450: Hunter Practice camouflage now looks
+                             * like deliberate pixel/dot brush dabs instead of
+                             * near-perfect per-pixel sampling. 20 -> 60 changes
+                             * both color accuracy and dab size.
                              */
-                            const maxError =
-                                Phaser.Math.Linear(
-                                    58,
-                                    2,
-                                    Phaser.Math.Clamp(
-                                        ratio,
-                                        0,
-                                        1,
+                            const dabSize =
+                                Math.round(
+                                    Phaser.Math.Linear(
+                                        9,
+                                        5,
+                                        difficultyRatio,
                                     ),
                                 );
 
                             const blockX =
                                 Math.floor(
                                     textureX /
-                                    4,
+                                    dabSize,
                                 );
 
                             const blockY =
                                 Math.floor(
                                     textureY /
-                                    4,
+                                    dabSize,
+                                );
+
+                            const sampleTextureX =
+                                blockX *
+                                    dabSize +
+                                dabSize *
+                                    0.5;
+
+                            const sampleTextureY =
+                                blockY *
+                                    dabSize +
+                                dabSize *
+                                    0.5;
+
+                            const sampled =
+                                this.samplePracticeBackgroundRgb(
+                                    sampler,
+                                    hider.centerX +
+                                        (
+                                            sampleTextureX -
+                                            40
+                                        ),
+                                    hider.centerY +
+                                        (
+                                            sampleTextureY -
+                                            60
+                                        ),
+                                );
+
+                            const maxError =
+                                Phaser.Math.Linear(
+                                    118,
+                                    20,
+                                    difficultyRatio,
                                 );
 
                             const seed =
@@ -14746,6 +15435,61 @@ export class GameScene extends Phaser.Scene {
                     `${Math.round(
                         canvasOuterRight,
                     )}px`,
+                );
+
+                /*
+                 * V1010450: some Fold/mobile browser geometries report a
+                 * letterboxed canvas rect that temporarily extends outside the
+                 * viewport. Anchor to the VISIBLE canvas edge and clamp the
+                 * actual button box so it can never escape to the left.
+                 */
+                const buttonWidth =
+                    button.offsetWidth ||
+                    120;
+                const visibleRight =
+                    Phaser.Math.Clamp(
+                        Math.min(
+                            rect.right,
+                            window.innerWidth -
+                                8,
+                        ),
+                        buttonWidth +
+                            8,
+                        window.innerWidth -
+                            8,
+                    );
+                const left =
+                    Phaser.Math.Clamp(
+                        visibleRight -
+                            buttonWidth,
+                        8,
+                        Math.max(
+                            8,
+                            window.innerWidth -
+                                buttonWidth -
+                                8,
+                        ),
+                    );
+
+                button.style.setProperty(
+                    'position',
+                    'fixed',
+                    'important',
+                );
+                button.style.setProperty(
+                    'left',
+                    `${Math.round(left)}px`,
+                    'important',
+                );
+                button.style.setProperty(
+                    'right',
+                    'auto',
+                    'important',
+                );
+                button.style.setProperty(
+                    'top',
+                    `${Math.round(rect.top + 48)}px`,
+                    'important',
                 );
 
                 this.updateControlsHelpPosition();
@@ -16428,6 +17172,8 @@ export class GameScene extends Phaser.Scene {
 
         this.practiceMode =
             'hider';
+        this.paintAssistUsedThisRound =
+            false;
 
         /* Practice starts from a clean renderer; lobby-customized avatars must
          * never remain as a ghost character over the practice background. */
@@ -35012,6 +35758,42 @@ const roomPlayers =
                 ? 814
                 : 1104;
 
+        /* V1010450: every local winner card clearly records whether Paint
+         * Assist was used. This is intentionally a personal/client badge and
+         * does not alter round authority or scoring. */
+        const paintSkillBadge =
+            this.getPaintSkillBadge();
+        context.save();
+        context.fillStyle =
+            paintSkillBadge.background;
+        context.strokeStyle =
+            'rgba(95,66,10,.20)';
+        context.lineWidth = 2;
+        context.beginPath();
+        context.roundRect(
+            72,
+            memoryPanelY - 18,
+            245,
+            54,
+            27,
+        );
+        context.fill();
+        context.stroke();
+        context.fillStyle =
+            paintSkillBadge.color;
+        context.font =
+            '900 20px Arial, sans-serif';
+        context.textAlign =
+            'left';
+        context.textBaseline =
+            'middle';
+        context.fillText(
+            `${paintSkillBadge.emoji} ${paintSkillBadge.label}`,
+            94,
+            memoryPanelY + 9,
+        );
+        context.restore();
+
         /*
          * V1010440F_HIDER_NICKNAME_SCOPE_FIX
          * Hider nickname belongs to the victory-card memory area, where
@@ -36386,6 +37168,11 @@ const roomPlayers =
         }
 
         if (phase === 'countdown') {
+            this.paintAssistUsedThisRound =
+                false;
+            this.paintAssistModal?.remove();
+            this.paintAssistModal =
+                undefined;
             this.clearVictoryShowcaseForRoundLifecycle();
             this.clearStatus();
 
@@ -50318,7 +51105,7 @@ const roomPlayers =
         /*
          * Build the REAL selected map at the same 960x540 logical size used
          * in-game. We then reconstruct every bot with the same paint
-         * silhouette, hide coordinate and precision formula used by Practice.
+         * silhouette, hide coordinate and five-step difficulty formula used by Practice.
          */
         const mapTextureKey =
             this.getBackgroundTextureKey(
@@ -50614,16 +51401,22 @@ const roomPlayers =
 
         if (
             this.practiceBotPrecision >=
-                85
+                50
         ) {
+            const extreme =
+                this.practiceBotPrecision >=
+                60;
+
             context.fillStyle =
-                '#d83d3d';
+                extreme
+                    ? '#9f1f25'
+                    : '#d94a43';
             context.beginPath();
             context.roundRect(
                 width -
-                    314,
+                    350,
                 300,
-                250,
+                286,
                 60,
                 30,
             );
@@ -50632,11 +51425,11 @@ const roomPlayers =
             context.fillStyle =
                 '#ffffff';
             context.font =
-                '900 25px Arial, sans-serif';
+                '900 24px Arial, sans-serif';
             context.fillText(
-                `🔥 ${tr('핵어려움')}`,
+                `${extreme ? '😈🔥' : '🔥'} ${this.getPracticeDifficultyLabel(this.practiceBotPrecision)}`,
                 width -
-                    285,
+                    326,
                 340,
             );
         }
@@ -50679,7 +51472,7 @@ const roomPlayers =
 
         /*
          * Recreate every hidden bot exactly from its final hide coordinate.
-         * Coverage is always 100%; precision only changes color error.
+         * The same pixel/dot camouflage algorithm used in Practice is rebuilt here.
          */
         this.hiders.forEach(
             (
@@ -50711,22 +51504,31 @@ const roomPlayers =
                         120,
                     );
 
-                const ratio =
-                    (
-                        this.practiceBotPrecision -
-                        50
-                    ) /
-                    45;
+                const difficultyRatio =
+                    Phaser.Math.Clamp(
+                        (
+                            this.practiceBotPrecision -
+                            20
+                        ) /
+                            40,
+                        0,
+                        1,
+                    );
+
+                const dabSize =
+                    Math.round(
+                        Phaser.Math.Linear(
+                            9,
+                            5,
+                            difficultyRatio,
+                        ),
+                    );
 
                 const maxError =
                     Phaser.Math.Linear(
-                        58,
-                        2,
-                        Phaser.Math.Clamp(
-                            ratio,
-                            0,
-                            1,
-                        ),
+                        118,
+                        20,
+                        difficultyRatio,
                     );
 
                 for (
@@ -50750,36 +51552,36 @@ const roomPlayers =
                             continue;
                         }
 
-                        const worldX =
-                            hider.centerX +
-                            (
-                                textureX -
-                                40
-                            );
-
-                        const worldY =
-                            hider.centerY +
-                            (
-                                textureY -
-                                60
-                            );
-
-                        const sampled =
-                            sampleMapColor(
-                                worldX,
-                                worldY,
-                            );
-
                         const blockX =
                             Math.floor(
                                 textureX /
-                                4,
+                                dabSize,
                             );
 
                         const blockY =
                             Math.floor(
                                 textureY /
-                                4,
+                                dabSize,
+                            );
+
+                        const sampled =
+                            sampleMapColor(
+                                hider.centerX +
+                                    (
+                                        blockX *
+                                            dabSize +
+                                        dabSize *
+                                            0.5 -
+                                        40
+                                    ),
+                                hider.centerY +
+                                    (
+                                        blockY *
+                                            dabSize +
+                                        dabSize *
+                                            0.5 -
+                                        60
+                                    ),
                             );
 
                         const seed =
@@ -51027,7 +51829,7 @@ const roomPlayers =
         context.font =
             '900 31px Arial, sans-serif';
         context.fillText(
-            `${tr('위장 난이도')}  ${this.practiceBotPrecision}%`,
+            `🎭 ${this.getPracticeDifficultyTitle()} · ${this.getPracticeDifficultyLabel(this.practiceBotPrecision)}`,
             62,
             1032,
         );
@@ -51085,7 +51887,7 @@ const roomPlayers =
                         '800 17px Arial, sans-serif';
 
                     context.fillText(
-                        `${record.botCount} BOT · ${record.precision}%`,
+                        `${record.botCount} BOT · ${this.getPracticeDifficultyLabel(record.precision)}`,
                         width -
                             64,
                         y,
@@ -51649,7 +52451,7 @@ ${shareUrl}`,
                             record,
                             index,
                         ) =>
-                            `<div class="colorhunt-practice-result-rank"><b>${index + 1}</b><span>${this.formatPracticeTime(record.elapsedMs)}</span><small>🗺️ ${record.map ? this.getMapDisplayName(record.map) : tr('맵 미상')} · ${record.botCount} BOT · ${record.precision}%</small></div>`,
+                            `<div class="colorhunt-practice-result-rank"><b>${index + 1}</b><span>${this.formatPracticeTime(record.elapsedMs)}</span><small>🗺️ ${record.map ? this.getMapDisplayName(record.map) : tr('맵 미상')} · ${record.botCount} BOT · ${this.getPracticeDifficultyLabel(record.precision)}</small></div>`,
                     )
                     .join('')
                 : `<div class="colorhunt-practice-result-empty">${tr('아직 기록이 없습니다.')}</div>`;
@@ -51684,7 +52486,7 @@ ${shareUrl}`,
                 <span>🗺️ ${this.getMapDisplayName(this.practiceMap)}</span>
                 <span>${this.practiceHuntDuration}s</span>
                 <span>${this.practiceBotCount} BOT</span>
-                <span>${tr('위장 난이도')} ${this.practiceBotPrecision}%</span>
+                <span>🎭 ${this.getPracticeDifficultyTitle()} · ${this.getPracticeDifficultyLabel(this.practiceBotPrecision)}</span>
             </div>
 
             <div class="colorhunt-practice-result-ranking">
