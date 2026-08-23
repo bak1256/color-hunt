@@ -85,6 +85,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010451L_VICTORY_BRUSH_DIAMETER_PARITY: victory-card paint replay uses the same N-pixel brush diameter as live gameplay. */
     /* V1010450ZE_UI_STABILITY_PASS: mobile Hunter palette rebuild, Hider READY visual lock, strong Lobby READY colors, translucent Hunter result tiles, Hider-only paint badges. */
     /* V1010450ZD_HUNTER_PAINT_HELP_AND_READY_BUBBLE: Hunters never see Paint Help; all-Hiders-ready shows a persistent comic bubble above Start Now until Hunt begins. */
     /* V1010450ZC_RECREATE_MOBILE_PAINT_DOCK: recreate mobile paint palette after Lobby cleanup so next-round Hunter/Hider Paint UI returns normally. */
@@ -36510,45 +36511,89 @@ export class GameScene extends Phaser.Scene {
                         .padStart(6, '0')
                         .slice(-6);
 
-                const radius =
-                    stroke.size <= 1
-                        ? 0
-                        : Math.max(
-                            1,
-                            Math.round(
-                                stroke.size,
-                            ),
-                        );
+                /*
+                 * V1010451L_VICTORY_BRUSH_DIAMETER_PARITY / EXACT_GAMEPLAY_FOOTPRINT
+                 *
+                 * Keep Victory replay pixel-identical to
+                 * NetworkPlayerManager.stampMaskedPaintBrush():
+                 * stroke.size is the brush DIAMETER, not radius.
+                 */
+                const diameter =
+                    Math.max(
+                        1,
+                        Math.round(
+                            stroke.size,
+                        ),
+                    );
+
+                const minOffset =
+                    -Math.floor(
+                        diameter / 2,
+                    );
+
+                const maxOffset =
+                    minOffset +
+                    diameter -
+                    1;
+
+                const centerOffset =
+                    (
+                        minOffset +
+                        maxOffset
+                    ) / 2;
+
+                const circleRadius =
+                    Math.max(
+                        0.5,
+                        diameter / 2 -
+                            0.25,
+                    );
 
                 stroke.points.forEach(
                     (point) => {
                         for (
-                            let oy = -radius;
-                            oy <= radius;
+                            let oy =
+                                minOffset;
+                            oy <=
+                                maxOffset;
                             oy += 1
                         ) {
                             for (
-                                let ox = -radius;
-                                ox <= radius;
+                                let ox =
+                                    minOffset;
+                                ox <=
+                                    maxOffset;
                                 ox += 1
                             ) {
                                 if (
                                     stroke.shape !==
-                                        'square' &&
-                                    ox * ox +
-                                        oy * oy >
-                                        radius *
-                                            radius
+                                    'square'
                                 ) {
-                                    continue;
+                                    const dx =
+                                        ox -
+                                        centerOffset;
+                                    const dy =
+                                        oy -
+                                        centerOffset;
+
+                                    if (
+                                        dx * dx +
+                                            dy * dy >
+                                        circleRadius *
+                                            circleRadius
+                                    ) {
+                                        continue;
+                                    }
                                 }
 
                                 drawPixel(
                                     Math.round(
-                                        point.x + ox,
+                                        point.x +
+                                            ox,
                                     ),
                                     Math.round(
-                                        point.y + oy,
+                                        point.y +
+                                            oy,
                                     ),
                                     color,
                                 );
