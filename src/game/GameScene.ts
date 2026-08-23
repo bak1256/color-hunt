@@ -15015,17 +15015,21 @@ export class GameScene extends Phaser.Scene {
                             textureY,
                         ) => {
                             /*
-                             * V1010450T_PRACTICE_BOT_FULL_COVERAGE_QUALITY
+                             * V1010450U_PRACTICE_BOT_ORGANIC_FULL_PAINT
                              *
-                             * Practice bots are ALWAYS fully painted.
-                             * Difficulty changes camouflage QUALITY only:
-                             * sampling detail + color accuracy.
+                             * Reuse the visual idea from Player Paint Help,
+                             * but keep bots 100% painted:
                              *
-                             * Very Easy  : coarse 11px sampling, large color drift
-                             * Easy       : coarse 8px sampling, visible drift
-                             * Normal     : 6px sampling, moderate drift
-                             * Hard       : fine 3px sampling, small drift
-                             * Very Hard  : exact 1px sampling, tiny drift
+                             * 1) EVERY pixel gets a coarse/softened background
+                             *    color -> no white holes.
+                             * 2) Organic circular islands receive a more exact
+                             *    background sample -> rounded "dab" feeling.
+                             * 3) Difficulty changes BOTH the coarse base quality
+                             *    and how many / how accurate the rounded detail
+                             *    islands are.
+                             *
+                             * This avoids the v450t square mosaic look while
+                             * preserving full-body camouflage.
                              */
                             const difficultyIndex =
                                 Phaser.Math.Clamp(
@@ -15042,29 +15046,44 @@ export class GameScene extends Phaser.Scene {
 
                             const qualitySettings = [
                                 {
-                                    sampleBlock: 11,
-                                    maxError: 92,
-                                    quantize: 40,
+                                    baseBlock: 10,
+                                    baseError: 82,
+                                    baseQuantize: 36,
+                                    detailChance: 24,
+                                    detailRadius: 2.4,
+                                    detailError: 48,
                                 },
                                 {
-                                    sampleBlock: 8,
-                                    maxError: 68,
-                                    quantize: 32,
+                                    baseBlock: 8,
+                                    baseError: 62,
+                                    baseQuantize: 30,
+                                    detailChance: 34,
+                                    detailRadius: 2.7,
+                                    detailError: 34,
                                 },
                                 {
-                                    sampleBlock: 6,
-                                    maxError: 46,
-                                    quantize: 24,
+                                    baseBlock: 6,
+                                    baseError: 44,
+                                    baseQuantize: 24,
+                                    detailChance: 46,
+                                    detailRadius: 3.0,
+                                    detailError: 22,
                                 },
                                 {
-                                    sampleBlock: 3,
-                                    maxError: 24,
-                                    quantize: 16,
+                                    baseBlock: 4,
+                                    baseError: 24,
+                                    baseQuantize: 16,
+                                    detailChance: 62,
+                                    detailRadius: 3.25,
+                                    detailError: 12,
                                 },
                                 {
-                                    sampleBlock: 1,
-                                    maxError: 7,
-                                    quantize: 8,
+                                    baseBlock: 2,
+                                    baseError: 9,
+                                    baseQuantize: 8,
+                                    detailChance: 78,
+                                    detailRadius: 3.5,
+                                    detailError: 4,
                                 },
                             ] as const;
 
@@ -15073,72 +15092,92 @@ export class GameScene extends Phaser.Scene {
                                     difficultyIndex
                                 ];
 
-                            /*
-                             * Lower difficulty deliberately samples one color
-                             * for a larger local block, smearing small details.
-                             * Very Hard reads the exact hidden background pixel.
-                             */
-                            const sampleTextureX =
-                                settings.sampleBlock === 1
-                                    ? textureX
-                                    : Math.floor(
-                                        textureX /
-                                            settings.sampleBlock,
-                                    ) *
-                                        settings.sampleBlock +
-                                        settings.sampleBlock /
-                                            2;
-                            const sampleTextureY =
-                                settings.sampleBlock === 1
-                                    ? textureY
-                                    : Math.floor(
-                                        textureY /
-                                            settings.sampleBlock,
-                                    ) *
-                                        settings.sampleBlock +
-                                        settings.sampleBlock /
-                                            2;
+                            const clampColor = (
+                                value: number,
+                            ): number =>
+                                Phaser.Math.Clamp(
+                                    Math.round(value),
+                                    0,
+                                    255,
+                                );
 
-                            const sampled =
+                            const quantizeChannel = (
+                                value: number,
+                                step: number,
+                            ): number =>
+                                Phaser.Math.Clamp(
+                                    Math.round(
+                                        value /
+                                            Math.max(
+                                                1,
+                                                step,
+                                            ),
+                                    ) *
+                                        Math.max(
+                                            1,
+                                            step,
+                                        ),
+                                    0,
+                                    255,
+                                );
+
+                            /*
+                             * FULL-COVERAGE BASE
+                             * Coarser difficulties intentionally sample a larger
+                             * local region. Unlike v450t, this is only the base,
+                             * not the final visible structure.
+                             */
+                            const baseSampleX =
+                                Math.floor(
+                                    textureX /
+                                        settings.baseBlock,
+                                ) *
+                                    settings.baseBlock +
+                                settings.baseBlock /
+                                    2;
+                            const baseSampleY =
+                                Math.floor(
+                                    textureY /
+                                        settings.baseBlock,
+                                ) *
+                                    settings.baseBlock +
+                                settings.baseBlock /
+                                    2;
+
+                            const baseSample =
                                 this.samplePracticeBackgroundRgb(
                                     sampler,
                                     hider.centerX +
                                         (
-                                            sampleTextureX -
+                                            baseSampleX -
                                             40
                                         ),
                                     hider.centerY +
                                         (
-                                            sampleTextureY -
+                                            baseSampleY -
                                             60
                                         ),
                                 );
 
-                            const blockX =
+                            const baseCellX =
                                 Math.floor(
                                     textureX /
-                                        Math.max(
-                                            1,
-                                            settings.sampleBlock,
-                                        ),
+                                        settings.baseBlock,
                                 );
-                            const blockY =
+                            const baseCellY =
                                 Math.floor(
                                     textureY /
-                                        Math.max(
-                                            1,
-                                            settings.sampleBlock,
-                                        ),
+                                        settings.baseBlock,
                                 );
-                            const seed =
+                            const baseSeed =
                                 (
                                     Math.imul(
-                                        blockX + 73,
-                                        2654435761,
+                                        baseCellX + 67,
+                                        73856093,
                                     ) ^
                                     Math.imul(
-                                        blockY + 19,
-                                        1597334677,
+                                        baseCellY + 43,
+                                        19349663,
                                     ) ^
                                     Math.imul(
                                         index + 1,
@@ -15146,56 +15185,201 @@ export class GameScene extends Phaser.Scene {
                                     )
                                 ) >>>
                                 0;
-
-                            /*
-                             * Use one correlated shade error per local block.
-                             * That looks like imperfect human color matching,
-                             * not RGB television noise.
-                             */
-                            const signedNoise =
+                            const baseNoise =
                                 (
                                     (
-                                        seed %
+                                        baseSeed %
                                         2001
                                     ) /
                                         1000 -
                                     1
                                 );
 
-                            const quantizeChannel =
-                                (
-                                    value: number,
-                                ): number =>
-                                    Phaser.Math.Clamp(
-                                        Math.round(
-                                            value /
-                                                settings.quantize,
-                                        ) *
-                                            settings.quantize,
-                                        0,
-                                        255,
-                                    );
-
-                            const r =
+                            let r =
                                 quantizeChannel(
-                                    sampled.r +
-                                        signedNoise *
-                                            settings.maxError,
+                                    baseSample.r +
+                                        baseNoise *
+                                            settings.baseError,
+                                    settings.baseQuantize,
                                 );
-                            const green =
+                            let green =
                                 quantizeChannel(
-                                    sampled.g +
-                                        signedNoise *
-                                            settings.maxError *
+                                    baseSample.g +
+                                        baseNoise *
+                                            settings.baseError *
                                             0.82,
+                                    settings.baseQuantize,
                                 );
-                            const b =
+                            let b =
                                 quantizeChannel(
-                                    sampled.b +
-                                        signedNoise *
-                                            settings.maxError *
+                                    baseSample.b +
+                                        baseNoise *
+                                            settings.baseError *
                                             0.68,
+                                    settings.baseQuantize,
                                 );
+
+                            /*
+                             * ORGANIC ROUNDED DETAIL ISLANDS
+                             *
+                             * This is the important Paint-Help-derived part:
+                             * deterministic round dabs laid over the full base.
+                             * We never connect them into lines, and we never use
+                             * square cells as the visible edge of the disguise.
+                             */
+                            const detailCellSize = 7;
+                            const detailCellX =
+                                Math.floor(
+                                    textureX /
+                                        detailCellSize,
+                                );
+                            const detailCellY =
+                                Math.floor(
+                                    textureY /
+                                        detailCellSize,
+                                );
+                            const detailSeed =
+                                (
+                                    Math.imul(
+                                        detailCellX + 31,
+                                        2654435761,
+                                    ) ^
+                                    Math.imul(
+                                        detailCellY + 59,
+                                        1597334677,
+                                    ) ^
+                                    Math.imul(
+                                        index + 5,
+                                        83492791,
+                                    )
+                                ) >>>
+                                0;
+
+                            const useDetailCell =
+                                detailSeed %
+                                    100 <
+                                settings.detailChance;
+
+                            if (useDetailCell) {
+                                const centerJitterX =
+                                    (
+                                        (
+                                            detailSeed >>>
+                                            9
+                                        ) %
+                                        3
+                                    ) -
+                                    1;
+                                const centerJitterY =
+                                    (
+                                        (
+                                            detailSeed >>>
+                                            12
+                                        ) %
+                                        3
+                                    ) -
+                                    1;
+                                const localX =
+                                    (
+                                        textureX %
+                                        detailCellSize
+                                    ) -
+                                    (
+                                        detailCellSize -
+                                        1
+                                    ) /
+                                        2 -
+                                    centerJitterX;
+                                const localY =
+                                    (
+                                        textureY %
+                                        detailCellSize
+                                    ) -
+                                    (
+                                        detailCellSize -
+                                        1
+                                    ) /
+                                        2 -
+                                    centerJitterY;
+                                const radius =
+                                    settings.detailRadius +
+                                    (
+                                        (
+                                            detailSeed >>>
+                                            15
+                                        ) %
+                                        3
+                                    ) *
+                                        0.28;
+
+                                if (
+                                    localX *
+                                        localX +
+                                        localY *
+                                            localY <=
+                                    radius *
+                                        radius
+                                ) {
+                                    const exact =
+                                        this.samplePracticeBackgroundRgb(
+                                            sampler,
+                                            hider.centerX +
+                                                (
+                                                    textureX -
+                                                    40
+                                                ),
+                                            hider.centerY +
+                                                (
+                                                    textureY -
+                                                    60
+                                                ),
+                                        );
+
+                                    const detailPixelSeed =
+                                        (
+                                            detailSeed ^
+                                            Math.imul(
+                                                textureX + 103,
+                                                2246822519,
+                                            ) ^
+                                            Math.imul(
+                                                textureY + 71,
+                                                3266489917,
+                                            )
+                                        ) >>>
+                                        0;
+                                    const detailNoise =
+                                        (
+                                            (
+                                                detailPixelSeed %
+                                                2001
+                                            ) /
+                                                1000 -
+                                            1
+                                        );
+
+                                    r =
+                                        clampColor(
+                                            exact.r +
+                                                detailNoise *
+                                                    settings.detailError,
+                                        );
+                                    green =
+                                        clampColor(
+                                            exact.g +
+                                                detailNoise *
+                                                    settings.detailError *
+                                                    0.82,
+                                        );
+                                    b =
+                                        clampColor(
+                                            exact.b +
+                                                detailNoise *
+                                                    settings.detailError *
+                                                    0.68,
+                                        );
+                                }
+                            }
 
                             return (
                                 r << 16 |
