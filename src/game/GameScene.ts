@@ -8586,12 +8586,12 @@ export class GameScene extends Phaser.Scene {
                  */
                 const keepPercent =
                     edgeStrength >= 150
-                        ? 74
+                        ? 68
                         : edgeStrength >= 95
-                            ? 64
+                            ? 58
                             : edgeStrength >= 55
-                                ? 54
-                                : 42;
+                                ? 48
+                                : 36;
 
                 /*
                  * V1010450L_COHERENT_BACKGROUND_PATCHES
