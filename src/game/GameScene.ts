@@ -17267,6 +17267,117 @@ export class GameScene extends Phaser.Scene {
         );
     }
 
+    /*
+     * V1010451M_FIRST_PLAY_GUIDES
+     * Lightweight, one-time onboarding for invite-link players.
+     */
+    private showFirstPlayGuide(
+        storageKey: string,
+        title: string,
+        body: string,
+    ): void {
+        if (typeof document === 'undefined' || typeof window === 'undefined') return;
+        try {
+            if (window.localStorage.getItem(storageKey) === '1') return;
+        } catch { /* storage is optional */ }
+
+        document.querySelector('.colorhunt-first-play-guide')?.remove();
+        const overlay = document.createElement('div');
+        overlay.className = 'colorhunt-first-play-guide';
+        overlay.innerHTML = `
+            <div class="colorhunt-first-play-card" role="dialog" aria-modal="true">
+                <strong>${title}</strong>
+                <p>${body}</p>
+                <button type="button">${getLanguage() === 'ja' ? '確認' : getLanguage() === 'en' ? 'OK' : '확인'}</button>
+            </div>
+        `;
+        Object.assign(overlay.style, {
+            position: 'fixed', inset: '0', zIndex: '2147483200', display: 'flex',
+            alignItems: 'center', justifyContent: 'center', padding: '18px', boxSizing: 'border-box',
+            background: 'rgba(8, 22, 17, .34)', backdropFilter: 'blur(2px)', WebkitBackdropFilter: 'blur(2px)',
+        });
+        const card = overlay.querySelector<HTMLElement>('.colorhunt-first-play-card');
+        if (card) Object.assign(card.style, {
+            width: this.mobileControlsEnabled ? 'min(86vw, 360px)' : 'min(420px, 72vw)',
+            padding: this.mobileControlsEnabled ? '18px 18px 16px' : '22px 24px 20px',
+            border: '2px solid rgba(112, 174, 128, .9)', borderRadius: '18px',
+            background: 'rgba(248, 252, 244, .98)', boxShadow: '0 16px 44px rgba(0,0,0,.28)',
+            color: '#203b2d', textAlign: 'center',
+            fontFamily: '"Noto Sans KR", "Noto Sans JP", Arial, sans-serif',
+        });
+        const heading = overlay.querySelector<HTMLElement>('strong');
+        if (heading) Object.assign(heading.style, {
+            display: 'block', fontSize: this.mobileControlsEnabled ? '22px' : '25px',
+            fontWeight: '950', lineHeight: '1.15', marginBottom: '10px',
+        });
+        const paragraph = overlay.querySelector<HTMLElement>('p');
+        if (paragraph) Object.assign(paragraph.style, {
+            margin: '0 0 16px', fontSize: this.mobileControlsEnabled ? '15px' : '16px',
+            fontWeight: '750', lineHeight: '1.55', whiteSpace: 'pre-line',
+        });
+        const button = overlay.querySelector<HTMLButtonElement>('button');
+        if (button) {
+            Object.assign(button.style, {
+                width: '100%', minHeight: '42px', border: '0', borderRadius: '11px',
+                background: 'linear-gradient(180deg, #55bd75, #3ca75f)', color: '#fff',
+                fontSize: '15px', fontWeight: '900', cursor: 'pointer',
+                boxShadow: '0 3px 0 rgba(33, 116, 63, .35)',
+            });
+            button.addEventListener('click', () => {
+                try { window.localStorage.setItem(storageKey, '1'); } catch { /* optional */ }
+                overlay.remove();
+            });
+        }
+        document.body.appendChild(overlay);
+        window.setTimeout(() => button?.focus(), 0);
+    }
+
+    private showFirstWaitingRoomGuide(): void {
+        const language = getLanguage();
+        const title = language === 'ja' ? '基本操作' : language === 'en' ? 'Basic controls' : '기본 조작';
+        const body = this.mobileControlsEnabled
+            ? language === 'ja' ? '画面のジョイスティックで移動します。\nまずは待機部屋で動いてみましょう！'
+                : language === 'en' ? 'Move with the on-screen joystick.\nTry moving around while you wait!'
+                    : '화면의 조이스틱으로 이동해요.\n대기방에서 한번 움직여보세요!'
+            : language === 'ja' ? 'WASDキーで移動します。\nまずは待機部屋で動いてみましょう！'
+                : language === 'en' ? 'Move with the WASD keys.\nTry moving around while you wait!'
+                    : 'WASD로 이동해요.\n대기방에서 한번 움직여보세요!';
+        this.showFirstPlayGuide('colorhunt-guide-waiting-v1', title, body);
+    }
+
+    private showFirstRoleGuide(): void {
+        if (!this.isMultiplayerSession() || this.phase !== 'paint') return;
+        const language = getLanguage();
+        const localIsHunter = this.networkPlayerManager?.isLocalHunter() || multiplayerClient.getLocalPlayer()?.role === 'hunter';
+        const title = localIsHunter
+            ? language === 'ja' ? 'あなたはハンター！' : language === 'en' ? 'You are the Hunter!' : '당신은 헌터!'
+            : language === 'ja' ? 'あなたはハイダー！' : language === 'en' ? 'You are a Hider!' : '당신은 하이더!';
+        const body = localIsHunter
+            ? language === 'ja' ? '背景に隠れているプレイヤーを見つけて撃ちましょう。'
+                : language === 'en' ? 'Find the players hiding in the background and shoot them.'
+                    : '배경에 숨어있는 플레이어를 찾아 쏘세요.'
+            : language === 'ja' ? '周りの背景に似せてキャラクターを塗り、うまく隠れましょう。'
+                : language === 'en' ? 'Paint your character to match the surroundings and hide.'
+                    : '주변 배경과 비슷하게 캐릭터를 칠해 숨어보세요.';
+        this.showFirstPlayGuide(localIsHunter ? 'colorhunt-guide-role-hunter-v1' : 'colorhunt-guide-role-hider-v1', title, body);
+    }
+
+    private showFirstHuntControlGuide(): void {
+        if (!this.isMultiplayerSession()) return;
+        const language = getLanguage();
+        const localIsHunter = this.networkPlayerManager?.canLocalControlHunter() || multiplayerClient.getLocalPlayer()?.role === 'hunter';
+        if (!localIsHunter) return;
+        const title = language === 'ja' ? 'ハント開始！' : language === 'en' ? 'Hunt started!' : '헌트 시작!';
+        const body = this.mobileControlsEnabled
+            ? language === 'ja' ? 'ジョイスティックで移動・発射ボタンで攻撃\n怪しい場所を探してみましょう！'
+                : language === 'en' ? 'Joystick to move · Fire button to shoot\nLook for anything suspicious!'
+                    : '조이스틱 이동 · 발사 버튼\n수상한 곳을 찾아보세요!'
+            : language === 'ja' ? 'WASDで移動・クリックで発射\n怪しい場所を探してみましょう！'
+                : language === 'en' ? 'WASD to move · Click to shoot\nLook for anything suspicious!'
+                    : 'WASD 이동 · 클릭 발사\n수상한 곳을 찾아보세요!';
+        this.showFirstPlayGuide('colorhunt-guide-hunt-hunter-v1', title, body);
+    }
+
     private showMainMatchHuntIntroText(
         localIsHunter: boolean,
     ): void {
@@ -27748,6 +27859,7 @@ export class GameScene extends Phaser.Scene {
          * merely because the phone model changed.
          */
         if (touch) {
+            this.waitingRoomRoot.classList.remove('ch-uniform-desktop-scale');
             /*
              * V1010311_UI_CANVAS_GAS_RISE_FIX: waiting-room panel belongs INSIDE the Phaser game canvas.
              * Never anchor it to the browser visualViewport.
@@ -27910,60 +28022,32 @@ export class GameScene extends Phaser.Scene {
                     ),
         );
 
-        const widthRatio = 0.285;
-
-        const panelWidth =
-            Math.min(
-                rect.width -
-                    horizontalInset * 2,
-                Math.max(
-                    250,
-                    Math.min(
-                        340,
-                        rect.width *
-                            widthRatio,
-                    ),
-                ),
-            );
-
-        const maxPanelHeight =
-            rect.height -
-            verticalInset * 2;
-
-        const panelHeight =
-            Math.min(
-                maxPanelHeight,
-                rect.height * 0.84,
-            );
-
-        const left =
-            rect.right -
-            horizontalInset -
-            panelWidth;
-
-        const top =
-            rect.top +
-            (
-                rect.height -
-                panelHeight
-            ) / 2;
-
-        this.waitingRoomRoot.style.setProperty(
-            '--waiting-left',
-            `${Math.round(left)}px`,
-        );
-        this.waitingRoomRoot.style.setProperty(
-            '--waiting-top',
-            `${Math.round(top)}px`,
-        );
-        this.waitingRoomRoot.style.setProperty(
-            '--waiting-width',
-            `${Math.round(panelWidth)}px`,
-        );
-        this.waitingRoomRoot.style.setProperty(
-            '--waiting-height',
-            `${Math.round(panelHeight)}px`,
-        );
+        /* V1010451M_DESKTOP_VIEWPORT_SCALE: scale by the tighter axis. */
+        const designWidth = 340;
+        const designHeight = 560;
+        const availableWidth = Math.max(220, rect.width * 0.34 - horizontalInset);
+        const availableHeight = Math.max(320, rect.height - verticalInset * 2);
+        const desktopScale = Math.min(1, availableWidth / designWidth, availableHeight / designHeight);
+        const renderedWidth = designWidth * desktopScale;
+        const renderedHeight = designHeight * desktopScale;
+        const left = rect.right - horizontalInset - renderedWidth;
+        const top = rect.top + (rect.height - renderedHeight) / 2;
+        this.waitingRoomRoot.classList.add('ch-uniform-desktop-scale');
+        const desktopStyle = this.waitingRoomRoot.style;
+        desktopStyle.setProperty('position', 'fixed', 'important');
+        desktopStyle.setProperty('left', `${left.toFixed(2)}px`, 'important');
+        desktopStyle.setProperty('top', `${top.toFixed(2)}px`, 'important');
+        desktopStyle.setProperty('right', 'auto', 'important');
+        desktopStyle.setProperty('bottom', 'auto', 'important');
+        desktopStyle.setProperty('width', `${designWidth}px`, 'important');
+        desktopStyle.setProperty('height', `${designHeight}px`, 'important');
+        desktopStyle.setProperty('transform', `scale(${desktopScale.toFixed(6)})`, 'important');
+        desktopStyle.setProperty('transform-origin', 'top left', 'important');
+        desktopStyle.setProperty('margin', '0', 'important');
+        desktopStyle.setProperty('--waiting-left', '0px');
+        desktopStyle.setProperty('--waiting-top', '0px');
+        desktopStyle.setProperty('--waiting-width', `${designWidth}px`);
+        desktopStyle.setProperty('--waiting-height', `${designHeight}px`);
     }
 
     private createWaitingRoomDom(): void {
@@ -28056,6 +28140,12 @@ export class GameScene extends Phaser.Scene {
 
         document.body.appendChild(root);
         this.waitingRoomRoot = root;
+
+        this.time.delayedCall(220, () => {
+            if (this.phase === 'lobby' && this.waitingRoomRoot === root) {
+                this.showFirstWaitingRoomGuide();
+            }
+        });
 
 
         const waitingFooter =
@@ -33691,6 +33781,25 @@ export class GameScene extends Phaser.Scene {
                         white-space: nowrap !important;
                         touch-action: manipulation !important;
                         user-select: none !important;
+                        box-sizing: border-box !important;
+                        max-width: 100% !important;
+                        overflow: visible !important;
+                        font-family: Arial, "Noto Sans KR", "Noto Sans JP", sans-serif !important;
+                        font-variant-ligatures: none !important;
+                    }
+
+                    .ch-waiting-header-actions {
+                        min-width: 0 !important;
+                        overflow: visible !important;
+                    }
+
+                    .ch-waiting-bgm-inline {
+                        flex: 0 0 auto !important;
+                        min-width: 92px !important;
+                        width: auto !important;
+                        padding-left: 10px !important;
+                        padding-right: 10px !important;
+                        line-height: 1.15 !important;
                     }
 
                     .ch-unified-bgm {
@@ -34886,6 +34995,12 @@ export class GameScene extends Phaser.Scene {
                     /*
                      * Desktop waiting layout reserves footer height explicitly.
                      */
+                    /* V1010451M: primary vs secondary action breathing room. */
+                    .colorhunt-waiting-room:not(.ch-uniform-mobile-scale)
+                    .ch-waiting-start {
+                        margin-bottom: 10px !important;
+                    }
+
                     /*
                      * V1010342_REMOVE_WAITING_START_GAP
                      * PC waiting room: do not let the timing row absorb all
@@ -53014,6 +53129,10 @@ const roomPlayers =
         this.clearStraightLinePreview();
         this.phase = 'paint';
 
+        this.time.delayedCall(260, () => {
+            if (this.phase === 'paint') this.showFirstRoleGuide();
+        });
+
         /*
          * V1010450ZC_RECREATE_MOBILE_PAINT_DOCK
          *
@@ -53418,6 +53537,9 @@ const roomPlayers =
             this.showMainMatchHuntIntroText(
                 localIsHunter,
             );
+            this.time.delayedCall(320, () => {
+                if (this.phase === 'hunt') this.showFirstHuntControlGuide();
+            });
         }
 
         if (
