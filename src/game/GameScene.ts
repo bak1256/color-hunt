@@ -8566,38 +8566,96 @@ export class GameScene extends Phaser.Scene {
                  */
                 const keepPercent =
                     edgeStrength >= 150
-                        ? 92
+                        ? 88
                         : edgeStrength >= 95
-                            ? 84
+                            ? 80
                             : edgeStrength >= 55
-                                ? 72
-                                : 60;
+                                ? 66
+                                : 54;
 
-                const hash =
+                /*
+                 * V1010450L_COHERENT_BACKGROUND_PATCHES
+                 *
+                 * The previous versions independently dropped individual dots.
+                 * That preserves color statistics, but it destroys tiny shapes:
+                 * eyes, mouths, letters and object outlines turn into confetti.
+                 *
+                 * Use a LOW-FREQUENCY keep mask instead. Neighboring samples
+                 * usually survive or disappear together as 6~10 px patches.
+                 * Inside a surviving patch we still sample the exact hidden
+                 * background every 2 px, so recognizable details remain shaped
+                 * like the real picture behind the avatar.
+                 */
+                const blobCellSize =
+                    edgeStrength >= 95
+                        ? 4
+                        : 6;
+                const blobX =
+                    Math.floor(
+                        localX /
+                            blobCellSize,
+                    );
+                const blobY =
+                    Math.floor(
+                        localY /
+                            blobCellSize,
+                    );
+                const blobHash =
                     (
                         seedBase ^
                         Math.imul(
-                            localX + 17,
+                            blobX + 31,
                             73856093,
                         ) ^
                         Math.imul(
-                            localY + 29,
+                            blobY + 47,
                             19349663,
                         )
                     ) >>>
                     0;
 
+                /*
+                 * Detailed edges get a second, smaller-scale chance to survive.
+                 * This keeps a cat eye / sign edge / fountain rim from vanishing
+                 * just because its surrounding coarse patch was removed.
+                 */
+                const detailHash =
+                    (
+                        seedBase ^
+                        Math.imul(
+                            localX + 101,
+                            83492791,
+                        ) ^
+                        Math.imul(
+                            localY + 59,
+                            2654435761,
+                        )
+                    ) >>>
+                    0;
+
+                const keepCoherentPatch =
+                    blobHash %
+                        100 <
+                    keepPercent;
+
+                const keepFineDetail =
+                    edgeStrength >=
+                        95 &&
+                    detailHash %
+                        100 <
+                        36;
+
                 if (
-                    hash % 100 >=
-                    keepPercent
+                    !keepCoherentPatch &&
+                    !keepFineDetail
                 ) {
                     continue;
                 }
 
                 /*
-                 * Keep the TRUE sampled background color. Only a light
-                 * quantization is applied so adjacent tiny color variations
-                 * melt together visually instead of exploding into noise.
+                 * Keep the sampled background itself nearly intact.
+                 * Only very light 8-step quantization is applied; no neighbor
+                 * color mixing and no line connection are used.
                  */
                 const r =
                     quantizeChannel(
@@ -8617,81 +8675,53 @@ export class GameScene extends Phaser.Scene {
                     b;
 
                 /*
-                 * Break the old regular cross pattern:
-                 * - larger/random dot sizes
-                 * - wider position jitter
-                 * - occasional second nearby blob, never a connecting line
+                 * Detailed areas use tiny dots so the projected shape remains
+                 * legible. Flat regions use slightly larger dots for the
+                 * beginner-friendly "partly colored-in" look.
                  */
                 const size =
                     edgeStrength >= 95
-                        ? 1 + ((hash >>> 9) % 3)
-                        : 2 + ((hash >>> 9) % 3);
+                        ? 1 +
+                            (
+                                (detailHash >>> 9) %
+                                2
+                            )
+                        : 2 +
+                            (
+                                (detailHash >>> 9) %
+                                3
+                            );
 
+                /*
+                 * No random positional jitter in detailed regions. Moving a
+                 * one-pixel eye by even one pixel was enough to break the face.
+                 * Flat regions may wobble by one pixel to avoid a sterile grid.
+                 */
                 const jitterX =
-                    ((hash >>> 13) % 3) -
-                    1;
+                    edgeStrength >= 95
+                        ? 0
+                        : (
+                            (detailHash >>> 13) %
+                            3
+                        ) -
+                            1;
                 const jitterY =
-                    ((hash >>> 17) % 3) -
-                    1;
-
-                const pointX =
-                    localX +
-                    jitterX;
-                const pointY =
-                    localY +
-                    jitterY;
+                    edgeStrength >= 95
+                        ? 0
+                        : (
+                            (detailHash >>> 17) %
+                            3
+                        ) -
+                            1;
 
                 addPoint(
                     color,
                     size,
-                    pointX,
-                    pointY,
+                    localX +
+                        jitterX,
+                    localY +
+                        jitterY,
                 );
-
-                /*
-                 * About one third of retained samples get a second soft blob.
-                 * It creates a smeared cluster without drawing a visible line
-                 * between points, and still uses the same true background color.
-                 */
-                if (
-                    ((hash >>> 22) % 5) ===
-                    0
-                ) {
-                    const angleIndex =
-                        (hash >>> 24) %
-                        8;
-                    const offsets = [
-                        [3, 0],
-                        [2, 2],
-                        [0, 3],
-                        [-2, 2],
-                        [-3, 0],
-                        [-2, -2],
-                        [0, -3],
-                        [2, -2],
-                    ] as const;
-                    const offset =
-                        offsets[
-                            angleIndex
-                        ];
-
-                    addPoint(
-                        color,
-                        Phaser.Math.Clamp(
-                            size +
-                                (
-                                    ((hash >>> 28) % 3) -
-                                    1
-                                ),
-                            2,
-                            6,
-                        ),
-                        pointX +
-                            offset[0],
-                        pointY +
-                            offset[1],
-                    );
-                }
             }
         }
 
