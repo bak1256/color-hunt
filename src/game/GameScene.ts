@@ -1,3 +1,4 @@
+/* V1010451E2_TERMINAL_REJOIN_AND_FOUND_POSITIONS_ROBUST: long-away active-round rejection + authoritative Hunter FOUND positions. */
 import Phaser from 'phaser';
 import {
     multiplayerClient,
@@ -12480,6 +12481,37 @@ export class GameScene extends Phaser.Scene {
                                 },
                             );
                         }
+
+                        return;
+                    }
+
+                    /*
+                     * V1010451E2_TERMINAL_REJOIN_AND_FOUND_POSITIONS_ROBUST / TERMINAL_REJECT_TO_PUBLIC_LOBBY
+                     */
+                    const terminalJoinRejection =
+                        multiplayerClient
+                            .consumeTerminalJoinRejectionReason();
+
+                    if (
+                        terminalJoinRejection ===
+                        'game_in_progress'
+                    ) {
+                        void (
+                            async () => {
+                                await this.leaveCurrentRoomToLobby();
+
+                                const language =
+                                    getLanguage();
+
+                                this.showStatus(
+                                    language === 'ko'
+                                        ? '자리를 비운 동안 게임이 시작되었습니다. 현재 게임에는 재참가할 수 없어 메인 로비로 돌아왔습니다.'
+                                        : language === 'ja'
+                                            ? '離席中にゲームが開始されました。進行中のゲームには再参加できないため、メインロビーに戻りました。'
+                                            : 'The game started while you were away. You cannot rejoin the active round, so you were returned to the main lobby.',
+                                );
+                            }
+                        )();
 
                         return;
                     }
@@ -37234,39 +37266,58 @@ const roomPlayers =
             isHunter &&
             displayedFound.length > 0
         ) {
+            /*
+             * V1010451E2_TERMINAL_REJOIN_AND_FOUND_POSITIONS_ROBUST / FOUND_AT_AUTHORITATIVE_POSITION
+             * marker.x / marker.y are server-captured target coordinates from
+             * the exact moment the Hider was found.
+             */
             const foundCount =
                 displayedFound.length;
-            const galleryCenterX = 540;
-            const galleryY = 650;
-            const spacing =
-                Math.min(
-                    176,
-                    820 /
-                        Math.max(
-                            1,
-                            foundCount,
-                        ),
-                );
-            const galleryStartX =
-                galleryCenterX -
-                (
-                    (
-                        foundCount - 1
-                    ) *
-                    spacing
-                ) /
-                    2;
+
+            void foundCount;
 
             displayedFound.forEach(
                 (
                     marker,
                     index,
                 ) => {
+                    const markerX =
+                        Math.max(
+                            0,
+                            Math.min(
+                                this.gameWidth,
+                                Number(
+                                    marker.x,
+                                ) || 0,
+                            ),
+                        );
+                    const markerY =
+                        Math.max(
+                            0,
+                            Math.min(
+                                this.gameHeight,
+                                Number(
+                                    marker.y,
+                                ) || 0,
+                            ),
+                        );
+
                     const mx =
-                        galleryStartX +
-                        index * spacing;
+                        frameX +
+                        markerX /
+                            Math.max(
+                                1,
+                                this.gameWidth,
+                            ) *
+                            frameW;
                     const my =
-                        galleryY;
+                        frameY +
+                        markerY /
+                            Math.max(
+                                1,
+                                this.gameHeight,
+                            ) *
+                            frameH;
 
                     const foundAvatar =
                         this.buildVictoryPaintedHiderCanvas(

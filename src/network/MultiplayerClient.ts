@@ -1,3 +1,4 @@
+/* V1010451E2_TERMINAL_REJOIN_AND_FOUND_POSITIONS_ROBUST: robust terminal fresh-rejoin rejection handling. */
 /* V1010450ZG_READY_AND_SNAPSHOT_STABILITY */
 import { tr } from '../i18n';
 import {
@@ -573,6 +574,16 @@ this.phaseChangedHandlers.forEach(
    * Gameplay traffic is legal only while ONE current Room owns a healthy
    * transport. Recovery/snapshot messages still use their dedicated methods.
    */
+  consumeTerminalJoinRejectionReason(): string {
+    const reason =
+      this.lastTerminalJoinRejectionReason;
+
+    this.lastTerminalJoinRejectionReason =
+      "";
+
+    return reason;
+  }
+
   isGameplayTransportStable(): boolean {
     const room =
       this.room;
@@ -606,6 +617,12 @@ this.phaseChangedHandlers.forEach(
   private lastJoinOptions?: JoinRoomOptions;
 
   private freshRejoinInFlight = false;
+
+  /*
+   * V1010451E2_TERMINAL_REJOIN_AND_FOUND_POSITIONS_ROBUST / TERMINAL_JOIN_REJECTION
+   * Persist a terminal active-round rejection until GameScene consumes it.
+   */
+  private lastTerminalJoinRejectionReason = "";
 
   /*
    * V1010372_SEAT_EXPIRED_FRESH_REJOIN
@@ -1908,6 +1925,62 @@ this.lastRoomPingAt = Date.now();
       undefined;
 
 this.room = room;
+
+    /*
+     * V1010451E2_TERMINAL_REJOIN_AND_FOUND_POSITIONS_ROBUST / ATTACH_REJECTION_GATE
+     *
+     * A fresh-rejoin Room may receive join_rejected before GameScene can bind
+     * its per-room listener. Catch it at the transport owner immediately.
+     */
+    room.onMessage(
+      "join_rejected",
+      (
+        payload: {
+          reason?: string;
+          returnToLobby?: boolean;
+        },
+      ) => {
+        if (
+          this.room !== room ||
+          payload?.reason !==
+            "game_in_progress"
+        ) {
+          return;
+        }
+
+        this.lastTerminalJoinRejectionReason =
+          "game_in_progress";
+
+        /*
+         * Stop every reconnect owner/watchdog so this rejected Room cannot
+         * remain as a movable but non-authoritative ghost waiting room.
+         */
+        this.recoveryEscalationGeneration +=
+          1;
+        this.seatExpiryRecoveryGeneration +=
+          1;
+        this.freshRejoinInFlight = false;
+        this.manualReconnectInFlight = false;
+        this.connectionIssueNotified = false;
+
+        this.room = undefined;
+        this.callbacks = undefined;
+        this.deliveredPhase = "";
+        this.lastStablePhase = "lobby";
+        this.snapshotPlayers.clear();
+        this.snapshotHostId = "";
+
+        this.emitConnectionChanged(
+          false,
+        );
+
+        void room.leave().catch(
+          () => {
+            // Server may already have closed the rejected transport.
+          },
+        );
+      },
+    );
 
     /*
      * Mobile network handoffs can happen before Colyseus' default
