@@ -1,3 +1,4 @@
+/* V1010450ZG_READY_AND_SNAPSHOT_STABILITY */
 import { tr } from '../i18n';
 import {
   Callbacks,
@@ -1348,28 +1349,37 @@ this.phaseChangedHandlers.forEach(
         );
 
         /*
-         * GameScene/NetworkPlayerManager에는 Schema onAdd와 동일한 이벤트로 전달.
-         * addPlayer()는 중복 sessionId를 update로 처리하므로 안전합니다.
+         * V1010450ZG_SNAPSHOT_ADD_DEDUP
+         *
+         * lobby_snapshot is a recovery snapshot and may legitimately arrive
+         * many times. Re-emitting PlayerAdded for an already-known session made
+         * GameScene rebuild the same actors repeatedly and produced the visible
+         * "Player added" storm. Existing snapshot players are updates, not adds.
          */
-        this.playerAddedHandlers
-          .forEach(
-            (handler) => {
-              try {
-                handler(
+        const targetHandlers =
+          existed
+            ? this.playerChangedHandlers
+            : this.playerAddedHandlers;
+
+        targetHandlers.forEach(
+          (handler) => {
+            try {
+              handler(
+                sessionId,
+                player,
+              );
+            } catch (error) {
+              console.error(
+                "[Chameleon Hunt] Lobby snapshot player handler failed",
+                {
                   sessionId,
-                  player,
-                );
-              } catch (error) {
-                console.error(
-                  "[Chameleon Hunt] Lobby snapshot player handler failed",
-                  {
-                    sessionId,
-                    error,
-                  },
-                );
-              }
-            },
-          );
+                  existed,
+                  error,
+                },
+              );
+            }
+          },
+        );
 
         if (existed) {
           this.playerChangedHandlers
