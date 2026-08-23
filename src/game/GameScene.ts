@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010450D_BACKGROUND_SHAPE_ASSIST: 45% beginner assist follows local background color/contours; Practice paint timer is text-only. */
     /* V1010450C_PRACTICE_VISUAL_POLISH: map16 cap, fixed 16:9 thumbnails, aligned Practice top-right rail, rough brush-streak camouflage. */
     /* V1010450_PAINT_ASSIST_AND_PRACTICE_DIFFICULTY: beginner paint assist, victory skill badges, five-step Hunter Practice difficulty, safer Practice exit positioning. */
     /* V1010448_LOBBY_ROUND_PAINT_HARD_ISOLATION: finished-round paint is scrubbed before lobby avatar presets are rebuilt. */
@@ -8337,12 +8338,23 @@ export class GameScene extends Phaser.Scene {
             0;
 
         /*
-         * V1010450C_ROUGH_BRUSH_STREAK_ASSIST
-         * Instead of a square 7px sampling grid, draw short hand-painted
-         * streaks at mixed angles. Dense points make each stroke read as one
-         * quick brush swipe while the avatar mask clips overflow naturally.
+         * V1010450D_BACKGROUND_SHAPE_ASSIST
+         * Beginner assist now imitates BOTH the color and the local shape flow
+         * behind the avatar. For each rough brush swipe we probe several
+         * directions and choose the one whose sampled background colors remain
+         * most similar. That makes strokes tend to follow grass bands, walls,
+         * paint splashes and other local contours instead of looking like
+         * random color strips pasted onto the body. Coverage intentionally
+         * stays around 45% so the player still finishes the camouflage.
          */
-        const strokeCount = 23;
+        const strokeCount = 31;
+        const colorDistance = (
+            a: { r: number; g: number; b: number },
+            b: { r: number; g: number; b: number },
+        ): number =>
+            Math.abs(a.r - b.r) +
+            Math.abs(a.g - b.g) +
+            Math.abs(a.b - b.b);
 
         for (let strokeIndex = 0; strokeIndex < strokeCount; strokeIndex += 1) {
             const hash =
@@ -8352,34 +8364,84 @@ export class GameScene extends Phaser.Scene {
                 ) >>>
                 0;
             const startX =
-                7 +
-                (hash % 67);
+                5 +
+                (hash % 71);
             const startY =
-                8 +
-                ((hash >>> 8) % 103);
-            const angle =
+                6 +
+                ((hash >>> 8) % 109);
+            const worldStartX = centerX + startX - 40;
+            const worldStartY = centerY + startY - 60;
+            const originColor =
+                this.samplePracticeBackgroundRgb(
+                    sampler,
+                    worldStartX,
+                    worldStartY,
+                );
+            const candidateAngles = [
+                0,
+                Math.PI / 6,
+                Math.PI / 3,
+                Math.PI / 2,
+                2 * Math.PI / 3,
+                5 * Math.PI / 6,
+            ];
+            let angle = candidateAngles[hash % candidateAngles.length];
+            let bestDirectionScore = Number.POSITIVE_INFINITY;
+
+            candidateAngles.forEach(
+                (candidate) => {
+                    let score = 0;
+                    [7, 13, 20].forEach(
+                        (distance) => {
+                            const forward =
+                                this.samplePracticeBackgroundRgb(
+                                    sampler,
+                                    worldStartX + Math.cos(candidate) * distance,
+                                    worldStartY + Math.sin(candidate) * distance,
+                                );
+                            const backward =
+                                this.samplePracticeBackgroundRgb(
+                                    sampler,
+                                    worldStartX - Math.cos(candidate) * distance,
+                                    worldStartY - Math.sin(candidate) * distance,
+                                );
+                            score +=
+                                colorDistance(originColor, forward) +
+                                colorDistance(originColor, backward);
+                        },
+                    );
+
+                    if (score < bestDirectionScore) {
+                        bestDirectionScore = score;
+                        angle = candidate;
+                    }
+                },
+            );
+
+            angle +=
                 (
-                    -55 +
-                    ((hash >>> 16) % 111)
+                    ((hash >>> 20) % 13) -
+                    6
                 ) *
                 Math.PI /
                 180;
+
             const length =
-                13 +
-                ((hash >>> 4) % 17);
+                14 +
+                ((hash >>> 4) % 15);
             const brushSize =
-                5 +
+                4 +
                 ((hash >>> 23) % 3);
-            const step = 2.1;
+            const step = 1.9;
             const points: NetworkPaintPoint[] = [];
 
-            for (let distance = 0; distance <= length; distance += step) {
+            for (let distance = -length / 2; distance <= length / 2; distance += step) {
                 const wobble =
                     Math.sin(
-                        distance * 0.72 +
-                        strokeIndex,
+                        distance * 0.58 +
+                        strokeIndex * 0.73,
                     ) *
-                    1.15;
+                    0.9;
                 const pointX =
                     Phaser.Math.Clamp(
                         startX +
@@ -8403,31 +8465,17 @@ export class GameScene extends Phaser.Scene {
                 });
             }
 
-            const middle =
-                points[Math.floor(points.length / 2)] ??
-                {
-                    x: startX,
-                    y: startY,
-                };
-            const sampled =
-                this.samplePracticeBackgroundRgb(
-                    sampler,
-                    centerX +
-                        (middle.x - 40),
-                    centerY +
-                        (middle.y - 60),
-                );
             const quantize =
                 (value: number): number =>
                     Phaser.Math.Clamp(
-                        Math.round(value / 32) * 32,
+                        Math.round(value / 24) * 24,
                         0,
                         255,
                     );
             const color =
-                quantize(sampled.r) << 16 |
-                quantize(sampled.g) << 8 |
-                quantize(sampled.b);
+                quantize(originColor.r) << 16 |
+                quantize(originColor.g) << 8 |
+                quantize(originColor.b);
             const stroke: NetworkPaintStroke = {
                 targetSessionId,
                 color,
@@ -8474,12 +8522,12 @@ export class GameScene extends Phaser.Scene {
 
         this.showStatus(
             getLanguage() === 'ja'
-                ? '✨ 約40%をラフなブラシ跡でサポートしました！'
+                ? '✨ 背景の色と形を参考に約45%をサポートしました！'
                 : getLanguage() === 'en'
-                    ? '✨ Paint Assist added rough brush strokes to about 40%!'
+                    ? '✨ Paint Assist copied the background color and shape flow to about 45%!'
                     : getLanguage() === 'zh'
-                        ? '✨ 已用粗糙笔触辅助填涂约40%！'
-                        : '✨ 약 40%를 거친 붓질 느낌으로 색칠해드렸어요!',
+                        ? '✨ 已参考背景颜色和形状辅助填涂约45%！'
+                        : '✨ 배경의 색과 모양을 참고해 약 45%를 자연스럽게 도와드렸어요!',
         );
     }
 
@@ -16035,11 +16083,15 @@ export class GameScene extends Phaser.Scene {
         timeWrap.style.opacity =
             '1';
         timeWrap.style.background =
-            'rgba(255, 249, 232, 0.38)';
+            'transparent';
+        timeWrap.style.border =
+            '0';
         timeWrap.style.color =
             '#263b2d';
         timeWrap.style.boxShadow =
-            '0 2px 8px rgba(0, 0, 0, 0.10)';
+            'none';
+        timeWrap.style.padding =
+            '0';
 
         /*
          * If the outer record bar itself has an old opaque CSS background,
@@ -16073,14 +16125,22 @@ export class GameScene extends Phaser.Scene {
         label.style.color =
             '#263b2d';
         label.style.fontWeight =
-            '800';
+            '950';
+        label.style.fontSize =
+            '20px';
+        label.style.textShadow =
+            '0 1px 0 rgba(255,255,255,.82), 0 2px 5px rgba(0,0,0,.12)';
 
         time.style.opacity =
             '1';
         time.style.color =
             '#17251b';
         time.style.fontWeight =
-            '900';
+            '950';
+        time.style.fontSize =
+            '24px';
+        time.style.textShadow =
+            '0 1px 0 rgba(255,255,255,.82), 0 2px 5px rgba(0,0,0,.12)';
 
         const finish =
             document.createElement(
