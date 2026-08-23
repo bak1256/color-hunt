@@ -15015,52 +15015,18 @@ export class GameScene extends Phaser.Scene {
                             textureY,
                         ) => {
                             /*
-                             * V1010450R_PRACTICE_BOT_PAINT_HELP_PARITY
+                             * V1010450T_PRACTICE_BOT_FULL_COVERAGE_QUALITY
                              *
-                             * Hunter Practice bots now use the SAME visual idea
-                             * as Hider Paint Help:
-                             * - sample the real background directly under the bot
-                             * - retain sparse, rounded-looking color islands
-                             * - leave the rest visually white/unpainted
+                             * Practice bots are ALWAYS fully painted.
+                             * Difficulty changes camouflage QUALITY only:
+                             * sampling detail + color accuracy.
                              *
-                             * Difficulty still matters:
-                             * Very Easy  ~30% painted
-                             * Easy       ~42%
-                             * Normal     ~55%  (default)
-                             * Hard       ~70%
-                             * Very Hard  ~84%
-                             *
-                             * Color accuracy also improves with difficulty.
+                             * Very Easy  : coarse 11px sampling, large color drift
+                             * Easy       : coarse 8px sampling, visible drift
+                             * Normal     : 6px sampling, moderate drift
+                             * Hard       : fine 3px sampling, small drift
+                             * Very Hard  : exact 1px sampling, tiny drift
                              */
-                            const difficultyRatio =
-                                Phaser.Math.Clamp(
-                                    (
-                                        this.practiceBotPrecision -
-                                        20
-                                    ) /
-                                        40,
-                                    0,
-                                    1,
-                                );
-
-                            /*
-                             * V1010450S_PRACTICE_BOT_EFFECTIVE_COVERAGE
-                             *
-                             * v450r multiplied two independent filters:
-                             * "keep this 7px cell" AND "inside a small circle".
-                             * At Very Hard that produced only ~25~30% visible
-                             * camouflage even though targetCoverage said 52%.
-                             *
-                             * Difficulty should describe the BOT's completed
-                             * camouflage, not the helper percentage.
-                             */
-                            const coverageByDifficulty = [
-                                30,
-                                42,
-                                55,
-                                70,
-                                84,
-                            ] as const;
                             const difficultyIndex =
                                 Phaser.Math.Clamp(
                                     Math.round(
@@ -15073,38 +15039,106 @@ export class GameScene extends Phaser.Scene {
                                     0,
                                     4,
                                 );
-                            const targetCoverage =
-                                coverageByDifficulty[
+
+                            const qualitySettings = [
+                                {
+                                    sampleBlock: 11,
+                                    maxError: 92,
+                                    quantize: 40,
+                                },
+                                {
+                                    sampleBlock: 8,
+                                    maxError: 68,
+                                    quantize: 32,
+                                },
+                                {
+                                    sampleBlock: 6,
+                                    maxError: 46,
+                                    quantize: 24,
+                                },
+                                {
+                                    sampleBlock: 3,
+                                    maxError: 24,
+                                    quantize: 16,
+                                },
+                                {
+                                    sampleBlock: 1,
+                                    maxError: 7,
+                                    quantize: 8,
+                                },
+                            ] as const;
+
+                            const settings =
+                                qualitySettings[
                                     difficultyIndex
                                 ];
 
                             /*
-                             * Build irregular circular-ish islands from a
-                             * deterministic 7px cell grid. colorAt() is still
-                             * called per character pixel by
-                             * applyPracticeFullCamouflage(), but skipped pixels
-                             * return the natural unpainted Hider white.
+                             * Lower difficulty deliberately samples one color
+                             * for a larger local block, smearing small details.
+                             * Very Hard reads the exact hidden background pixel.
                              */
-                            const cellSize = 7;
-                            const cellX =
+                            const sampleTextureX =
+                                settings.sampleBlock === 1
+                                    ? textureX
+                                    : Math.floor(
+                                        textureX /
+                                            settings.sampleBlock,
+                                    ) *
+                                        settings.sampleBlock +
+                                        settings.sampleBlock /
+                                            2;
+                            const sampleTextureY =
+                                settings.sampleBlock === 1
+                                    ? textureY
+                                    : Math.floor(
+                                        textureY /
+                                            settings.sampleBlock,
+                                    ) *
+                                        settings.sampleBlock +
+                                        settings.sampleBlock /
+                                            2;
+
+                            const sampled =
+                                this.samplePracticeBackgroundRgb(
+                                    sampler,
+                                    hider.centerX +
+                                        (
+                                            sampleTextureX -
+                                            40
+                                        ),
+                                    hider.centerY +
+                                        (
+                                            sampleTextureY -
+                                            60
+                                        ),
+                                );
+
+                            const blockX =
                                 Math.floor(
                                     textureX /
-                                        cellSize,
+                                        Math.max(
+                                            1,
+                                            settings.sampleBlock,
+                                        ),
                                 );
-                            const cellY =
+                            const blockY =
                                 Math.floor(
                                     textureY /
-                                        cellSize,
+                                        Math.max(
+                                            1,
+                                            settings.sampleBlock,
+                                        ),
                                 );
                             const seed =
                                 (
                                     Math.imul(
-                                        cellX + 31,
-                                        73856093,
+                                        blockX + 73,
+                                        2654435761,
                                     ) ^
                                     Math.imul(
-                                        cellY + 47,
-                                        19349663,
+                                        blockY + 19,
+                                        1597334677,
                                     ) ^
                                     Math.imul(
                                         index + 1,
@@ -15113,143 +15147,54 @@ export class GameScene extends Phaser.Scene {
                                 ) >>>
                                 0;
 
-                            const keepCell =
-                                seed %
-                                    100 <
-                                targetCoverage;
-
-                            if (!keepCell) {
-                                return 0xf5eee2;
-                            }
-
                             /*
-                             * Only the center portion of a kept cell is colored,
-                             * turning square grid cells into rounded blobs.
+                             * Use one correlated shade error per local block.
+                             * That looks like imperfect human color matching,
+                             * not RGB television noise.
                              */
-                            const localCellX =
-                                (
-                                    textureX %
-                                    cellSize
-                                ) -
-                                (
-                                    cellSize -
-                                    1
-                                ) /
-                                    2;
-                            const localCellY =
-                                (
-                                    textureY %
-                                    cellSize
-                                ) -
-                                (
-                                    cellSize -
-                                    1
-                                ) /
-                                    2;
-                            /*
-                             * Keep the blobs visually rounded, but do NOT throw
-                             * away half of every retained cell. A 3.5~4.1px
-                             * radius on a 7px cell mostly fills the cell while
-                             * shaving off corners, so targetCoverage now closely
-                             * matches what the Hunter actually sees.
-                             */
-                            const radius =
-                                3.5 +
-                                (
-                                    (seed >>> 9) %
-                                    3
-                                ) *
-                                    0.3;
-
-                            if (
-                                localCellX *
-                                    localCellX +
-                                    localCellY *
-                                        localCellY >
-                                radius *
-                                    radius
-                            ) {
-                                return 0xf5eee2;
-                            }
-
-                            const sampled =
-                                this.samplePracticeBackgroundRgb(
-                                    sampler,
-                                    hider.centerX +
-                                        (
-                                            textureX -
-                                            40
-                                        ),
-                                    hider.centerY +
-                                        (
-                                            textureY -
-                                            60
-                                        ),
-                                );
-
-                            /*
-                             * Easier difficulties intentionally drift from the
-                             * sampled color. Normal+ quickly approaches the
-                             * real hidden background.
-                             */
-                            const maxError =
-                                Phaser.Math.Linear(
-                                    76,
-                                    8,
-                                    difficultyRatio,
-                                );
-                            const pixelSeed =
-                                (
-                                    seed ^
-                                    Math.imul(
-                                        textureX + 73,
-                                        2654435761,
-                                    ) ^
-                                    Math.imul(
-                                        textureY + 19,
-                                        1597334677,
-                                    )
-                                ) >>>
-                                0;
-                            const error =
+                            const signedNoise =
                                 (
                                     (
-                                        pixelSeed %
-                                        1001
+                                        seed %
+                                        2001
                                     ) /
-                                        500 -
+                                        1000 -
                                     1
-                                ) *
-                                maxError;
+                                );
+
+                            const quantizeChannel =
+                                (
+                                    value: number,
+                                ): number =>
+                                    Phaser.Math.Clamp(
+                                        Math.round(
+                                            value /
+                                                settings.quantize,
+                                        ) *
+                                            settings.quantize,
+                                        0,
+                                        255,
+                                    );
 
                             const r =
-                                Phaser.Math.Clamp(
-                                    Math.round(
-                                        sampled.r +
-                                            error,
-                                    ),
-                                    0,
-                                    255,
+                                quantizeChannel(
+                                    sampled.r +
+                                        signedNoise *
+                                            settings.maxError,
                                 );
                             const green =
-                                Phaser.Math.Clamp(
-                                    Math.round(
-                                        sampled.g +
-                                            error *
-                                                0.78,
-                                    ),
-                                    0,
-                                    255,
+                                quantizeChannel(
+                                    sampled.g +
+                                        signedNoise *
+                                            settings.maxError *
+                                            0.82,
                                 );
                             const b =
-                                Phaser.Math.Clamp(
-                                    Math.round(
-                                        sampled.b +
-                                            error *
-                                                0.64,
-                                    ),
-                                    0,
-                                    255,
+                                quantizeChannel(
+                                    sampled.b +
+                                        signedNoise *
+                                            settings.maxError *
+                                            0.68,
                                 );
 
                             return (
