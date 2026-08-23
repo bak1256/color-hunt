@@ -15024,11 +15024,11 @@ export class GameScene extends Phaser.Scene {
                              * - leave the rest visually white/unpainted
                              *
                              * Difficulty still matters:
-                             * Very Easy  ~22% background guide
-                             * Easy       ~28%
-                             * Normal     ~35%  (default)
-                             * Hard       ~43%
-                             * Very Hard  ~52%
+                             * Very Easy  ~30% painted
+                             * Easy       ~42%
+                             * Normal     ~55%  (default)
+                             * Hard       ~70%
+                             * Very Hard  ~84%
                              *
                              * Color accuracy also improves with difficulty.
                              */
@@ -15043,12 +15043,40 @@ export class GameScene extends Phaser.Scene {
                                     1,
                                 );
 
-                            const targetCoverage =
-                                Phaser.Math.Linear(
-                                    22,
-                                    52,
-                                    difficultyRatio,
+                            /*
+                             * V1010450S_PRACTICE_BOT_EFFECTIVE_COVERAGE
+                             *
+                             * v450r multiplied two independent filters:
+                             * "keep this 7px cell" AND "inside a small circle".
+                             * At Very Hard that produced only ~25~30% visible
+                             * camouflage even though targetCoverage said 52%.
+                             *
+                             * Difficulty should describe the BOT's completed
+                             * camouflage, not the helper percentage.
+                             */
+                            const coverageByDifficulty = [
+                                30,
+                                42,
+                                55,
+                                70,
+                                84,
+                            ] as const;
+                            const difficultyIndex =
+                                Phaser.Math.Clamp(
+                                    Math.round(
+                                        (
+                                            this.practiceBotPrecision -
+                                            20
+                                        ) /
+                                            10,
+                                    ),
+                                    0,
+                                    4,
                                 );
+                            const targetCoverage =
+                                coverageByDifficulty[
+                                    difficultyIndex
+                                ];
 
                             /*
                              * Build irregular circular-ish islands from a
@@ -15118,13 +15146,20 @@ export class GameScene extends Phaser.Scene {
                                     1
                                 ) /
                                     2;
+                            /*
+                             * Keep the blobs visually rounded, but do NOT throw
+                             * away half of every retained cell. A 3.5~4.1px
+                             * radius on a 7px cell mostly fills the cell while
+                             * shaving off corners, so targetCoverage now closely
+                             * matches what the Hunter actually sees.
+                             */
                             const radius =
-                                2.35 +
+                                3.5 +
                                 (
                                     (seed >>> 9) %
                                     3
                                 ) *
-                                    0.55;
+                                    0.3;
 
                             if (
                                 localCellX *
