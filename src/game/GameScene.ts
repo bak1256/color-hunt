@@ -1,3 +1,4 @@
+/* V1010451H2_AUTHORITATIVE_FOUND_PAINT_ROBUST: robustly prefer exact server hit-time paint snapshot for Hunter FOUND avatars. */
 /* V1010451G_TERMINAL_UI_BARRIER: prevent stale Paint/Hunt callbacks from resurrecting UI after terminal lobby return. */
 /* V1010451F_ASSIST_CAPTURE_TERMINAL_CLEANUP_CARD_POLISH: Paint Help full authoritative replay + cleaner victory tiles + terminal mobile lobby reset. */
 /* V1010451E2_TERMINAL_REJOIN_AND_FOUND_POSITIONS_ROBUST: long-away active-round rejection + authoritative Hunter FOUND positions. */
@@ -11355,7 +11356,7 @@ export class GameScene extends Phaser.Scene {
                         this.victoryRoundPaintBySession
                             .set(
                                 targetId,
-                                previous.slice(-500),
+                                previous.slice(-2400),
                             );
                     }
 
@@ -36456,6 +36457,13 @@ export class GameScene extends Phaser.Scene {
             multiplayerClient
                 .getSessionId();
 
+        /*
+         * V1010451H2_AUTHORITATIVE_FOUND_PAINT_ROBUST / SERVER_HIT_SNAPSHOT_FIRST
+         *
+         * marker.paintStrokes is captured by the server at the exact hit time.
+         * It must beat local/observer caches, because those caches may have been
+         * trimmed while Paint Help produced many color buckets.
+         */
         const strokes =
             authoritativeStrokes &&
             authoritativeStrokes.length > 0
