@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010450E_PROJECTED_BACKGROUND_DOT_ASSIST: project hidden background into avatar, erase about half, retain edge-aware dot guide; bold text-only timer. */
     /* V1010450D_BACKGROUND_SHAPE_ASSIST: 45% beginner assist follows local background color/contours; Practice paint timer is text-only. */
     /* V1010450C_PRACTICE_VISUAL_POLISH: map16 cap, fixed 16:9 thumbnails, aligned Practice top-right rail, rough brush-streak camouflage. */
     /* V1010450_PAINT_ASSIST_AND_PRACTICE_DIFFICULTY: beginner paint assist, victory skill badges, five-step Hunter Practice difficulty, safer Practice exit positioning. */
@@ -8338,196 +8339,324 @@ export class GameScene extends Phaser.Scene {
             0;
 
         /*
-         * V1010450D_BACKGROUND_SHAPE_ASSIST
-         * Beginner assist now imitates BOTH the color and the local shape flow
-         * behind the avatar. For each rough brush swipe we probe several
-         * directions and choose the one whose sampled background colors remain
-         * most similar. That makes strokes tend to follow grass bands, walls,
-         * paint splashes and other local contours instead of looking like
-         * random color strips pasted onto the body. Coverage intentionally
-         * stays around 45% so the player still finishes the camouflage.
+         * V1010450E_PROJECTED_BACKGROUND_DOT_ASSIST
+         *
+         * "AI-like" beginner assist:
+         * 1) Treat the 80x120 avatar paint surface as a window onto the real
+         *    background currently hidden behind the avatar.
+         * 2) Sample that exact world-space background position for every small
+         *    dot. This preserves the background's real color regions AND their
+         *    boundaries instead of inventing random brush directions.
+         * 3) Remove roughly half of the projected dots so the player still has
+         *    obvious blank areas to finish with the eyedropper/brush.
+         * 4) Keep more dots around high-contrast background edges. Those are
+         *    the useful "coloring-book guide lines": fountain rims, bushes,
+         *    walls, paths, paint borders, etc. become visibly traceable through
+         *    the avatar without drawing an artificial avatar outline.
+         * 5) Quantize colors slightly and use tiny round dots to make the guide
+         *    feel hand-dithered rather than like a perfect screenshot copy.
          */
-        const strokeCount = 31;
+        type AssistRgb = {
+            r: number;
+            g: number;
+            b: number;
+        };
+
         const colorDistance = (
-            a: { r: number; g: number; b: number },
-            b: { r: number; g: number; b: number },
+            a: AssistRgb,
+            b: AssistRgb,
         ): number =>
             Math.abs(a.r - b.r) +
             Math.abs(a.g - b.g) +
             Math.abs(a.b - b.b);
 
-        for (let strokeIndex = 0; strokeIndex < strokeCount; strokeIndex += 1) {
-            const hash =
-                (
-                    seedBase ^
-                    ((strokeIndex + 1) * 2654435761)
-                ) >>>
-                0;
-            const startX =
-                5 +
-                (hash % 71);
-            const startY =
-                6 +
-                ((hash >>> 8) % 109);
-            const worldStartX = centerX + startX - 40;
-            const worldStartY = centerY + startY - 60;
-            const originColor =
-                this.samplePracticeBackgroundRgb(
-                    sampler,
-                    worldStartX,
-                    worldStartY,
+        const quantizeChannel =
+            (value: number): number =>
+                Phaser.Math.Clamp(
+                    Math.round(value / 16) * 16,
+                    0,
+                    255,
                 );
-            const candidateAngles = [
-                0,
-                Math.PI / 6,
-                Math.PI / 3,
-                Math.PI / 2,
-                2 * Math.PI / 3,
-                5 * Math.PI / 6,
-            ];
-            let angle = candidateAngles[hash % candidateAngles.length];
-            let bestDirectionScore = Number.POSITIVE_INFINITY;
 
-            candidateAngles.forEach(
-                (candidate) => {
-                    let score = 0;
-                    [7, 13, 20].forEach(
-                        (distance) => {
-                            const forward =
-                                this.samplePracticeBackgroundRgb(
-                                    sampler,
-                                    worldStartX + Math.cos(candidate) * distance,
-                                    worldStartY + Math.sin(candidate) * distance,
-                                );
-                            const backward =
-                                this.samplePracticeBackgroundRgb(
-                                    sampler,
-                                    worldStartX - Math.cos(candidate) * distance,
-                                    worldStartY - Math.sin(candidate) * distance,
-                                );
-                            score +=
-                                colorDistance(originColor, forward) +
-                                colorDistance(originColor, backward);
-                        },
+        const colorBuckets =
+            new Map<
+                string,
+                {
+                    color: number;
+                    points: NetworkPaintPoint[];
+                }
+            >();
+
+        const dotStep = 4;
+        const edgeProbe = 4;
+
+        for (
+            let localY = 2;
+            localY <= 118;
+            localY += dotStep
+        ) {
+            for (
+                let localX = 2;
+                localX <= 78;
+                localX += dotStep
+            ) {
+                const worldX =
+                    centerX +
+                    localX -
+                    40;
+                const worldY =
+                    centerY +
+                    localY -
+                    60;
+
+                const centerColor =
+                    this.samplePracticeBackgroundRgb(
+                        sampler,
+                        worldX,
+                        worldY,
+                    );
+                const leftColor =
+                    this.samplePracticeBackgroundRgb(
+                        sampler,
+                        worldX - edgeProbe,
+                        worldY,
+                    );
+                const rightColor =
+                    this.samplePracticeBackgroundRgb(
+                        sampler,
+                        worldX + edgeProbe,
+                        worldY,
+                    );
+                const upColor =
+                    this.samplePracticeBackgroundRgb(
+                        sampler,
+                        worldX,
+                        worldY - edgeProbe,
+                    );
+                const downColor =
+                    this.samplePracticeBackgroundRgb(
+                        sampler,
+                        worldX,
+                        worldY + edgeProbe,
                     );
 
-                    if (score < bestDirectionScore) {
-                        bestDirectionScore = score;
-                        angle = candidate;
-                    }
-                },
-            );
-
-            angle +=
-                (
-                    ((hash >>> 20) % 13) -
-                    6
-                ) *
-                Math.PI /
-                180;
-
-            const length =
-                14 +
-                ((hash >>> 4) % 15);
-            const brushSize =
-                4 +
-                ((hash >>> 23) % 3);
-            const step = 1.9;
-            const points: NetworkPaintPoint[] = [];
-
-            for (let distance = -length / 2; distance <= length / 2; distance += step) {
-                const wobble =
-                    Math.sin(
-                        distance * 0.58 +
-                        strokeIndex * 0.73,
-                    ) *
-                    0.9;
-                const pointX =
-                    Phaser.Math.Clamp(
-                        startX +
-                        Math.cos(angle) * distance +
-                        Math.cos(angle + Math.PI / 2) * wobble,
-                        0,
-                        80,
-                    );
-                const pointY =
-                    Phaser.Math.Clamp(
-                        startY +
-                        Math.sin(angle) * distance +
-                        Math.sin(angle + Math.PI / 2) * wobble,
-                        0,
-                        120,
+                const edgeStrength =
+                    Math.max(
+                        colorDistance(
+                            leftColor,
+                            rightColor,
+                        ),
+                        colorDistance(
+                            upColor,
+                            downColor,
+                        ),
+                        colorDistance(
+                            centerColor,
+                            leftColor,
+                        ),
+                        colorDistance(
+                            centerColor,
+                            rightColor,
+                        ),
+                        colorDistance(
+                            centerColor,
+                            upColor,
+                        ),
+                        colorDistance(
+                            centerColor,
+                            downColor,
+                        ),
                     );
 
-                points.push({
-                    x: pointX,
-                    y: pointY,
+                /*
+                 * Flat background: ~47% retained.
+                 * Strong contour: up to ~82% retained.
+                 *
+                 * This makes hidden background outlines survive the 50% erase
+                 * pass while broad flat areas remain deliberately incomplete.
+                 */
+                const keepPercent =
+                    edgeStrength >= 150
+                        ? 82
+                        : edgeStrength >= 95
+                            ? 70
+                            : edgeStrength >= 55
+                                ? 58
+                                : 47;
+
+                const hash =
+                    (
+                        seedBase ^
+                        Math.imul(
+                            localX + 17,
+                            73856093,
+                        ) ^
+                        Math.imul(
+                            localY + 29,
+                            19349663,
+                        )
+                    ) >>>
+                    0;
+
+                if (
+                    hash % 100 >=
+                    keepPercent
+                ) {
+                    continue;
+                }
+
+                /*
+                 * Very small deterministic jitter breaks the rigid checkerboard
+                 * without moving the guide away from the true background region.
+                 */
+                const jitterX =
+                    ((hash >>> 8) % 3) -
+                    1;
+                const jitterY =
+                    ((hash >>> 12) % 3) -
+                    1;
+
+                const r =
+                    quantizeChannel(
+                        centerColor.r,
+                    );
+                const g =
+                    quantizeChannel(
+                        centerColor.g,
+                    );
+                const b =
+                    quantizeChannel(
+                        centerColor.b,
+                    );
+                const color =
+                    r << 16 |
+                    g << 8 |
+                    b;
+                const key =
+                    String(
+                        color,
+                    );
+
+                let bucket =
+                    colorBuckets.get(
+                        key,
+                    );
+
+                if (!bucket) {
+                    bucket = {
+                        color,
+                        points: [],
+                    };
+                    colorBuckets.set(
+                        key,
+                        bucket,
+                    );
+                }
+
+                bucket.points.push({
+                    x:
+                        Phaser.Math.Clamp(
+                            localX +
+                                jitterX,
+                            0,
+                            80,
+                        ),
+                    y:
+                        Phaser.Math.Clamp(
+                            localY +
+                                jitterY,
+                            0,
+                            120,
+                        ),
                 });
             }
-
-            const quantize =
-                (value: number): number =>
-                    Phaser.Math.Clamp(
-                        Math.round(value / 24) * 24,
-                        0,
-                        255,
-                    );
-            const color =
-                quantize(originColor.r) << 16 |
-                quantize(originColor.g) << 8 |
-                quantize(originColor.b);
-            const stroke: NetworkPaintStroke = {
-                targetSessionId,
-                color,
-                size: brushSize,
-                shape: 'circle',
-                points,
-            };
-
-            stroke.points.forEach(
-                (point) => {
-                    this.networkPlayerManager
-                        .stampLocalPaintPoint(
-                            point.x,
-                            point.y,
-                            this.brushTextureKey,
-                            stroke.color,
-                            stroke.size,
-                            stroke.shape,
-                        );
-                },
-            );
-
-            if (this.isMultiplayerSession()) {
-                multiplayerClient.sendPaintStroke(stroke);
-            }
-
-            assistStrokes.push(stroke);
         }
 
-        this.localPaintHistory.push(...assistStrokes);
+        colorBuckets.forEach(
+            (
+                bucket,
+            ) => {
+                if (
+                    bucket.points.length ===
+                    0
+                ) {
+                    return;
+                }
+
+                const stroke:
+                    NetworkPaintStroke = {
+                        targetSessionId,
+                        color:
+                            bucket.color,
+                        size: 3,
+                        shape: 'circle',
+                        points:
+                            bucket.points,
+                    };
+
+                stroke.points.forEach(
+                    (
+                        point,
+                    ) => {
+                        this.networkPlayerManager
+                            .stampLocalPaintPoint(
+                                point.x,
+                                point.y,
+                                this.brushTextureKey,
+                                stroke.color,
+                                stroke.size,
+                                stroke.shape,
+                            );
+                    },
+                );
+
+                if (
+                    this.isMultiplayerSession()
+                ) {
+                    multiplayerClient
+                        .sendPaintStroke(
+                            stroke,
+                        );
+                }
+
+                assistStrokes.push(
+                    stroke,
+                );
+            },
+        );
+
+        this.localPaintHistory.push(
+            ...assistStrokes,
+        );
         this.redoPaintHistory = [];
         this.paintAssistUsedThisRound = true;
 
-        if (this.practiceMode === 'hider') {
+        if (
+            this.practiceMode ===
+                'hider'
+        ) {
             this.markPracticeHiderPaintStarted();
         }
 
-        if (this.paintAssistButton) {
+        if (
+            this.paintAssistButton
+        ) {
             this.paintAssistButton.textContent =
                 this.getPaintAssistUsedLabel();
-            this.paintAssistButton.disabled = true;
-            this.paintAssistButton.style.opacity = '0.66';
+            this.paintAssistButton.disabled =
+                true;
+            this.paintAssistButton.style.opacity =
+                '0.66';
         }
 
         this.showStatus(
             getLanguage() === 'ja'
-                ? '✨ 背景の色と形を参考に約45%をサポートしました！'
+                ? '✨ 背景をそのまま投影し、約半分をドットガイドとして残しました！'
                 : getLanguage() === 'en'
-                    ? '✨ Paint Assist copied the background color and shape flow to about 45%!'
+                    ? '✨ Projected the hidden background and kept about half as a dotted guide!'
                     : getLanguage() === 'zh'
-                        ? '✨ 已参考背景颜色和形状辅助填涂约45%！'
-                        : '✨ 배경의 색과 모양을 참고해 약 45%를 자연스럽게 도와드렸어요!',
+                        ? '✨ 已投影角色背后的背景，并保留约一半作为点状上色引导！'
+                        : '✨ 가려진 뒷배경을 그대로 투영해 약 절반을 도트 밑그림으로 남겼어요!',
         );
     }
 
@@ -16101,6 +16230,14 @@ export class GameScene extends Phaser.Scene {
             'transparent';
         root.style.boxShadow =
             'none';
+        root.style.border =
+            '0';
+        root.style.outline =
+            '0';
+        root.style.borderRadius =
+            '0';
+        root.style.padding =
+            '0';
 
         const label =
             document.createElement(
@@ -16123,24 +16260,36 @@ export class GameScene extends Phaser.Scene {
         label.style.opacity =
             '1';
         label.style.color =
-            '#263b2d';
+            '#ffffff';
         label.style.fontWeight =
             '950';
         label.style.fontSize =
-            '20px';
+            '24px';
+        label.style.letterSpacing =
+            '-0.5px';
+        label.style.webkitTextStroke =
+            '2px #111111';
+        label.style.paintOrder =
+            'stroke fill';
         label.style.textShadow =
-            '0 1px 0 rgba(255,255,255,.82), 0 2px 5px rgba(0,0,0,.12)';
+            '0 3px 0 rgba(0,0,0,.42)';
 
         time.style.opacity =
             '1';
         time.style.color =
-            '#17251b';
+            '#ffd85a';
         time.style.fontWeight =
             '950';
         time.style.fontSize =
-            '24px';
+            '30px';
+        time.style.letterSpacing =
+            '-0.5px';
+        time.style.webkitTextStroke =
+            '2px #111111';
+        time.style.paintOrder =
+            'stroke fill';
         time.style.textShadow =
-            '0 1px 0 rgba(255,255,255,.82), 0 2px 5px rgba(0,0,0,.12)';
+            '0 3px 0 rgba(0,0,0,.42)';
 
         const finish =
             document.createElement(
