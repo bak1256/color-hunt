@@ -79,6 +79,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010450ZB_VICTORY_AND_LOBBY_TOOL_CLEANUP: victory Close stays closed; Lobby hard-cleans mobile eyedropper/paint previews. */
     /* V1010450Z_MAIN_HUNT_INTRO_AND_READY_RESET: clean role-goal Hunt intros + explicit post-round lobby READY reset. */
     /* V1010450Y_SAFE_PRECREATE_ROLE_GUARDS: Paint Help role checks tolerate NetworkPlayerManager being undefined during create(). */
     /* V1010450X_HIDER_PRACTICE_CLEAN_UI: Hider hard-hides GAS, Paint Help is Hider-only, and practice starts with fading text-only paint prompt. */
@@ -34642,10 +34643,15 @@ export class GameScene extends Phaser.Scene {
                 this.time.delayedCall(
                     delay,
                     () => {
+                        /*
+                         * V1010450ZA_VICTORY_CLOSE_STAYS_CLOSED
+                         * Collapsed chip = user intentionally closed full card.
+                         */
                         if (
                             this.phase === 'lobby' &&
                             this.victoryShowcaseBlob &&
-                            !this.victoryShowcaseModal
+                            !this.victoryShowcaseModal &&
+                            !this.victoryShowcaseCollapsedChip
                         ) {
                             this.showMultiplayerVictoryShowcase();
                         }
@@ -34730,6 +34736,34 @@ export class GameScene extends Phaser.Scene {
             .setText('')
             .setVisible(false);
 
+        /*
+         * V1010450ZB_LOBBY_PAINT_PREVIEW_CLEANUP
+         * Remove every transient Hider paint/eyedropper helper before Lobby.
+         */
+        this.eyedropperArmed = false;
+        this.eyedropperPointerId = -1;
+        this.mobileFingerImmediatePaintNextTouch = false;
+        this.mobileLastBrushTargetWorld = undefined;
+
+        this.hideEyedropperMagnifier();
+        this.hideMobilePaintPrecisionGuide();
+        this.clearStraightLinePreview();
+
+        this.eyedropperToolGuide
+            ?.clear()
+            .setVisible(false);
+        this.eyedropperMagnifier
+            ?.setVisible(false);
+        this.eyedropperMagnifierSwatch
+            ?.setVisible(false);
+        this.mobilePaintPrecisionRing
+            ?.setVisible(false);
+        this.mobilePaintPrecisionCrosshair
+            ?.setVisible(false);
+        this.mobilePaintPrecisionHandle
+            ?.clear()
+            .setVisible(false);
+
         this.paintPreview.setVisible(false);
         this.setPaintPaletteVisible(false);
         this.setHunterCamoPaletteVisible(false);
@@ -34746,6 +34780,11 @@ export class GameScene extends Phaser.Scene {
                 .resetLocalPaintZoom();
         }
         this.setPaintPaletteVisible(false);
+
+        if (this.mobileControlsEnabled) {
+            this.destroyMobilePaintDock();
+        }
+
         this.ammoText.setVisible(false);
         this.hunterWeaponHudContainer?.setVisible(false);
         this.targetText.setVisible(false);
