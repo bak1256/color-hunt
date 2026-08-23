@@ -8329,7 +8329,8 @@ export class GameScene extends Phaser.Scene {
         const sampler =
             this.createCurrentPaintBackgroundSampler();
 
-        const assistStrokes: NetworkPaintStroke[] = [];
+        const assistStrokes:
+            NetworkPaintStroke[] = [];
         const seedBase =
             Math.floor(
                 centerX * 31 +
@@ -8339,22 +8340,18 @@ export class GameScene extends Phaser.Scene {
             0;
 
         /*
-         * V1010450E_PROJECTED_BACKGROUND_DOT_ASSIST
+         * V1010450F_ORGANIC_PROJECTED_GUIDE
          *
-         * "AI-like" beginner assist:
-         * 1) Treat the 80x120 avatar paint surface as a window onto the real
-         *    background currently hidden behind the avatar.
-         * 2) Sample that exact world-space background position for every small
-         *    dot. This preserves the background's real color regions AND their
-         *    boundaries instead of inventing random brush directions.
-         * 3) Remove roughly half of the projected dots so the player still has
-         *    obvious blank areas to finish with the eyedropper/brush.
-         * 4) Keep more dots around high-contrast background edges. Those are
-         *    the useful "coloring-book guide lines": fountain rims, bushes,
-         *    walls, paths, paint borders, etc. become visibly traceable through
-         *    the avatar without drawing an artificial avatar outline.
-         * 5) Quantize colors slightly and use tiny round dots to make the guide
-         *    feel hand-dithered rather than like a perfect screenshot copy.
+         * Beginner assist is now a softened projection of the REAL background
+         * hidden by the avatar:
+         *
+         * - keep roughly 58~64% overall instead of the sparse ~50% grid;
+         * - preserve high-contrast background boundaries more strongly;
+         * - sample a tiny neighborhood so the projection is intentionally
+         *   "smudged", not a perfect screenshot copy;
+         * - mix 2/3/4/5 px round dots;
+         * - extend many retained dots into short 2~5-point runs, so clusters
+         *   read like rough hand-painted strokes rather than a uniform matrix.
          */
         type AssistRgb = {
             r: number;
@@ -8373,19 +8370,109 @@ export class GameScene extends Phaser.Scene {
         const quantizeChannel =
             (value: number): number =>
                 Phaser.Math.Clamp(
-                    Math.round(value / 16) * 16,
+                    Math.round(value / 20) * 20,
                     0,
                     255,
                 );
+
+        const mixRgb = (
+            colors: AssistRgb[],
+        ): AssistRgb => {
+            const count =
+                Math.max(
+                    1,
+                    colors.length,
+                );
+
+            return {
+                r:
+                    colors.reduce(
+                        (
+                            total,
+                            color,
+                        ) =>
+                            total +
+                            color.r,
+                        0,
+                    ) /
+                    count,
+                g:
+                    colors.reduce(
+                        (
+                            total,
+                            color,
+                        ) =>
+                            total +
+                            color.g,
+                        0,
+                    ) /
+                    count,
+                b:
+                    colors.reduce(
+                        (
+                            total,
+                            color,
+                        ) =>
+                            total +
+                            color.b,
+                        0,
+                    ) /
+                    count,
+            };
+        };
 
         const colorBuckets =
             new Map<
                 string,
                 {
                     color: number;
-                    points: NetworkPaintPoint[];
+                    size: number;
+                    points:
+                        NetworkPaintPoint[];
                 }
             >();
+
+        const addPoint = (
+            color: number,
+            size: number,
+            x: number,
+            y: number,
+        ): void => {
+            const key =
+                `${color}:${size}`;
+
+            let bucket =
+                colorBuckets.get(
+                    key,
+                );
+
+            if (!bucket) {
+                bucket = {
+                    color,
+                    size,
+                    points: [],
+                };
+                colorBuckets.set(
+                    key,
+                    bucket,
+                );
+            }
+
+            bucket.points.push({
+                x:
+                    Phaser.Math.Clamp(
+                        x,
+                        0,
+                        80,
+                    ),
+                y:
+                    Phaser.Math.Clamp(
+                        y,
+                        0,
+                        120,
+                    ),
+            });
+        };
 
         const dotStep = 4;
         const edgeProbe = 4;
@@ -8418,26 +8505,30 @@ export class GameScene extends Phaser.Scene {
                 const leftColor =
                     this.samplePracticeBackgroundRgb(
                         sampler,
-                        worldX - edgeProbe,
+                        worldX -
+                            edgeProbe,
                         worldY,
                     );
                 const rightColor =
                     this.samplePracticeBackgroundRgb(
                         sampler,
-                        worldX + edgeProbe,
+                        worldX +
+                            edgeProbe,
                         worldY,
                     );
                 const upColor =
                     this.samplePracticeBackgroundRgb(
                         sampler,
                         worldX,
-                        worldY - edgeProbe,
+                        worldY -
+                            edgeProbe,
                     );
                 const downColor =
                     this.samplePracticeBackgroundRgb(
                         sampler,
                         worldX,
-                        worldY + edgeProbe,
+                        worldY +
+                            edgeProbe,
                     );
 
                 const edgeStrength =
@@ -8468,21 +8559,14 @@ export class GameScene extends Phaser.Scene {
                         ),
                     );
 
-                /*
-                 * Flat background: ~47% retained.
-                 * Strong contour: up to ~82% retained.
-                 *
-                 * This makes hidden background outlines survive the 50% erase
-                 * pass while broad flat areas remain deliberately incomplete.
-                 */
                 const keepPercent =
                     edgeStrength >= 150
-                        ? 82
+                        ? 90
                         : edgeStrength >= 95
-                            ? 70
+                            ? 80
                             : edgeStrength >= 55
-                                ? 58
-                                : 47;
+                                ? 69
+                                : 58;
 
                 const hash =
                     (
@@ -8506,69 +8590,183 @@ export class GameScene extends Phaser.Scene {
                 }
 
                 /*
-                 * Very small deterministic jitter breaks the rigid checkerboard
-                 * without moving the guide away from the true background region.
+                 * Blur only a LITTLE: center gets the strongest vote, nearby
+                 * samples soften hard photographic detail while keeping the
+                 * background's large shapes and color boundaries recognizable.
                  */
-                const jitterX =
-                    ((hash >>> 8) % 3) -
-                    1;
-                const jitterY =
-                    ((hash >>> 12) % 3) -
-                    1;
+                const blurDirection =
+                    (hash >>> 5) % 4;
+                const nearbyColor =
+                    blurDirection === 0
+                        ? leftColor
+                        : blurDirection === 1
+                            ? rightColor
+                            : blurDirection === 2
+                                ? upColor
+                                : downColor;
+
+                const softenedColor =
+                    edgeStrength >= 95
+                        ? centerColor
+                        : mixRgb([
+                            centerColor,
+                            centerColor,
+                            nearbyColor,
+                        ]);
 
                 const r =
                     quantizeChannel(
-                        centerColor.r,
+                        softenedColor.r,
                     );
                 const g =
                     quantizeChannel(
-                        centerColor.g,
+                        softenedColor.g,
                     );
                 const b =
                     quantizeChannel(
-                        centerColor.b,
+                        softenedColor.b,
                     );
                 const color =
                     r << 16 |
                     g << 8 |
                     b;
-                const key =
-                    String(
-                        color,
+
+                const baseSize =
+                    2 +
+                    (
+                        (hash >>> 10) %
+                        4
                     );
 
-                let bucket =
-                    colorBuckets.get(
-                        key,
+                const jitterX =
+                    ((hash >>> 14) % 5) -
+                    2;
+                const jitterY =
+                    ((hash >>> 17) % 5) -
+                    2;
+
+                const startX =
+                    localX +
+                    jitterX;
+                const startY =
+                    localY +
+                    jitterY;
+
+                /*
+                 * Follow the locally calmer color direction. It tends to run
+                 * along a bush/path/wall region instead of crossing straight
+                 * through a strong boundary.
+                 */
+                const horizontalChange =
+                    colorDistance(
+                        leftColor,
+                        rightColor,
+                    );
+                const verticalChange =
+                    colorDistance(
+                        upColor,
+                        downColor,
                     );
 
-                if (!bucket) {
-                    bucket = {
-                        color,
-                        points: [],
-                    };
-                    colorBuckets.set(
-                        key,
-                        bucket,
-                    );
+                let directionX =
+                    0;
+                let directionY =
+                    0;
+
+                if (
+                    horizontalChange <
+                    verticalChange
+                ) {
+                    directionX =
+                        (hash & 1)
+                            ? 1
+                            : -1;
+                } else {
+                    directionY =
+                        (hash & 1)
+                            ? 1
+                            : -1;
                 }
 
-                bucket.points.push({
-                    x:
+                /*
+                 * Some marks stay as single dots. Most become short uneven
+                 * dotted strokes. With variable sizes this produces the
+                 * "big/small dots connected into rough lines" look.
+                 */
+                const runLength =
+                    edgeStrength >= 95
+                        ? 2 +
+                            (
+                                (hash >>> 20) %
+                                3
+                            )
+                        : 1 +
+                            (
+                                (hash >>> 20) %
+                                5
+                            );
+
+                for (
+                    let runIndex = 0;
+                    runIndex <
+                    runLength;
+                    runIndex += 1
+                ) {
+                    const wobble =
+                        (
+                            (
+                                hash >>>
+                                (
+                                    22 +
+                                    runIndex %
+                                        6
+                                )
+                            ) %
+                            3
+                        ) -
+                        1;
+
+                    const pointSize =
                         Phaser.Math.Clamp(
-                            localX +
-                                jitterX,
-                            0,
-                            80,
-                        ),
-                    y:
-                        Phaser.Math.Clamp(
-                            localY +
-                                jitterY,
-                            0,
-                            120,
-                        ),
-                });
+                            baseSize +
+                                (
+                                    runIndex % 2 ===
+                                    0
+                                        ? 0
+                                        : wobble
+                                ),
+                            2,
+                            5,
+                        );
+
+                    const spacing =
+                        2.2;
+
+                    addPoint(
+                        color,
+                        pointSize,
+                        startX +
+                            directionX *
+                                runIndex *
+                                spacing +
+                            (
+                                directionY !==
+                                0
+                                    ? wobble
+                                    : 0
+                            ),
+                        startY +
+                            directionY *
+                                runIndex *
+                                spacing +
+                            (
+                                directionX !==
+                                0
+                                    ? wobble
+                                    : 0
+                            ),
+                    );
+                }
             }
         }
 
@@ -8588,8 +8786,10 @@ export class GameScene extends Phaser.Scene {
                         targetSessionId,
                         color:
                             bucket.color,
-                        size: 3,
-                        shape: 'circle',
+                        size:
+                            bucket.size,
+                        shape:
+                            'circle',
                         points:
                             bucket.points,
                     };
@@ -8629,7 +8829,8 @@ export class GameScene extends Phaser.Scene {
             ...assistStrokes,
         );
         this.redoPaintHistory = [];
-        this.paintAssistUsedThisRound = true;
+        this.paintAssistUsedThisRound =
+            true;
 
         if (
             this.practiceMode ===
@@ -8651,12 +8852,12 @@ export class GameScene extends Phaser.Scene {
 
         this.showStatus(
             getLanguage() === 'ja'
-                ? '✨ 背景をそのまま投影し、約半分をドットガイドとして残しました！'
+                ? '✨ 背景をやわらかく投影し、大小のドットと短い線で塗りガイドを作りました！'
                 : getLanguage() === 'en'
-                    ? '✨ Projected the hidden background and kept about half as a dotted guide!'
+                    ? '✨ Soft-projected the background into mixed dots and rough short guide strokes!'
                     : getLanguage() === 'zh'
-                        ? '✨ 已投影角色背后的背景，并保留约一半作为点状上色引导！'
-                        : '✨ 가려진 뒷배경을 그대로 투영해 약 절반을 도트 밑그림으로 남겼어요!',
+                        ? '✨ 已柔化投影背景，并用大小不一的点和短线生成上色引导！'
+                        : '✨ 뒷배경을 살짝 뭉개 투영하고 크고 작은 도트와 짧은 선으로 밑그림을 만들었어요!',
         );
     }
 
