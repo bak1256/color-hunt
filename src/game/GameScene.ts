@@ -79,7 +79,9 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010450ZE_UI_STABILITY_PASS: mobile Hunter palette rebuild, Hider READY visual lock, strong Lobby READY colors, translucent Hunter result tiles, Hider-only paint badges. */
     /* V1010450ZD_HUNTER_PAINT_HELP_AND_READY_BUBBLE: Hunters never see Paint Help; all-Hiders-ready shows a persistent comic bubble above Start Now until Hunt begins. */
+    /* V1010450ZC_RECREATE_MOBILE_PAINT_DOCK: recreate mobile paint palette after Lobby cleanup so next-round Hunter/Hider Paint UI returns normally. */
     /* V1010450ZB_VICTORY_AND_LOBBY_TOOL_CLEANUP: victory Close stays closed; Lobby hard-cleans mobile eyedropper/paint previews. */
     /* V1010450Z_MAIN_HUNT_INTRO_AND_READY_RESET: clean role-goal Hunt intros + explicit post-round lobby READY reset. */
     /* V1010450Y_SAFE_PRECREATE_ROLE_GUARDS: Paint Help role checks tolerate NetworkPlayerManager being undefined during create(). */
@@ -574,6 +576,15 @@ export class GameScene extends Phaser.Scene {
     private paintReadyDomButton?: HTMLButtonElement;
 
     private localPaintReady = false;
+
+    /*
+     * V1010450ZE_PAINT_READY_INTENT_VISUAL_LOCK
+     * Keep the tapped READY/CANCEL state visually stable until the server
+     * confirms it or the short retry window expires.
+     */
+    private pendingPaintReadyIntent?: boolean;
+    private pendingPaintReadyIntentUntil = 0;
+
     private allHidersPaintReady = false;
     private paintReadyCount = 0;
     private paintReadyHiderCount = 0;
@@ -657,6 +668,11 @@ export class GameScene extends Phaser.Scene {
 
             this.localPaintReady =
                 desiredReady;
+
+            this.pendingPaintReadyIntent =
+                desiredReady;
+            this.pendingPaintReadyIntentUntil =
+                Date.now() + 3800;
 
             multiplayerClient
                 .sendPaintReady(
@@ -1018,7 +1034,11 @@ export class GameScene extends Phaser.Scene {
     }
 
     private hideAllHidersReadyBubble(): void {
-        document.querySelector('.colorhunt-all-hiders-ready-bubble')?.remove();
+        document
+            .querySelector(
+                '.colorhunt-all-hiders-ready-bubble',
+            )
+            ?.remove();
     }
 
     private updateAllHidersReadyBubble(
@@ -1030,45 +1050,108 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
-        let bubble=document.querySelector(
-            '.colorhunt-all-hiders-ready-bubble'
-        ) as HTMLDivElement | null;
+        let bubble =
+            document.querySelector(
+                '.colorhunt-all-hiders-ready-bubble',
+            ) as HTMLDivElement | null;
 
         if (!bubble) {
-            bubble=document.createElement('div');
-            bubble.className='colorhunt-all-hiders-ready-bubble';
-            bubble.textContent=tr('모두 준비 완료! 바로 찾기 시작 가능!');
-            Object.assign(bubble.style,{
-                position:'fixed',zIndex:'2147482400',pointerEvents:'none',
-                maxWidth:'230px',padding:'9px 13px',
-                border:'2px solid rgba(35,45,39,.88)',borderRadius:'15px',
-                background:'rgba(255,252,225,.90)',color:'#24382d',
-                boxShadow:'0 5px 14px rgba(0,0,0,.16)',
-                fontFamily:'"Arial Black","Noto Sans KR",Arial,sans-serif',
-                fontSize:this.mobileControlsEnabled?'13px':'14px',
-                fontWeight:'900',lineHeight:'1.25',textAlign:'center',
-                whiteSpace:'normal'
-            });
-            const tail=document.createElement('div');
-            Object.assign(tail.style,{
-                position:'absolute',left:'50%',bottom:'-9px',
-                width:'16px',height:'16px',
-                transform:'translateX(-50%) rotate(45deg)',
-                background:'rgba(255,252,225,.90)',
-                borderRight:'2px solid rgba(35,45,39,.88)',
-                borderBottom:'2px solid rgba(35,45,39,.88)'
-            });
-            bubble.appendChild(tail);
-            document.body.appendChild(bubble);
+            bubble =
+                document.createElement(
+                    'div',
+                );
+
+            bubble.className =
+                'colorhunt-all-hiders-ready-bubble';
+
+            bubble.textContent =
+                tr('모두 준비 완료! 바로 찾기 시작 가능!');
+
+            Object.assign(
+                bubble.style,
+                {
+                    position: 'fixed',
+                    zIndex: '2147482400',
+                    pointerEvents: 'none',
+                    maxWidth: '230px',
+                    padding: '9px 13px',
+                    border: '2px solid rgba(35,45,39,.88)',
+                    borderRadius: '15px',
+                    background: 'rgba(255,252,225,.90)',
+                    color: '#24382d',
+                    boxShadow:
+                        '0 5px 14px rgba(0,0,0,.16)',
+                    fontFamily:
+                        '"Arial Black","Noto Sans KR",Arial,sans-serif',
+                    fontSize:
+                        this.mobileControlsEnabled
+                            ? '13px'
+                            : '14px',
+                    fontWeight: '900',
+                    lineHeight: '1.25',
+                    textAlign: 'center',
+                    whiteSpace: 'normal',
+                },
+            );
+
+            const tail =
+                document.createElement(
+                    'div',
+                );
+
+            Object.assign(
+                tail.style,
+                {
+                    position: 'absolute',
+                    left: '50%',
+                    bottom: '-9px',
+                    width: '16px',
+                    height: '16px',
+                    transform:
+                        'translateX(-50%) rotate(45deg)',
+                    background:
+                        'rgba(255,252,225,.90)',
+                    borderRight:
+                        '2px solid rgba(35,45,39,.88)',
+                    borderBottom:
+                        '2px solid rgba(35,45,39,.88)',
+                },
+            );
+
+            bubble.appendChild(
+                tail,
+            );
+
+            document.body.appendChild(
+                bubble,
+            );
         }
 
-        const rect=button.getBoundingClientRect();
-        bubble.style.left=Math.round(rect.left+rect.width/2)+'px';
-        bubble.style.top=Math.max(
-            10,
-            Math.round(rect.top-bubble.offsetHeight-14)
-        )+'px';
-        bubble.style.transform='translateX(-50%)';
+        const rect =
+            button.getBoundingClientRect();
+
+        bubble.style.left =
+            `${Math.round(
+                rect.left +
+                    rect.width / 2,
+            )}px`;
+
+        /*
+         * Sit immediately above the Hunter's "Start now" button.
+         * Clamp to the viewport so it avoids the character whenever possible.
+         */
+        bubble.style.top =
+            `${Math.max(
+                10,
+                Math.round(
+                    rect.top -
+                        bubble.offsetHeight -
+                        14,
+                ),
+            )}px`;
+
+        bubble.style.transform =
+            'translateX(-50%)';
     }
 
     private updatePaintReadyButton(): void {
@@ -1235,6 +1318,7 @@ export class GameScene extends Phaser.Scene {
 
         if (role === 'hider') {
             this.hideAllHidersReadyBubble();
+
             button.classList
                 .remove(
                     'is-hunter-waiting',
@@ -1313,7 +1397,11 @@ export class GameScene extends Phaser.Scene {
         if (
             this.allHidersPaintReady
         ) {
-            this.updateAllHidersReadyBubble(button,true);
+            this.updateAllHidersReadyBubble(
+                button,
+                true,
+            );
+
             const label =
                 document.createElement(
                     'span',
@@ -9599,19 +9687,32 @@ export class GameScene extends Phaser.Scene {
         }
 
         if (this.paintAssistButton) {
-            /* V1010450ZD_HIDER_ONLY_ASSIST_VISIBILITY */
-            const localRole=multiplayerClient.getLocalPlayer()?.role;
-            const localIsHunter=
-                this.practiceMode==='hunter' ||
-                localRole==='hunter' ||
-                this.networkPlayerManager?.isLocalHunter?.();
-            const localIsHider=
-                this.practiceMode==='hider' ||
-                localRole==='hider' ||
-                this.networkPlayerManager?.isLocalHider?.();
-            const canAssist=
+            /*
+             * V1010450ZD_HIDER_ONLY_ASSIST_VISIBILITY
+             * Multiplayer alone is NOT enough: the local player must actually
+             * be a Hider. This prevents setMobilePaintDockVisible(true) from
+             * re-showing Paint Help for Hunters.
+             */
+            const localRole =
+                multiplayerClient
+                    .getLocalPlayer()
+                    ?.role;
+
+            const localIsHunter =
+                this.practiceMode === 'hunter' ||
+                localRole === 'hunter' ||
+                this.networkPlayerManager
+                    ?.isLocalHunter?.();
+
+            const localIsHider =
+                this.practiceMode === 'hider' ||
+                localRole === 'hider' ||
+                this.networkPlayerManager
+                    ?.isLocalHider?.();
+
+            const canAssist =
                 visible &&
-                this.phase==='paint' &&
+                this.phase === 'paint' &&
                 localIsHider &&
                 !localIsHunter;
 
@@ -11867,12 +11968,47 @@ export class GameScene extends Phaser.Scene {
                         multiplayerClient
                             .getSessionId();
 
-                    this.localPaintReady =
+                    const authoritativeReady =
                         Boolean(
                             sessionId &&
                             state.readySessionIds
                                 .includes(sessionId),
                         );
+
+                    const intentStillActive =
+                        this.pendingPaintReadyIntent !==
+                            undefined &&
+                        Date.now() <
+                            this.pendingPaintReadyIntentUntil;
+
+                    if (
+                        intentStillActive &&
+                        authoritativeReady !==
+                            this.pendingPaintReadyIntent
+                    ) {
+                        /*
+                         * Stale server echo from before the tap: keep the
+                         * optimistic visual state instead of flashing back.
+                         */
+                        this.localPaintReady =
+                            Boolean(
+                                this.pendingPaintReadyIntent,
+                            );
+                    } else {
+                        this.localPaintReady =
+                            authoritativeReady;
+
+                        if (
+                            this.pendingPaintReadyIntent ===
+                                authoritativeReady ||
+                            !intentStillActive
+                        ) {
+                            this.pendingPaintReadyIntent =
+                                undefined;
+                            this.pendingPaintReadyIntentUntil =
+                                0;
+                        }
+                    }
 
                     this.updatePaintReadyButton();
                 },
@@ -17000,61 +17136,129 @@ export class GameScene extends Phaser.Scene {
     private showMainMatchHuntIntroText(
         localIsHunter: boolean,
     ): void {
-        document.querySelector('.colorhunt-main-hunt-intro')?.remove();
+        document
+            .querySelector(
+                '.colorhunt-main-hunt-intro',
+            )
+            ?.remove();
 
-        const text=document.createElement('div');
-        text.className='colorhunt-main-hunt-intro';
-        text.textContent=localIsHunter
-            ? tr('하이더를 찾자!')
-            : tr('헌터를 피해 숨자!');
+        const text =
+            document.createElement('div');
 
-        Object.assign(text.style,{
-            position:'fixed',
-            zIndex:'2147482500',
-            pointerEvents:'none',
-            left:'50%',
-            top:'96px',
-            transform:'translateX(-50%) translateY(-4px)',
-            color:localIsHunter?'#ffd85a':'#ffffff',
-            fontFamily:'"Arial Black","Noto Sans KR",Arial,sans-serif',
-            fontSize:this.mobileControlsEnabled?'23px':'30px',
-            fontWeight:'950',
-            lineHeight:'1.1',
-            letterSpacing:'-0.7px',
-            whiteSpace:'nowrap',
-            WebkitTextStroke:'2px #111111',
-            paintOrder:'stroke fill',
-            textShadow:'0 3px 0 rgba(0,0,0,.42)',
-            opacity:'0',
-            transition:'opacity 180ms ease, transform 180ms ease'
-        });
+        text.className =
+            'colorhunt-main-hunt-intro';
 
-        document.body.appendChild(text);
+        text.textContent =
+            localIsHunter
+                ? tr('하이더를 찾자!')
+                : tr('헌터를 피해 숨자!');
 
-        const place=():void=>{
-            if(!document.body.contains(text))return;
-            const rect=this.game.canvas.getBoundingClientRect();
-            text.style.left=Math.round(rect.left+rect.width/2)+'px';
-            text.style.top=Math.round(
-                rect.top+Math.max(
-                    62,
-                    rect.height*(this.mobileControlsEnabled?0.105:0.115)
-                )
-            )+'px';
-        };
+        Object.assign(
+            text.style,
+            {
+                position: 'fixed',
+                zIndex: '2147482500',
+                pointerEvents: 'none',
+                left: '50%',
+                top: '96px',
+                transform:
+                    'translateX(-50%) translateY(-4px)',
+                color:
+                    localIsHunter
+                        ? '#ffd85a'
+                        : '#ffffff',
+                fontFamily:
+                    '"Arial Black", "Noto Sans KR", Arial, sans-serif',
+                fontSize:
+                    this.mobileControlsEnabled
+                        ? '23px'
+                        : '30px',
+                fontWeight: '950',
+                lineHeight: '1.1',
+                letterSpacing: '-0.7px',
+                whiteSpace: 'nowrap',
+                WebkitTextStroke:
+                    '2px #111111',
+                paintOrder:
+                    'stroke fill',
+                textShadow:
+                    '0 3px 0 rgba(0,0,0,.42)',
+                opacity: '0',
+                transition:
+                    'opacity 180ms ease, transform 180ms ease',
+            },
+        );
+
+        document.body.appendChild(
+            text,
+        );
+
+        const place =
+            (): void => {
+                if (
+                    !document.body.contains(
+                        text,
+                    )
+                ) {
+                    return;
+                }
+
+                const rect =
+                    this.game.canvas
+                        .getBoundingClientRect();
+
+                text.style.left =
+                    `${Math.round(
+                        rect.left +
+                            rect.width /
+                                2,
+                    )}px`;
+
+                text.style.top =
+                    `${Math.round(
+                        rect.top +
+                            Math.max(
+                                62,
+                                rect.height *
+                                    (
+                                        this.mobileControlsEnabled
+                                            ? 0.105
+                                            : 0.115
+                                    ),
+                            ),
+                    )}px`;
+            };
 
         place();
-        requestAnimationFrame(place);
-        requestAnimationFrame(()=>{
-            text.style.opacity='1';
-            text.style.transform='translateX(-50%) translateY(0)';
-        });
+        requestAnimationFrame(
+            place,
+        );
 
-        window.setTimeout(()=>{
-            text.style.opacity='0';
-            text.style.transform='translateX(-50%) translateY(-4px)';
-            window.setTimeout(()=>text.remove(),260);
-        },1500);
+        requestAnimationFrame(
+            () => {
+                text.style.opacity =
+                    '1';
+                text.style.transform =
+                    'translateX(-50%) translateY(0)';
+            },
+        );
+
+        window.setTimeout(
+            () => {
+                text.style.opacity =
+                    '0';
+                text.style.transform =
+                    'translateX(-50%) translateY(-4px)';
+
+                window.setTimeout(
+                    () => {
+                        text.remove();
+                    },
+                    260,
+                );
+            },
+            1500,
+        );
     }
 
     private showPracticePaintIntroText(): void {
@@ -29053,6 +29257,20 @@ export class GameScene extends Phaser.Scene {
                 start.classList.remove(
                     'is-ready',
                 );
+
+                [
+                    'background',
+                    'border-color',
+                    'box-shadow',
+                    'color',
+                    'text-shadow',
+                ].forEach(
+                    (property) => {
+                        start.style.removeProperty(
+                            property,
+                        );
+                    },
+                );
             } else {
                 start.textContent =
                     localReady
@@ -29068,6 +29286,42 @@ export class GameScene extends Phaser.Scene {
                 start.classList.toggle(
                     'is-ready',
                     localReady,
+                );
+
+                /*
+                 * V1010450ZE_READY_VISUAL_STATE
+                 * Make READY/CANCEL READY unmistakable at a glance.
+                 */
+                start.style.setProperty(
+                    'background',
+                    localReady
+                        ? 'linear-gradient(180deg,#de6f63 0%,#bb4741 100%)'
+                        : 'linear-gradient(180deg,#75cc8f 0%,#3d9c63 100%)',
+                    'important',
+                );
+                start.style.setProperty(
+                    'border-color',
+                    localReady
+                        ? '#8c302d'
+                        : '#2f744b',
+                    'important',
+                );
+                start.style.setProperty(
+                    'box-shadow',
+                    localReady
+                        ? '0 4px 0 #7c2926,0 8px 18px rgba(122,39,36,.24)'
+                        : '0 4px 0 #28643f,0 8px 18px rgba(37,112,70,.22)',
+                    'important',
+                );
+                start.style.setProperty(
+                    'color',
+                    '#ffffff',
+                    'important',
+                );
+                start.style.setProperty(
+                    'text-shadow',
+                    '0 2px 2px rgba(0,0,0,.42)',
+                    'important',
                 );
             }
         }
@@ -34715,7 +34969,9 @@ export class GameScene extends Phaser.Scene {
                     () => {
                         /*
                          * V1010450ZA_VICTORY_CLOSE_STAYS_CLOSED
-                         * Collapsed chip = user intentionally closed full card.
+                         * If the user already closed the full victory card,
+                         * the collapsed chip is the intentional resting state.
+                         * Do not let the lobby watchdog reopen it automatically.
                          */
                         if (
                             this.phase === 'lobby' &&
@@ -34808,7 +35064,11 @@ export class GameScene extends Phaser.Scene {
 
         /*
          * V1010450ZB_LOBBY_PAINT_PREVIEW_CLEANUP
-         * Remove every transient Hider paint/eyedropper helper before Lobby.
+         *
+         * A Hider can finish the round while the mobile eyedropper/precision
+         * preview is still alive. Those Phaser helper objects are camera/world
+         * objects, so merely hiding the paint palette does not remove them.
+         * Reset every transient paint-tool owner explicitly when Lobby begins.
          */
         this.eyedropperArmed = false;
         this.eyedropperPointerId = -1;
@@ -36979,8 +37239,13 @@ const roomPlayers =
                     context.shadowColor =
                         'rgba(35,39,43,.16)';
                     context.shadowBlur = 14;
+                    /*
+                     * V1010450ZE_HUNTER_CARD_TRANSLUCENT_HIDER_TILES
+                     * Let a little of the captured map show through each Hider
+                     * result tile instead of covering it with solid white.
+                     */
                     context.fillStyle =
-                        'rgba(255,255,255,.97)';
+                        'rgba(255,255,255,.72)';
                     context.beginPath();
                     context.roundRect(
                         mx - 62,
@@ -37104,41 +37369,46 @@ const roomPlayers =
                 ? 814
                 : 1104;
 
-        /* V1010450: every local winner card clearly records whether Paint
-         * Assist was used. This is intentionally a personal/client badge and
-         * does not alter round authority or scoring. */
-        const paintSkillBadge =
-            this.getPaintSkillBadge();
-        context.save();
-        context.fillStyle =
-            paintSkillBadge.background;
-        context.strokeStyle =
-            'rgba(95,66,10,.20)';
-        context.lineWidth = 2;
-        context.beginPath();
-        context.roundRect(
-            72,
-            memoryPanelY - 18,
-            245,
-            54,
-            27,
-        );
-        context.fill();
-        context.stroke();
-        context.fillStyle =
-            paintSkillBadge.color;
-        context.font =
-            '900 20px Arial, sans-serif';
-        context.textAlign =
-            'left';
-        context.textBaseline =
-            'middle';
-        context.fillText(
-            `${paintSkillBadge.emoji} ${paintSkillBadge.label}`,
-            94,
-            memoryPanelY + 9,
-        );
-        context.restore();
+        /*
+         * V1010450ZE_HIDER_ONLY_PAINT_SKILL_BADGE
+         * Paint Master / Paint Rookie describes Hider Paint Help usage.
+         * Hunter victory cards must never show either badge.
+         */
+        if (!isHunter) {
+            const paintSkillBadge =
+                this.getPaintSkillBadge();
+
+            context.save();
+            context.fillStyle =
+                paintSkillBadge.background;
+            context.strokeStyle =
+                'rgba(95,66,10,.20)';
+            context.lineWidth = 2;
+            context.beginPath();
+            context.roundRect(
+                72,
+                memoryPanelY - 18,
+                245,
+                54,
+                27,
+            );
+            context.fill();
+            context.stroke();
+            context.fillStyle =
+                paintSkillBadge.color;
+            context.font =
+                '900 20px Arial, sans-serif';
+            context.textAlign =
+                'left';
+            context.textBaseline =
+                'middle';
+            context.fillText(
+                `${paintSkillBadge.emoji} ${paintSkillBadge.label}`,
+                94,
+                memoryPanelY + 9,
+            );
+            context.restore();
+        }
 
         /*
          * V1010440F_HIDER_NICKNAME_SCOPE_FIX
@@ -38363,6 +38633,11 @@ const roomPlayers =
                 phaseEndsAt - Date.now(),
             );
 
+        /*
+         * Capture this before enterLobbyPhase() mutates this.phase.
+         * Used to reset the next-round waiting-room READY state only after a
+         * completed round, not on a normal lobby reconnect.
+         */
         const returnedToLobbyAfterRound =
             phase === 'lobby' &&
             this.phase === 'finished';
@@ -38514,26 +38789,56 @@ const roomPlayers =
 
             this.resetGameplayCamera();
 
+            /*
+             * V1010450Z_POST_ROUND_LOBBY_READY_RESET
+             *
+             * A completed round must always return guests to NOT READY.
+             * The server normally clears lobbyReadySessionIds in resetToLobby(),
+             * but the client can still render its cached previous READY state
+             * until the new lobby_ready_state arrives. That creates the
+             * "button is still pressed; click twice" bug.
+             *
+             * Clear ownership authoritatively for this guest and request the
+             * fresh state a few times across the phase handoff.
+             */
             if (
                 returnedToLobbyAfterRound &&
-                multiplayerClient.isConnected()
+                multiplayerClient
+                    .isConnected()
             ) {
-                if (!multiplayerClient.isHost()) {
-                    multiplayerClient.sendLobbyReady(false);
+                if (
+                    !multiplayerClient
+                        .isHost()
+                ) {
+                    multiplayerClient
+                        .sendLobbyReady(
+                            false,
+                        );
                 }
 
-                [0,120,360,800].forEach((delay)=>{
-                    this.time.delayedCall(delay,()=>{
-                        if (
-                            this.phase !== 'lobby' ||
-                            !multiplayerClient.isConnected()
-                        ) return;
+                [0, 120, 360, 800].forEach(
+                    (delay) => {
+                        this.time.delayedCall(
+                            delay,
+                            () => {
+                                if (
+                                    this.phase !==
+                                        'lobby' ||
+                                    !multiplayerClient
+                                        .isConnected()
+                                ) {
+                                    return;
+                                }
 
-                        multiplayerClient.requestLobbyReadyState();
-                        this.updateWaitingRoomDom();
-                        this.updateLobbyUi();
-                    });
-                });
+                                multiplayerClient
+                                    .requestLobbyReadyState();
+
+                                this.updateWaitingRoomDom();
+                                this.updateLobbyUi();
+                            },
+                        );
+                    },
+                );
             }
 
             this.enterLobbyPhase();
@@ -52041,6 +52346,49 @@ const roomPlayers =
         this.clearStraightLinePreview();
         this.phase = 'paint';
 
+        /*
+         * V1010450ZC_RECREATE_MOBILE_PAINT_DOCK
+         *
+         * v450zb correctly destroys stale Hider paint/eyedropper DOM when
+         * returning to Lobby. But createMobilePaintDock() used to run only once
+         * during Scene.create(), so the next real Paint phase had nothing to
+         * show. This was especially obvious for a Hunter: the color palette /
+         * paint controls were simply gone.
+         *
+         * Rebuild the dock on every Paint entry when Lobby cleanup removed it.
+         * At this point NetworkPlayerManager already exists, so the Hider-only
+         * Paint Help role check is also safe and correct:
+         *   Hider  -> normal dock + Paint Help
+         *   Hunter -> normal dock, NO Paint Help
+         */
+        /*
+         * V1010450ZE_MOBILE_HUNTER_PALETTE_REBUILD
+         *
+         * Mobile Hunter could inherit a stale/hidden Paint dock from the Lobby
+         * transition. Rebuild the mobile dock from the authoritative Paint role
+         * every round. Hunter still gets NO Paint Help, only normal paint tools.
+         */
+        if (this.mobileControlsEnabled) {
+            this.destroyMobilePaintDock();
+            this.createMobilePaintDock();
+        } else if (!this.mobilePaintDock) {
+            this.createMobilePaintDock();
+        }
+
+        this.setMobilePaintDockVisible(
+            true,
+        );
+
+        this.time.delayedCall(
+            0,
+            () => {
+                this.setMobilePaintDockVisible(
+                    true,
+                );
+                this.updateMobilePaintDockPosition();
+            },
+        );
+
         if (
             this.isMultiplayerSession()
         ) {
@@ -52390,9 +52738,18 @@ const roomPlayers =
                 .getLocalPlayer()
                 ?.role === 'hunter';
 
-        if (this.isMultiplayerSession()) {
+        if (
+            this.isMultiplayerSession()
+        ) {
+            /*
+             * V1010450Z_MAIN_HUNT_TEXT_INTRO
+             * Replace old transient Hunt guidance with the same clean,
+             * text-only intro style used by Hider Practice.
+             */
             this.clearStatus();
-            this.showMainMatchHuntIntroText(localIsHunter);
+            this.showMainMatchHuntIntroText(
+                localIsHunter,
+            );
         }
 
         if (
