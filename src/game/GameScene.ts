@@ -1304,6 +1304,74 @@ export class GameScene extends Phaser.Scene {
     }
 
     private applyHiderSpectatorAndViewPostPass(): void {
+        /*
+         * V1010452P_HIDER_VICTORY_PC_MOBILE_CAPTURE_PARITY
+         *
+         * During Hider victory capture, captureVictoryFrameForRoleShowcase()
+         * temporarily owns the camera (960x540, zoom 4.9, centered on the local
+         * Hider).  The normal Hider post-pass used to run again on mobile during
+         * the requestAnimationFrame settling window and restore gameplay zoom /
+         * circular vision, so the mobile poster became zoomed-out and the Hider
+         * could disappear.
+         *
+         * Victory capture is a camera-authority barrier: do not touch camera,
+         * vision, spectator controls, or Hider visibility until capture finishes.
+         */
+        if (this.victoryShowcaseCleanCaptureActive) {
+            this.spectatorMobileButtonFrame
+                ?.setVisible(false);
+
+            this.spectatorButton
+                ?.setVisible(false);
+
+            this.mobileMoveBase
+                ?.setVisible(false);
+            this.mobileMoveKnob
+                ?.setVisible(false);
+            this.mobileMoveLabel
+                ?.setVisible(false);
+
+            this.mobileAimBase
+                ?.setVisible(false);
+            this.mobileAimKnob
+                ?.setVisible(false);
+            this.mobileAimLabel
+                ?.setVisible(false);
+
+            this.mobileFireButton
+                ?.setVisible(false);
+            this.mobileFireLabel
+                ?.setVisible(false);
+
+            this.mobileFartButton
+                ?.setVisible(false);
+            this.mobileFartLabel
+                ?.setVisible(false);
+
+            this.aimLine
+                ?.clear()
+                .setVisible(false);
+
+            this.crosshair
+                ?.clear()
+                .setVisible(false);
+
+            this.gun
+                ?.setVisible(false);
+
+            this.hiderVisionGraphics
+                ?.clear()
+                .setVisible(false);
+
+            this.hiderVisionOverlays
+                .forEach(
+                    (overlay) =>
+                        overlay.setVisible(false),
+                );
+
+            return;
+        }
+
         const localRole =
             multiplayerClient
                 .getLocalPlayer()
@@ -41591,8 +41659,8 @@ const ribbon =
     /*
      * V1010388J_VICTORY_CARD_FINAL_VISUALS / ROLE_CAPTURE
      *
-     * Hider victory uses the SAME practical framing as Hider Practice:
-     * local player only, centered, Paint zoom 3.75 desktop / 4.55 mobile.
+     * Hider victory uses one device-independent capture frame:
+     * local player only, centered, logical 960x540 camera at zoom 4.9.
      * The change exists only for the screenshot frame and is restored
      * immediately afterwards.
      */
