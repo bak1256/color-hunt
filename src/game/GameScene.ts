@@ -1590,6 +1590,32 @@ export class GameScene extends Phaser.Scene {
 
         button.hidden =
             !visible;
+        /*
+         * V1010451M8A_READY_BUTTON_LOBBY_CLEANUP_ROBUST / PAINT_RESTORE
+         * enterLobbyPhase() uses a visibility hard-hide to defeat stale DOM/CSS.
+         * Only a legitimate Paint READY render may restore interaction.
+         */
+        button.style.setProperty(
+            'visibility',
+            visible
+                ? 'visible'
+                : 'hidden',
+            'important',
+        );
+        button.style.setProperty(
+            'pointer-events',
+            visible
+                ? 'auto'
+                : 'none',
+            'important',
+        );
+        button.setAttribute(
+            'aria-hidden',
+            visible
+                ? 'false'
+                : 'true',
+        );
+
 
         if (!visible) {
             this.hideAllHidersReadyBubble();
@@ -38898,6 +38924,48 @@ const ribbon =
     }
 
     private enterLobbyPhase(): void {
+        /*
+         * V1010451M8A_READY_BUTTON_LOBBY_CLEANUP_ROBUST / LOBBY_HARD_HIDE
+         * READY is a DOM HUD. Never allow Paint coordination UI to survive
+         * a round-end / abort / leave path into Lobby.
+         */
+        this.localPaintReady = false;
+        this.allHidersPaintReady = false;
+        this.paintReadyCount = 0;
+        this.paintReadyHiderCount = 0;
+        this.pendingPaintReadyIntent =
+            undefined;
+        this.pendingPaintReadyIntentUntil =
+            0;
+
+        this.paintReadyButton
+            ?.setVisible(false);
+
+        if (this.paintReadyDomButton) {
+            this.paintReadyDomButton.hidden =
+                true;
+            this.paintReadyDomButton.style
+                .setProperty(
+                    'visibility',
+                    'hidden',
+                    'important',
+                );
+            this.paintReadyDomButton.style
+                .setProperty(
+                    'pointer-events',
+                    'none',
+                    'important',
+                );
+            this.paintReadyDomButton
+                .setAttribute(
+                    'aria-hidden',
+                    'true',
+                );
+        }
+
+        this.hideAllHidersReadyBubble();
+
+
         this.destroyHunterControlsBottomHint();
 
         this.time.delayedCall(
@@ -42738,6 +42806,39 @@ const roomPlayers =
         }
 
         if (phase !== 'paint') {
+            /*
+             * V1010451M8A_READY_BUTTON_LOBBY_CLEANUP_ROBUST / NETWORK_NON_PAINT_HARD_HIDE
+             */
+            this.pendingPaintReadyIntent =
+                undefined;
+            this.pendingPaintReadyIntentUntil =
+                0;
+
+            if (this.paintReadyDomButton) {
+                this.paintReadyDomButton.hidden =
+                    true;
+                this.paintReadyDomButton.style
+                    .setProperty(
+                        'visibility',
+                        'hidden',
+                        'important',
+                    );
+                this.paintReadyDomButton.style
+                    .setProperty(
+                        'pointer-events',
+                        'none',
+                        'important',
+                    );
+                this.paintReadyDomButton
+                    .setAttribute(
+                        'aria-hidden',
+                        'true',
+                    );
+            }
+
+            this.hideAllHidersReadyBubble();
+
+
             this.localPaintReady = false;
             this.allHidersPaintReady = false;
             this.paintReadyCount = 0;
