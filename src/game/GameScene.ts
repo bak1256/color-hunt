@@ -85,6 +85,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010451M3K4_HUNTER_HELP_EXTERNAL_ROW: Hunter explanation is a dedicated flow row outside the clipped status card. */
     /* V1010451M3K3_HUNTER_STATUS_HARDFIX: inline-important Hunter status rendering defeats legacy mobile CSS/textContent overrides. */
     /* V1010451M3K2_HUNTER_HELP_TOAST_CENTER: show Hunter helper line; center host-transfer toast inside game canvas. */
     /* V1010451M3K_WAITING_LAYOUT_RESCUE: deterministic compact waiting flow; complete Hunt controls; toast inside canvas. */
@@ -28209,6 +28210,74 @@ export class GameScene extends Phaser.Scene {
 
         {
             const styleId =
+                'colorhunt-v451m3k4-hunter-helper-row';
+
+            document
+                .getElementById(
+                    styleId,
+                )
+                ?.remove();
+
+            const style =
+                document.createElement(
+                    'style',
+                );
+
+            style.id =
+                styleId;
+
+            style.textContent = `
+                .colorhunt-waiting-room .ch-waiting-role-wrap {
+                    display: flex !important;
+                    flex-direction: column !important;
+                    gap: 5px !important;
+                    padding-bottom: 5px !important;
+                    overflow: visible !important;
+                    height: auto !important;
+                    min-height: 0 !important;
+                    max-height: none !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-role-status {
+                    margin-bottom: 0 !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-role-help-external {
+                    display: flex !important;
+                    flex: 0 0 18px !important;
+                    width: 100% !important;
+                    height: 18px !important;
+                    min-height: 18px !important;
+                    max-height: 18px !important;
+                    margin: 0 0 7px 0 !important;
+                    padding: 0 4px !important;
+                    box-sizing: border-box !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    overflow: visible !important;
+                    white-space: nowrap !important;
+                    font-size: 9px !important;
+                    font-weight: 750 !important;
+                    line-height: 18px !important;
+                    text-align: center !important;
+                    color: #65736c !important;
+                    opacity: 1 !important;
+                    visibility: visible !important;
+                }
+
+                /* Ensure Paint begins only after the helper row has consumed flow space. */
+                .colorhunt-waiting-room .ch-waiting-timing {
+                    margin-top: 0 !important;
+                }
+            `;
+
+            document.head.appendChild(
+                style,
+            );
+        }
+
+        {
+            const styleId =
                 'colorhunt-v451m3k3-hunter-status-hardfix';
 
             document
@@ -30298,6 +30367,163 @@ export class GameScene extends Phaser.Scene {
                     'is-active',
                     localVolunteer,
                 );
+        }
+
+
+        /*
+         * V1010451M3K4_HUNTER_HELP_EXTERNAL_ROW
+         * External Hunter helper row: independent of the compact status card.
+         */
+        if (hunterVolunteerStatus) {
+            const roleWrap =
+                hunterVolunteerStatus
+                    .closest<HTMLElement>(
+                        '.ch-waiting-role-wrap',
+                    );
+
+            if (roleWrap) {
+                let helperRow =
+                    roleWrap.querySelector<HTMLElement>(
+                        '.ch-waiting-role-help-external',
+                    );
+
+                if (!helperRow) {
+                    helperRow =
+                        document.createElement(
+                            'div',
+                        );
+
+                    helperRow.className =
+                        'ch-waiting-role-help-external';
+
+                    hunterVolunteerStatus
+                        .insertAdjacentElement(
+                            'afterend',
+                            helperRow,
+                        );
+                }
+
+                const lang =
+                    getLanguage();
+
+                helperRow.textContent =
+                    lang === 'ja'
+                        ? 'ハンター募集中… 応募者がいなければランダムで選ばれます。'
+                        : lang === 'en'
+                            ? 'Recruiting Hunters… If nobody volunteers, one is chosen at random.'
+                            : lang === 'zh'
+                                ? '正在招募猎人… 如果无人申请，将随机选择。'
+                                : '헌터 모집 중… 지원자가 없으면 무작위로 선택됩니다.';
+
+                const setImportant =
+                    (
+                        property: string,
+                        value: string,
+                    ): void => {
+                        helperRow?.style
+                            .setProperty(
+                                property,
+                                value,
+                                'important',
+                            );
+                    };
+
+                setImportant(
+                    'display',
+                    'flex',
+                );
+                setImportant(
+                    'align-items',
+                    'center',
+                );
+                setImportant(
+                    'justify-content',
+                    'center',
+                );
+                setImportant(
+                    'width',
+                    '100%',
+                );
+                setImportant(
+                    'height',
+                    '18px',
+                );
+                setImportant(
+                    'min-height',
+                    '18px',
+                );
+                setImportant(
+                    'max-height',
+                    '18px',
+                );
+                setImportant(
+                    'margin',
+                    '0 0 7px 0',
+                );
+                setImportant(
+                    'padding',
+                    '0 4px',
+                );
+                setImportant(
+                    'box-sizing',
+                    'border-box',
+                );
+                setImportant(
+                    'overflow',
+                    'visible',
+                );
+                setImportant(
+                    'white-space',
+                    'nowrap',
+                );
+                setImportant(
+                    'font-size',
+                    '9px',
+                );
+                setImportant(
+                    'font-weight',
+                    '750',
+                );
+                setImportant(
+                    'line-height',
+                    '18px',
+                );
+                setImportant(
+                    'text-align',
+                    'center',
+                );
+                setImportant(
+                    'color',
+                    '#65736c',
+                );
+                setImportant(
+                    'opacity',
+                    '1',
+                );
+                setImportant(
+                    'visibility',
+                    'visible',
+                );
+
+                /*
+                 * Hide the old inner helper if present so we never get two lines.
+                 * Main Hunter count remains in the status card.
+                 */
+                const innerHelper =
+                    hunterVolunteerStatus
+                        .querySelector<HTMLElement>(
+                            '.ch-waiting-role-status-help',
+                        );
+
+                if (innerHelper) {
+                    innerHelper.style
+                        .setProperty(
+                            'display',
+                            'none',
+                            'important',
+                        );
+                }
+            }
         }
 
         if (this.waitingRoomInfo) {
