@@ -85,6 +85,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010452N3_RESTORE_HIDER_CORE_PC_MOBILE_PARITY */
     /* V1010452N_SEAL_HIDER_BATTLE_SKILLS_RESTORE_VISION */
     /*
      * Reserved for a future Hunter Battle Mode.
@@ -1128,7 +1129,6 @@ export class GameScene extends Phaser.Scene {
     /*
      * V1010452M_HIDER_SKILL_UX_SPECTATOR_MOBILE_POLISH
      */
-    private paintUtilityCollapsed = false;
     private paintUtilityToggleDom?: HTMLButtonElement;
     private hiderSkillChargeActive = false;
     /* V1010452N2_REMOVE_UNUSED_CHARGE_TIMER */
@@ -1151,162 +1151,90 @@ export class GameScene extends Phaser.Scene {
         );
     }
 
-    private destroyPaintUtilityToggle(): void {
-        this.paintUtilityToggleDom?.remove();
-        this.paintUtilityToggleDom = undefined;
-    }
 
     private syncPaintUtilityCollapseUi(): void {
-        const toggle =
-            this.paintUtilityToggleDom;
-
-        if (toggle) {
-            toggle.textContent =
-                this.paintUtilityCollapsed
-                    ? '>'
-                    : '<';
-
-            toggle.title =
-                this.paintUtilityCollapsed
-                    ? '펼치기'
-                    : '접기';
-
-            /*
-             * Attached square-arrow style requested for mobile:
-             * [ Paint Help ][ < ]  ->  [ > ]
-             */
-            Object.assign(
-                toggle.style,
-                {
-                    width: '38px',
-                    height: '38px',
-                    borderRadius: '0',
-                    border:
-                        '3px solid #111111',
-                    background:
-                        '#ffffff',
-                    color:
-                        '#111111',
-                    fontSize: '28px',
-                    fontWeight: '1000',
-                    lineHeight: '29px',
-                    boxShadow: 'none',
-                },
-            );
-        }
-
-        if (this.paintAssistButton) {
-            this.paintAssistButton.style.visibility =
-                this.paintUtilityCollapsed
-                    ? 'hidden'
-                    : 'visible';
-
-            this.paintAssistButton.style.pointerEvents =
-                this.paintUtilityCollapsed
-                    ? 'none'
-                    : 'auto';
-
-            if (this.mobileControlsEnabled) {
-                this.paintAssistButton.style.borderRadius =
-                    '0';
-                this.paintAssistButton.style.border =
-                    '3px solid #111111';
-                this.paintAssistButton.style.boxShadow =
-                    'none';
-                this.paintAssistButton.style.height =
-                    '38px';
-            }
-        }
-
         /*
-         * Battle skills are sealed: never show the skill picker.
+         * V1010452N3_RESTORE_HIDER_CORE_PC_MOBILE_PARITY
+         * Collapse experiment removed. Paint Help returns to the original UI.
          */
-        if (this.hiderSkillPickerDom) {
-            this.hiderSkillPickerDom.style.display =
-                'none';
-            this.hiderSkillPickerDom.style.pointerEvents =
-                'none';
-        }
-    }
 
-    private ensurePaintUtilityToggle(): void {
-        const localIsHider =
-            this.phase === 'paint' &&
-            this.isMultiplayerSession() &&
-            (
-                multiplayerClient.getLocalPlayer()?.role === 'hider' ||
-                this.networkPlayerManager?.isLocalHider?.()
-            );
+        this.paintUtilityToggleDom
+            ?.remove();
 
-        if (!localIsHider) {
-            this.destroyPaintUtilityToggle();
+        this.paintUtilityToggleDom =
+            undefined;
+
+        const button =
+            this.paintAssistButton;
+
+        if (!button) {
             return;
         }
 
-        if (!this.paintUtilityToggleDom) {
-            const button = document.createElement('button');
-            button.type = 'button';
-            Object.assign(button.style, {
-                position: 'fixed',
-                zIndex: '2147481501',
-                width: '32px',
-                height: '32px',
-                padding: '0',
-                border: '2px solid rgba(92,143,102,.88)',
-                borderRadius: '10px',
-                background: 'rgba(247,252,242,.92)',
-                color: '#274b38',
-                fontSize: '21px',
-                fontWeight: '1000',
-                lineHeight: '26px',
-                cursor: 'pointer',
-                boxShadow: '0 3px 8px rgba(0,0,0,.18)',
-                userSelect: 'none',
-                WebkitTapHighlightColor: 'transparent',
-            });
-            button.addEventListener('pointerdown', (event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                this.paintUtilityCollapsed = !this.paintUtilityCollapsed;
-                this.syncPaintUtilityCollapseUi();
-            });
-            document.body.appendChild(button);
-            this.paintUtilityToggleDom = button;
-        }
+        button.style.visibility =
+            'visible';
+        button.style.pointerEvents =
+            'auto';
+        button.style.display =
+            '';
+
+        /*
+         * Original Paint Help authoring values.
+         */
+        button.style.minWidth =
+            '126px';
+        button.style.minHeight =
+            '46px';
+        button.style.height =
+            '';
+        button.style.padding =
+            '7px 12px';
+        button.style.border =
+            '2px solid #c79b27';
+        button.style.borderRadius =
+            '13px';
+        button.style.background =
+            'rgba(255,219,88,.72)';
+        button.style.color =
+            '#4d3a08';
+        button.style.boxShadow =
+            '0 4px 14px rgba(97,72,10,.22)';
+        button.style.fontFamily =
+            'Arial, sans-serif';
+        button.style.fontWeight =
+            '900';
+        button.style.fontSize =
+            '13px';
+        button.style.lineHeight =
+            '1.15';
+        button.style.whiteSpace =
+            'pre-line';
+        button.style.textAlign =
+            'center';
+    }
+
+    private ensurePaintUtilityToggle(): void {
+        /*
+         * Collapse UI removed.
+         * Also clean up a stale button created before this patch/hot reload.
+         */
+
+        this.paintUtilityToggleDom
+            ?.remove();
+
+        this.paintUtilityToggleDom =
+            undefined;
+
+        document
+            .querySelectorAll(
+                '.colorhunt-paint-utility-collapse',
+            )
+            .forEach(
+                (node) =>
+                    node.remove(),
+            );
 
         this.syncPaintUtilityCollapseUi();
-
-        const anchorRect =
-            this.paintAssistButton
-                ?.getBoundingClientRect();
-
-        const canvasRect =
-            this.game.canvas
-                .getBoundingClientRect();
-
-        const buttonWidth =
-            38;
-
-        const left =
-            anchorRect
-                ? (
-                    this.paintUtilityCollapsed
-                        ? anchorRect.right - buttonWidth
-                        : anchorRect.right
-                )
-                : canvasRect.left + 12;
-
-        const top =
-            anchorRect
-                ? anchorRect.top
-                : canvasRect.top +
-                    canvasRect.height * 0.42;
-
-        this.paintUtilityToggleDom.style.left =
-            `${Math.round(left)}px`;
-
-        this.paintUtilityToggleDom.style.top =
-            `${Math.round(top)}px`;
     }
 
     private clearHiderSkillChargePreview(): void {
@@ -1354,6 +1282,16 @@ export class GameScene extends Phaser.Scene {
 
         if (!this.hiderBattleSkillsEnabled) {
             this.destroyHiderSkillPicker();
+
+            document
+                .querySelectorAll(
+                    '.colorhunt-hider-skill-picker',
+                )
+                .forEach(
+                    (node) =>
+                        node.remove(),
+                );
+
             this.clearHiderSkillChargePreview();
 
             this.hiderLaserAimGraphics
@@ -1398,10 +1336,6 @@ export class GameScene extends Phaser.Scene {
                         .setDepth(6002);
             }
 
-            /*
-             * Keep the real mobile spectator button,
-             * slightly lower so it stays clear of the nickname/status card.
-             */
             const buttonX =
                 this.gameWidth / 2;
 
@@ -1419,6 +1353,7 @@ export class GameScene extends Phaser.Scene {
                 0x3d9ed1,
                 0.88,
             );
+
             frame.fillRoundedRect(
                 -94,
                 -23,
@@ -1432,6 +1367,7 @@ export class GameScene extends Phaser.Scene {
                 0xd9f3ff,
                 0.94,
             );
+
             frame.strokeRoundedRect(
                 -94,
                 -23,
@@ -1465,20 +1401,21 @@ export class GameScene extends Phaser.Scene {
                 );
             }
 
-            /*
-             * Hide & Seek Hider owns movement only.
-             * Battle skill AIM/FIRE is sealed.
-             */
             const showMove =
                 !spectating;
 
             this.mobileMoveBase
                 ?.setVisible(showMove);
+
             this.mobileMoveKnob
                 ?.setVisible(showMove);
+
             this.mobileMoveLabel
                 ?.setVisible(showMove);
 
+            /*
+             * Sealed Battle controls never belong to normal Hider gameplay.
+             */
             this.mobileAimBase
                 ?.setVisible(false);
             this.mobileAimKnob
@@ -1498,32 +1435,62 @@ export class GameScene extends Phaser.Scene {
                 ?.setVisible(false);
         }
 
+        /*
+         * Hider aim is always off in current Hide & Seek.
+         */
+        this.aimLine
+            ?.clear()
+            .setVisible(false);
+
+        this.crosshair
+            ?.clear()
+            .setVisible(false);
+
+        this.gun
+            ?.setVisible(false);
+
         if (spectating) {
-            this.clearHiderSkillChargePreview();
-            this.hiderLaserAimGraphics
-                ?.clear()
-                .setVisible(false);
-
-            this.aimLine
-                ?.clear()
-                .setVisible(false);
-
-            this.crosshair
-                ?.clear()
-                .setVisible(false);
-
-            this.gun
-                ?.setVisible(false);
+            return;
         }
 
         /*
-         * IMPORTANT:
-         * Do NOT hide hiderVisionGraphics here.
-         * Do NOT override camera zoom here.
-         *
-         * The original Hunt tension code owns the dark circular Hider vision,
-         * and ensureGameplayCameraFollow() owns gameplayCameraZoom (1.65).
+         * ORIGINAL gameplay camera authority, for BOTH PC + Mobile.
          */
+        if (
+            Math.abs(
+                this.cameras.main.zoom -
+                    this.gameplayCameraZoom,
+            ) >
+            0.001
+        ) {
+            this.applyFixedHudForZoom(
+                this.gameplayCameraZoom,
+            );
+
+            this.cameras.main
+                .setZoom(
+                    this.gameplayCameraZoom,
+                );
+        }
+
+        /*
+         * ORIGINAL circular Hider vision.
+         * Explicit final-frame redraw fixes PC being left unmasked by 452m.
+         */
+        const localPosition =
+            this.networkPlayerManager
+                .getLocalPlayerPosition();
+
+        if (localPosition) {
+            this.drawCircularHiderVision(
+                localPosition,
+                this.hiderVisionRadiusScreen /
+                    Math.max(
+                        0.01,
+                        this.cameras.main.zoom,
+                    ),
+            );
+        }
     }
 
     private createHiderSkillPicker(): void {
@@ -41610,6 +41577,17 @@ const ribbon =
             camera.scrollX;
         const savedScrollY =
             camera.scrollY;
+
+        /*
+         * V1010452N3 / VICTORY_CAPTURE_PARITY
+         * Normalize the capture camera logical viewport so Mobile and PC use
+         * identical framing/character scale.
+         */
+        const savedCameraWidth =
+            camera.width;
+
+        const savedCameraHeight =
+            camera.height;
         const savedPaintWorldZoom =
             this.paintWorldZoom;
         const previousCleanCaptureActive =
@@ -41745,14 +41723,22 @@ const ribbon =
                  * the Practice poster shows the Hider as the clear hero instead
                  * of a tiny dot surrounded by most of the map.
                  */
+                /*
+                 * Same logical camera size + zoom on every device.
+                 * CSS/device viewport size must not change the victory poster crop.
+                 */
                 this.paintWorldZoom =
                     4.9;
 
                 camera
                     .stopFollow()
                     .removeBounds()
+                    .setSize(
+                        this.gameWidth,
+                        this.gameHeight,
+                    )
                     .setZoom(
-                        this.paintWorldZoom,
+                        4.9,
                     );
 
                 const localTarget =
@@ -41824,6 +41810,10 @@ const ribbon =
 
             camera
                 .stopFollow()
+                .setSize(
+                    savedCameraWidth,
+                    savedCameraHeight,
+                )
                 .setZoom(savedZoom)
                 .setScroll(
                     savedScrollX,
@@ -53918,6 +53908,35 @@ const roomPlayers =
     }
 
     private updateAim(): void {
+        /*
+         * V1010452N3 / HIDER_AIM_SEAL
+         * Hider Battle skills are dormant. Current Hider must never inherit
+         * Hunter aim-line/crosshair/gun visuals on PC or Mobile.
+         */
+        if (
+            this.isMultiplayerSession() &&
+            (
+                multiplayerClient
+                    .getLocalPlayer()
+                    ?.role === 'hider' ||
+                this.networkPlayerManager
+                    .isLocalHider()
+            )
+        ) {
+            this.aimLine
+                .clear()
+                .setVisible(false);
+
+            this.crosshair
+                .clear()
+                .setVisible(false);
+
+            this.gun
+                .setVisible(false);
+
+            return;
+        }
+
         const multiplayer =
             this.isMultiplayerSession();
 
