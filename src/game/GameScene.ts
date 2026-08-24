@@ -85,6 +85,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010451M3J2_WAITING_MOCK_HOST_TRANSFER_ROBUST: approved bright lobby status/timing spacing + large host badge + localized host-transfer toast. */
     /* V1010451M3I_WAITING_SPACING_BALANCE: approved light lobby spacing/balance follow-up after m3h. */
     /* V1010451M3H_GAME_FLASH_WAITING_UI_POLISH: fart flash is canvas-only; waiting panel gets unified spacing, tactile buttons, readable timing and desktop trim. */
     /* V1010451L_VICTORY_BRUSH_DIAMETER_PARITY: victory-card paint replay uses the same N-pixel brush diameter as live gameplay. */
@@ -4797,6 +4798,10 @@ export class GameScene extends Phaser.Scene {
     private waitingRoomHuntButtons: HTMLButtonElement[] = [];
     private waitingRoomResizeObserver?: ResizeObserver;
     private waitingRoomViewportHandler?: () => void;
+    /* V1010451M3J2_WAITING_MOCK_HOST_TRANSFER_ROBUST: guest->host transition notification state. */
+    private waitingRoomLastHostState?: boolean;
+    private waitingRoomHostTransferToast?: HTMLDivElement;
+    private waitingRoomHostTransferToastTimer?: number;
     private lobbyPanel!: Phaser.GameObjects.Rectangle;
     private lobbyTitleText!: Phaser.GameObjects.Text;
     private lobbyInfoText!: Phaser.GameObjects.Text;
@@ -28150,7 +28155,13 @@ export class GameScene extends Phaser.Scene {
                         <button type="button" class="ch-waiting-role-hunter">🎯 ${tr('HUNTER 지원')}</button>
                         <button type="button" class="ch-waiting-role-cancel">↩ ${tr('지원 취소')}</button>
                     </div>
-                    <div class="ch-waiting-role-status"></div>
+                    <div class="ch-waiting-role-status">
+                        <div class="ch-waiting-role-status-main">
+                            <span class="ch-waiting-role-status-icon">👥</span>
+                            <strong class="ch-waiting-role-status-text"></strong>
+                        </div>
+                        <small class="ch-waiting-role-status-help"></small>
+                    </div>
                 </div>
 
                 <div class="ch-waiting-timing">
@@ -28192,6 +28203,312 @@ export class GameScene extends Phaser.Scene {
 
         document.body.appendChild(root);
         this.waitingRoomRoot = root;
+
+        /*
+         * Initial host state is baseline only.
+         * If it later changes false -> true, that means this player received host.
+         */
+        this.waitingRoomLastHostState =
+            multiplayerClient.isHost();
+
+        {
+            const styleId =
+                'colorhunt-v451m3j2-approved-waiting';
+
+            document
+                .getElementById(
+                    styleId,
+                )
+                ?.remove();
+
+            const style =
+                document.createElement(
+                    'style',
+                );
+
+            style.id =
+                styleId;
+
+            style.textContent = `
+                /* Approved bright mock: spacing first, no compact overlap. */
+                .colorhunt-waiting-room .ch-waiting-shell {
+                    gap: 10px !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-role-wrap {
+                    display: flex !important;
+                    flex-direction: column !important;
+                    gap: 10px !important;
+                    margin: 0 !important;
+                    padding: 0 0 4px !important;
+                    overflow: visible !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-role {
+                    display: grid !important;
+                    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+                    gap: 10px !important;
+                    margin: 0 !important;
+                    padding: 0 0 3px !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-role-status {
+                    display: flex !important;
+                    flex-direction: column !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    gap: 4px !important;
+                    min-height: 60px !important;
+                    margin: 0 0 5px !important;
+                    padding: 9px 10px !important;
+                    box-sizing: border-box !important;
+                    border-radius: 11px !important;
+                    overflow: visible !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-role-status-main {
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    gap: 7px !important;
+                    width: 100% !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-role-status-icon {
+                    font-size: 20px !important;
+                    line-height: 1 !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-role-status-text {
+                    font-size: 16px !important;
+                    font-weight: 950 !important;
+                    line-height: 1.1 !important;
+                    color: #496057 !important;
+                    white-space: nowrap !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-role-status-help {
+                    width: 100% !important;
+                    font-size: 10.5px !important;
+                    font-weight: 750 !important;
+                    line-height: 1.2 !important;
+                    color: #66756e !important;
+                    text-align: center !important;
+                    white-space: normal !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-timing {
+                    display: flex !important;
+                    flex-direction: column !important;
+                    gap: 10px !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    overflow: visible !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-timing section {
+                    display: flex !important;
+                    flex-direction: column !important;
+                    gap: 10px !important;
+                    min-height: 76px !important;
+                    margin: 0 !important;
+                    padding: 9px 8px 10px !important;
+                    box-sizing: border-box !important;
+                    overflow: visible !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-timing-title {
+                    position: static !important;
+                    inset: auto !important;
+                    transform: none !important;
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: space-between !important;
+                    gap: 12px !important;
+                    width: 100% !important;
+                    min-height: 20px !important;
+                    height: auto !important;
+                    margin: 0 !important;
+                    padding: 0 1px !important;
+                    box-sizing: border-box !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-timing-title span,
+                .colorhunt-waiting-room .ch-waiting-timing-title b {
+                    position: static !important;
+                    inset: auto !important;
+                    transform: none !important;
+                    float: none !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    font-size: 14px !important;
+                    font-weight: 950 !important;
+                    line-height: 1.15 !important;
+                    white-space: nowrap !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-time-options {
+                    position: static !important;
+                    inset: auto !important;
+                    transform: none !important;
+                    display: grid !important;
+                    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+                    gap: 7px !important;
+                    width: 100% !important;
+                    height: auto !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-time-options button {
+                    width: 100% !important;
+                    min-width: 0 !important;
+                    height: 34px !important;
+                    min-height: 34px !important;
+                    margin: 0 !important;
+                    font-size: 13px !important;
+                    font-weight: 900 !important;
+                }
+
+                /* Make host ownership obvious. */
+                .colorhunt-waiting-room .ch-waiting-host {
+                    display: inline-flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    gap: 3px !important;
+                    min-height: 25px !important;
+                    padding: 4px 8px !important;
+                    border-radius: 999px !important;
+                    border: 1px solid rgba(231,107,24,.28) !important;
+                    background: rgba(255,242,204,.94) !important;
+                    color: #e66b18 !important;
+                    font-size: 13.5px !important;
+                    font-weight: 950 !important;
+                    line-height: 1 !important;
+                    white-space: nowrap !important;
+                    box-sizing: border-box !important;
+                }
+
+                /* Symmetric footer. */
+                .colorhunt-waiting-room .ch-waiting-footer {
+                    display: grid !important;
+                    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+                    gap: 10px !important;
+                    width: 100% !important;
+                    margin: 0 !important;
+                    padding: 1px 0 4px !important;
+                    box-sizing: border-box !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-footer button {
+                    width: 100% !important;
+                    min-width: 0 !important;
+                    max-width: none !important;
+                    margin: 0 0 3px !important;
+                    padding-left: 8px !important;
+                    padding-right: 8px !important;
+                    box-sizing: border-box !important;
+                    text-align: center !important;
+                }
+
+                .ch-waiting-host-transfer-toast {
+                    position: fixed;
+                    left: 50%;
+                    top: 16%;
+                    z-index: 2147483645;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    gap: 4px;
+                    width: min(360px, calc(100vw - 36px));
+                    padding: 12px 18px;
+                    box-sizing: border-box;
+                    border: 2px solid rgba(230,151,42,.62);
+                    border-radius: 14px;
+                    background: rgba(255,250,225,.98);
+                    box-shadow:
+                        0 5px 0 rgba(120,87,31,.18),
+                        0 10px 26px rgba(45,58,48,.18);
+                    color: #3d5148;
+                    text-align: center;
+                    pointer-events: none;
+                    opacity: 0;
+                    transform: translate(-50%, -12px) scale(.96);
+                    transition:
+                        opacity .2s ease,
+                        transform .22s cubic-bezier(.2,.9,.2,1);
+                }
+
+                .ch-waiting-host-transfer-toast.is-visible {
+                    opacity: 1;
+                    transform: translate(-50%, 0) scale(1);
+                }
+
+                .ch-waiting-host-transfer-toast strong {
+                    font-size: 17px;
+                    font-weight: 950;
+                    line-height: 1.15;
+                    color: #d66a16;
+                }
+
+                .ch-waiting-host-transfer-toast span {
+                    font-size: 12px;
+                    font-weight: 750;
+                    line-height: 1.25;
+                }
+
+                /* Mobile: keep the separation instead of compacting it away. */
+                .colorhunt-waiting-room.ch-uniform-mobile-scale
+                .ch-waiting-shell {
+                    gap: 9px !important;
+                }
+
+                .colorhunt-waiting-room.ch-uniform-mobile-scale
+                .ch-waiting-role-wrap {
+                    gap: 9px !important;
+                }
+
+                .colorhunt-waiting-room.ch-uniform-mobile-scale
+                .ch-waiting-role-status {
+                    min-height: 56px !important;
+                    margin-bottom: 5px !important;
+                    padding: 8px !important;
+                }
+
+                .colorhunt-waiting-room.ch-uniform-mobile-scale
+                .ch-waiting-role-status-text {
+                    font-size: 15px !important;
+                }
+
+                .colorhunt-waiting-room.ch-uniform-mobile-scale
+                .ch-waiting-role-status-help {
+                    font-size: 9.5px !important;
+                }
+
+                .colorhunt-waiting-room.ch-uniform-mobile-scale
+                .ch-waiting-timing {
+                    gap: 9px !important;
+                }
+
+                .colorhunt-waiting-room.ch-uniform-mobile-scale
+                .ch-waiting-timing section {
+                    gap: 9px !important;
+                    min-height: 73px !important;
+                    padding: 8px 7px 9px !important;
+                }
+
+                .colorhunt-waiting-room.ch-uniform-mobile-scale
+                .ch-waiting-timing-title span,
+                .colorhunt-waiting-room.ch-uniform-mobile-scale
+                .ch-waiting-timing-title b {
+                    font-size: 13.5px !important;
+                }
+            `;
+
+            document.head.appendChild(
+                style,
+            );
+        }
 
         /*
          * V1010451M3I_WAITING_SPACING_BALANCE
@@ -29024,6 +29341,96 @@ export class GameScene extends Phaser.Scene {
         }
     }
 
+    private showWaitingRoomHostTransferToast(): void {
+        if (
+            typeof document === 'undefined'
+        ) {
+            return;
+        }
+
+        if (
+            this.waitingRoomHostTransferToastTimer !==
+            undefined
+        ) {
+            window.clearTimeout(
+                this.waitingRoomHostTransferToastTimer,
+            );
+        }
+
+        this.waitingRoomHostTransferToast
+            ?.remove();
+
+        const toast =
+            document.createElement(
+                'div',
+            );
+        toast.className =
+            'ch-waiting-host-transfer-toast';
+
+        const lang =
+            getLanguage();
+
+        const title =
+            lang === 'ja'
+                ? 'ルームリーダーになりました！'
+                : lang === 'en'
+                    ? 'You are the room host!'
+                    : lang === 'zh'
+                        ? '你成为房主了！'
+                        : '방장이 되었습니다!';
+
+        const detail =
+            lang === 'ja'
+                ? 'マップ・時間設定とゲーム開始ができます。'
+                : lang === 'en'
+                    ? 'You can now set the map, timers, and start the game.'
+                    : lang === 'zh'
+                        ? '现在可以设置地图、时间并开始游戏。'
+                        : '이제 맵·시간 설정과 게임 시작을 할 수 있어요.';
+
+        toast.innerHTML =
+            `<strong>★ ${title}</strong><span>${detail}</span>`;
+
+        document.body.appendChild(
+            toast,
+        );
+        this.waitingRoomHostTransferToast =
+            toast;
+
+        requestAnimationFrame(
+            () => {
+                toast.classList.add(
+                    'is-visible',
+                );
+            },
+        );
+
+        this.waitingRoomHostTransferToastTimer =
+            window.setTimeout(
+                () => {
+                    toast.classList.remove(
+                        'is-visible',
+                    );
+
+                    window.setTimeout(
+                        () => {
+                            toast.remove();
+
+                            if (
+                                this.waitingRoomHostTransferToast ===
+                                toast
+                            ) {
+                                this.waitingRoomHostTransferToast =
+                                    undefined;
+                            }
+                        },
+                        220,
+                    );
+                },
+                3200,
+            );
+    }
+
     private updateWaitingRoomDom(): void {
         if (
             !this.waitingRoomRoot ||
@@ -29062,6 +29469,17 @@ export class GameScene extends Phaser.Scene {
             multiplayerClient.getSelectedMap();
         const isHost =
             multiplayerClient.isHost();
+
+        if (
+            this.waitingRoomLastHostState ===
+                false &&
+            isHost
+        ) {
+            this.showWaitingRoomHostTransferToast();
+        }
+
+        this.waitingRoomLastHostState =
+            isHost;
 
         const localPlayer =
             multiplayerClient.getLocalPlayer();
@@ -29148,151 +29566,52 @@ export class GameScene extends Phaser.Scene {
         if (
             hunterVolunteerStatus
         ) {
-            /*
-             * V1010310C_CURRENT_SOURCE_HARDFIX_RECOVER: old CSS had multiple 10/12/13px overrides.
-             * Force a readable final size at runtime.
-             */
-            hunterVolunteerStatus.style.setProperty(
-                'min-height',
-                this.mobileControlsEnabled
-                    ? '26px'
-                    : '28px',
-                'important',
-            );
-            hunterVolunteerStatus.style.setProperty(
-                'height',
-                this.mobileControlsEnabled
-                    ? '26px'
-                    : '28px',
-                'important',
-            );
-            hunterVolunteerStatus.style.setProperty(
-                'font-size',
-                this.mobileControlsEnabled
-                    ? '14px'
-                    : '15px',
-                'important',
-            );
-            hunterVolunteerStatus.style.setProperty(
-                'font-weight',
-                '900',
-                'important',
-            );
-            hunterVolunteerStatus.style.setProperty(
-                'line-height',
-                '1',
-                'important',
-            );
-
-            const roleWrap =
-                hunterVolunteerStatus.closest<HTMLElement>(
-                    '.ch-waiting-role-wrap',
-                );
-
-            if (roleWrap) {
-                roleWrap.style.setProperty(
-                    'grid-template-rows',
-                    this.mobileControlsEnabled
-                        ? 'auto 28px'
-                        : 'auto 32px',
-                    'important',
-                );
-                roleWrap.style.setProperty(
-                    'min-height',
-                    this.mobileControlsEnabled
-                        ? '68px'
-                        : '74px',
-                    'important',
-                );
-                roleWrap.style.setProperty(
-                    'overflow',
-                    'visible',
-                    'important',
-                );
-            }
-
-            hunterVolunteerStatus.style.setProperty(
-                'display',
-                'flex',
-                'important',
-            );
-            hunterVolunteerStatus.style.setProperty(
-                'align-items',
-                'center',
-                'important',
-            );
-            hunterVolunteerStatus.style.setProperty(
-                'justify-content',
-                'center',
-                'important',
-            );
-            hunterVolunteerStatus.style.setProperty(
-                'min-height',
-                this.mobileControlsEnabled
-                    ? '28px'
-                    : '32px',
-                'important',
-            );
-            hunterVolunteerStatus.style.setProperty(
-                'height',
-                this.mobileControlsEnabled
-                    ? '28px'
-                    : '32px',
-                'important',
-            );
-            hunterVolunteerStatus.style.setProperty(
-                'font-size',
-                this.mobileControlsEnabled
-                    ? '14px'
-                    : '16px',
-                'important',
-            );
-            hunterVolunteerStatus.style.setProperty(
-                'font-weight',
-                '900',
-                'important',
-            );
-            hunterVolunteerStatus.style.setProperty(
-                'line-height',
-                '1.1',
-                'important',
-            );
-            hunterVolunteerStatus.style.setProperty(
-                'padding',
-                '2px 8px',
-                'important',
-            );
-            hunterVolunteerStatus.style.setProperty(
-                'overflow',
-                'visible',
-                'important',
-            );
-            hunterVolunteerStatus.style.setProperty(
-                'text-overflow',
-                'clip',
-                'important',
-            );
-
             const template =
                 tr('헌터 지원 {count}명');
-
-            hunterVolunteerStatus.textContent =
-                localVolunteer
-                    ? `${tr('헌터 지원 완료')} · ${template.replace(
-                        '{count}',
-                        String(
-                            Math.max(
+            const countLabel =
+                template.replace(
+                    '{count}',
+                    String(
+                        localVolunteer
+                            ? Math.max(
                                 1,
                                 hunterVolunteerCount,
-                            ),
-                        ),
-                    )}`
-                    : template.replace(
-                        '{count}',
-                        String(
-                            hunterVolunteerCount,
-                        ),
+                            )
+                            : hunterVolunteerCount,
+                    ),
+                );
+
+            const statusText =
+                hunterVolunteerStatus
+                    .querySelector<HTMLElement>(
+                        '.ch-waiting-role-status-text',
                     );
+            const statusHelp =
+                hunterVolunteerStatus
+                    .querySelector<HTMLElement>(
+                        '.ch-waiting-role-status-help',
+                    );
+
+            if (statusText) {
+                statusText.textContent =
+                    localVolunteer
+                        ? `${tr('헌터 지원 완료')} · ${countLabel}`
+                        : countLabel;
+            }
+
+            if (statusHelp) {
+                const lang =
+                    getLanguage();
+
+                statusHelp.textContent =
+                    lang === 'ja'
+                        ? 'ハンター募集中… 応募者がいなければランダムで選ばれます。'
+                        : lang === 'en'
+                            ? 'Recruiting Hunters… If nobody volunteers, one is chosen at random.'
+                            : lang === 'zh'
+                                ? '正在招募猎人… 如果无人申请，将随机选择。'
+                                : '헌터 모집 중… 지원자가 없으면 무작위로 선택됩니다.';
+            }
 
             hunterVolunteerStatus
                 .classList.toggle(
@@ -29300,541 +29619,6 @@ export class GameScene extends Phaser.Scene {
                     localVolunteer,
                 );
         }
-
-        /*
-         * V1010318_MOBILE_WAITING_FORCE_FULL_WIDTH: final full-width mobile timing composition.
-         *
-         * IMPORTANT:
-         * Do not change any v316/v317 vertical sizes.
-         *
-         * The previous attempt only stretched .ch-waiting-time-options.
-         * Old CSS still centered the PARENT grid items, so 100% meant 100%
-         * of a narrow intrinsic content track. Stretch the entire ancestry:
-         *
-         * timing -> section -> title/options -> buttons
-         */
-        const isMobileWaiting =
-            this.waitingRoomRoot
-                ?.classList.contains(
-                    'ch-uniform-mobile-scale',
-                ) ??
-            false;
-
-        const waitingTiming =
-            this.waitingRoomRoot
-                ?.querySelector<HTMLElement>(
-                    '.ch-waiting-timing',
-                );
-
-        if (
-            waitingTiming &&
-            isMobileWaiting
-        ) {
-            waitingTiming.style.setProperty(
-                'display',
-                'grid',
-                'important',
-            );
-            waitingTiming.style.setProperty(
-                'grid-template-rows',
-                '45px 45px',
-                'important',
-            );
-            waitingTiming.style.setProperty(
-                'gap',
-                '4px',
-                'important',
-            );
-            waitingTiming.style.setProperty(
-                'width',
-                '100%',
-                'important',
-            );
-            waitingTiming.style.setProperty(
-                'min-width',
-                '0',
-                'important',
-            );
-            waitingTiming.style.setProperty(
-                'height',
-                '94px',
-                'important',
-            );
-            waitingTiming.style.setProperty(
-                'min-height',
-                '94px',
-                'important',
-            );
-            waitingTiming.style.setProperty(
-                'max-height',
-                '94px',
-                'important',
-            );
-            waitingTiming.style.setProperty(
-                'justify-items',
-                'stretch',
-                'important',
-            );
-            waitingTiming.style.setProperty(
-                'align-items',
-                'stretch',
-                'important',
-            );
-            waitingTiming.style.setProperty(
-                'overflow',
-                'hidden',
-                'important',
-            );
-            waitingTiming.style.setProperty(
-                'box-sizing',
-                'border-box',
-                'important',
-            );
-        }
-
-        this.waitingRoomRoot
-            ?.querySelectorAll<HTMLElement>(
-                '.ch-waiting-timing section',
-            )
-            .forEach(
-                (section) => {
-                    if (
-                        isMobileWaiting
-                    ) {
-                        section.style.setProperty(
-                            'display',
-                            'grid',
-                            'important',
-                        );
-                        section.style.setProperty(
-                            'grid-template-rows',
-                            '14px 24px',
-                            'important',
-                        );
-                        section.style.setProperty(
-                            'row-gap',
-                            '1px',
-                            'important',
-                        );
-                        section.style.setProperty(
-                            'width',
-                            '100%',
-                            'important',
-                        );
-                        section.style.setProperty(
-                            'min-width',
-                            '0',
-                            'important',
-                        );
-                        section.style.setProperty(
-                            'height',
-                            '45px',
-                            'important',
-                        );
-                        section.style.setProperty(
-                            'min-height',
-                            '45px',
-                            'important',
-                        );
-                        section.style.setProperty(
-                            'max-height',
-                            '45px',
-                            'important',
-                        );
-                        section.style.setProperty(
-                            'justify-self',
-                            'stretch',
-                            'important',
-                        );
-                        section.style.setProperty(
-                            'justify-items',
-                            'stretch',
-                            'important',
-                        );
-                        section.style.setProperty(
-                            'justify-content',
-                            'stretch',
-                            'important',
-                        );
-                        section.style.setProperty(
-                            'align-items',
-                            'stretch',
-                            'important',
-                        );
-                        section.style.setProperty(
-                            'padding',
-                            '3px 6px',
-                            'important',
-                        );
-                        section.style.setProperty(
-                            'margin',
-                            '0',
-                            'important',
-                        );
-                        section.style.setProperty(
-                            'box-sizing',
-                            'border-box',
-                            'important',
-                        );
-                        section.style.setProperty(
-                            'overflow',
-                            'hidden',
-                            'important',
-                        );
-                    }
-                },
-            );
-
-        this.waitingRoomRoot
-            ?.querySelectorAll<HTMLElement>(
-                '.ch-waiting-timing-title',
-            )
-            .forEach(
-                (title) => {
-                    title.style.setProperty(
-                        'display',
-                        'grid',
-                        'important',
-                    );
-                    title.style.setProperty(
-                        'grid-template-columns',
-                        'minmax(0, 1fr) auto',
-                        'important',
-                    );
-                    title.style.setProperty(
-                        'align-items',
-                        'center',
-                        'important',
-                    );
-                    title.style.setProperty(
-                        'justify-items',
-                        'stretch',
-                        'important',
-                    );
-                    title.style.setProperty(
-                        'column-gap',
-                        '6px',
-                        'important',
-                    );
-
-                    if (
-                        isMobileWaiting
-                    ) {
-                        title.style.setProperty(
-                            'width',
-                            '100%',
-                            'important',
-                        );
-                        title.style.setProperty(
-                            'min-width',
-                            '0',
-                            'important',
-                        );
-                        title.style.setProperty(
-                            'justify-self',
-                            'stretch',
-                            'important',
-                        );
-                        title.style.setProperty(
-                            'height',
-                            '14px',
-                            'important',
-                        );
-                        title.style.setProperty(
-                            'min-height',
-                            '14px',
-                            'important',
-                        );
-                        title.style.setProperty(
-                            'max-height',
-                            '14px',
-                            'important',
-                        );
-                        title.style.setProperty(
-                            'font-size',
-                            '10.5px',
-                            'important',
-                        );
-                        title.style.setProperty(
-                            'line-height',
-                            '14px',
-                            'important',
-                        );
-                        title.style.setProperty(
-                            'margin',
-                            '0',
-                            'important',
-                        );
-                        title.style.setProperty(
-                            'padding',
-                            '0',
-                            'important',
-                        );
-                        title.style.setProperty(
-                            'overflow',
-                            'hidden',
-                            'important',
-                        );
-                    }
-
-                    const label =
-                        title.querySelector<HTMLElement>(
-                            'span',
-                        );
-
-                    if (label) {
-                        label.style.setProperty(
-                            'display',
-                            'block',
-                            'important',
-                        );
-                        label.style.setProperty(
-                            'width',
-                            '100%',
-                            'important',
-                        );
-                        label.style.setProperty(
-                            'min-width',
-                            '0',
-                            'important',
-                        );
-                        label.style.setProperty(
-                            'justify-self',
-                            'stretch',
-                            'important',
-                        );
-                        label.style.setProperty(
-                            'text-align',
-                            'left',
-                            'important',
-                        );
-                        label.style.setProperty(
-                            'white-space',
-                            'nowrap',
-                            'important',
-                        );
-                        label.style.setProperty(
-                            'overflow',
-                            'hidden',
-                            'important',
-                        );
-                    }
-
-                    const current =
-                        title.querySelector<HTMLElement>(
-                            'b',
-                        );
-
-                    if (current) {
-                        current.style.setProperty(
-                            'justify-self',
-                            'end',
-                            'important',
-                        );
-                        current.style.setProperty(
-                            'text-align',
-                            'right',
-                            'important',
-                        );
-                        current.style.setProperty(
-                            'white-space',
-                            'nowrap',
-                            'important',
-                        );
-                    }
-                },
-            );
-
-        this.waitingRoomRoot
-            ?.querySelectorAll<HTMLElement>(
-                '.ch-waiting-time-options',
-            )
-            .forEach(
-                (options) => {
-                    if (
-                        isMobileWaiting
-                    ) {
-                        options.style.setProperty(
-                            'display',
-                            'grid',
-                            'important',
-                        );
-                        options.style.setProperty(
-                            'grid-template-columns',
-                            'repeat(3, minmax(0, 1fr))',
-                            'important',
-                        );
-                        options.style.setProperty(
-                            'column-gap',
-                            '4px',
-                            'important',
-                        );
-                        options.style.setProperty(
-                            'width',
-                            '100%',
-                            'important',
-                        );
-                        options.style.setProperty(
-                            'justify-content',
-                            'stretch',
-                            'important',
-                        );
-                        options.style.setProperty(
-                            'min-width',
-                            '0',
-                            'important',
-                        );
-                        options.style.setProperty(
-                            'max-width',
-                            'none',
-                            'important',
-                        );
-                        options.style.setProperty(
-                            'justify-self',
-                            'stretch',
-                            'important',
-                        );
-                        options.style.setProperty(
-                            'justify-items',
-                            'stretch',
-                            'important',
-                        );
-                        options.style.setProperty(
-                            'height',
-                            '24px',
-                            'important',
-                        );
-                        options.style.setProperty(
-                            'min-height',
-                            '24px',
-                            'important',
-                        );
-                        options.style.setProperty(
-                            'max-height',
-                            '24px',
-                            'important',
-                        );
-                        options.style.setProperty(
-                            'margin',
-                            '0',
-                            'important',
-                        );
-                        options.style.setProperty(
-                            'padding',
-                            '0',
-                            'important',
-                        );
-                        options.style.setProperty(
-                            'box-sizing',
-                            'border-box',
-                            'important',
-                        );
-                        options.style.setProperty(
-                            'overflow',
-                            'hidden',
-                            'important',
-                        );
-                    }
-                },
-            );
-
-        this.waitingRoomRoot
-            ?.querySelectorAll<HTMLButtonElement>(
-                '.ch-waiting-time-options button',
-            )
-            .forEach(
-                (button) => {
-                    if (
-                        isMobileWaiting
-                    ) {
-                        button.style.setProperty(
-                            'display',
-                            'flex',
-                            'important',
-                        );
-                        button.style.setProperty(
-                            'align-items',
-                            'center',
-                            'important',
-                        );
-                        button.style.setProperty(
-                            'justify-content',
-                            'center',
-                            'important',
-                        );
-                        button.style.setProperty(
-                            'width',
-                            '100%',
-                            'important',
-                        );
-                        button.style.setProperty(
-                            'min-width',
-                            '0',
-                            'important',
-                        );
-                        button.style.setProperty(
-                            'max-width',
-                            'none',
-                            'important',
-                        );
-                        button.style.setProperty(
-                            'justify-self',
-                            'stretch',
-                            'important',
-                        );
-                        button.style.setProperty(
-                            'height',
-                            '24px',
-                            'important',
-                        );
-                        button.style.setProperty(
-                            'min-height',
-                            '24px',
-                            'important',
-                        );
-                        button.style.setProperty(
-                            'max-height',
-                            '24px',
-                            'important',
-                        );
-                        button.style.setProperty(
-                            'font-size',
-                            '11px',
-                            'important',
-                        );
-                        button.style.setProperty(
-                            'font-weight',
-                            '900',
-                            'important',
-                        );
-                        button.style.setProperty(
-                            'line-height',
-                            '1',
-                            'important',
-                        );
-                        button.style.setProperty(
-                            'margin',
-                            '0',
-                            'important',
-                        );
-                        button.style.setProperty(
-                            'padding',
-                            '2px 3px',
-                            'important',
-                        );
-                        button.style.setProperty(
-                            'box-sizing',
-                            'border-box',
-                            'important',
-                        );
-                        button.style.setProperty(
-                            'overflow',
-                            'hidden',
-                            'important',
-                        );
-                    }
-                },
-            );
 
         if (this.waitingRoomInfo) {
             this.waitingRoomInfo.innerHTML = `
