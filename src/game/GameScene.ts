@@ -85,6 +85,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010451M6D_REAL_DESKTOP_VIEWPORT_MODE: touchscreen capability no longer decides desktop lobby scaling. */
     /* V1010451M6C_PC_DETECTION_ROBUST: PC/Fold selection follows mobileControlsEnabled instead of touch hardware. */
     /* V1010451M4_VICTORY_ACHIEVEMENT_BADGES: collectible-looking victory emblems replace flat pill badges. */
 
@@ -277,6 +278,44 @@ export class GameScene extends Phaser.Scene {
     private readonly gameHeight = 540;
 
     /*
+     * V1010451M6D_REAL_DESKTOP_VIEWPORT_MODE
+     *
+     * Layout identity is NOT the same thing as touch capability.
+     * Touchscreen Windows PCs have maxTouchPoints > 0, but still have a
+     * mouse/trackpad and a desktop viewport. any-pointer:fine detects that.
+     *
+     * Fold/mobile devices stay on their existing mobile path.
+     */
+    private isDesktopViewportLayout(): boolean {
+        if (
+            typeof window === 'undefined'
+        ) {
+            return false;
+        }
+
+        const viewportWidth =
+            window.visualViewport
+                ?.width ??
+                window.innerWidth;
+
+        const viewportHeight =
+            window.visualViewport
+                ?.height ??
+                window.innerHeight;
+
+        const hasFinePointer =
+            window.matchMedia(
+                '(any-pointer: fine)',
+            ).matches;
+
+        return (
+            hasFinePointer &&
+            viewportWidth >= 760 &&
+            viewportHeight >= 420
+        );
+    }
+
+    /*
      * V1010451M6_PC_VIEWPORT_CONTAIN
      *
      * DESKTOP ONLY:
@@ -294,7 +333,7 @@ export class GameScene extends Phaser.Scene {
     private readonly applyDesktopViewportContain =
         (): void => {
             if (
-                this.mobileControlsEnabled
+                !this.isDesktopViewportLayout()
             ) {
                 return;
             }
@@ -391,7 +430,7 @@ export class GameScene extends Phaser.Scene {
         (): void => {
             if (
                 !this.sys.isActive() ||
-                this.mobileControlsEnabled
+                !this.isDesktopViewportLayout()
             ) {
                 return;
             }
@@ -26052,8 +26091,13 @@ const ribbon =
          * A touch-capable Windows PC may report pointer: coarse.
          * The game's actual layout mode is mobileControlsEnabled.
          */
+        /*
+         * V1010451M6D_REAL_DESKTOP_VIEWPORT_MODE / LOBBY_LAYOUT_IDENTITY
+         * "coarsePointer" is retained as the local variable name so all existing
+         * mobile/desktop branches remain unchanged.
+         */
         const coarsePointer =
-            this.mobileControlsEnabled;
+            !this.isDesktopViewportLayout();
 
         /*
          * V1010451M6A_PC_LOBBY_UNIFORM_CONTAIN_FIX
