@@ -85,6 +85,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010451M6C_PC_DETECTION_ROBUST: PC/Fold selection follows mobileControlsEnabled instead of touch hardware. */
     /* V1010451M4_VICTORY_ACHIEVEMENT_BADGES: collectible-looking victory emblems replace flat pill badges. */
 
     /* V1010451M3K4_HUNTER_HELP_EXTERNAL_ROW: Hunter explanation is a dedicated flow row outside the clipped status card. */
@@ -293,10 +294,7 @@ export class GameScene extends Phaser.Scene {
     private readonly applyDesktopViewportContain =
         (): void => {
             if (
-                this.mobileControlsEnabled ||
-                window.matchMedia(
-                    '(pointer: coarse)',
-                ).matches
+                this.mobileControlsEnabled
             ) {
                 return;
             }
@@ -393,10 +391,7 @@ export class GameScene extends Phaser.Scene {
         (): void => {
             if (
                 !this.sys.isActive() ||
-                this.mobileControlsEnabled ||
-                window.matchMedia(
-                    '(pointer: coarse)',
-                ).matches
+                this.mobileControlsEnabled
             ) {
                 return;
             }
@@ -26052,10 +26047,13 @@ const ribbon =
             return;
         }
 
+        /*
+         * V1010451M6C_PC_DETECTION_ROBUST
+         * A touch-capable Windows PC may report pointer: coarse.
+         * The game's actual layout mode is mobileControlsEnabled.
+         */
         const coarsePointer =
-            window.matchMedia(
-                '(pointer: coarse)',
-            ).matches;
+            this.mobileControlsEnabled;
 
         /*
          * V1010451M6A_PC_LOBBY_UNIFORM_CONTAIN_FIX
