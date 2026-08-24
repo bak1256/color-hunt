@@ -85,6 +85,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010452L_RESPONSIVE_GAMEPLAY_DOM_ANCHOR_FIX */
     /* V1010452K_SPECTATOR_SAFE_HIDER_MOBILE_FIRE */
     /* V1010452J_PAINTBALL_ARC_SPLASH_LASER_INFINITE */
     /* V1010452I5_HIDER_SKILL_IMMEDIATE_CONTROLS */
@@ -953,6 +954,159 @@ export class GameScene extends Phaser.Scene {
         this.hiderSkillPickerDom = undefined;
     }
 
+    /*
+     * V1010452L_RESPONSIVE_GAMEPLAY_DOM_ANCHOR_FIX
+     *
+     * DOM gameplay overlays must follow the rendered Phaser canvas after
+     * browser resize / DevTools dock / desktop contain scaling.
+     */
+    private updateHiderSkillPickerResponsivePosition(): void {
+        const root =
+            this.hiderSkillPickerDom;
+
+        if (
+            !root ||
+            !document.body.contains(root)
+        ) {
+            return;
+        }
+
+        const canvasRect =
+            this.game.canvas
+                .getBoundingClientRect();
+
+        if (
+            canvasRect.width <= 0 ||
+            canvasRect.height <= 0
+        ) {
+            return;
+        }
+
+        const mobile =
+            this.mobileControlsEnabled;
+
+        const paintDockRect =
+            this.mobilePaintDock
+                ?.getBoundingClientRect();
+
+        const assistRect =
+            this.paintAssistButton
+                ?.getBoundingClientRect();
+
+        const modeButtonRect =
+            this.mobilePaintModeButton
+                ?.getBoundingClientRect();
+
+        /*
+         * One left column:
+         *
+         *   Paint Help
+         *   Hider Skill
+         *   Paint Palette
+         *
+         * Desktop uses Paint Palette as the strongest horizontal authority.
+         * Mobile uses Paint Help/Finger button first, matching the approved UI.
+         */
+        const alignedLeft =
+            mobile
+                ? (
+                    assistRect?.left ??
+                    modeButtonRect?.left ??
+                    paintDockRect?.left ??
+                    canvasRect.left +
+                        canvasRect.width *
+                            0.105
+                )
+                : (
+                    paintDockRect?.left ??
+                    assistRect?.left ??
+                    canvasRect.left +
+                        canvasRect.width *
+                            0.105
+                );
+
+        root.style.setProperty(
+            'left',
+            `${Math.round(alignedLeft)}px`,
+            'important',
+        );
+
+        root.style.setProperty(
+            'transform',
+            'none',
+            'important',
+        );
+
+        /*
+         * Vertical order is recomputed from actual DOM rectangles rather than
+         * stale viewport percentages.
+         */
+        const pickerHeight =
+            Math.max(
+                root.getBoundingClientRect()
+                    .height,
+                mobile
+                    ? 66
+                    : 74,
+            );
+
+        const paletteTop =
+            paintDockRect?.top ??
+            (
+                canvasRect.top +
+                canvasRect.height *
+                    0.76
+            );
+
+        const topAfterHelp =
+            assistRect
+                ? assistRect.bottom +
+                    (
+                        mobile
+                            ? 7
+                            : 8
+                    )
+                : (
+                    canvasRect.top +
+                    canvasRect.height *
+                        (
+                            mobile
+                                ? 0.50
+                                : 0.40
+                        )
+                );
+
+        const latestSafeTop =
+            paletteTop -
+            pickerHeight -
+            (
+                mobile
+                    ? 7
+                    : 8
+            );
+
+        const alignedTop =
+            Math.max(
+                canvasRect.top + 8,
+                Math.min(
+                    topAfterHelp,
+                    latestSafeTop,
+                ),
+            );
+
+        root.style.setProperty(
+            'top',
+            `${Math.round(alignedTop)}px`,
+            'important',
+        );
+
+        root.style.setProperty(
+            'bottom',
+            'auto',
+            'important',
+        );
+    }
+
     private createHiderSkillPicker(): void {
         this.destroyHiderSkillPicker();
 
@@ -1275,6 +1429,18 @@ export class GameScene extends Phaser.Scene {
         render();
         document.body.appendChild(root);
         this.hiderSkillPickerDom = root;
+
+        /*
+         * Position only after append: getBoundingClientRect() now has the
+         * true final width/height.
+         */
+        this.updateHiderSkillPickerResponsivePosition();
+
+        requestAnimationFrame(
+            () =>
+                this.updateHiderSkillPickerResponsivePosition(),
+        );
+
         multiplayerClient.requestSkillState();
     }
 
@@ -7884,7 +8050,15 @@ export class GameScene extends Phaser.Scene {
         // role-label screen coordinates at the very end of the frame so the
         // labels never disappear during gameplay or jump after round end.
         this.syncSurvivalRoleLabelHudPosition();
-    }
+    
+        /*
+         * V1010452L / FINAL_DOM_ANCHOR_PASS
+         * Browser resize can change the canvas rect after the resize event
+         * itself. Re-anchor fixed DOM gameplay UI from the final frame geometry.
+         */
+        this.updateHiderSkillPickerResponsivePosition();
+        this.updateUnifiedBgmButtonPosition();
+}
 
     /*
      * Multiplayer
@@ -39254,12 +39428,32 @@ const ribbon =
          * Controls uses canvas top + 52px, so BGM occupies the same right rail
          * one row above it. No browser chrome / safe-area positioning.
          */
-        const right =
+        /*
+         * V1010452L / BGM_CANVAS_ANCHOR
+         * Direct canvas-coordinate anchoring survives browser width changes
+         * without depending on window.innerWidth/right arithmetic.
+         */
+        const buttonWidth =
             Math.max(
-                6,
-                window.innerWidth -
-                    rect.right +
+                button.getBoundingClientRect()
+                    .width,
+                this.mobileControlsEnabled
+                    ? 72
+                    : 82,
+            );
+
+        const left =
+            Phaser.Math.Clamp(
+                rect.right -
+                    buttonWidth -
                     10,
+                rect.left + 6,
+                Math.max(
+                    rect.left + 6,
+                    rect.right -
+                        buttonWidth -
+                        6,
+                ),
             );
 
         const top =
@@ -39269,7 +39463,9 @@ const ribbon =
             );
 
         button.style.right =
-            `${Math.round(right)}px`;
+            'auto';
+        button.style.left =
+            `${Math.round(left)}px`;
         button.style.top =
             `${Math.round(top)}px`;
 
