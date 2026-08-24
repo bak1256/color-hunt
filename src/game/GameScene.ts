@@ -85,6 +85,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010452H_FINAL_LEFT_COLUMN_ALIGNMENT */
     /* V1010452G3_PC_PARITY_MOBILE_WAITING_SKILL_POLISH */
     /* V1010452F_FINAL_MOBILE_WAITING_AND_SKILL_LAYOUT */
     /* V1010451M6D_REAL_DESKTOP_VIEWPORT_MODE: touchscreen capability no longer decides desktop lobby scaling. */
@@ -1093,6 +1094,99 @@ export class GameScene extends Phaser.Scene {
             );
         }
 
+        /*
+         * V1010452H_FINAL_LEFT_COLUMN_ALIGNMENT / SKILL_LEFT_COLUMN
+         *
+         * Desktop left edge = Paint dock left edge.
+         * Mobile left edge = Paint Help / Finger Draw left edge.
+         * This creates one clean vertical column.
+         */
+        {
+            const mobile =
+                this.mobileControlsEnabled;
+
+            const paintDockRect =
+                this.mobilePaintDock
+                    ?.getBoundingClientRect();
+
+            const modeButtonRect =
+                this.mobilePaintModeButton
+                    ?.getBoundingClientRect();
+
+            const assistRect =
+                this.paintAssistButton
+                    ?.getBoundingClientRect();
+
+            const alignedLeft =
+                mobile
+                    ? (
+                        assistRect?.left ??
+                        modeButtonRect?.left ??
+                        canvasRect.left +
+                            canvasRect.width * 0.16
+                    )
+                    : (
+                        paintDockRect?.left ??
+                        canvasRect.left +
+                            canvasRect.width * 0.105
+                    );
+
+            root.style.setProperty(
+                'left',
+                `${Math.round(alignedLeft)}px`,
+                'important',
+            );
+            root.style.setProperty(
+                'transform',
+                'none',
+                'important',
+            );
+
+            /*
+             * Desktop returns to the good one-row shape.
+             * Mobile remains compact, but both skill buttons still fit in one row.
+             */
+            root.style.setProperty(
+                'width',
+                mobile ? '184px' : '244px',
+                'important',
+            );
+            root.style.setProperty(
+                'max-width',
+                mobile ? '184px' : '244px',
+                'important',
+            );
+
+            /*
+             * PC should read as a solid gameplay panel, not translucent glass.
+             * Mobile keeps light transparency to match its upper controls.
+             */
+            root.style.setProperty(
+                'background',
+                mobile
+                    ? 'rgba(15, 28, 31, .72)'
+                    : 'rgba(20, 24, 30, .96)',
+                'important',
+            );
+            root.style.setProperty(
+                'border',
+                mobile
+                    ? '1.5px solid rgba(126, 173, 139, .62)'
+                    : '1px solid rgba(255,255,255,.08)',
+                'important',
+            );
+            root.style.setProperty(
+                'backdrop-filter',
+                mobile ? 'blur(7px)' : 'none',
+                'important',
+            );
+            root.style.setProperty(
+                '-webkit-backdrop-filter',
+                mobile ? 'blur(7px)' : 'none',
+                'important',
+            );
+        }
+
         const render = (): void => {
             root.innerHTML = '';
 
@@ -1131,6 +1225,28 @@ export class GameScene extends Phaser.Scene {
                     'white-space:nowrap',
                     this.localPaintReady ? 'opacity:.55' : 'opacity:1'
                 ].join(';');
+                /*
+                 * V1010452H_FINAL_LEFT_COLUMN_ALIGNMENT / SKILL_BUTTON_ONE_ROW
+                 */
+                button.style.setProperty(
+                    'font-size',
+                    this.mobileControlsEnabled
+                        ? '9.5px'
+                        : '12px',
+                    'important',
+                );
+                button.style.setProperty(
+                    'padding',
+                    this.mobileControlsEnabled
+                        ? '5px 6px'
+                        : '7px 9px',
+                    'important',
+                );
+                button.style.setProperty(
+                    'flex',
+                    '0 0 auto',
+                    'important',
+                );
 
                 button.onclick = () => {
                     if (this.localPaintReady || this.phase !== 'paint') return;
@@ -11658,22 +11774,14 @@ const ribbon =
              * V1010452G3_PC_PARITY_MOBILE_WAITING_SKILL_POLISH / PC_PAINT_HELP_ALIGN
              * Align to the right edge of chat/send when available.
              */
-            const chatSendButton =
-                document.querySelector<HTMLElement>(
-                    '.colorhunt-chat-send, .ch-chat-send, [data-chat-send]',
-                );
-            const chatRoot =
-                document.querySelector<HTMLElement>(
-                    '.colorhunt-chat, .colorhunt-chat-ui, .ch-chat',
-                );
-            const chatAnchorRect =
-                chatSendButton?.getBoundingClientRect() ??
-                chatRoot?.getBoundingClientRect();
+            const paintDockRect =
+                this.mobilePaintDock
+                    ?.getBoundingClientRect();
 
             const alignedPaintAssistX =
-                chatAnchorRect
+                paintDockRect
                     ? Phaser.Math.Clamp(
-                        chatAnchorRect.right + 12,
+                        paintDockRect.left,
                         8,
                         Math.max(
                             8,
