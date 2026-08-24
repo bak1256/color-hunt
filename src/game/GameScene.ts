@@ -276,6 +276,150 @@ export class GameScene extends Phaser.Scene {
     private readonly gameHeight = 540;
 
     /*
+     * V1010451M6_PC_VIEWPORT_CONTAIN
+     *
+     * DESKTOP ONLY:
+     * Keep the logical 960x540 game untouched and scale the rendered canvas
+     * uniformly to the largest size that fits inside the browser viewport.
+     *
+     * - never crop
+     * - never stretch
+     * - preserve 16:9
+     * - enlarge on a large desktop viewport
+     * - shrink proportionally when either browser dimension becomes smaller
+     *
+     * Mobile/Fold/tablet behavior is intentionally left untouched.
+     */
+    private readonly applyDesktopViewportContain =
+        (): void => {
+            if (
+                this.mobileControlsEnabled ||
+                window.matchMedia(
+                    '(pointer: coarse)',
+                ).matches
+            ) {
+                return;
+            }
+
+            const canvas =
+                this.game.canvas;
+
+            if (!canvas) {
+                return;
+            }
+
+            const viewportWidth =
+                Math.max(
+                    1,
+                    window.visualViewport
+                        ?.width ??
+                        window.innerWidth,
+                );
+
+            const viewportHeight =
+                Math.max(
+                    1,
+                    window.visualViewport
+                        ?.height ??
+                        window.innerHeight,
+                );
+
+            const scale =
+                Math.max(
+                    0.1,
+                    Math.min(
+                        viewportWidth /
+                            this.gameWidth,
+                        viewportHeight /
+                            this.gameHeight,
+                    ),
+                );
+
+            const width =
+                Math.floor(
+                    this.gameWidth *
+                        scale,
+                );
+
+            const height =
+                Math.floor(
+                    this.gameHeight *
+                        scale,
+                );
+
+            canvas.style.setProperty(
+                'width',
+                `${width}px`,
+                'important',
+            );
+            canvas.style.setProperty(
+                'height',
+                `${height}px`,
+                'important',
+            );
+            canvas.style.setProperty(
+                'max-width',
+                '100vw',
+                'important',
+            );
+            canvas.style.setProperty(
+                'max-height',
+                '100vh',
+                'important',
+            );
+            canvas.style.setProperty(
+                'object-fit',
+                'contain',
+                'important',
+            );
+            canvas.style.setProperty(
+                'aspect-ratio',
+                '16 / 9',
+                'important',
+            );
+            canvas.style.setProperty(
+                'display',
+                'block',
+                'important',
+            );
+            canvas.style.setProperty(
+                'margin',
+                'auto',
+                'important',
+            );
+        };
+
+    private readonly handleDesktopViewportContain =
+        (): void => {
+            if (
+                !this.sys.isActive() ||
+                this.mobileControlsEnabled ||
+                window.matchMedia(
+                    '(pointer: coarse)',
+                ).matches
+            ) {
+                return;
+            }
+
+            this.applyDesktopViewportContain();
+
+            requestAnimationFrame(
+                () => {
+                    if (!this.sys.isActive()) {
+                        return;
+                    }
+
+                    this.applyDesktopViewportContain();
+                    this.updateMainLobbyDomPosition();
+                    this.updateWaitingRoomDomPosition();
+                    this.updateControlsHelpPosition();
+                    this.updateChatKeyboardOffset();
+                    this.updatePaintReadyButton();
+                },
+            );
+        };
+
+    /*
      * v0.10.10.97:
      * Browser chrome/fullscreen/orientation changes can change the physical
      * viewport without changing the 960x540 logical game world.
@@ -6318,6 +6462,29 @@ export class GameScene extends Phaser.Scene {
     }
 
     create(): void {
+        /*
+         * V1010451M6_PC_VIEWPORT_CONTAIN / INSTALL
+         */
+        this.applyDesktopViewportContain();
+
+        window.addEventListener(
+            'resize',
+            this.handleDesktopViewportContain,
+            {
+                passive: true,
+            },
+        );
+
+        window.visualViewport
+            ?.addEventListener(
+                'resize',
+                this.handleDesktopViewportContain,
+                {
+                    passive: true,
+                },
+            );
+
+
         this.installGameNoTextSelectionGuard();
         this.installVisibilityAudioGuard();
         window.addEventListener(
@@ -6463,6 +6630,18 @@ export class GameScene extends Phaser.Scene {
         this.events.once(
             Phaser.Scenes.Events.SHUTDOWN,
             () => {
+                window.removeEventListener(
+                    'resize',
+                    this.handleDesktopViewportContain,
+                );
+
+                window.visualViewport
+                    ?.removeEventListener(
+                        'resize',
+                        this.handleDesktopViewportContain,
+                    );
+
+
                 window.removeEventListener(
                     'colorhunt:viewportchange',
                     this.handleMobileViewportChange,
@@ -25849,6 +26028,12 @@ const ribbon =
     }
 
     private updateMainLobbyDomPosition(): void {
+        /*
+         * V1010451M6_PC_VIEWPORT_CONTAIN / MAIN_LOBBY_REASSERT
+         */
+        this.applyDesktopViewportContain();
+
+
         const root =
             this.mainLobbyRoot;
 
@@ -28548,6 +28733,12 @@ const ribbon =
     }
 
     private updateWaitingRoomDomPosition(): void {
+        /*
+         * V1010451M6_PC_VIEWPORT_CONTAIN / WAITING_REASSERT
+         */
+        this.applyDesktopViewportContain();
+
+
         if (!this.waitingRoomRoot) {
             return;
         }
