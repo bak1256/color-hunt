@@ -969,12 +969,26 @@ export class GameScene extends Phaser.Scene {
 
         const root = document.createElement('div');
         root.className = 'colorhunt-hider-skill-picker';
+        const canvasRect =
+            this.game.canvas.getBoundingClientRect();
+
+        /* V1010452B_HIDER_SKILL_PICKER_VISIBLE_POSITION: keep picker above the Paint palette instead of behind it. */
+        const pickerLeft =
+            this.mobileControlsEnabled
+                ? canvasRect.left + canvasRect.width * 0.50
+                : canvasRect.left + Math.max(130, canvasRect.width * 0.18);
+
+        const pickerTop =
+            canvasRect.top + canvasRect.height *
+                (this.mobileControlsEnabled ? 0.56 : 0.60);
+
         root.style.cssText = [
             'position:fixed',
-            'left:50%',
-            'bottom:max(92px, env(safe-area-inset-bottom))',
-            'transform:translateX(-50%)',
-            'z-index:2147482000',
+            'left:' + Math.round(pickerLeft) + 'px',
+            'top:' + Math.round(pickerTop) + 'px',
+            'bottom:auto',
+            'transform:' + (this.mobileControlsEnabled ? 'translateX(-50%)' : 'translateX(-50%)'),
+            'z-index:2147483646',
             'display:flex',
             'gap:8px',
             'padding:7px',
@@ -982,11 +996,22 @@ export class GameScene extends Phaser.Scene {
             'background:rgba(15,18,28,.82)',
             'backdrop-filter:blur(8px)',
             'box-shadow:0 6px 22px rgba(0,0,0,.28)',
-            'font-family:inherit'
+            'font-family:inherit',
+            'flex-wrap:wrap',
+            'justify-content:center',
+            'width:max-content',
+            'max-width:min(320px, calc(100vw - 24px))'
         ].join(';');
 
         const render = (): void => {
             root.innerHTML = '';
+
+            const title = document.createElement('div');
+            title.textContent = '😈 도발 스킬 선택';
+            title.style.cssText =
+                'width:100%;color:#fff;font-size:12px;font-weight:1000;' +
+                'text-align:center;margin:0 0 4px 0;';
+            root.appendChild(title);
             const items: Array<{
                 id: 'paintball' | 'laser';
                 icon: string;
