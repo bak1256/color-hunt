@@ -27882,12 +27882,26 @@ export class GameScene extends Phaser.Scene {
         const rect =
             this.game.canvas.getBoundingClientRect();
 
-        if (rect.width <= 0 || rect.height <= 0) {
+        if (
+            rect.width <= 0 ||
+            rect.height <= 0
+        ) {
             return;
         }
 
         const touch =
             this.mobileControlsEnabled;
+
+        const aspect =
+            rect.width /
+            Math.max(
+                1,
+                rect.height,
+            );
+
+        const landscapeCanvas =
+            aspect >= 1.45;
+
         const horizontalInset =
             Math.max(
                 6,
@@ -27907,208 +27921,215 @@ export class GameScene extends Phaser.Scene {
             );
 
         /*
-         * v0.10.10.191 MOBILE HOTFIX
-         * --------------------------
-         * The waiting room used to calculate a different width/height for
-         * every phone while CSS separately compressed each section. On short
-         * or unusual aspect-ratio phones that made the outer frame, buttons
-         * and typography scale at different rates.
-         *
-         * Mobile now has ONE authoring size (300x460) and the entire DOM
-         * panel is uniformly transformed to fit inside the actual Phaser
-         * canvas rectangle. Nothing inside the panel is allowed to reflow
-         * merely because the phone model changed.
+         * V1010451M3K11_NO_CLASS_ANCHOR_SAFE
+         * Use the REAL rendered DOM content height and scale the whole panel
+         * uniformly so it stays inside the Phaser canvas.
          */
-        if (touch) {
-            this.waitingRoomRoot.classList.remove('ch-uniform-desktop-scale');
-            /*
-             * V1010311_UI_CANVAS_GAS_RISE_FIX: waiting-room panel belongs INSIDE the Phaser game canvas.
-             * Never anchor it to the browser visualViewport.
-             *
-             * Target inside canvas:
-             * top    2px
-             * right  2px
-             * bottom 2px
-             */
-            const designWidth =
-                320;
-            const designHeight =
-                500;
-
-            const edge =
-                2;
-
-            const scale =
-                Math.max(
-                    0.45,
-                    (
-                        rect.height -
-                        edge * 2
-                    ) /
-                        designHeight,
+        const shell =
+            this.waitingRoomRoot
+                .querySelector<HTMLElement>(
+                    '.ch-waiting-shell',
                 );
 
-            const renderedWidth =
-                designWidth *
-                scale;
+        const designWidth =
+            touch
+                ? 300
+                : 340;
 
-            const renderedHeight =
-                designHeight *
-                scale;
-
-            const left =
-                rect.right -
-                edge -
-                renderedWidth;
-
-            const top =
-                rect.top +
-                edge;
-
-            this.waitingRoomRoot.classList.add(
-                'ch-uniform-mobile-scale',
+        const naturalHeight =
+            Math.max(
+                touch
+                    ? 460
+                    : 520,
+                shell?.scrollHeight ?? 0,
+                this.waitingRoomRoot.scrollHeight,
             );
 
-            const style =
-                this.waitingRoomRoot.style;
-
-            style.setProperty(
-                'position',
-                'fixed',
-                'important',
-            );
-            style.setProperty(
-                'left',
-                left.toFixed(2) +
-                    'px',
-                'important',
-            );
-            style.setProperty(
-                'top',
-                top.toFixed(2) +
-                    'px',
-                'important',
-            );
-            style.setProperty(
-                'right',
-                'auto',
-                'important',
-            );
-            style.setProperty(
-                'bottom',
-                'auto',
-                'important',
-            );
-            style.setProperty(
-                'width',
-                String(designWidth) +
-                    'px',
-                'important',
-            );
-            style.setProperty(
-                'height',
-                String(designHeight) +
-                    'px',
-                'important',
-            );
-            style.setProperty(
-                'transform',
-                'scale(' +
-                    scale.toFixed(6) +
-                    ')',
-                'important',
-            );
-            style.setProperty(
-                'transform-origin',
-                'top left',
-                'important',
-            );
-            style.setProperty(
-                'margin',
-                '0',
-                'important',
+        const availableWidth =
+            Math.max(
+                1,
+                rect.width -
+                    horizontalInset * 2,
             );
 
-            /*
-             * Guard against floating point overshoot outside the canvas.
-             */
-            const actualBottom =
-                top +
-                renderedHeight;
+        const availableHeight =
+            Math.max(
+                1,
+                rect.height -
+                    verticalInset * 2,
+            );
 
-            if (
-                actualBottom >
-                rect.bottom -
-                    edge +
-                    0.5
-            ) {
-                style.setProperty(
-                    'top',
-                    (
-                        rect.bottom -
-                        edge -
-                        renderedHeight
-                    ).toFixed(2) +
-                        'px',
-                    'important',
-                );
-            }
-
-            return;
-        }
-
-        this.waitingRoomRoot.classList.remove(
-            'ch-uniform-mobile-scale',
-        );
-        this.waitingRoomRoot.style.removeProperty(
-            '--waiting-uniform-scale',
-        );
-
-        [
-            'position',
-            'left',
-            'top',
-            'right',
-            'bottom',
-            'width',
-            'height',
-            'transform',
-            'transform-origin',
-            'margin',
-        ].forEach(
-            (property) =>
-                this.waitingRoomRoot
-                    ?.style.removeProperty(
-                        property,
+        const targetWidth =
+            touch
+                ? Math.min(
+                    availableWidth,
+                    Math.max(
+                        170,
+                        rect.width *
+                            (
+                                landscapeCanvas
+                                    ? 0.31
+                                    : 0.36
+                            ),
                     ),
+                )
+                : Math.min(
+                    availableWidth,
+                    Math.max(
+                        250,
+                        Math.min(
+                            340,
+                            rect.width * 0.285,
+                        ),
+                    ),
+                );
+
+        const targetHeight =
+            touch
+                ? Math.min(
+                    availableHeight,
+                    rect.height *
+                        (
+                            landscapeCanvas
+                                ? 0.92
+                                : 0.88
+                        ),
+                )
+                : Math.min(
+                    availableHeight,
+                    rect.height * 0.94,
+                );
+
+        const scale =
+            Math.min(
+                1,
+                targetWidth /
+                    designWidth,
+                targetHeight /
+                    naturalHeight,
+            );
+
+        const renderedWidth =
+            designWidth *
+            scale;
+
+        const renderedHeight =
+            naturalHeight *
+            scale;
+
+        const left =
+            rect.right -
+            horizontalInset -
+            renderedWidth;
+
+        const top =
+            rect.top +
+            (
+                rect.height -
+                renderedHeight
+            ) / 2;
+
+        this.waitingRoomRoot
+            .classList.toggle(
+                'ch-uniform-mobile-scale',
+                touch,
+            );
+
+        this.waitingRoomRoot
+            .classList.toggle(
+                'ch-uniform-desktop-scale',
+                !touch,
+            );
+
+        const style =
+            this.waitingRoomRoot.style;
+
+        style.setProperty(
+            'position',
+            'fixed',
+            'important',
+        );
+        style.setProperty(
+            'left',
+            `${left.toFixed(2)}px`,
+            'important',
+        );
+        style.setProperty(
+            'top',
+            `${top.toFixed(2)}px`,
+            'important',
+        );
+        style.setProperty(
+            'right',
+            'auto',
+            'important',
+        );
+        style.setProperty(
+            'bottom',
+            'auto',
+            'important',
+        );
+        style.setProperty(
+            'width',
+            `${designWidth}px`,
+            'important',
+        );
+        style.setProperty(
+            'height',
+            `${naturalHeight}px`,
+            'important',
+        );
+        style.setProperty(
+            'min-height',
+            '0',
+            'important',
+        );
+        style.setProperty(
+            'max-height',
+            'none',
+            'important',
+        );
+        style.setProperty(
+            'overflow',
+            'visible',
+            'important',
+        );
+        style.setProperty(
+            'transform',
+            `scale(${scale.toFixed(6)})`,
+            'important',
+        );
+        style.setProperty(
+            'transform-origin',
+            'top left',
+            'important',
+        );
+        style.setProperty(
+            'margin',
+            '0',
+            'important',
         );
 
-        /* V1010451M_DESKTOP_VIEWPORT_SCALE: scale by the tighter axis. */
-        const designWidth = 340;
-        const designHeight = 560;
-        const availableWidth = Math.max(220, rect.width * 0.34 - horizontalInset);
-        const availableHeight = Math.max(320, rect.height - verticalInset * 2);
-        const desktopScale = Math.min(1, availableWidth / designWidth, availableHeight / designHeight);
-        const renderedWidth = designWidth * desktopScale;
-        const renderedHeight = designHeight * desktopScale;
-        const left = rect.right - horizontalInset - renderedWidth;
-        const top = rect.top + (rect.height - renderedHeight) / 2;
-        this.waitingRoomRoot.classList.add('ch-uniform-desktop-scale');
-        const desktopStyle = this.waitingRoomRoot.style;
-        desktopStyle.setProperty('position', 'fixed', 'important');
-        desktopStyle.setProperty('left', `${left.toFixed(2)}px`, 'important');
-        desktopStyle.setProperty('top', `${top.toFixed(2)}px`, 'important');
-        desktopStyle.setProperty('right', 'auto', 'important');
-        desktopStyle.setProperty('bottom', 'auto', 'important');
-        desktopStyle.setProperty('width', `${designWidth}px`, 'important');
-        desktopStyle.setProperty('height', `${designHeight}px`, 'important');
-        desktopStyle.setProperty('transform', `scale(${desktopScale.toFixed(6)})`, 'important');
-        desktopStyle.setProperty('transform-origin', 'top left', 'important');
-        desktopStyle.setProperty('margin', '0', 'important');
-        desktopStyle.setProperty('--waiting-left', '0px');
-        desktopStyle.setProperty('--waiting-top', '0px');
-        desktopStyle.setProperty('--waiting-width', `${designWidth}px`);
-        desktopStyle.setProperty('--waiting-height', `${designHeight}px`);
+        style.setProperty(
+            '--waiting-left',
+            '0px',
+        );
+        style.setProperty(
+            '--waiting-top',
+            '0px',
+        );
+        style.setProperty(
+            '--waiting-width',
+            `${designWidth}px`,
+        );
+        style.setProperty(
+            '--waiting-height',
+            `${naturalHeight}px`,
+        );
+        style.setProperty(
+            '--waiting-uniform-scale',
+            scale.toFixed(6),
+        );
     }
 
     private createWaitingRoomDom(): void {
@@ -30523,6 +30544,213 @@ export class GameScene extends Phaser.Scene {
                             'important',
                         );
                 }
+            }
+        }
+
+        /*
+         * V1010451M3K11_NO_CLASS_ANCHOR_SAFE: localized Hunter explanation stays INSIDE the existing
+         * status frame. Old external helper, if present, is removed.
+         */
+        {
+            const hunterStatus =
+                this.waitingRoomRoot
+                    .querySelector<HTMLElement>(
+                        '.ch-waiting-role-status',
+                    );
+
+            if (hunterStatus) {
+                hunterStatus
+                    .closest<HTMLElement>(
+                        '.ch-waiting-role-wrap',
+                    )
+                    ?.querySelector(
+                        '.ch-waiting-role-help-external',
+                    )
+                    ?.remove();
+
+                let helper =
+                    hunterStatus
+                        .querySelector<HTMLElement>(
+                            '.ch-waiting-role-status-help',
+                        );
+
+                if (!helper) {
+                    helper =
+                        document.createElement(
+                            'small',
+                        );
+                    helper.className =
+                        'ch-waiting-role-status-help';
+                    hunterStatus.appendChild(
+                        helper,
+                    );
+                }
+
+                const lang =
+                    getLanguage();
+
+                helper.textContent =
+                    lang === 'ja'
+                        ? 'ハンター募集中… 応募者がいなければランダムで選ばれます。'
+                        : lang === 'en'
+                            ? 'Recruiting Hunters… If nobody volunteers, one is chosen at random.'
+                            : lang === 'zh'
+                                ? '正在招募猎人… 如果无人申请，将随机选择。'
+                                : '헌터 모집 중… 지원자가 없으면 무작위로 선택됩니다.';
+
+                hunterStatus.style.setProperty(
+                    'display',
+                    'flex',
+                    'important',
+                );
+                hunterStatus.style.setProperty(
+                    'flex-direction',
+                    'column',
+                    'important',
+                );
+                hunterStatus.style.setProperty(
+                    'align-items',
+                    'center',
+                    'important',
+                );
+                hunterStatus.style.setProperty(
+                    'justify-content',
+                    'center',
+                    'important',
+                );
+                hunterStatus.style.setProperty(
+                    'gap',
+                    '2px',
+                    'important',
+                );
+                hunterStatus.style.setProperty(
+                    'height',
+                    '54px',
+                    'important',
+                );
+                hunterStatus.style.setProperty(
+                    'min-height',
+                    '54px',
+                    'important',
+                );
+                hunterStatus.style.setProperty(
+                    'max-height',
+                    '54px',
+                    'important',
+                );
+                hunterStatus.style.setProperty(
+                    'padding',
+                    '5px 7px',
+                    'important',
+                );
+                hunterStatus.style.setProperty(
+                    'box-sizing',
+                    'border-box',
+                    'important',
+                );
+                hunterStatus.style.setProperty(
+                    'overflow',
+                    'hidden',
+                    'important',
+                );
+
+                helper.style.setProperty(
+                    'display',
+                    'block',
+                    'important',
+                );
+                helper.style.setProperty(
+                    'width',
+                    '100%',
+                    'important',
+                );
+                helper.style.setProperty(
+                    'height',
+                    '14px',
+                    'important',
+                );
+                helper.style.setProperty(
+                    'min-height',
+                    '14px',
+                    'important',
+                );
+                helper.style.setProperty(
+                    'max-height',
+                    '14px',
+                    'important',
+                );
+                helper.style.setProperty(
+                    'font-size',
+                    '8.8px',
+                    'important',
+                );
+                helper.style.setProperty(
+                    'font-weight',
+                    '700',
+                    'important',
+                );
+                helper.style.setProperty(
+                    'line-height',
+                    '14px',
+                    'important',
+                );
+                helper.style.setProperty(
+                    'text-align',
+                    'center',
+                    'important',
+                );
+                helper.style.setProperty(
+                    'white-space',
+                    'nowrap',
+                    'important',
+                );
+                helper.style.setProperty(
+                    'overflow',
+                    'hidden',
+                    'important',
+                );
+                helper.style.setProperty(
+                    'text-overflow',
+                    'ellipsis',
+                    'important',
+                );
+                helper.style.setProperty(
+                    'opacity',
+                    '1',
+                    'important',
+                );
+                helper.style.setProperty(
+                    'visibility',
+                    'visible',
+                    'important',
+                );
+
+                const roleWrap =
+                    hunterStatus
+                        .closest<HTMLElement>(
+                            '.ch-waiting-role-wrap',
+                        );
+
+                roleWrap?.style.setProperty(
+                    'height',
+                    'auto',
+                    'important',
+                );
+                roleWrap?.style.setProperty(
+                    'min-height',
+                    '0',
+                    'important',
+                );
+                roleWrap?.style.setProperty(
+                    'max-height',
+                    'none',
+                    'important',
+                );
+                roleWrap?.style.setProperty(
+                    'overflow',
+                    'visible',
+                    'important',
+                );
             }
         }
 
