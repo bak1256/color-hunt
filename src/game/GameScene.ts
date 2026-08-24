@@ -85,6 +85,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010451M3K_WAITING_LAYOUT_RESCUE: deterministic compact waiting flow; complete Hunt controls; toast inside canvas. */
     /* V1010451M3J2_WAITING_MOCK_HOST_TRANSFER_ROBUST: approved bright lobby status/timing spacing + large host badge + localized host-transfer toast. */
     /* V1010451M3I_WAITING_SPACING_BALANCE: approved light lobby spacing/balance follow-up after m3h. */
     /* V1010451M3H_GAME_FLASH_WAITING_UI_POLISH: fart flash is canvas-only; waiting panel gets unified spacing, tactile buttons, readable timing and desktop trim. */
@@ -28205,6 +28206,256 @@ export class GameScene extends Phaser.Scene {
         this.waitingRoomRoot = root;
 
         /*
+         * V1010451M3K_WAITING_LAYOUT_RESCUE
+         * Rescue layout: the previous visual patches increased child heights while
+         * the mobile waiting shell was still height-constrained/scaled.  That caused
+         * the Hunter card to collide with Paint and Hunt buttons to be clipped.
+         * Make the CONTENT compact and deterministic, then let the existing outer
+         * scaler scale the whole card as one unit.
+         */
+        {
+            const styleId = 'colorhunt-v451m3k-layout-rescue';
+            document.getElementById(styleId)?.remove();
+
+            const style = document.createElement('style');
+            style.id = styleId;
+            style.textContent = `
+                /* ----- deterministic vertical flow ----- */
+                .colorhunt-waiting-room .ch-waiting-shell {
+                    display: flex !important;
+                    flex-direction: column !important;
+                    gap: 7px !important;
+                    overflow: visible !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-role-wrap {
+                    display: flex !important;
+                    flex-direction: column !important;
+                    gap: 7px !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    overflow: visible !important;
+                    flex: 0 0 auto !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-role {
+                    display: grid !important;
+                    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+                    gap: 8px !important;
+                    margin: 0 !important;
+                    padding: 0 0 3px !important;
+                    flex: 0 0 auto !important;
+                }
+
+                /* Hunter info is useful, but must stay compact enough for portrait. */
+                .colorhunt-waiting-room .ch-waiting-role-status {
+                    display: flex !important;
+                    flex-direction: column !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    gap: 2px !important;
+                    height: 43px !important;
+                    min-height: 43px !important;
+                    max-height: 43px !important;
+                    margin: 0 0 4px !important;
+                    padding: 4px 7px !important;
+                    box-sizing: border-box !important;
+                    overflow: hidden !important;
+                    flex: 0 0 43px !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-role-status-main {
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    gap: 5px !important;
+                    height: 18px !important;
+                    min-height: 18px !important;
+                    line-height: 18px !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-role-status-icon {
+                    font-size: 15px !important;
+                    line-height: 1 !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-role-status-text {
+                    font-size: 14px !important;
+                    font-weight: 950 !important;
+                    line-height: 18px !important;
+                    white-space: nowrap !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-role-status-help {
+                    display: block !important;
+                    width: 100% !important;
+                    height: 13px !important;
+                    min-height: 13px !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    overflow: hidden !important;
+                    text-overflow: ellipsis !important;
+                    white-space: nowrap !important;
+                    font-size: 9px !important;
+                    font-weight: 700 !important;
+                    line-height: 13px !important;
+                    text-align: center !important;
+                }
+
+                /* ----- timing: two complete cards, never overlapping/clipping ----- */
+                .colorhunt-waiting-room .ch-waiting-timing {
+                    display: grid !important;
+                    grid-template-columns: 1fr !important;
+                    grid-auto-rows: 65px !important;
+                    gap: 7px !important;
+                    height: auto !important;
+                    min-height: 137px !important;
+                    max-height: none !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    overflow: visible !important;
+                    flex: 0 0 137px !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-timing section {
+                    position: relative !important;
+                    display: grid !important;
+                    grid-template-rows: 18px 34px !important;
+                    row-gap: 5px !important;
+                    height: 65px !important;
+                    min-height: 65px !important;
+                    max-height: 65px !important;
+                    margin: 0 !important;
+                    padding: 4px 7px !important;
+                    box-sizing: border-box !important;
+                    overflow: hidden !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-timing-title {
+                    position: static !important;
+                    inset: auto !important;
+                    transform: none !important;
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: space-between !important;
+                    width: 100% !important;
+                    height: 18px !important;
+                    min-height: 18px !important;
+                    max-height: 18px !important;
+                    margin: 0 !important;
+                    padding: 0 1px !important;
+                    box-sizing: border-box !important;
+                    overflow: visible !important;
+                    line-height: 18px !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-timing-title span,
+                .colorhunt-waiting-room .ch-waiting-timing-title b {
+                    position: static !important;
+                    inset: auto !important;
+                    transform: none !important;
+                    float: none !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    font-size: 13px !important;
+                    font-weight: 950 !important;
+                    line-height: 18px !important;
+                    white-space: nowrap !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-time-options {
+                    position: static !important;
+                    inset: auto !important;
+                    transform: none !important;
+                    display: grid !important;
+                    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+                    gap: 6px !important;
+                    width: 100% !important;
+                    height: 34px !important;
+                    min-height: 34px !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    overflow: visible !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-time-options button {
+                    position: static !important;
+                    width: 100% !important;
+                    min-width: 0 !important;
+                    height: 34px !important;
+                    min-height: 34px !important;
+                    max-height: 34px !important;
+                    margin: 0 !important;
+                    padding: 0 4px !important;
+                    box-sizing: border-box !important;
+                    font-size: 12px !important;
+                    font-weight: 900 !important;
+                    line-height: 34px !important;
+                    transform: none !important;
+                }
+
+                /* Start/footer keep their own breathing room. */
+                .colorhunt-waiting-room .ch-waiting-start {
+                    flex: 0 0 auto !important;
+                    margin: 1px 0 3px !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-footer {
+                    display: grid !important;
+                    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+                    gap: 8px !important;
+                    width: 100% !important;
+                    margin: 0 !important;
+                    padding: 2px 0 3px !important;
+                    box-sizing: border-box !important;
+                    flex: 0 0 auto !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-footer button {
+                    width: 100% !important;
+                    min-width: 0 !important;
+                    max-width: none !important;
+                    margin: 0 !important;
+                    box-sizing: border-box !important;
+                }
+
+                /* Host remains obvious without consuming excessive vertical space. */
+                .colorhunt-waiting-room .ch-waiting-host {
+                    min-height: 23px !important;
+                    padding: 3px 7px !important;
+                    font-size: 12.5px !important;
+                    font-weight: 950 !important;
+                    line-height: 1 !important;
+                }
+
+                /* Mobile outer card must be allowed to scale the complete content. */
+                .colorhunt-waiting-room.ch-uniform-mobile-scale .ch-waiting-shell {
+                    gap: 7px !important;
+                    overflow: visible !important;
+                }
+
+                .colorhunt-waiting-room.ch-uniform-mobile-scale .ch-waiting-timing {
+                    min-height: 137px !important;
+                    height: 137px !important;
+                    max-height: 137px !important;
+                }
+
+                /* ----- host-transfer toast: place relative to GAME CANVAS ----- */
+                .ch-waiting-host-transfer-toast {
+                    /* JS below owns left/top/width; remove viewport-centering transform. */
+                    right: auto !important;
+                    bottom: auto !important;
+                    transform: translate(-50%, -10px) scale(.96) !important;
+                }
+
+                .ch-waiting-host-transfer-toast.is-visible {
+                    transform: translate(-50%, 0) scale(1) !important;
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        /*
          * Initial host state is baseline only.
          * If it later changes false -> true, that means this player received host.
          */
@@ -29396,6 +29647,33 @@ export class GameScene extends Phaser.Scene {
         );
         this.waitingRoomHostTransferToast =
             toast;
+
+        {
+            const canvasRect =
+                this.game.canvas
+                    .getBoundingClientRect();
+            const toastWidth =
+                Math.min(
+                    360,
+                    Math.max(
+                        220,
+                        canvasRect.width - 28,
+                    ),
+                );
+
+            toast.style.width =
+                `${toastWidth}px`;
+            toast.style.left =
+                `${canvasRect.left + canvasRect.width / 2}px`;
+            toast.style.top =
+                `${canvasRect.top + Math.max(
+                    14,
+                    Math.min(
+                        72,
+                        canvasRect.height * 0.045,
+                    ),
+                )}px`;
+        }
 
         requestAnimationFrame(
             () => {
