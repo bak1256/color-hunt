@@ -52012,9 +52012,99 @@ const roomPlayers =
         }
     }
 
+    /* V1010451M3G_FART_DETECT_SCREEN_EDGE_FLASH_ROBUST
+     * Successful fart detection gets one unmistakable GREEN screen-edge pulse.
+     * DOM overlay intentionally sits above Phaser canvas and runs before audio guards.
+     */
+    private flashFartDetectionScreenEdge(): void {
+        if (typeof document === 'undefined') {
+            return;
+        }
+
+        document
+            .querySelector(
+                '.colorhunt-fart-detect-success-flash',
+            )
+            ?.remove();
+
+        const flash =
+            document.createElement(
+                'div',
+            );
+
+        flash.className =
+            'colorhunt-fart-detect-success-flash';
+
+        Object.assign(
+            flash.style,
+            {
+                position: 'fixed',
+                inset: '0',
+                zIndex: '2147483646',
+                pointerEvents: 'none',
+                boxSizing: 'border-box',
+                border: '18px solid rgba(55,255,115,0.98)',
+                boxShadow:
+                    'inset 0 0 42px 16px rgba(55,255,115,0.72), 0 0 28px rgba(55,255,115,0.88)',
+                background:
+                    'rgba(55,255,115,0.11)',
+                opacity: '0',
+            },
+        );
+
+        document.body.appendChild(
+            flash,
+        );
+
+        const animation =
+            flash.animate(
+                [
+                    {
+                        opacity: 0,
+                        transform:
+                            'scale(1.012)',
+                    },
+                    {
+                        opacity: 1,
+                        offset: 0.20,
+                        transform:
+                            'scale(1)',
+                    },
+                    {
+                        opacity: 0.92,
+                        offset: 0.52,
+                        transform:
+                            'scale(1)',
+                    },
+                    {
+                        opacity: 0,
+                        transform:
+                            'scale(1.006)',
+                    },
+                ],
+                {
+                    duration: 420,
+                    easing:
+                        'cubic-bezier(.18,.8,.2,1)',
+                    fill: 'forwards',
+                },
+            );
+
+        animation.onfinish =
+            () => flash.remove();
+
+        window.setTimeout(
+            () => flash.remove(),
+            700,
+        );
+    }
+
+
     private showHunterDetectionAlert(
         _reaction: 'cough',
     ): void {
+        // Visual first: mute/suspended audio must never suppress detection feedback.
+        this.flashFartDetectionScreenEdge();
         if (
             this.shouldSuppressOneShotAudio()
         ) {
