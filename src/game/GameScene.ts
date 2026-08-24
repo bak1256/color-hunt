@@ -85,6 +85,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010452I5_HIDER_SKILL_IMMEDIATE_CONTROLS */
     /* V1010452H_FINAL_LEFT_COLUMN_ALIGNMENT */
     /* V1010452G3_PC_PARITY_MOBILE_WAITING_SKILL_POLISH */
     /* V1010452F_FINAL_MOBILE_WAITING_AND_SKILL_LAYOUT */
@@ -4090,20 +4091,22 @@ export class GameScene extends Phaser.Scene {
                     return;
                 }
 
-                const localCanAimAsHunter =
-                    this.phase ===
-                        'hunt' &&
+                const localCanUseAimControl =
+                    this.phase === 'hunt' &&
                     (
-                        this.practiceMode ===
-                            'hunter' ||
+                        this.practiceMode === 'hunter' ||
                         multiplayerClient
                             .getLocalPlayer()
-                            ?.role ===
-                            'hunter'
+                            ?.role === 'hunter' ||
+                        multiplayerClient
+                            .getLocalPlayer()
+                            ?.role === 'hider' ||
+                        this.networkPlayerManager
+                            .isLocalHider()
                     );
 
                 if (
-                    localCanAimAsHunter
+                    localCanUseAimControl
                 ) {
                     /*
                      * Lost pointer-up events used to leave AIM owned by a
@@ -4430,29 +4433,37 @@ export class GameScene extends Phaser.Scene {
                     );
                 }
 
-                if (
-                    this.phase !== 'hunt' ||
-                    (
-                        this.practiceMode !==
-                            'hunter' &&
-                        multiplayerClient
-                            .getLocalPlayer()
-                            ?.role !==
-                            'hunter'
-                    )
-                ) {
+                if (this.phase !== 'hunt') {
                     return;
                 }
 
-                /*
-                 * V1010293_MOBILE_HUNTER_FART_VISION_CONTROLS: pressing FIRE must never become an aim input.
-                 * If the aim stick has never moved, preserve the Hunter's
-                 * current facing instead of using the FIRE touch position.
-                 */
+                const localRole =
+                    multiplayerClient
+                        .getLocalPlayer()
+                        ?.role;
+
                 const fireAngle =
                     this.mobileAimHasDirection
                         ? this.mobileAimAngle
                         : this.hunterFocusAngle;
+
+                if (
+                    localRole === 'hider' ||
+                    this.networkPlayerManager
+                        .isLocalHider()
+                ) {
+                    this.fireHiderSkill(
+                        fireAngle,
+                    );
+                    return;
+                }
+
+                if (
+                    this.practiceMode !== 'hunter' &&
+                    localRole !== 'hunter'
+                ) {
+                    return;
+                }
 
                 this.fireShotgun(
                     fireAngle,
@@ -5367,6 +5378,16 @@ export class GameScene extends Phaser.Scene {
             !this.networkPlayerManager
                 .isLocalCustomizationMode();
 
+        const localHiderSkillCombat =
+            canMove &&
+            this.phase === 'hunt' &&
+            this.isMultiplayerSession() &&
+            (
+                localRole === 'hider' ||
+                this.networkPlayerManager
+                    .isLocalHider()
+            );
+
         const showHunterCombat =
             canMove &&
             this.phase === 'hunt' &&
@@ -5376,6 +5397,10 @@ export class GameScene extends Phaser.Scene {
                 this.practiceMode ===
                     'hunter'
             );
+
+        const showAimFireCombat =
+            showHunterCombat ||
+            localHiderSkillCombat;
 
         this.mobileMoveBase
             ?.setVisible(canMove);
@@ -5389,7 +5414,7 @@ export class GameScene extends Phaser.Scene {
             .setVisible(canMove);
 
         this.mobileAimBase
-            ?.setVisible(showHunterCombat);
+            ?.setVisible(showAimFireCombat);
         this.mobileAimKnob
             ?.setVisible(showHunterCombat);
 
@@ -5458,7 +5483,7 @@ export class GameScene extends Phaser.Scene {
         }
 
         if (
-            showHunterCombat &&
+            showAimFireCombat &&
             this.mobileAimLabel
         ) {
             this.setFixedHudScreenPosition(
@@ -5472,7 +5497,7 @@ export class GameScene extends Phaser.Scene {
             this.resetMobileMoveControl();
         }
 
-        if (!showHunterCombat) {
+        if (!showAimFireCombat) {
             this.mobileAimPointerId = -1;
             this.mobileAimKnob
                 ?.setPosition(
@@ -48865,15 +48890,28 @@ const roomPlayers =
                         nativeLeftClick ||
                         pointer.leftButtonDown();
 
-                    if (
-                        isLeftClick &&
-                        (
+                    if (isLeftClick) {
+                        const localRole =
+                            multiplayerClient
+                                .getLocalPlayer()
+                                ?.role;
+
+                        if (
+                            this.isMultiplayerSession() &&
+                            (
+                                localRole === 'hider' ||
+                                this.networkPlayerManager
+                                    .isLocalHider()
+                            )
+                        ) {
+                            this.fireHiderSkill();
+                        } else if (
                             !this.isMultiplayerSession() ||
                             this.networkPlayerManager
                                 .canLocalControlHunter()
-                        )
-                    ) {
-                        this.fireShotgun();
+                        ) {
+                            this.fireShotgun();
+                        }
                     }
 
                     return;
@@ -53157,21 +53195,33 @@ const roomPlayers =
     }
 
     private updateAim(): void {
-        if (
-            this.isMultiplayerSession() &&
-            !this.networkPlayerManager
-                .canLocalControlHunter()
-        ) {
-            this.aimLine.clear();
-            this.crosshair.clear();
-            this.gun.setVisible(false);
-            return;
-        }
+        const multiplayer =
+            this.isMultiplayerSession();
+
+        const localRole =
+            multiplayerClient
+                .getLocalPlayer()
+                ?.role;
+
+        const localHiderSkillCombat =
+            multiplayer &&
+            this.phase === 'hunt' &&
+            (
+                localRole === 'hider' ||
+                this.networkPlayerManager
+                    .isLocalHider()
+            );
+
+        const localHunterCombat =
+            !multiplayer ||
+            this.practiceMode === 'hunter' ||
+            this.networkPlayerManager
+                .canLocalControlHunter();
 
         if (
-            this.isMultiplayerSession() &&
-            !this.networkPlayerManager
-                .canLocalControlHunter()
+            multiplayer &&
+            !localHunterCombat &&
+            !localHiderSkillCombat
         ) {
             this.aimLine.clear();
             this.crosshair.clear();
@@ -53180,7 +53230,7 @@ const roomPlayers =
         }
 
         const origin =
-            this.isMultiplayerSession()
+            multiplayer
                 ? this.networkPlayerManager
                     .getLocalPlayerPosition()
                 : new Phaser.Math.Vector2(
@@ -53195,12 +53245,6 @@ const roomPlayers =
         const pointer =
             this.input.activePointer;
 
-        /*
-         * V101023825_HUNTER_DESKTOP_AIM_SCREEN_LOCK
-         * Desktop hunter aim is anchored to the physical mouse SCREEN position.
-         * If the hunter/camera moves while the mouse stays still, convert the
-         * unchanged pointer.x/y through the CURRENT camera transform.
-         */
         const desktopAimWorld =
             !this.mobileControlsEnabled
                 ? this.getPointerWorldPoint(
@@ -53211,23 +53255,20 @@ const roomPlayers =
         const usingMobileAim =
             this.mobileControlsEnabled &&
             (
-                this.practiceMode ===
-                    'hunter' ||
-                this.networkPlayerManager
-                    .canLocalControlHunter()
+                localHunterCombat ||
+                localHiderSkillCombat
             ) &&
             this.mobileAimHasDirection;
 
-        const mobileHunterControl =
+        const mobileCombatControl =
             this.mobileControlsEnabled &&
             (
-                this.practiceMode === 'hunter' ||
-                this.networkPlayerManager
-                    .canLocalControlHunter()
+                localHunterCombat ||
+                localHiderSkillCombat
             );
 
         const angle =
-            mobileHunterControl
+            mobileCombatControl
                 ? (
                     usingMobileAim
                         ? this.mobileAimAngle
@@ -53245,46 +53286,51 @@ const roomPlayers =
         this.hunterFocusAngle =
             angle;
 
-        this.gun.setRotation(angle);
-
-        if (
-            this.practiceMode ===
-                'hunter'
-        ) {
-            this.networkPlayerManager
-                .updateHunterAim(
-                    this.practiceHunterSessionId,
-                    angle,
-                    122,
-                );
-        }
-
-        if (
-            this.isMultiplayerSession()
-        ) {
-            const now =
-                this.time.now;
-
-            this.networkPlayerManager
-                .updateHunterAim(
-                    multiplayerClient
-                        .getSessionId() ?? '',
-                    angle,
-                    122,
-                );
+        /*
+         * Hider reuses only the Hunter INPUT contract.
+         * Never expose the Hunter gun or publish Hunter aim state.
+         */
+        if (localHiderSkillCombat) {
+            this.gun.setVisible(false);
+        } else {
+            this.gun.setRotation(angle);
 
             if (
-                now -
-                this.lastHunterAimSentAt >=
-                this.hunterAimSendInterval
+                this.practiceMode === 'hunter'
             ) {
-                this.lastHunterAimSentAt =
-                    now;
-
-                multiplayerClient
-                    .sendHunterAim(
+                this.networkPlayerManager
+                    .updateHunterAim(
+                        this.practiceHunterSessionId,
                         angle,
+                        122,
                     );
+            }
+
+            if (multiplayer) {
+                const now =
+                    this.time.now;
+
+                this.networkPlayerManager
+                    .updateHunterAim(
+                        multiplayerClient
+                            .getSessionId() ?? '',
+                        angle,
+                        122,
+                    );
+
+                if (
+                    now -
+                    this.lastHunterAimSentAt >=
+                    this.hunterAimSendInterval
+                ) {
+                    this.lastHunterAimSentAt =
+                        now;
+
+                    multiplayerClient
+                        .sendHunterAim(
+                            angle,
+                        );
+                }
             }
         }
 
@@ -53296,12 +53342,18 @@ const roomPlayers =
             .setDepth(181);
 
         this.aimLine.lineStyle(
-            2,
-            0xffffff,
-            0.35,
+            localHiderSkillCombat ? 1 : 2,
+            localHiderSkillCombat &&
+                this.selectedHiderSkill === 'laser'
+                ? 0xff3344
+                : 0xffffff,
+            localHiderSkillCombat ? 0.28 : 0.35,
         );
 
-        const lineLength = 122;
+        const lineLength =
+            localHiderSkillCombat
+                ? 150
+                : 122;
 
         this.aimLine.lineBetween(
             origin.x,
@@ -53376,6 +53428,186 @@ const roomPlayers =
         );
 
         this.crosshair.strokeCircle(x, y, 2);
+    }
+
+    /*
+     * V1010452I5_HIDER_SKILL_IMMEDIATE_CONTROLS / LOCAL_SKILL_TEST
+     *
+     * First gameplay test pass:
+     * - desktop: mouse aim + left click
+     * - mobile: Hunter AIM stick + FIRE button
+     * - paintball stain persists for the round
+     * - laser is a short-lived taunt beam
+     *
+     * This pass deliberately does NOT impersonate Hunter network messages.
+     * Multiplayer replication can be wired after input/feel is approved.
+     */
+    private fireHiderSkill(
+        aimAngleOverride?: number,
+    ): void {
+        if (
+            this.phase !== 'hunt' ||
+            !this.isMultiplayerSession() ||
+            !(
+                multiplayerClient
+                    .getLocalPlayer()
+                    ?.role === 'hider' ||
+                this.networkPlayerManager
+                    .isLocalHider()
+            )
+        ) {
+            return;
+        }
+
+        const origin =
+            this.networkPlayerManager
+                .getLocalPlayerPosition();
+
+        if (!origin) {
+            return;
+        }
+
+        const pointer =
+            this.input.activePointer;
+
+        const desktopAimWorld =
+            !this.mobileControlsEnabled
+                ? this.getPointerWorldPoint(
+                    pointer,
+                )
+                : undefined;
+
+        const angle =
+            aimAngleOverride ??
+            (
+                this.mobileControlsEnabled &&
+                this.mobileAimHasDirection
+                    ? this.mobileAimAngle
+                    : Phaser.Math.Angle.Between(
+                        origin.x,
+                        origin.y,
+                        desktopAimWorld?.x ??
+                            pointer.worldX,
+                        desktopAimWorld?.y ??
+                            pointer.worldY,
+                    )
+            );
+
+        this.hunterFocusAngle =
+            angle;
+
+        if (this.selectedHiderSkill === 'paintball') {
+            const range = 230;
+            const impactX =
+                origin.x +
+                Math.cos(angle) * range;
+            const impactY =
+                origin.y +
+                Math.sin(angle) * range;
+
+            const trail =
+                this.add.graphics()
+                    .setDepth(176);
+
+            trail.lineStyle(
+                3,
+                0xff4f87,
+                0.9,
+            );
+            trail.lineBetween(
+                origin.x,
+                origin.y,
+                impactX,
+                impactY,
+            );
+
+            this.tweens.add({
+                targets: trail,
+                alpha: 0,
+                duration: 180,
+                onComplete: () =>
+                    trail.destroy(),
+            });
+
+            /*
+             * Permanent-on-purpose splat for this round.
+             */
+            const splat =
+                this.add.graphics()
+                    .setDepth(124);
+
+            splat.fillStyle(
+                0xff4f87,
+                0.92,
+            );
+            splat.fillCircle(
+                impactX,
+                impactY,
+                8,
+            );
+            splat.fillCircle(
+                impactX - 8,
+                impactY + 5,
+                4,
+            );
+            splat.fillCircle(
+                impactX + 7,
+                impactY - 6,
+                3,
+            );
+            splat.fillCircle(
+                impactX + 10,
+                impactY + 7,
+                3,
+            );
+
+            return;
+        }
+
+        const laserLength = 300;
+        const endX =
+            origin.x +
+            Math.cos(angle) *
+                laserLength;
+        const endY =
+            origin.y +
+            Math.sin(angle) *
+                laserLength;
+
+        const beam =
+            this.add.graphics()
+                .setDepth(179);
+
+        beam.lineStyle(
+            2,
+            0xff2038,
+            0.9,
+        );
+        beam.lineBetween(
+            origin.x,
+            origin.y,
+            endX,
+            endY,
+        );
+
+        beam.fillStyle(
+            0xff2038,
+            1,
+        );
+        beam.fillCircle(
+            endX,
+            endY,
+            3,
+        );
+
+        this.tweens.add({
+            targets: beam,
+            alpha: 0,
+            duration: 240,
+            ease: 'Quad.easeOut',
+            onComplete: () =>
+                beam.destroy(),
+        });
     }
 
     private fireShotgun(
@@ -57301,18 +57533,14 @@ const roomPlayers =
         this.clearStraightLinePreview();
         this.phase = 'paint';
 
-        /* V1010452_HIDER_SKILL_PICKER: create picker after Paint/role state settles. */
-        /* V1010452C_HIDER_SKILL_PICKER_RESPONSIVE_POLISH / INTRO_SAFE_DELAY
-         * Mobile role/tutorial card owns the opening seconds of Paint.
-         * Delay the skill picker until that card has had time to clear.
+        /*
+         * V1010452I5_HIDER_SKILL_IMMEDIATE_CONTROLS
+         * Skill selection is gameplay UI, not tutorial UI.
+         * Create it immediately, then retry once after the authoritative role
+         * snapshot has had one frame to settle.
          */
-        if (this.mobileControlsEnabled) {
-            this.time.delayedCall(2600, () => this.createHiderSkillPicker());
-            this.time.delayedCall(3400, () => this.createHiderSkillPicker());
-        } else {
-            this.time.delayedCall(120, () => this.createHiderSkillPicker());
-            this.time.delayedCall(500, () => this.createHiderSkillPicker());
-        }
+        this.createHiderSkillPicker();
+        this.time.delayedCall(80, () => this.createHiderSkillPicker());
 
         this.time.delayedCall(260, () => {
             if (this.phase === 'paint') this.showFirstRoleGuide();
