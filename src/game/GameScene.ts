@@ -85,6 +85,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010451M3K3_HUNTER_STATUS_HARDFIX: inline-important Hunter status rendering defeats legacy mobile CSS/textContent overrides. */
     /* V1010451M3K2_HUNTER_HELP_TOAST_CENTER: show Hunter helper line; center host-transfer toast inside game canvas. */
     /* V1010451M3K_WAITING_LAYOUT_RESCUE: deterministic compact waiting flow; complete Hunt controls; toast inside canvas. */
     /* V1010451M3J2_WAITING_MOCK_HOST_TRANSFER_ROBUST: approved bright lobby status/timing spacing + large host badge + localized host-transfer toast. */
@@ -28206,6 +28207,39 @@ export class GameScene extends Phaser.Scene {
         document.body.appendChild(root);
         this.waitingRoomRoot = root;
 
+        {
+            const styleId =
+                'colorhunt-v451m3k3-hunter-status-hardfix';
+
+            document
+                .getElementById(
+                    styleId,
+                )
+                ?.remove();
+
+            const style =
+                document.createElement(
+                    'style',
+                );
+
+            style.id =
+                styleId;
+
+            style.textContent = `
+                .colorhunt-waiting-room .ch-waiting-role-wrap {
+                    padding-bottom: 6px !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-role-status {
+                    margin-bottom: 6px !important;
+                }
+            `;
+
+            document.head.appendChild(
+                style,
+            );
+        }
+
         /*
          * V1010451M3K2_HUNTER_HELP_TOAST_CENTER
          * Final micro-polish after m3k.
@@ -29971,6 +30005,293 @@ export class GameScene extends Phaser.Scene {
                                 ? '正在招募猎人… 如果无人申请，将随机选择。'
                                 : '헌터 모집 중… 지원자가 없으면 무작위로 선택됩니다.';
             }
+
+            hunterVolunteerStatus
+                .classList.toggle(
+                    'is-active',
+                    localVolunteer,
+                );
+        }
+
+        /*
+         * V1010451M3K3_HUNTER_STATUS_HARDFIX
+         * Hard-render Hunter recruitment card AFTER all prior status writers.
+         * This guarantees icon + title + helper line survive even if an older
+         * textContent assignment or compact mobile stylesheet is still present.
+         */
+        if (hunterVolunteerStatus) {
+            const lang =
+                getLanguage();
+
+            const template =
+                tr('헌터 지원 {count}명');
+
+            const countLabel =
+                template.replace(
+                    '{count}',
+                    String(
+                        localVolunteer
+                            ? Math.max(
+                                1,
+                                hunterVolunteerCount,
+                            )
+                            : hunterVolunteerCount,
+                    ),
+                );
+
+            const title =
+                localVolunteer
+                    ? `${tr('헌터 지원 완료')} · ${countLabel}`
+                    : countLabel;
+
+            const helper =
+                lang === 'ja'
+                    ? 'ハンター募集中… 応募者がいなければランダムで選ばれます。'
+                    : lang === 'en'
+                        ? 'Recruiting Hunters… If nobody volunteers, one is chosen at random.'
+                        : lang === 'zh'
+                            ? '正在招募猎人… 如果无人申请，将随机选择。'
+                            : '헌터 모집 중… 지원자가 없으면 무작위로 선택됩니다.';
+
+            hunterVolunteerStatus.innerHTML =
+                `<div class="ch-waiting-role-status-main">
+                    <span class="ch-waiting-role-status-icon">👥</span>
+                    <strong class="ch-waiting-role-status-text"></strong>
+                </div>
+                <small class="ch-waiting-role-status-help"></small>`;
+
+            const main =
+                hunterVolunteerStatus
+                    .querySelector<HTMLElement>(
+                        '.ch-waiting-role-status-main',
+                    );
+            const icon =
+                hunterVolunteerStatus
+                    .querySelector<HTMLElement>(
+                        '.ch-waiting-role-status-icon',
+                    );
+            const titleNode =
+                hunterVolunteerStatus
+                    .querySelector<HTMLElement>(
+                        '.ch-waiting-role-status-text',
+                    );
+            const helpNode =
+                hunterVolunteerStatus
+                    .querySelector<HTMLElement>(
+                        '.ch-waiting-role-status-help',
+                    );
+
+            if (titleNode) {
+                titleNode.textContent =
+                    title;
+            }
+
+            if (helpNode) {
+                helpNode.textContent =
+                    helper;
+            }
+
+            const setImportant =
+                (
+                    el: HTMLElement | null,
+                    property: string,
+                    value: string,
+                ): void => {
+                    el?.style.setProperty(
+                        property,
+                        value,
+                        'important',
+                    );
+                };
+
+            /*
+             * Critical layout is inline !important on purpose:
+             * several old responsive waiting-room patches still target this class.
+             */
+            setImportant(
+                hunterVolunteerStatus,
+                'display',
+                'flex',
+            );
+            setImportant(
+                hunterVolunteerStatus,
+                'flex-direction',
+                'column',
+            );
+            setImportant(
+                hunterVolunteerStatus,
+                'align-items',
+                'center',
+            );
+            setImportant(
+                hunterVolunteerStatus,
+                'justify-content',
+                'center',
+            );
+            setImportant(
+                hunterVolunteerStatus,
+                'gap',
+                '3px',
+            );
+            setImportant(
+                hunterVolunteerStatus,
+                'height',
+                '54px',
+            );
+            setImportant(
+                hunterVolunteerStatus,
+                'min-height',
+                '54px',
+            );
+            setImportant(
+                hunterVolunteerStatus,
+                'max-height',
+                '54px',
+            );
+            setImportant(
+                hunterVolunteerStatus,
+                'padding',
+                '5px 8px 6px',
+            );
+            setImportant(
+                hunterVolunteerStatus,
+                'margin',
+                '0 0 6px',
+            );
+            setImportant(
+                hunterVolunteerStatus,
+                'box-sizing',
+                'border-box',
+            );
+            setImportant(
+                hunterVolunteerStatus,
+                'overflow',
+                'visible',
+            );
+
+            setImportant(
+                main,
+                'display',
+                'flex',
+            );
+            setImportant(
+                main,
+                'align-items',
+                'center',
+            );
+            setImportant(
+                main,
+                'justify-content',
+                'center',
+            );
+            setImportant(
+                main,
+                'gap',
+                '6px',
+            );
+            setImportant(
+                main,
+                'height',
+                '20px',
+            );
+            setImportant(
+                main,
+                'min-height',
+                '20px',
+            );
+
+            setImportant(
+                icon,
+                'font-size',
+                '15px',
+            );
+            setImportant(
+                icon,
+                'line-height',
+                '1',
+            );
+
+            setImportant(
+                titleNode,
+                'font-size',
+                '14px',
+            );
+            setImportant(
+                titleNode,
+                'font-weight',
+                '900',
+            );
+            setImportant(
+                titleNode,
+                'line-height',
+                '20px',
+            );
+            setImportant(
+                titleNode,
+                'white-space',
+                'nowrap',
+            );
+
+            setImportant(
+                helpNode,
+                'display',
+                'block',
+            );
+            setImportant(
+                helpNode,
+                'width',
+                '100%',
+            );
+            setImportant(
+                helpNode,
+                'height',
+                '15px',
+            );
+            setImportant(
+                helpNode,
+                'min-height',
+                '15px',
+            );
+            setImportant(
+                helpNode,
+                'font-size',
+                '9px',
+            );
+            setImportant(
+                helpNode,
+                'font-weight',
+                '700',
+            );
+            setImportant(
+                helpNode,
+                'line-height',
+                '15px',
+            );
+            setImportant(
+                helpNode,
+                'text-align',
+                'center',
+            );
+            setImportant(
+                helpNode,
+                'white-space',
+                'nowrap',
+            );
+            setImportant(
+                helpNode,
+                'overflow',
+                'visible',
+            );
+            setImportant(
+                helpNode,
+                'opacity',
+                '1',
+            );
+            setImportant(
+                helpNode,
+                'visibility',
+                'visible',
+            );
 
             hunterVolunteerStatus
                 .classList.toggle(
