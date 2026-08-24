@@ -28715,6 +28715,277 @@ const ribbon =
             );
         }
 
+
+        /*
+         * V1010451M6G_LOBBY_HEADER_THREE_COLUMN_FIT
+         *
+         * Final desktop header geometry:
+         * use REAL three columns instead of "title + nested action box".
+         *
+         * [ GAME START ][ BGM ][ HELP ]
+         *
+         * The nested .ch-lobby-inline-actions wrapper becomes display:contents,
+         * so it no longer steals width from the title. This fixes the m6f
+         * regression where 조작방법 fit but 게임 시작하기 got clipped.
+         */
+        if (
+            typeof (
+                this as unknown as {
+                    isDesktopViewportLayout?: () => boolean;
+                }
+            ).isDesktopViewportLayout === 'function'
+                ? (
+                    this as unknown as {
+                        isDesktopViewportLayout: () => boolean;
+                    }
+                ).isDesktopViewportLayout()
+                : !this.mobileControlsEnabled
+        ) {
+            const titleRow =
+                root.querySelector<HTMLElement>(
+                    '.ch-lobby-actions-title-row',
+                );
+
+            const inlineActions =
+                root.querySelector<HTMLElement>(
+                    '.ch-lobby-inline-actions',
+                );
+
+            const title =
+                titleRow
+                    ?.querySelector<HTMLElement>(
+                        'h2',
+                    ) ??
+                null;
+
+            const bgm =
+                root.querySelector<HTMLButtonElement>(
+                    '.ch-lobby-inline-bgm',
+                );
+
+            const controls =
+                root.querySelector<HTMLButtonElement>(
+                    '.ch-lobby-inline-controls',
+                );
+
+            const force =
+                (
+                    element:
+                        HTMLElement |
+                        null,
+                    property:
+                        string,
+                    value:
+                        string,
+                ): void => {
+                    element?.style.setProperty(
+                        property,
+                        value,
+                        'important',
+                    );
+                };
+
+            force(
+                titleRow,
+                'display',
+                'grid',
+            );
+            force(
+                titleRow,
+                'grid-template-columns',
+                'minmax(112px, 1fr) 84px 84px',
+            );
+            force(
+                titleRow,
+                'column-gap',
+                '6px',
+            );
+            force(
+                titleRow,
+                'align-items',
+                'center',
+            );
+            force(
+                titleRow,
+                'padding',
+                '3px 8px 3px 4px',
+            );
+            force(
+                titleRow,
+                'overflow',
+                'hidden',
+            );
+            force(
+                titleRow,
+                'box-sizing',
+                'border-box',
+            );
+
+            /*
+             * Let BGM / HELP become direct grid items.
+             */
+            force(
+                inlineActions,
+                'display',
+                'contents',
+            );
+
+            force(
+                title,
+                'grid-column',
+                '1',
+            );
+            force(
+                title,
+                'min-width',
+                '112px',
+            );
+            force(
+                title,
+                'max-width',
+                'none',
+            );
+            force(
+                title,
+                'width',
+                'auto',
+            );
+            force(
+                title,
+                'font-size',
+                '17px',
+            );
+            force(
+                title,
+                'line-height',
+                '1',
+            );
+            force(
+                title,
+                'white-space',
+                'nowrap',
+            );
+            force(
+                title,
+                'overflow',
+                'visible',
+            );
+            force(
+                title,
+                'text-overflow',
+                'clip',
+            );
+
+            const headerButtons:
+                Array<
+                    [
+                        HTMLButtonElement | null,
+                        string,
+                    ]
+                > = [
+                    [
+                        bgm,
+                        '2',
+                    ],
+                    [
+                        controls,
+                        '3',
+                    ],
+                ];
+
+            headerButtons.forEach(
+                (
+                    [
+                        button,
+                        column,
+                    ],
+                ) => {
+                    force(
+                        button,
+                        'grid-column',
+                        column,
+                    );
+                    force(
+                        button,
+                        'position',
+                        'static',
+                    );
+                    force(
+                        button,
+                        'transform',
+                        'none',
+                    );
+                    force(
+                        button,
+                        'width',
+                        '84px',
+                    );
+                    force(
+                        button,
+                        'min-width',
+                        '84px',
+                    );
+                    force(
+                        button,
+                        'max-width',
+                        '84px',
+                    );
+                    force(
+                        button,
+                        'height',
+                        '38px',
+                    );
+                    force(
+                        button,
+                        'min-height',
+                        '38px',
+                    );
+                    force(
+                        button,
+                        'max-height',
+                        '38px',
+                    );
+                    force(
+                        button,
+                        'margin',
+                        '0',
+                    );
+                    force(
+                        button,
+                        'padding',
+                        '0 6px',
+                    );
+                    force(
+                        button,
+                        'box-sizing',
+                        'border-box',
+                    );
+                    force(
+                        button,
+                        'font-size',
+                        '11.5px',
+                    );
+                    force(
+                        button,
+                        'line-height',
+                        '1',
+                    );
+                    force(
+                        button,
+                        'white-space',
+                        'nowrap',
+                    );
+                    force(
+                        button,
+                        'overflow',
+                        'hidden',
+                    );
+                },
+            );
+
+            /* V1010451M6G2_HEADER_TUPLE_TYPE_FIX */
+        }
+
 }
 
     private createMainLobbyDom(): void {
