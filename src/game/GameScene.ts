@@ -85,6 +85,12 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010452N_SEAL_HIDER_BATTLE_SKILLS_RESTORE_VISION */
+    /*
+     * Reserved for a future Hunter Battle Mode.
+     * Paintball/Laser source stays intact, but current Hide & Seek never exposes it.
+     */
+    private readonly hiderBattleSkillsEnabled = false;
     /* V1010452M_HIDER_SKILL_UX_SPECTATOR_MOBILE_POLISH */
     /* V1010452L_RESPONSIVE_GAMEPLAY_DOM_ANCHOR_FIX */
     /* V1010452K_SPECTATOR_SAFE_HIDER_MOBILE_FIRE */
@@ -1125,7 +1131,7 @@ export class GameScene extends Phaser.Scene {
     private paintUtilityCollapsed = false;
     private paintUtilityToggleDom?: HTMLButtonElement;
     private hiderSkillChargeActive = false;
-    private hiderSkillChargeStartedAt = 0;
+    /* V1010452N2_REMOVE_UNUSED_CHARGE_TIMER */
     private hiderSkillChargeAngle = 0;
     private hiderSkillChargeDistance = 80;
     private hiderSkillChargeGraphics?: Phaser.GameObjects.Graphics;
@@ -1151,25 +1157,75 @@ export class GameScene extends Phaser.Scene {
     }
 
     private syncPaintUtilityCollapseUi(): void {
-        if (this.paintUtilityToggleDom) {
-            this.paintUtilityToggleDom.textContent =
-                this.paintUtilityCollapsed ? '>' : '<';
-            this.paintUtilityToggleDom.title =
-                this.paintUtilityCollapsed ? '펼치기' : '접기';
+        const toggle =
+            this.paintUtilityToggleDom;
+
+        if (toggle) {
+            toggle.textContent =
+                this.paintUtilityCollapsed
+                    ? '>'
+                    : '<';
+
+            toggle.title =
+                this.paintUtilityCollapsed
+                    ? '펼치기'
+                    : '접기';
+
+            /*
+             * Attached square-arrow style requested for mobile:
+             * [ Paint Help ][ < ]  ->  [ > ]
+             */
+            Object.assign(
+                toggle.style,
+                {
+                    width: '38px',
+                    height: '38px',
+                    borderRadius: '0',
+                    border:
+                        '3px solid #111111',
+                    background:
+                        '#ffffff',
+                    color:
+                        '#111111',
+                    fontSize: '28px',
+                    fontWeight: '1000',
+                    lineHeight: '29px',
+                    boxShadow: 'none',
+                },
+            );
         }
 
         if (this.paintAssistButton) {
             this.paintAssistButton.style.visibility =
-                this.paintUtilityCollapsed ? 'hidden' : 'visible';
+                this.paintUtilityCollapsed
+                    ? 'hidden'
+                    : 'visible';
+
             this.paintAssistButton.style.pointerEvents =
-                this.paintUtilityCollapsed ? 'none' : 'auto';
+                this.paintUtilityCollapsed
+                    ? 'none'
+                    : 'auto';
+
+            if (this.mobileControlsEnabled) {
+                this.paintAssistButton.style.borderRadius =
+                    '0';
+                this.paintAssistButton.style.border =
+                    '3px solid #111111';
+                this.paintAssistButton.style.boxShadow =
+                    'none';
+                this.paintAssistButton.style.height =
+                    '38px';
+            }
         }
 
+        /*
+         * Battle skills are sealed: never show the skill picker.
+         */
         if (this.hiderSkillPickerDom) {
-            this.hiderSkillPickerDom.style.visibility =
-                this.paintUtilityCollapsed ? 'hidden' : 'visible';
+            this.hiderSkillPickerDom.style.display =
+                'none';
             this.hiderSkillPickerDom.style.pointerEvents =
-                this.paintUtilityCollapsed ? 'none' : 'auto';
+                'none';
         }
     }
 
@@ -1221,14 +1277,36 @@ export class GameScene extends Phaser.Scene {
         this.syncPaintUtilityCollapseUi();
 
         const anchorRect =
-            this.paintAssistButton?.getBoundingClientRect() ??
-            this.hiderSkillPickerDom?.getBoundingClientRect();
-        const canvasRect = this.game.canvas.getBoundingClientRect();
+            this.paintAssistButton
+                ?.getBoundingClientRect();
+
+        const canvasRect =
+            this.game.canvas
+                .getBoundingClientRect();
+
+        const buttonWidth =
+            38;
+
+        const left =
+            anchorRect
+                ? (
+                    this.paintUtilityCollapsed
+                        ? anchorRect.right - buttonWidth
+                        : anchorRect.right
+                )
+                : canvasRect.left + 12;
+
+        const top =
+            anchorRect
+                ? anchorRect.top
+                : canvasRect.top +
+                    canvasRect.height * 0.42;
 
         this.paintUtilityToggleDom.style.left =
-            `${Math.round(anchorRect ? anchorRect.right + 6 : canvasRect.left + 12)}px`;
+            `${Math.round(left)}px`;
+
         this.paintUtilityToggleDom.style.top =
-            `${Math.round(anchorRect ? anchorRect.top : canvasRect.top + canvasRect.height * 0.42)}px`;
+            `${Math.round(top)}px`;
     }
 
     private clearHiderSkillChargePreview(): void {
@@ -1237,6 +1315,10 @@ export class GameScene extends Phaser.Scene {
     }
 
     private beginHiderSkillCharge(aimAngleOverride?: number): void {
+        if (!this.hiderBattleSkillsEnabled) {
+            return;
+        }
+
         if (!this.isLocalHiderOwnHuntView()) return;
 
         if (this.selectedHiderSkill === 'laser') {
@@ -1247,7 +1329,7 @@ export class GameScene extends Phaser.Scene {
         if (this.hiderSkillChargeActive) return;
 
         this.hiderSkillChargeActive = true;
-        this.hiderSkillChargeStartedAt = this.time.now;
+
         this.hiderSkillChargeAngle =
             Number.isFinite(aimAngleOverride)
                 ? (aimAngleOverride as number)
@@ -1270,173 +1352,186 @@ export class GameScene extends Phaser.Scene {
     private updateHiderSkillRuntimeUi(): void {
         this.ensurePaintUtilityToggle();
 
-        if (!this.isLocalHiderOwnHuntView()) {
+        if (!this.hiderBattleSkillsEnabled) {
+            this.destroyHiderSkillPicker();
             this.clearHiderSkillChargePreview();
-            this.hiderLaserAimGraphics?.clear().setVisible(false);
-            return;
-        }
 
-        const origin = this.networkPlayerManager.getLocalPlayerPosition();
-        if (!origin) return;
-
-        if (this.selectedHiderSkill === 'paintball' && this.hiderSkillChargeActive) {
-            if (!this.hiderSkillChargeGraphics) {
-                this.hiderSkillChargeGraphics = this.add.graphics().setDepth(181);
-            }
-
-            const t = Phaser.Math.Clamp(
-                Math.max(0, this.time.now - this.hiderSkillChargeStartedAt) / 900,
-                0,
-                1,
-            );
-            const distance = Phaser.Math.Linear(80, 245, t);
-            this.hiderSkillChargeDistance = distance;
-
-            const g = this.hiderSkillChargeGraphics;
-            const angle = this.hiderSkillChargeAngle;
-            const ux = Math.cos(angle);
-            const uy = Math.sin(angle);
-            const phase = (this.time.now / 28) % 14;
-
-            g.clear().setVisible(true);
-
-            for (let d = 14 - phase; d < distance - 14; d += 14) {
-                g.fillStyle(0xffffff, 0.42);
-                g.fillCircle(origin.x + ux * d, origin.y + uy * d, 2.1);
-            }
-
-            const endX = origin.x + ux * distance;
-            const endY = origin.y + uy * distance;
-
-            g.lineStyle(2, 0xffffff, 0.68);
-            g.strokeCircle(endX, endY, 12);
-
-            const head = 11;
-            g.lineBetween(
-                endX, endY,
-                endX - Math.cos(angle - 0.55) * head,
-                endY - Math.sin(angle - 0.55) * head,
-            );
-            g.lineBetween(
-                endX, endY,
-                endX - Math.cos(angle + 0.55) * head,
-                endY - Math.sin(angle + 0.55) * head,
-            );
-        } else {
-            this.hiderSkillChargeGraphics?.clear().setVisible(false);
-        }
-
-        if (this.selectedHiderSkill === 'laser' && !this.hiderSkillChargeActive) {
-            if (!this.hiderLaserAimGraphics) {
-                this.hiderLaserAimGraphics = this.add.graphics().setDepth(180);
-            }
-            const range = 390;
-            const angle = this.hunterFocusAngle;
             this.hiderLaserAimGraphics
-                .clear()
-                .setVisible(true)
-                .lineStyle(1, 0xffffff, 0.28)
-                .lineBetween(
-                    origin.x,
-                    origin.y,
-                    origin.x + Math.cos(angle) * range,
-                    origin.y + Math.sin(angle) * range,
-                );
-        } else {
-            this.hiderLaserAimGraphics?.clear().setVisible(false);
+                ?.clear()
+                .setVisible(false);
+
+            return;
         }
     }
 
     private applyHiderSpectatorAndViewPostPass(): void {
-        const localRole = multiplayerClient.getLocalPlayer()?.role;
+        const localRole =
+            multiplayerClient
+                .getLocalPlayer()
+                ?.role;
+
         const localHider =
             this.phase === 'hunt' &&
             this.isMultiplayerSession() &&
             (
                 localRole === 'hider' ||
-                this.networkPlayerManager.isLocalHider()
+                this.networkPlayerManager
+                    .isLocalHider()
             );
 
         if (!localHider) {
-            this.spectatorMobileButtonFrame?.setVisible(false);
+            this.spectatorMobileButtonFrame
+                ?.setVisible(false);
             return;
         }
 
-        const spectating = Boolean(this.spectatorSessionId);
+        const spectating =
+            Boolean(
+                this.spectatorSessionId,
+            );
 
         if (this.mobileControlsEnabled) {
             if (!this.spectatorMobileButtonFrame) {
                 this.spectatorMobileButtonFrame =
-                    this.add.graphics().setScrollFactor(0).setDepth(6002);
+                    this.add.graphics()
+                        .setScrollFactor(0)
+                        .setDepth(6002);
             }
 
-            const buttonX = this.gameWidth / 2;
-            const buttonY = this.gameHeight - 28;
-            const frame = this.spectatorMobileButtonFrame;
+            /*
+             * Keep the real mobile spectator button,
+             * slightly lower so it stays clear of the nickname/status card.
+             */
+            const buttonX =
+                this.gameWidth / 2;
 
-            frame.clear().setVisible(true);
-            frame.fillStyle(0x3d9ed1, 0.84);
-            frame.fillRoundedRect(-94, -23, 188, 46, 13);
-            frame.lineStyle(3, 0xd9f3ff, 0.88);
-            frame.strokeRoundedRect(-94, -23, 188, 46, 13);
-            this.setFixedHudScreenPosition(frame, buttonX, buttonY);
+            const buttonY =
+                this.gameHeight - 24;
+
+            const frame =
+                this.spectatorMobileButtonFrame;
+
+            frame
+                .clear()
+                .setVisible(true);
+
+            frame.fillStyle(
+                0x3d9ed1,
+                0.88,
+            );
+            frame.fillRoundedRect(
+                -94,
+                -23,
+                188,
+                46,
+                13,
+            );
+
+            frame.lineStyle(
+                3,
+                0xd9f3ff,
+                0.94,
+            );
+            frame.strokeRoundedRect(
+                -94,
+                -23,
+                188,
+                46,
+                13,
+            );
+
+            this.setFixedHudScreenPosition(
+                frame,
+                buttonX,
+                buttonY,
+            );
 
             if (this.spectatorButton) {
                 this.spectatorButton
-                    .setBackgroundColor('rgba(0,0,0,0)')
-                    .setFixedSize(180, 40)
+                    .setBackgroundColor(
+                        'rgba(0,0,0,0)',
+                    )
+                    .setFixedSize(
+                        180,
+                        40,
+                    )
                     .setFontSize(16)
-                    .setPadding(0, 8, 0, 0)
                     .setVisible(true);
-                this.setFixedHudScreenPosition(this.spectatorButton, buttonX, buttonY);
-            }
 
-            const showOwn = !spectating;
-
-            this.mobileMoveBase?.setVisible(showOwn);
-            this.mobileMoveKnob?.setVisible(showOwn);
-            this.mobileMoveLabel?.setVisible(showOwn);
-            this.mobileAimBase?.setVisible(showOwn);
-            this.mobileAimKnob?.setVisible(showOwn);
-            this.mobileAimLabel?.setVisible(showOwn);
-            this.mobileFireButton?.setVisible(showOwn);
-            this.mobileFireLabel?.setVisible(showOwn);
-
-            this.mobileFartButton?.setVisible(false);
-            this.mobileFartLabel?.setVisible(false);
-
-            if (showOwn && this.mobileAimPointerId < 0 && this.mobileAimKnob) {
                 this.setFixedHudScreenPosition(
-                    this.mobileAimKnob,
-                    this.gameWidth - 170,
-                    this.gameHeight - 190,
+                    this.spectatorButton,
+                    buttonX,
+                    buttonY,
                 );
-                this.mobileAimKnob.setAlpha(0.62).setVisible(true);
             }
+
+            /*
+             * Hide & Seek Hider owns movement only.
+             * Battle skill AIM/FIRE is sealed.
+             */
+            const showMove =
+                !spectating;
+
+            this.mobileMoveBase
+                ?.setVisible(showMove);
+            this.mobileMoveKnob
+                ?.setVisible(showMove);
+            this.mobileMoveLabel
+                ?.setVisible(showMove);
+
+            this.mobileAimBase
+                ?.setVisible(false);
+            this.mobileAimKnob
+                ?.setVisible(false);
+            this.mobileAimLabel
+                ?.setVisible(false);
+            this.mobileFireButton
+                ?.setVisible(false);
+            this.mobileFireLabel
+                ?.setVisible(false);
+            this.mobileFartButton
+                ?.setVisible(false);
+            this.mobileFartLabel
+                ?.setVisible(false);
         } else {
-            this.spectatorMobileButtonFrame?.setVisible(false);
+            this.spectatorMobileButtonFrame
+                ?.setVisible(false);
         }
 
         if (spectating) {
             this.clearHiderSkillChargePreview();
-            this.hiderLaserAimGraphics?.clear().setVisible(false);
-            this.aimLine?.clear().setVisible(false);
-            this.crosshair?.clear().setVisible(false);
-            this.gun?.setVisible(false);
-            return;
+            this.hiderLaserAimGraphics
+                ?.clear()
+                .setVisible(false);
+
+            this.aimLine
+                ?.clear()
+                .setVisible(false);
+
+            this.crosshair
+                ?.clear()
+                .setVisible(false);
+
+            this.gun
+                ?.setVisible(false);
         }
 
-        this.hiderVisionGraphics?.clear().setVisible(false);
-        this.hiderVisionOverlays.forEach((overlay) => overlay.setVisible(false));
-
-        const hiderSkillZoom = 1.28;
-        if (Math.abs(this.cameras.main.zoom - hiderSkillZoom) > 0.001) {
-            this.cameras.main.setZoom(hiderSkillZoom);
-            this.applyFixedHudForZoom(hiderSkillZoom);
-        }
+        /*
+         * IMPORTANT:
+         * Do NOT hide hiderVisionGraphics here.
+         * Do NOT override camera zoom here.
+         *
+         * The original Hunt tension code owns the dark circular Hider vision,
+         * and ensureGameplayCameraFollow() owns gameplayCameraZoom (1.65).
+         */
     }
 
     private createHiderSkillPicker(): void {
+        if (!this.hiderBattleSkillsEnabled) {
+            this.destroyHiderSkillPicker();
+            return;
+        }
+
         this.destroyHiderSkillPicker();
 
         /* V1010452A_HIDER_SKILL_PICKER_ROLE_FIX
@@ -22550,6 +22645,31 @@ const ribbon =
         this.gameplayDocumentWasFocused =
             gameplayDocumentFocused;
 
+        /*
+         * Spectator view is observation-only.
+         * No WASD/mobile movement packets while viewing another player.
+         */
+        if (
+            this.phase === 'hunt' &&
+            this.spectatorSessionId &&
+            (
+                multiplayerClient
+                    .getLocalPlayer()
+                    ?.role === 'hider' ||
+                this.networkPlayerManager
+                    .isLocalHider()
+            )
+        ) {
+            this.resetMobileMoveControl();
+
+            this.networkPlayerManager
+                .update(
+                    delta,
+                );
+
+            return;
+        }
+
         let directionX = 0;
         let directionY = 0;
 
@@ -41468,6 +41588,16 @@ const ribbon =
     private async captureVictoryFrameForRoleShowcase(
         result: NetworkRoundResult,
     ): Promise<HTMLImageElement> {
+        /*
+         * Experimental Battle-mode FX must never cover real Hider camouflage
+         * in a normal victory card.
+         */
+        this.clearHiderSkillRoundFx();
+        this.clearHiderSkillChargePreview();
+        this.hiderLaserAimGraphics
+            ?.clear()
+            .setVisible(false);
+
         const isHider =
             result.winner === 'hiders';
 
@@ -54057,6 +54187,10 @@ const roomPlayers =
         aimAngleOverride?: number,
         paintballDistanceOverride?: number,
     ): void {
+        if (!this.hiderBattleSkillsEnabled) {
+            return;
+        }
+
         if (
             this.phase !== 'hunt' ||
             !this.isMultiplayerSession() ||
