@@ -28445,7 +28445,277 @@ const ribbon =
             force(editButton, 'box-sizing', 'border-box');
         }
 
-    }
+    
+        /*
+         * V1010451M6F_LOBBY_HEADER_CONTROLS_FIT
+         *
+         * m6e fixed the whole PC stage. The only remaining overflow is the
+         * right-column header: historical desktop rules let BGM + Help keep
+         * intrinsic widths, so the Help button can extend past the panel edge.
+         *
+         * Keep the existing visual sizes, but make the two controls share a
+         * bounded responsive box. The title gets the remaining width.
+         */
+        if (
+            typeof (
+                this as unknown as {
+                    isDesktopViewportLayout?: () => boolean;
+                }
+            ).isDesktopViewportLayout === 'function'
+                ? (
+                    this as unknown as {
+                        isDesktopViewportLayout: () => boolean;
+                    }
+                ).isDesktopViewportLayout()
+                : !this.mobileControlsEnabled
+        ) {
+            const titleRow =
+                root.querySelector<HTMLElement>(
+                    '.ch-lobby-actions-title-row',
+                );
+
+            const inlineActions =
+                root.querySelector<HTMLElement>(
+                    '.ch-lobby-inline-actions',
+                );
+
+            const title =
+                titleRow
+                    ?.querySelector<HTMLElement>(
+                        'h2',
+                    ) ??
+                null;
+
+            const bgm =
+                root.querySelector<HTMLButtonElement>(
+                    '.ch-lobby-inline-bgm',
+                );
+
+            const controls =
+                root.querySelector<HTMLButtonElement>(
+                    '.ch-lobby-inline-controls',
+                );
+
+            const force =
+                (
+                    element:
+                        HTMLElement |
+                        null,
+                    property:
+                        string,
+                    value:
+                        string,
+                ): void => {
+                    element?.style.setProperty(
+                        property,
+                        value,
+                        'important',
+                    );
+                };
+
+            force(
+                titleRow,
+                'display',
+                'grid',
+            );
+            force(
+                titleRow,
+                'grid-template-columns',
+                'minmax(0, 1fr) minmax(176px, 58%)',
+            );
+            force(
+                titleRow,
+                'column-gap',
+                '8px',
+            );
+            force(
+                titleRow,
+                'align-items',
+                'center',
+            );
+            force(
+                titleRow,
+                'padding',
+                '3px 10px 3px 4px',
+            );
+            force(
+                titleRow,
+                'overflow',
+                'hidden',
+            );
+            force(
+                titleRow,
+                'box-sizing',
+                'border-box',
+            );
+
+            force(
+                title,
+                'min-width',
+                '0',
+            );
+            force(
+                title,
+                'max-width',
+                '100%',
+            );
+            force(
+                title,
+                'font-size',
+                '18px',
+            );
+            force(
+                title,
+                'white-space',
+                'nowrap',
+            );
+            force(
+                title,
+                'overflow',
+                'hidden',
+            );
+            force(
+                title,
+                'text-overflow',
+                'clip',
+            );
+
+            force(
+                inlineActions,
+                'display',
+                'grid',
+            );
+            force(
+                inlineActions,
+                'grid-template-columns',
+                'minmax(0, 1fr) minmax(0, 1fr)',
+            );
+            force(
+                inlineActions,
+                'gap',
+                '6px',
+            );
+            force(
+                inlineActions,
+                'width',
+                '100%',
+            );
+            force(
+                inlineActions,
+                'min-width',
+                '0',
+            );
+            force(
+                inlineActions,
+                'max-width',
+                '100%',
+            );
+            force(
+                inlineActions,
+                'justify-self',
+                'stretch',
+            );
+            force(
+                inlineActions,
+                'overflow',
+                'hidden',
+            );
+            force(
+                inlineActions,
+                'box-sizing',
+                'border-box',
+            );
+
+            [
+                bgm,
+                controls,
+            ].forEach(
+                (button) => {
+                    force(
+                        button,
+                        'position',
+                        'static',
+                    );
+                    force(
+                        button,
+                        'transform',
+                        'none',
+                    );
+                    force(
+                        button,
+                        'width',
+                        '100%',
+                    );
+                    force(
+                        button,
+                        'min-width',
+                        '0',
+                    );
+                    force(
+                        button,
+                        'max-width',
+                        '100%',
+                    );
+                    force(
+                        button,
+                        'height',
+                        '38px',
+                    );
+                    force(
+                        button,
+                        'min-height',
+                        '38px',
+                    );
+                    force(
+                        button,
+                        'max-height',
+                        '38px',
+                    );
+                    force(
+                        button,
+                        'margin',
+                        '0',
+                    );
+                    force(
+                        button,
+                        'padding',
+                        '0 7px',
+                    );
+                    force(
+                        button,
+                        'box-sizing',
+                        'border-box',
+                    );
+                    force(
+                        button,
+                        'font-size',
+                        '12px',
+                    );
+                    force(
+                        button,
+                        'line-height',
+                        '1',
+                    );
+                    force(
+                        button,
+                        'white-space',
+                        'nowrap',
+                    );
+                    force(
+                        button,
+                        'overflow',
+                        'hidden',
+                    );
+                    force(
+                        button,
+                        'text-overflow',
+                        'clip',
+                    );
+                },
+            );
+        }
+
+}
 
     private createMainLobbyDom(): void {
         this.destroyMainLobbyDom();
