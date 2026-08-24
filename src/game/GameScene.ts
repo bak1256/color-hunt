@@ -33658,6 +33658,33 @@ const ribbon =
          */
         this.clearVictoryShowcaseForRoundLifecycle();
 
+        /*
+         * V1010451M5C_CLIENT_INTENTIONAL_LOBBY_LEAVE_ROBUST
+         * Explicit Lobby exit: tell the server not to preserve this seat as a
+         * recoverable network drop.
+         */
+        const leavingRoom =
+            multiplayerClient.getRoom();
+
+        if (leavingRoom) {
+            try {
+                leavingRoom.send(
+                    'leave_room_intent',
+                );
+
+                await new Promise<void>(
+                    (resolve) => {
+                        window.setTimeout(
+                            resolve,
+                            35,
+                        );
+                    },
+                );
+            } catch {
+                // disconnect() below remains the fallback.
+            }
+        }
+
         await multiplayerClient.disconnect();
 
         this.hideChatUi(true);
