@@ -1,3 +1,4 @@
+/* V1010452_SKILL_SYSTEM_FOUNDATION: client skill selection/state API. */
 /* V1010451E2_TERMINAL_REJOIN_AND_FOUND_POSITIONS_ROBUST: robust terminal fresh-rejoin rejection handling. */
 /* V1010450ZG_READY_AND_SNAPSHOT_STABILITY */
 import { tr } from '../i18n';
@@ -376,6 +377,14 @@ export type PaintReadyState = {
 
 export type PaintReadyStateHandler = (
   state: PaintReadyState,
+) => void;
+
+export type PlayerSkillId =
+  | "paintball"
+  | "laser";
+
+export type SkillStateHandler = (
+  skillId: PlayerSkillId,
 ) => void;
 
 export class MultiplayerClient {
@@ -802,6 +811,12 @@ this.phaseChangedHandlers.forEach(
 
   private readonly paintReadyStateHandlers =
     new Set<PaintReadyStateHandler>();
+
+  private readonly skillStateHandlers =
+    new Set<SkillStateHandler>();
+
+  private selectedSkill: PlayerSkillId =
+    "paintball";
 
   private paintReadyState: PaintReadyState = {
     readySessionIds: [],
@@ -3051,6 +3066,21 @@ this.room = room;
       },
     );
 
+    room.onMessage<{ skillId?: PlayerSkillId }>(
+      "skill_state",
+      (payload) => {
+        const skillId =
+          payload?.skillId === "laser"
+            ? "laser"
+            : "paintball";
+
+        this.selectedSkill = skillId;
+        this.skillStateHandlers.forEach(
+          (handler) => handler(skillId),
+        );
+      },
+    );
+
     room.onMessage<PaintReadyState>(
       "paint_ready_state",
       (payload) => {
@@ -3824,6 +3854,33 @@ this.room = room;
 
   getLobbyReadyState(): LobbyReadyState {
     return this.lobbyReadyState;
+  }
+
+  sendSkillSelection(
+    skillId: PlayerSkillId,
+  ): void {
+    if (
+      skillId !== "paintball" &&
+      skillId !== "laser"
+    ) return;
+
+    this.selectedSkill = skillId;
+    this.room?.send("skill_select", { skillId });
+  }
+
+  requestSkillState(): void {
+    this.room?.send("request_skill_state", {});
+  }
+
+  getSelectedSkill(): PlayerSkillId {
+    return this.selectedSkill;
+  }
+
+  onSkillState(
+    handler: SkillStateHandler,
+  ): () => void {
+    this.skillStateHandlers.add(handler);
+    return () => this.skillStateHandlers.delete(handler);
   }
 
   sendPaintReady(

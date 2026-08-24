@@ -938,6 +938,100 @@ export class GameScene extends Phaser.Scene {
 
     private localPaintReady = false;
 
+    /* V1010452_HIDER_SKILL_PICKER: reusable Hider skill picker foundation. */
+    private selectedHiderSkill: 'paintball' | 'laser' = 'paintball';
+    private hiderSkillPickerDom?: HTMLDivElement;
+
+    private destroyHiderSkillPicker(): void {
+        this.hiderSkillPickerDom?.remove();
+        this.hiderSkillPickerDom = undefined;
+    }
+
+    private createHiderSkillPicker(): void {
+        this.destroyHiderSkillPicker();
+
+        const localPlayer = multiplayerClient.getLocalPlayer();
+        const role = localPlayer?.role;
+
+        if (
+            this.phase !== 'paint' ||
+            role !== 'hider' ||
+            !this.isMultiplayerSession()
+        ) return;
+
+        this.selectedHiderSkill = multiplayerClient.getSelectedSkill();
+
+        const root = document.createElement('div');
+        root.className = 'colorhunt-hider-skill-picker';
+        root.style.cssText = [
+            'position:fixed',
+            'left:50%',
+            'bottom:max(92px, env(safe-area-inset-bottom))',
+            'transform:translateX(-50%)',
+            'z-index:2147482000',
+            'display:flex',
+            'gap:8px',
+            'padding:7px',
+            'border-radius:16px',
+            'background:rgba(15,18,28,.82)',
+            'backdrop-filter:blur(8px)',
+            'box-shadow:0 6px 22px rgba(0,0,0,.28)',
+            'font-family:inherit'
+        ].join(';');
+
+        const render = (): void => {
+            root.innerHTML = '';
+            const items: Array<{
+                id: 'paintball' | 'laser';
+                icon: string;
+                label: string;
+            }> = [
+                { id: 'paintball', icon: '🎨', label: '페인트볼' },
+                { id: 'laser', icon: '🔴', label: '레이저' }
+            ];
+
+            items.forEach((item) => {
+                const button = document.createElement('button');
+                const selected = this.selectedHiderSkill === item.id;
+                button.type = 'button';
+                button.disabled = this.localPaintReady;
+                button.textContent = item.icon + ' ' + item.label;
+                button.style.cssText = [
+                    'border:2px solid ' + (selected ? '#ffe066' : 'rgba(255,255,255,.28)'),
+                    'background:' + (selected ? 'rgba(255,224,102,.22)' : 'rgba(255,255,255,.09)'),
+                    'color:#fff',
+                    'font-weight:900',
+                    'font-size:14px',
+                    'padding:9px 12px',
+                    'border-radius:12px',
+                    'cursor:pointer',
+                    'white-space:nowrap',
+                    this.localPaintReady ? 'opacity:.55' : 'opacity:1'
+                ].join(';');
+
+                button.onclick = () => {
+                    if (this.localPaintReady || this.phase !== 'paint') return;
+                    this.selectedHiderSkill = item.id;
+                    multiplayerClient.sendSkillSelection(item.id);
+                    render();
+                };
+                root.appendChild(button);
+            });
+
+            const tag = document.createElement('div');
+            tag.textContent = 'SKILL';
+            tag.style.cssText =
+                'position:absolute;top:-9px;left:12px;background:#fff;color:#111;' +
+                'font-size:9px;font-weight:1000;padding:2px 6px;border-radius:999px;';
+            root.appendChild(tag);
+        };
+
+        render();
+        document.body.appendChild(root);
+        this.hiderSkillPickerDom = root;
+        multiplayerClient.requestSkillState();
+    }
+
     /*
      * V1010450ZE_PAINT_READY_INTENT_VISUAL_LOCK
      * Keep the tapped READY/CANCEL state visually stable until the server
@@ -56726,6 +56820,10 @@ const roomPlayers =
         this.clearStraightLinePreview();
         this.phase = 'paint';
 
+        /* V1010452_HIDER_SKILL_PICKER: create picker after Paint/role state settles. */
+        this.time.delayedCall(80, () => this.createHiderSkillPicker());
+        this.time.delayedCall(420, () => this.createHiderSkillPicker());
+
         this.time.delayedCall(260, () => {
             if (this.phase === 'paint') this.showFirstRoleGuide();
         });
@@ -56960,6 +57058,7 @@ const roomPlayers =
     }
 
     private startHunt(): void {
+        this.destroyHiderSkillPicker();
         this.hideAllHidersReadyBubble();
 
         this.time.delayedCall(
