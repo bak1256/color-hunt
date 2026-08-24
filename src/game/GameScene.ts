@@ -42051,7 +42051,114 @@ const ribbon =
             this.networkPlayerManager
                 .setNamesVisible(false);
 
-            return await this.captureVictoryFrameGuaranteed();
+            /*
+             * V1010452R_HIDER_CAPTURE_PC_AUTHORITY / PC_IS_SOURCE_OF_TRUTH
+             *
+             * Hider victory framing has exactly one implementation. Mobile does
+             * not calculate its own zoom, viewport, center, bounds, or scale.
+             * It repeatedly receives the same PC capture state until the
+             * framebuffer has actually been copied.
+             */
+            const applyCanonicalHiderCaptureCamera =
+                (): void => {
+                    if (!isHider) {
+                        return;
+                    }
+
+                    this.paintWorldZoom =
+                        4.9;
+
+                    camera
+                        .stopFollow()
+                        .removeBounds()
+                        .setSize(
+                            this.gameWidth,
+                            this.gameHeight,
+                        )
+                        .setZoom(
+                            4.9,
+                        );
+
+                    this.networkPlayerManager
+                        .showOnlyLocalPlayer();
+
+                    const localTarget =
+                        this.networkPlayerManager
+                            .getLocalPlayerContainer();
+
+                    if (!localTarget) {
+                        return;
+                    }
+
+                    localTarget
+                        .setVisible(true)
+                        .setAlpha(1);
+
+                    const visualBounds =
+                        localTarget.getBounds();
+
+                    const centerX =
+                        Number.isFinite(
+                            visualBounds.centerX,
+                        )
+                            ? visualBounds.centerX
+                            : localTarget.x;
+
+                    const centerY =
+                        Number.isFinite(
+                            visualBounds.centerY,
+                        )
+                            ? visualBounds.centerY
+                            : localTarget.y;
+
+                    camera.centerOn(
+                        centerX,
+                        centerY,
+                    );
+
+                    /*
+                     * Capture-only UI/vision must stay out of the PC reference
+                     * frame on both device classes.
+                     */
+                    this.hiderVisionGraphics
+                        ?.clear()
+                        .setVisible(false);
+
+                    this.hiderVisionOverlays
+                        .forEach(
+                            (overlay) =>
+                                overlay.setVisible(false),
+                        );
+
+                    this.mobileMoveBase
+                        ?.setVisible(false);
+                    this.mobileMoveKnob
+                        ?.setVisible(false);
+                    this.mobileMoveLabel
+                        ?.setVisible(false);
+                    this.mobileAimBase
+                        ?.setVisible(false);
+                    this.mobileAimKnob
+                        ?.setVisible(false);
+                    this.mobileAimLabel
+                        ?.setVisible(false);
+                    this.mobileFireButton
+                        ?.setVisible(false);
+                    this.mobileFireLabel
+                        ?.setVisible(false);
+                    this.mobileFartButton
+                        ?.setVisible(false);
+                    this.mobileFartLabel
+                        ?.setVisible(false);
+                };
+
+            applyCanonicalHiderCaptureCamera();
+
+            return await this.captureVictoryFrameGuaranteed(
+                isHider
+                    ? applyCanonicalHiderCaptureCamera
+                    : undefined,
+            );
         } finally {
             this.victoryShowcaseCleanCaptureActive =
                 previousCleanCaptureActive;
@@ -42104,7 +42211,17 @@ const ribbon =
      * rendering the Hunt/Finished HUD and caused one Hunter's card to contain
      * the exact gunfire moment.
      */
-    private async captureVictoryFrameGuaranteed(): Promise<HTMLImageElement> {
+    private async captureVictoryFrameGuaranteed(
+        beforeSnapshot?: () => void,
+    ): Promise<HTMLImageElement> {
+        /*
+         * V1010452R_HIDER_CAPTURE_PC_AUTHORITY
+         *
+         * renderer.snapshot() happens after RAF settling. Mobile-only gameplay
+         * passes can run in that gap and overwrite the victory camera. Allow the
+         * caller to restore the canonical capture camera at the LAST possible
+         * moment, immediately before every framebuffer snapshot.
+         */
         const delays =
             [0, 80, 180, 320, 520];
 
@@ -42133,6 +42250,26 @@ const ribbon =
                     );
                 },
             );
+
+            beforeSnapshot?.();
+
+            /*
+             * One final render frame with the canonical capture state. Do not
+             * add a second RAF here: that would give gameplay camera code
+             * another chance to overwrite it on mobile.
+             */
+            await new Promise<void>(
+                (resolve) => {
+                    requestAnimationFrame(
+                        () => {
+                            beforeSnapshot?.();
+                            resolve();
+                        },
+                    );
+                },
+            );
+
+            beforeSnapshot?.();
 
             const snapshot =
                 await this.captureGameCanvasForShare();
