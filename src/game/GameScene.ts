@@ -31514,6 +31514,101 @@ const ribbon =
         });
 
 
+        /*
+         * V1010452E2_MOBILE_WAITING_TIMING_NO_OVERLAP_ROBUST
+         * Final mobile-only authority for Paint/Hunt timing geometry.
+         * Two 73px cards + 9px gap require 155px total.
+         */
+        {
+            const styleId = 'colorhunt-v452e2-mobile-timing-no-overlap';
+            document.getElementById(styleId)?.remove();
+
+            const style = document.createElement('style');
+            style.id = styleId;
+            style.textContent = `
+                .colorhunt-waiting-room.ch-uniform-mobile-scale .ch-waiting-timing {
+                    display: grid !important;
+                    grid-template-columns: minmax(0, 1fr) !important;
+                    grid-template-rows: 73px 73px !important;
+                    grid-auto-rows: 73px !important;
+                    gap: 9px !important;
+                    width: 100% !important;
+                    height: 155px !important;
+                    min-height: 155px !important;
+                    max-height: 155px !important;
+                    flex: 0 0 155px !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    box-sizing: border-box !important;
+                    overflow: visible !important;
+                }
+
+                .colorhunt-waiting-room.ch-uniform-mobile-scale .ch-waiting-timing > section {
+                    position: relative !important;
+                    display: grid !important;
+                    grid-template-rows: 18px 31px !important;
+                    align-content: start !important;
+                    row-gap: 7px !important;
+                    width: 100% !important;
+                    height: 73px !important;
+                    min-height: 73px !important;
+                    max-height: 73px !important;
+                    margin: 0 !important;
+                    padding: 7px 7px 8px !important;
+                    box-sizing: border-box !important;
+                    overflow: hidden !important;
+                }
+
+                .colorhunt-waiting-room.ch-uniform-mobile-scale .ch-waiting-timing-title {
+                    position: static !important;
+                    inset: auto !important;
+                    transform: none !important;
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: space-between !important;
+                    gap: 6px !important;
+                    width: 100% !important;
+                    height: 18px !important;
+                    min-height: 18px !important;
+                    max-height: 18px !important;
+                    margin: 0 !important;
+                    padding: 0 1px !important;
+                    box-sizing: border-box !important;
+                    line-height: 18px !important;
+                    overflow: visible !important;
+                }
+
+                .colorhunt-waiting-room.ch-uniform-mobile-scale .ch-waiting-time-options {
+                    position: static !important;
+                    inset: auto !important;
+                    transform: none !important;
+                    display: grid !important;
+                    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+                    gap: 5px !important;
+                    width: 100% !important;
+                    height: 31px !important;
+                    min-height: 31px !important;
+                    max-height: 31px !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    box-sizing: border-box !important;
+                }
+
+                .colorhunt-waiting-room.ch-uniform-mobile-scale .ch-waiting-time-options button {
+                    width: 100% !important;
+                    height: 31px !important;
+                    min-height: 31px !important;
+                    max-height: 31px !important;
+                    margin: 0 !important;
+                    padding: 0 4px !important;
+                    box-sizing: border-box !important;
+                    line-height: 1 !important;
+                }
+            `;
+
+            document.head.appendChild(style);
+        }
+
         const waitingFooter =
             root.querySelector<HTMLElement>(
                 '.ch-waiting-footer',
