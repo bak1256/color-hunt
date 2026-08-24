@@ -85,6 +85,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010452O2_STALE_CHAT_MOBILE_READY_EXACT */
     /* V1010452N3_RESTORE_HIDER_CORE_PC_MOBILE_PARITY */
     /* V1010452N_SEAL_HIDER_BATTLE_SKILLS_RESTORE_VISION */
     /*
@@ -2478,9 +2479,20 @@ export class GameScene extends Phaser.Scene {
                         : undefined
             );
 
+        /*
+         * Paint phase can arrive one callback before the local scene phase or
+         * role fallback settles on mobile. The server phase is authoritative.
+         */
+        const authoritativePhase =
+            multiplayerClient.getPhase();
+
         const visible =
             this.isMultiplayerSession() &&
-            this.phase === 'paint' &&
+            multiplayerClient.isConnected() &&
+            (
+                this.phase === 'paint' ||
+                authoritativePhase === 'paint'
+            ) &&
             (
                 role === 'hider' ||
                 role === 'hunter'
@@ -2512,6 +2524,14 @@ export class GameScene extends Phaser.Scene {
             visible
                 ? 'false'
                 : 'true',
+        );
+
+        button.style.setProperty(
+            'display',
+            visible
+                ? 'flex'
+                : 'none',
+            'important',
         );
 
 
@@ -9279,6 +9299,21 @@ export class GameScene extends Phaser.Scene {
 
 
     private showChatUi(): void {
+        /*
+         * V1010452O2_STALE_CHAT_MOBILE_READY_EXACT
+         * Room chat is valid only while this scene owns a connected room.
+         * In particular, a late history/message callback from an already-started
+         * room rejection must never reopen chat over the public MAIN lobby.
+         */
+        if (
+            !this.multiplayerSessionActive ||
+            !multiplayerClient.isConnected() ||
+            !multiplayerClient.getRoom()
+        ) {
+            this.hideChatUi(true);
+            return;
+        }
+
         if (!this.chatRoot) {
             return;
         }
@@ -13272,6 +13307,15 @@ const ribbon =
                     message:
                         NetworkChatMessage,
                 ) => {
+                    if (
+                        !this.multiplayerSessionActive ||
+                        !multiplayerClient.isConnected() ||
+                        !multiplayerClient.getRoom()
+                    ) {
+                        this.hideChatUi(true);
+                        return;
+                    }
+
                     this.showChatUi();
                     this.appendChatMessage(
                         message,
@@ -13286,6 +13330,15 @@ const ribbon =
                     messages:
                         NetworkChatMessage[],
                 ) => {
+                    if (
+                        !this.multiplayerSessionActive ||
+                        !multiplayerClient.isConnected() ||
+                        !multiplayerClient.getRoom()
+                    ) {
+                        this.hideChatUi(true);
+                        return;
+                    }
+
                     this.chatMessageIds
                         .clear();
 
@@ -22090,10 +22143,6 @@ const ribbon =
         );
         this.createWaitingRoomDom();
 
-        this.showChatUi();
-        multiplayerClient
-            .requestChatHistory();
-
         if (
             multiplayerClient.getRoom() !== room
         ) {
@@ -22255,6 +22304,13 @@ const ribbon =
 
             return;
         }
+
+        /*
+         * Chat activation belongs after the mid-game participant gate.
+         */
+        this.showChatUi();
+        multiplayerClient
+            .requestChatHistory();
 
         this.applyNetworkPhase(
             joinedPhase,
@@ -44398,6 +44454,18 @@ const roomPlayers =
 
             this.localPaintReady = false;
             this.enterPaintPhase();
+
+            /*
+             * Post-round/lobby cleanup is allowed to remove the fixed DOM READY
+             * control. Every new Paint phase must recreate it before rendering.
+             */
+            if (
+                !this.paintReadyDomButton ||
+                !this.paintReadyDomButton.isConnected
+            ) {
+                this.createPaintReadyDomButton();
+            }
+
             this.updatePaintReadyButton();
 
             /*
