@@ -1515,6 +1515,25 @@ export class GameScene extends Phaser.Scene {
     }
 
     private updateSurvivalHud(): void {
+
+        /*
+         * V1010451M4E_VICTORY_CLEAN_CAPTURE_UI_LOCK_ROBUST / SURVIVAL_HUD_LOCK
+         * Prevent role labels / hourglass / hunt timer from being resurrected
+         * during Victory Snapshot settling frames.
+         */
+        if (this.victoryShowcaseCleanCaptureActive) {
+            this.survivalHudText
+                ?.setText('')
+                .setVisible(false);
+            this.survivalHudGraphics
+                ?.setVisible(false);
+            this.survivalHiderLabelText
+                ?.setVisible(false);
+            this.survivalHunterLabelText
+                ?.setVisible(false);
+            return;
+        }
+
         /*
          * v0.10.10.236.2:
          * Survival/phase HUD only belongs to Paint/Hunt (plus Hunter practice).
@@ -4525,6 +4544,41 @@ export class GameScene extends Phaser.Scene {
     }
 
     private updateMobileControlVisibility(): void {
+
+        /*
+         * V1010451M4E_VICTORY_CLEAN_CAPTURE_UI_LOCK_ROBUST / MOBILE_SPECTATOR_LOCK
+         * Victory-card capture must not resurrect TAB/spectator/mobile controls.
+         */
+        if (this.victoryShowcaseCleanCaptureActive) {
+            this.spectatorButton
+                ?.setVisible(false);
+            this.spectatorStatusText
+                ?.setVisible(false);
+
+            this.mobileMoveBase
+                ?.setVisible(false);
+            this.mobileMoveKnob
+                ?.setVisible(false);
+            this.mobileMoveLabel
+                ?.setVisible(false);
+            this.mobileAimBase
+                ?.setVisible(false);
+            this.mobileAimKnob
+                ?.setVisible(false);
+            this.mobileAimLabel
+                ?.setVisible(false);
+            this.mobileFireButton
+                ?.setVisible(false);
+            this.mobileFireLabel
+                ?.setVisible(false);
+            this.mobileFartButton
+                ?.setVisible(false);
+            this.mobileFartLabel
+                ?.setVisible(false);
+
+            return;
+        }
+
         const inRoomForSpectator =
             multiplayerClient.isConnected();
 
@@ -4910,6 +4964,7 @@ export class GameScene extends Phaser.Scene {
      * updateCountdownUi() respects this flag so the card never contains the
      * Finished overlay, while the player still sees the normal Finished UI.
      */
+    /* V1010451M4E_VICTORY_CLEAN_CAPTURE_UI_LOCK_ROBUST: clean-capture flag now locks HUD update loops. */
     private victoryShowcaseCleanCaptureActive = false;
 
     private roundReturnLobbyButton?: Phaser.GameObjects.Text;
@@ -35249,6 +35304,17 @@ const ribbon =
     private updateHuntTension(
         delta: number,
     ): void {
+
+        /*
+         * V1010451M4E_VICTORY_CLEAN_CAPTURE_UI_LOCK_ROBUST / HUNT_TENSION_LOCK
+         * Prevent Hider vision mask / heartbeat / minimap from being redrawn
+         * during the few settle frames before the Victory Snapshot.
+         */
+        if (this.victoryShowcaseCleanCaptureActive) {
+            this.hideHuntTensionUi();
+            return;
+        }
+
         if (
             this.phase !== 'hunt' ||
             (
@@ -39035,6 +39101,24 @@ const ribbon =
                     );
                 },
             );
+
+            
+            /*
+             * V1010451M4E_VICTORY_CLEAN_CAPTURE_UI_LOCK_ROBUST / FINAL_VISIBILITY_BARRIER
+             * Normal update() has continued to run during requestAnimationFrame
+             * settling. Hide every captured HUD object once more immediately
+             * before the renderer snapshot.
+             */
+            captureHudVisibility.forEach(
+                (entry) => {
+                    entry.object.setVisible(
+                        false,
+                    );
+                },
+            );
+
+            this.networkPlayerManager
+                .setNamesVisible(false);
 
             return await this.captureVictoryFrameGuaranteed();
         } finally {
