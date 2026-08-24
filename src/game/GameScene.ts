@@ -85,6 +85,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010451M3H_GAME_FLASH_WAITING_UI_POLISH: fart flash is canvas-only; waiting panel gets unified spacing, tactile buttons, readable timing and desktop trim. */
     /* V1010451L_VICTORY_BRUSH_DIAMETER_PARITY: victory-card paint replay uses the same N-pixel brush diameter as live gameplay. */
     /* V1010450ZE_UI_STABILITY_PASS: mobile Hunter palette rebuild, Hider READY visual lock, strong Lobby READY colors, translucent Hunter result tiles, Hider-only paint badges. */
     /* V1010450ZD_HUNTER_PAINT_HELP_AND_READY_BUBBLE: Hunters never see Paint Help; all-Hiders-ready shows a persistent comic bubble above Start Now until Hunt begins. */
@@ -28191,6 +28192,225 @@ export class GameScene extends Phaser.Scene {
         document.body.appendChild(root);
         this.waitingRoomRoot = root;
 
+        /*
+         * V1010451M3H_GAME_FLASH_WAITING_UI_POLISH
+         * Final visual-only waiting-room rhythm:
+         * - consistent vertical spacing
+         * - all action buttons share tactile depth
+         * - role status gets breathing room
+         * - timing labels/current values are readable
+         * - desktop panel trims dead space under footer
+         */
+        {
+            const styleId =
+                'colorhunt-v451m3h-waiting-polish';
+
+            document
+                .getElementById(
+                    styleId,
+                )
+                ?.remove();
+
+            const polish =
+                document.createElement(
+                    'style',
+                );
+
+            polish.id =
+                styleId;
+
+            polish.textContent = `
+                /* ---------- common rhythm ---------- */
+                .colorhunt-waiting-room .ch-waiting-shell {
+                    gap: 8px !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-role-wrap {
+                    gap: 8px !important;
+                    padding-top: 2px !important;
+                    padding-bottom: 2px !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-role {
+                    gap: 8px !important;
+                    padding-bottom: 3px !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-role-status {
+                    margin-top: 2px !important;
+                    margin-bottom: 2px !important;
+                    min-height: 25px !important;
+                    padding: 5px 6px !important;
+                    box-sizing: border-box !important;
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    line-height: 1.15 !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-timing {
+                    gap: 8px !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-timing section {
+                    padding: 7px 8px !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-timing-title {
+                    margin-bottom: 6px !important;
+                    font-size: 14px !important;
+                    line-height: 1.15 !important;
+                    min-height: 18px !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-timing-title span,
+                .colorhunt-waiting-room .ch-waiting-timing-title b {
+                    font-size: 14px !important;
+                    font-weight: 900 !important;
+                    line-height: 1.15 !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-time-options {
+                    gap: 6px !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-time-options button {
+                    font-size: 13px !important;
+                    font-weight: 900 !important;
+                    line-height: 1 !important;
+                    min-height: 32px !important;
+                }
+
+                /* ---------- one tactile language for action buttons ---------- */
+                .colorhunt-waiting-room .ch-waiting-role button,
+                .colorhunt-waiting-room .ch-waiting-start,
+                .colorhunt-waiting-room .ch-waiting-footer button,
+                .colorhunt-waiting-room .ch-waiting-map button {
+                    position: relative !important;
+                    transform: translateY(0) !important;
+                    transition:
+                        transform .08s ease,
+                        box-shadow .08s ease,
+                        filter .08s ease !important;
+                    box-shadow:
+                        0 3px 0 rgba(40, 83, 63, .26),
+                        0 5px 10px rgba(35, 55, 45, .08) !important;
+                    border-bottom-width: 1px !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-role button:active,
+                .colorhunt-waiting-room .ch-waiting-start:active,
+                .colorhunt-waiting-room .ch-waiting-footer button:active,
+                .colorhunt-waiting-room .ch-waiting-map button:active {
+                    transform: translateY(2px) !important;
+                    box-shadow:
+                        0 1px 0 rgba(40, 83, 63, .28),
+                        0 2px 5px rgba(35, 55, 45, .08) !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-role button,
+                .colorhunt-waiting-room .ch-waiting-footer button {
+                    margin-bottom: 3px !important;
+                    font-weight: 800 !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-start {
+                    margin-top: 1px !important;
+                    margin-bottom: 3px !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-footer {
+                    gap: 8px !important;
+                    padding-top: 1px !important;
+                    padding-bottom: 3px !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-footer button {
+                    font-size: 13px !important;
+                    line-height: 1.1 !important;
+                    min-height: 40px !important;
+                }
+
+                /* ---------- mobile/fold: preserve frame, improve readability ---------- */
+                .colorhunt-waiting-room.ch-uniform-mobile-scale
+                .ch-waiting-shell {
+                    gap: 7px !important;
+                    padding-top: 8px !important;
+                    padding-bottom: 8px !important;
+                }
+
+                .colorhunt-waiting-room.ch-uniform-mobile-scale
+                .ch-waiting-role-status {
+                    font-size: 13px !important;
+                    min-height: 28px !important;
+                }
+
+                .colorhunt-waiting-room.ch-uniform-mobile-scale
+                .ch-waiting-timing-title,
+                .colorhunt-waiting-room.ch-uniform-mobile-scale
+                .ch-waiting-timing-title span,
+                .colorhunt-waiting-room.ch-uniform-mobile-scale
+                .ch-waiting-timing-title b {
+                    font-size: 13.5px !important;
+                }
+
+                .colorhunt-waiting-room.ch-uniform-mobile-scale
+                .ch-waiting-time-options button {
+                    font-size: 12.5px !important;
+                    min-height: 31px !important;
+                }
+
+                .colorhunt-waiting-room.ch-uniform-mobile-scale
+                .ch-waiting-footer button {
+                    font-size: 12.5px !important;
+                }
+
+                /* ---------- desktop: remove bottom dead air ---------- */
+                .colorhunt-waiting-room:not(.ch-uniform-mobile-scale) {
+                    height: auto !important;
+                    min-height: 0 !important;
+                    max-height: none !important;
+                }
+
+                .colorhunt-waiting-room:not(.ch-uniform-mobile-scale)
+                .ch-waiting-shell {
+                    display: flex !important;
+                    flex-direction: column !important;
+                    height: auto !important;
+                    min-height: 0 !important;
+                    max-height: none !important;
+                    padding-top: 10px !important;
+                    padding-bottom: 10px !important;
+                    gap: 8px !important;
+                    overflow: visible !important;
+                }
+
+                .colorhunt-waiting-room:not(.ch-uniform-mobile-scale)
+                .ch-waiting-timing {
+                    flex: 0 0 auto !important;
+                }
+
+                .colorhunt-waiting-room:not(.ch-uniform-mobile-scale)
+                .ch-waiting-footer {
+                    height: auto !important;
+                    min-height: 0 !important;
+                    margin-top: 0 !important;
+                    padding-bottom: 3px !important;
+                }
+
+                .colorhunt-waiting-room:not(.ch-uniform-mobile-scale)
+                .ch-waiting-footer button {
+                    height: 38px !important;
+                    min-height: 38px !important;
+                    font-size: 13px !important;
+                }
+            `;
+
+            document.head.appendChild(
+                polish,
+            );
+        }
+
         this.time.delayedCall(220, () => {
             if (this.phase === 'lobby' && this.waitingRoomRoot === root) {
                 this.showFirstWaitingRoomGuide();
@@ -52039,8 +52259,16 @@ const roomPlayers =
             flash.style,
             {
                 position: 'fixed',
-                inset: '0',
+                left:
+                    `${this.game.canvas.getBoundingClientRect().left}px`,
+                top:
+                    `${this.game.canvas.getBoundingClientRect().top}px`,
+                width:
+                    `${this.game.canvas.getBoundingClientRect().width}px`,
+                height:
+                    `${this.game.canvas.getBoundingClientRect().height}px`,
                 zIndex: '2147483646',
+                overflow: 'hidden',
                 pointerEvents: 'none',
                 boxSizing: 'border-box',
                 border: '18px solid rgba(55,255,115,0.98)',
