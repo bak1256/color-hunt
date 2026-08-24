@@ -28986,6 +28986,144 @@ const ribbon =
             /* V1010451M6G2_HEADER_TUPLE_TYPE_FIX */
         }
 
+
+        /*
+         * V1010451M6H_LOBBY_HEADER_FINAL_SAFE_FIT
+         *
+         * Final PC-only correction after m6g:
+         * the right column is narrower than the old 84px + 84px assumption
+         * on some fitted desktop viewport sizes.
+         *
+         * Reserve a real inner-right safety inset and use 74px controls.
+         * Title receives the flexible remainder.
+         */
+        if (
+            typeof (
+                this as unknown as {
+                    isDesktopViewportLayout?: () => boolean;
+                }
+            ).isDesktopViewportLayout === 'function'
+                ? (
+                    this as unknown as {
+                        isDesktopViewportLayout: () => boolean;
+                    }
+                ).isDesktopViewportLayout()
+                : !this.mobileControlsEnabled
+        ) {
+            const titleRow =
+                root.querySelector<HTMLElement>(
+                    '.ch-lobby-actions-title-row',
+                );
+
+            const inlineActions =
+                root.querySelector<HTMLElement>(
+                    '.ch-lobby-inline-actions',
+                );
+
+            const title =
+                titleRow
+                    ?.querySelector<HTMLElement>(
+                        'h2',
+                    ) ??
+                null;
+
+            const bgm =
+                root.querySelector<HTMLButtonElement>(
+                    '.ch-lobby-inline-bgm',
+                );
+
+            const controls =
+                root.querySelector<HTMLButtonElement>(
+                    '.ch-lobby-inline-controls',
+                );
+
+            const force =
+                (
+                    element:
+                        HTMLElement |
+                        null,
+                    property:
+                        string,
+                    value:
+                        string,
+                ): void => {
+                    element?.style.setProperty(
+                        property,
+                        value,
+                        'important',
+                    );
+                };
+
+            force(titleRow, 'display', 'grid');
+            force(
+                titleRow,
+                'grid-template-columns',
+                'minmax(0, 1fr) 74px 74px',
+            );
+            force(titleRow, 'column-gap', '6px');
+            force(titleRow, 'align-items', 'center');
+            force(
+                titleRow,
+                'padding',
+                '3px 14px 3px 4px',
+            );
+            force(titleRow, 'overflow', 'hidden');
+            force(titleRow, 'box-sizing', 'border-box');
+            force(titleRow, 'width', '100%');
+            force(titleRow, 'min-width', '0');
+            force(titleRow, 'max-width', '100%');
+
+            force(inlineActions, 'display', 'contents');
+
+            force(title, 'grid-column', '1');
+            force(title, 'min-width', '0');
+            force(title, 'max-width', '100%');
+            force(title, 'font-size', '16px');
+            force(title, 'line-height', '1');
+            force(title, 'white-space', 'nowrap');
+            force(title, 'overflow', 'hidden');
+            force(title, 'text-overflow', 'clip');
+
+            const buttons:
+                Array<
+                    [
+                        HTMLButtonElement | null,
+                        string,
+                    ]
+                > = [
+                    [bgm, '2'],
+                    [controls, '3'],
+                ];
+
+            buttons.forEach(
+                (
+                    [
+                        button,
+                        column,
+                    ],
+                ) => {
+                    force(button, 'grid-column', column);
+                    force(button, 'justify-self', 'stretch');
+                    force(button, 'position', 'static');
+                    force(button, 'transform', 'none');
+                    force(button, 'width', '74px');
+                    force(button, 'min-width', '74px');
+                    force(button, 'max-width', '74px');
+                    force(button, 'height', '36px');
+                    force(button, 'min-height', '36px');
+                    force(button, 'max-height', '36px');
+                    force(button, 'margin', '0');
+                    force(button, 'padding', '0 4px');
+                    force(button, 'box-sizing', 'border-box');
+                    force(button, 'font-size', '10.5px');
+                    force(button, 'line-height', '1');
+                    force(button, 'white-space', 'nowrap');
+                    force(button, 'overflow', 'hidden');
+                    force(button, 'text-overflow', 'clip');
+                },
+            );
+        }
+
 }
 
     private createMainLobbyDom(): void {
