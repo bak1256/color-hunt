@@ -2530,6 +2530,45 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
+        /*
+         * V1010452Q_READY_COUNT_VERTICAL_LAYOUT
+         *
+         * READY contents are rebuilt with replaceChildren() for both Hider and
+         * Hunter.  Some inherited/global button CSS can therefore lay the count
+         * beside/above the label.  Make this DOM control explicitly own a
+         * two-row vertical layout on every device/role.
+         */
+        button.style.setProperty(
+            'display',
+            'flex',
+            'important',
+        );
+        button.style.setProperty(
+            'flex-direction',
+            'column',
+            'important',
+        );
+        button.style.setProperty(
+            'align-items',
+            'center',
+            'important',
+        );
+        button.style.setProperty(
+            'justify-content',
+            'center',
+            'important',
+        );
+        button.style.setProperty(
+            'gap',
+            '2px',
+            'important',
+        );
+        button.style.setProperty(
+            'line-height',
+            '1.08',
+            'important',
+        );
+
         const stateRole =
             multiplayerClient
                 .getLocalPlayer()
@@ -2797,6 +2836,48 @@ export class GameScene extends Phaser.Scene {
                 count,
             );
 
+            Array.from(
+                button.children,
+            ).forEach(
+                (child) => {
+                    if (
+                        child instanceof
+                        HTMLElement
+                    ) {
+                        child.style.setProperty(
+                            'position',
+                            'static',
+                            'important',
+                        );
+                        child.style.setProperty(
+                            'transform',
+                            'none',
+                            'important',
+                        );
+                        child.style.setProperty(
+                            'margin',
+                            '0',
+                            'important',
+                        );
+                        child.style.setProperty(
+                            'display',
+                            'block',
+                            'important',
+                        );
+                        child.style.setProperty(
+                            'width',
+                            '100%',
+                            'important',
+                        );
+                        child.style.setProperty(
+                            'text-align',
+                            'center',
+                            'important',
+                        );
+                    }
+                },
+            );
+
             return;
         }
 
@@ -2868,6 +2949,52 @@ export class GameScene extends Phaser.Scene {
         button.append(
             label,
             count,
+        );
+
+        /*
+         * V1010452Q_READY_COUNT_VERTICAL_LAYOUT / FINAL_CHILD_LOCK
+         * Keep the count below the text even if external CSS targets strong/span.
+         */
+        Array.from(
+            button.children,
+        ).forEach(
+            (child) => {
+                if (
+                    child instanceof
+                    HTMLElement
+                ) {
+                    child.style.setProperty(
+                        'position',
+                        'static',
+                        'important',
+                    );
+                    child.style.setProperty(
+                        'transform',
+                        'none',
+                        'important',
+                    );
+                    child.style.setProperty(
+                        'margin',
+                        '0',
+                        'important',
+                    );
+                    child.style.setProperty(
+                        'display',
+                        'block',
+                        'important',
+                    );
+                    child.style.setProperty(
+                        'width',
+                        '100%',
+                        'important',
+                    );
+                    child.style.setProperty(
+                        'text-align',
+                        'center',
+                        'important',
+                    );
+                }
+            },
         );
     }
 
