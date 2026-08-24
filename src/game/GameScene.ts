@@ -26057,6 +26057,157 @@ const ribbon =
                 '(pointer: coarse)',
             ).matches;
 
+        /*
+         * V1010451M6A_PC_LOBBY_UNIFORM_CONTAIN_FIX
+         *
+         * m6 correctly made the Phaser canvas use desktop viewport CONTAIN,
+         * but the legacy desktop lobby branch still used native/flexible pixel
+         * sizing (including minimum 760x430). That made the HTML lobby overflow
+         * the newly scaled canvas.
+         *
+         * Desktop now follows the same authoring-frame principle as the game:
+         * one 960x510 lobby composition, uniformly scaled inside the REAL canvas.
+         * Internal proportions/font/button spacing stay intact as one unit.
+         */
+        if (!coarsePointer) {
+            const designWidth =
+                960;
+
+            const designHeight =
+                510;
+
+            const edge =
+                6;
+
+            const availableWidth =
+                Math.max(
+                    1,
+                    rect.width -
+                        edge * 2,
+                );
+
+            const availableHeight =
+                Math.max(
+                    1,
+                    rect.height -
+                        edge * 2,
+                );
+
+            const uniformScale =
+                Math.max(
+                    0.1,
+                    Math.min(
+                        availableWidth /
+                            designWidth,
+                        availableHeight /
+                            designHeight,
+                    ),
+                );
+
+            const renderedWidth =
+                designWidth *
+                uniformScale;
+
+            const renderedHeight =
+                designHeight *
+                uniformScale;
+
+            const left =
+                rect.left +
+                (
+                    rect.width -
+                    renderedWidth
+                ) / 2;
+
+            const top =
+                rect.top +
+                (
+                    rect.height -
+                    renderedHeight
+                ) / 2;
+
+            root.style.setProperty(
+                'position',
+                'fixed',
+                'important',
+            );
+            root.style.setProperty(
+                'left',
+                `${left.toFixed(2)}px`,
+                'important',
+            );
+            root.style.setProperty(
+                'top',
+                `${top.toFixed(2)}px`,
+                'important',
+            );
+            root.style.setProperty(
+                'right',
+                'auto',
+                'important',
+            );
+            root.style.setProperty(
+                'bottom',
+                'auto',
+                'important',
+            );
+            root.style.setProperty(
+                'width',
+                `${designWidth}px`,
+                'important',
+            );
+            root.style.setProperty(
+                'height',
+                `${designHeight}px`,
+                'important',
+            );
+            root.style.setProperty(
+                'min-width',
+                `${designWidth}px`,
+                'important',
+            );
+            root.style.setProperty(
+                'min-height',
+                `${designHeight}px`,
+                'important',
+            );
+            root.style.setProperty(
+                'max-width',
+                `${designWidth}px`,
+                'important',
+            );
+            root.style.setProperty(
+                'max-height',
+                `${designHeight}px`,
+                'important',
+            );
+            root.style.setProperty(
+                'transform',
+                `scale(${uniformScale.toFixed(6)})`,
+                'important',
+            );
+            root.style.setProperty(
+                'transform-origin',
+                'top left',
+                'important',
+            );
+            root.style.setProperty(
+                'overflow',
+                'hidden',
+                'important',
+            );
+            root.style.setProperty(
+                'box-sizing',
+                'border-box',
+                'important',
+            );
+
+            this.applyMainLobbyActionRuntimeLayout();
+            this.updateControlsHelpPosition();
+            return;
+        }
+
+
         if (coarsePointer) {
             /*
              * V1010332_DESKTOP_LOBBY_RESTORE_MOBILE_KEEP
