@@ -85,6 +85,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010452J_PAINTBALL_ARC_SPLASH_LASER_INFINITE */
     /* V1010452I5_HIDER_SKILL_IMMEDIATE_CONTROLS */
     /* V1010452H_FINAL_LEFT_COLUMN_ALIGNMENT */
     /* V1010452G3_PC_PARITY_MOBILE_WAITING_SKILL_POLISH */
@@ -39525,6 +39526,12 @@ const ribbon =
 
     private enterLobbyPhase(): void {
         /*
+         * V1010452J_PAINTBALL_ARC_SPLASH_LASER_INFINITE / ROUND_FX_CLEANUP
+         * Paint splats are Hunt-only memories. Never leak them into Lobby.
+         */
+        this.clearHiderSkillRoundFx();
+
+        /*
          * V1010451M8A_READY_BUTTON_LOBBY_CLEANUP_ROBUST / LOBBY_HARD_HIDE
          * READY is a DOM HUD. Never allow Paint coordination UI to survive
          * a round-end / abort / leave path into Lobby.
@@ -53442,6 +53449,24 @@ const roomPlayers =
      * This pass deliberately does NOT impersonate Hunter network messages.
      * Multiplayer replication can be wired after input/feel is approved.
      */
+    /*
+     * V1010452J_PAINTBALL_ARC_SPLASH_LASER_INFINITE
+     * Persistent Paintball splats live only for the current Hunt round.
+     */
+    private hiderSkillRoundFx =
+        new Set<Phaser.GameObjects.GameObject>();
+
+    private clearHiderSkillRoundFx(): void {
+        this.hiderSkillRoundFx
+            .forEach(
+                (object) => {
+                    object.destroy();
+                },
+            );
+
+        this.hiderSkillRoundFx.clear();
+    }
+
     private fireHiderSkill(
         aimAngleOverride?: number,
     ): void {
@@ -53496,117 +53521,257 @@ const roomPlayers =
         this.hunterFocusAngle =
             angle;
 
-        if (this.selectedHiderSkill === 'paintball') {
-            const range = 230;
-            const impactX =
+        /*
+         * LASER
+         * Same instant point-and-fire feeling the first Paintball prototype had,
+         * but extends far beyond the full logical map so its gameplay range is
+         * effectively unlimited.
+         */
+        if (this.selectedHiderSkill === 'laser') {
+            const infiniteRange =
+                Math.max(
+                    this.gameWidth,
+                    this.gameHeight,
+                ) * 8;
+
+            const endX =
                 origin.x +
-                Math.cos(angle) * range;
-            const impactY =
+                Math.cos(angle) *
+                    infiniteRange;
+            const endY =
                 origin.y +
-                Math.sin(angle) * range;
+                Math.sin(angle) *
+                    infiniteRange;
 
-            const trail =
+            const beam =
                 this.add.graphics()
-                    .setDepth(176);
+                    .setDepth(179);
 
-            trail.lineStyle(
-                3,
-                0xff4f87,
-                0.9,
+            /*
+             * faint tail + bright core = small laser pointer rather than weapon beam
+             */
+            beam.lineStyle(
+                4,
+                0xff2038,
+                0.16,
             );
-            trail.lineBetween(
+            beam.lineBetween(
                 origin.x,
                 origin.y,
-                impactX,
-                impactY,
+                endX,
+                endY,
+            );
+
+            beam.lineStyle(
+                1.5,
+                0xff334d,
+                0.92,
+            );
+            beam.lineBetween(
+                origin.x,
+                origin.y,
+                endX,
+                endY,
             );
 
             this.tweens.add({
-                targets: trail,
+                targets: beam,
                 alpha: 0,
-                duration: 180,
+                duration: 210,
+                ease: 'Quad.easeOut',
                 onComplete: () =>
-                    trail.destroy(),
+                    beam.destroy(),
             });
-
-            /*
-             * Permanent-on-purpose splat for this round.
-             */
-            const splat =
-                this.add.graphics()
-                    .setDepth(124);
-
-            splat.fillStyle(
-                0xff4f87,
-                0.92,
-            );
-            splat.fillCircle(
-                impactX,
-                impactY,
-                8,
-            );
-            splat.fillCircle(
-                impactX - 8,
-                impactY + 5,
-                4,
-            );
-            splat.fillCircle(
-                impactX + 7,
-                impactY - 6,
-                3,
-            );
-            splat.fillCircle(
-                impactX + 10,
-                impactY + 7,
-                3,
-            );
 
             return;
         }
 
-        const laserLength = 300;
-        const endX =
+        /*
+         * PAINTBALL
+         * "슈우우웅 -> 철퍽"
+         * A real visible projectile travels before the splash is created.
+         */
+        const paintColors = [
+            0xff4f87,
+            0x38bdf8,
+            0xfacc15,
+            0x22c55e,
+            0x8b5cf6,
+            0xf97316,
+            0xef4444,
+            0x14b8a6,
+        ] as const;
+
+        const paintColor =
+            Phaser.Utils.Array.GetRandom(
+                [...paintColors],
+            );
+
+        const travelDistance =
+            245;
+
+        const impactX =
             origin.x +
             Math.cos(angle) *
-                laserLength;
-        const endY =
+                travelDistance;
+        const impactY =
             origin.y +
             Math.sin(angle) *
-                laserLength;
+                travelDistance;
 
-        const beam =
-            this.add.graphics()
+        const ball =
+            this.add.circle(
+                origin.x,
+                origin.y,
+                7,
+                paintColor,
+                1,
+            )
                 .setDepth(179);
 
-        beam.lineStyle(
+        ball.setStrokeStyle(
             2,
-            0xff2038,
-            0.9,
-        );
-        beam.lineBetween(
-            origin.x,
-            origin.y,
-            endX,
-            endY,
+            0xffffff,
+            0.72,
         );
 
-        beam.fillStyle(
-            0xff2038,
-            1,
-        );
-        beam.fillCircle(
-            endX,
-            endY,
-            3,
-        );
+        /*
+         * Small highlight makes the projectile readable while moving over
+         * bright/dark maps.
+         */
+        const highlight =
+            this.add.circle(
+                origin.x - 2,
+                origin.y - 2,
+                2,
+                0xffffff,
+                0.78,
+            )
+                .setDepth(180);
+
+        let lastTrailAt =
+            -Infinity;
 
         this.tweens.add({
-            targets: beam,
-            alpha: 0,
-            duration: 240,
-            ease: 'Quad.easeOut',
-            onComplete: () =>
-                beam.destroy(),
+            targets: [
+                ball,
+                highlight,
+            ],
+            x: impactX,
+            y: impactY,
+            duration: 390,
+            ease: 'Sine.easeIn',
+            onUpdate: () => {
+                /*
+                 * "슈우우웅" dotted fading trajectory.
+                 */
+                if (
+                    this.time.now -
+                    lastTrailAt <
+                    42
+                ) {
+                    return;
+                }
+
+                lastTrailAt =
+                    this.time.now;
+
+                const trailDot =
+                    this.add.circle(
+                        ball.x,
+                        ball.y,
+                        Phaser.Math.Between(
+                            2,
+                            4,
+                        ),
+                        paintColor,
+                        0.68,
+                    )
+                        .setDepth(177);
+
+                this.tweens.add({
+                    targets: trailDot,
+                    alpha: 0,
+                    scale: 0.35,
+                    duration: 230,
+                    ease: 'Quad.easeOut',
+                    onComplete: () =>
+                        trailDot.destroy(),
+                });
+            },
+            onComplete: () => {
+                ball.destroy();
+                highlight.destroy();
+
+                /*
+                 * "철퍽" — much larger than the previous tiny 8px mark.
+                 * Entire cluster stays for this Hunt, then Lobby cleanup removes it.
+                 */
+                const splat =
+                    this.add.graphics()
+                        .setDepth(124);
+
+                splat.fillStyle(
+                    paintColor,
+                    0.94,
+                );
+
+                splat.fillCircle(
+                    impactX,
+                    impactY,
+                    20,
+                );
+
+                [
+                    [-24, -8, 9],
+                    [23, -12, 8],
+                    [-20, 17, 7],
+                    [25, 16, 6],
+                    [-6, -28, 6],
+                    [8, 29, 5],
+                    [-32, 6, 4],
+                    [34, 3, 4],
+                ].forEach(
+                    ([dx, dy, radius]) => {
+                        splat.fillCircle(
+                            impactX + dx,
+                            impactY + dy,
+                            radius,
+                        );
+                    },
+                );
+
+                /*
+                 * A quick impact ring sells the "철퍽" without changing the
+                 * persistent stain itself.
+                 */
+                const impactRing =
+                    this.add.circle(
+                        impactX,
+                        impactY,
+                        10,
+                    )
+                        .setStrokeStyle(
+                            3,
+                            paintColor,
+                            0.9,
+                        )
+                        .setDepth(178);
+
+                this.tweens.add({
+                    targets: impactRing,
+                    scale: 3.2,
+                    alpha: 0,
+                    duration: 220,
+                    ease: 'Quad.easeOut',
+                    onComplete: () =>
+                        impactRing.destroy(),
+                });
+
+                this.hiderSkillRoundFx.add(
+                    splat,
+                );
+            },
         });
     }
 
@@ -57776,6 +57941,7 @@ const roomPlayers =
     }
 
     private startHunt(): void {
+        this.clearHiderSkillRoundFx();
         this.destroyHiderSkillPicker();
         this.hideAllHidersReadyBubble();
 
