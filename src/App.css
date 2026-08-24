@@ -222,3 +222,43 @@ html.colorhunt-mobile .game-container {
     margin: 0 !important;
   }
 }
+
+
+/* V1010451M6E_STAGE_PARENT_CONTAIN
+ * Desktop page shell follows the exact Phaser stage width.
+ * Mobile/Fold rules are left untouched.
+ */
+@media (min-width: 761px) and (any-pointer: fine) {
+  .app {
+    width: var(
+      --ch-desktop-stage-width,
+      min(1100px, calc(100vw - 32px))
+    ) !important;
+    max-width: none !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    box-sizing: border-box !important;
+  }
+
+  .game-header,
+  .game-container,
+  .game-footer {
+    width: 100% !important;
+    max-width: none !important;
+    box-sizing: border-box !important;
+  }
+
+  .game-container {
+    height: var(
+      --ch-desktop-stage-height,
+      auto
+    ) !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+
+  .game-container canvas {
+    display: block !important;
+    margin: 0 !important;
+  }
+}

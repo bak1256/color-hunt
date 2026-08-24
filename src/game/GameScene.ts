@@ -330,18 +330,55 @@ export class GameScene extends Phaser.Scene {
      *
      * Mobile/Fold/tablet behavior is intentionally left untouched.
      */
+        /*
+     * V1010451M6E_STAGE_PARENT_CONTAIN
+     *
+     * PC stage ownership:
+     * Browser viewport -> React .app/.game-container -> Phaser canvas.
+     *
+     * The header/footer are measured first, then the largest 16:9 game stage
+     * that fits in the remaining viewport is chosen. The parent and canvas
+     * receive the SAME dimensions, so overflow:hidden can never crop an
+     * oversized canvas while DOM overlays follow a different rectangle.
+     */
     private readonly applyDesktopViewportContain =
         (): void => {
-            if (
-                !this.isDesktopViewportLayout()
-            ) {
+            const desktopLayout =
+                typeof (
+                    this as unknown as {
+                        isDesktopViewportLayout?: () => boolean;
+                    }
+                ).isDesktopViewportLayout ===
+                    'function'
+                    ? (
+                        this as unknown as {
+                            isDesktopViewportLayout: () => boolean;
+                        }
+                    ).isDesktopViewportLayout()
+                    : !this.mobileControlsEnabled;
+
+            if (!desktopLayout) {
                 return;
             }
 
             const canvas =
                 this.game.canvas;
 
-            if (!canvas) {
+            const app =
+                document.querySelector<HTMLElement>(
+                    '.app',
+                );
+
+            const container =
+                canvas.closest<HTMLElement>(
+                    '.game-container',
+                );
+
+            if (
+                !canvas ||
+                !app ||
+                !container
+            ) {
                 return;
             }
 
@@ -361,52 +398,181 @@ export class GameScene extends Phaser.Scene {
                         window.innerHeight,
                 );
 
-            const scale =
+            const header =
+                app.querySelector<HTMLElement>(
+                    '.game-header',
+                );
+
+            const footer =
+                app.querySelector<HTMLElement>(
+                    '.game-footer',
+                );
+
+            const appStyle =
+                window.getComputedStyle(
+                    app,
+                );
+
+            const headerStyle =
+                header
+                    ? window.getComputedStyle(
+                        header,
+                    )
+                    : null;
+
+            const paddingX =
+                (
+                    parseFloat(
+                        appStyle.paddingLeft,
+                    ) || 0
+                ) +
+                (
+                    parseFloat(
+                        appStyle.paddingRight,
+                    ) || 0
+                );
+
+            const paddingY =
+                (
+                    parseFloat(
+                        appStyle.paddingTop,
+                    ) || 0
+                ) +
+                (
+                    parseFloat(
+                        appStyle.paddingBottom,
+                    ) || 0
+                );
+
+            const headerHeight =
+                header
+                    ?.getBoundingClientRect()
+                    .height ?? 0;
+
+            const headerGap =
+                headerStyle
+                    ? (
+                        parseFloat(
+                            headerStyle.marginBottom,
+                        ) || 0
+                    )
+                    : 0;
+
+            const footerHeight =
+                footer &&
+                window.getComputedStyle(
+                    footer,
+                ).display !== 'none'
+                    ? footer
+                        .getBoundingClientRect()
+                        .height
+                    : 0;
+
+            /*
+             * Small outer breathing room keeps browser edges from touching the
+             * title/game frame.  Header/footer remain outside the 16:9 stage.
+             */
+            const viewportEdge =
+                16;
+
+            const availableWidth =
+                Math.max(
+                    320,
+                    viewportWidth -
+                        viewportEdge * 2 -
+                        paddingX,
+                );
+
+            const availableHeight =
+                Math.max(
+                    180,
+                    viewportHeight -
+                        viewportEdge * 2 -
+                        paddingY -
+                        headerHeight -
+                        headerGap -
+                        footerHeight,
+                );
+
+            const uniformScale =
                 Math.max(
                     0.1,
                     Math.min(
-                        viewportWidth /
+                        availableWidth /
                             this.gameWidth,
-                        viewportHeight /
+                        availableHeight /
                             this.gameHeight,
                     ),
                 );
 
-            const width =
+            const stageWidth =
                 Math.floor(
                     this.gameWidth *
-                        scale,
+                        uniformScale,
                 );
 
-            const height =
+            const stageHeight =
                 Math.floor(
                     this.gameHeight *
-                        scale,
+                        uniformScale,
                 );
+
+            /*
+             * CRITICAL: parent and canvas are the same rectangle.
+             */
+            app.style.setProperty(
+                '--ch-desktop-stage-width',
+                `${stageWidth}px`,
+            );
+            app.style.setProperty(
+                '--ch-desktop-stage-height',
+                `${stageHeight}px`,
+            );
+
+            container.style.setProperty(
+                'width',
+                `${stageWidth}px`,
+                'important',
+            );
+            container.style.setProperty(
+                'height',
+                `${stageHeight}px`,
+                'important',
+            );
+            container.style.setProperty(
+                'min-width',
+                '0',
+                'important',
+            );
+            container.style.setProperty(
+                'max-width',
+                'none',
+                'important',
+            );
+            container.style.setProperty(
+                'aspect-ratio',
+                '16 / 9',
+                'important',
+            );
 
             canvas.style.setProperty(
                 'width',
-                `${width}px`,
+                `${stageWidth}px`,
                 'important',
             );
             canvas.style.setProperty(
                 'height',
-                `${height}px`,
+                `${stageHeight}px`,
                 'important',
             );
             canvas.style.setProperty(
                 'max-width',
-                '100vw',
+                'none',
                 'important',
             );
             canvas.style.setProperty(
                 'max-height',
-                '100vh',
-                'important',
-            );
-            canvas.style.setProperty(
-                'object-fit',
-                'contain',
+                'none',
                 'important',
             );
             canvas.style.setProperty(
@@ -421,10 +587,11 @@ export class GameScene extends Phaser.Scene {
             );
             canvas.style.setProperty(
                 'margin',
-                'auto',
+                '0',
                 'important',
             );
         };
+
 
     private readonly handleDesktopViewportContain =
         (): void => {
