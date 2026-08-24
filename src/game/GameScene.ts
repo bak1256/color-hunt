@@ -85,6 +85,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010452M_HIDER_SKILL_UX_SPECTATOR_MOBILE_POLISH */
     /* V1010452L_RESPONSIVE_GAMEPLAY_DOM_ANCHOR_FIX */
     /* V1010452K_SPECTATOR_SAFE_HIDER_MOBILE_FIRE */
     /* V1010452J_PAINTBALL_ARC_SPLASH_LASER_INFINITE */
@@ -961,6 +962,17 @@ export class GameScene extends Phaser.Scene {
      * browser resize / DevTools dock / desktop contain scaling.
      */
     private updateHiderSkillPickerResponsivePosition(): void {
+        if (
+            this.time &&
+            this.time.now - this.lastResponsiveSkillLayoutAt < 120
+        ) {
+            return;
+        }
+
+        if (this.time) {
+            this.lastResponsiveSkillLayoutAt = this.time.now;
+        }
+
         const root =
             this.hiderSkillPickerDom;
 
@@ -1105,6 +1117,323 @@ export class GameScene extends Phaser.Scene {
             'auto',
             'important',
         );
+    }
+
+    /*
+     * V1010452M_HIDER_SKILL_UX_SPECTATOR_MOBILE_POLISH
+     */
+    private paintUtilityCollapsed = false;
+    private paintUtilityToggleDom?: HTMLButtonElement;
+    private hiderSkillChargeActive = false;
+    private hiderSkillChargeStartedAt = 0;
+    private hiderSkillChargeAngle = 0;
+    private hiderSkillChargeDistance = 80;
+    private hiderSkillChargeGraphics?: Phaser.GameObjects.Graphics;
+    private hiderLaserAimGraphics?: Phaser.GameObjects.Graphics;
+    private spectatorMobileButtonFrame?: Phaser.GameObjects.Graphics;
+    private lastResponsiveSkillLayoutAt = -Infinity;
+
+    private isLocalHiderOwnHuntView(): boolean {
+        return (
+            this.phase === 'hunt' &&
+            this.isMultiplayerSession() &&
+            (
+                multiplayerClient.getLocalPlayer()?.role === 'hider' ||
+                this.networkPlayerManager.isLocalHider()
+            ) &&
+            !this.spectatorSessionId
+        );
+    }
+
+    private destroyPaintUtilityToggle(): void {
+        this.paintUtilityToggleDom?.remove();
+        this.paintUtilityToggleDom = undefined;
+    }
+
+    private syncPaintUtilityCollapseUi(): void {
+        if (this.paintUtilityToggleDom) {
+            this.paintUtilityToggleDom.textContent =
+                this.paintUtilityCollapsed ? '>' : '<';
+            this.paintUtilityToggleDom.title =
+                this.paintUtilityCollapsed ? '펼치기' : '접기';
+        }
+
+        if (this.paintAssistButton) {
+            this.paintAssistButton.style.visibility =
+                this.paintUtilityCollapsed ? 'hidden' : 'visible';
+            this.paintAssistButton.style.pointerEvents =
+                this.paintUtilityCollapsed ? 'none' : 'auto';
+        }
+
+        if (this.hiderSkillPickerDom) {
+            this.hiderSkillPickerDom.style.visibility =
+                this.paintUtilityCollapsed ? 'hidden' : 'visible';
+            this.hiderSkillPickerDom.style.pointerEvents =
+                this.paintUtilityCollapsed ? 'none' : 'auto';
+        }
+    }
+
+    private ensurePaintUtilityToggle(): void {
+        const localIsHider =
+            this.phase === 'paint' &&
+            this.isMultiplayerSession() &&
+            (
+                multiplayerClient.getLocalPlayer()?.role === 'hider' ||
+                this.networkPlayerManager?.isLocalHider?.()
+            );
+
+        if (!localIsHider) {
+            this.destroyPaintUtilityToggle();
+            return;
+        }
+
+        if (!this.paintUtilityToggleDom) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            Object.assign(button.style, {
+                position: 'fixed',
+                zIndex: '2147481501',
+                width: '32px',
+                height: '32px',
+                padding: '0',
+                border: '2px solid rgba(92,143,102,.88)',
+                borderRadius: '10px',
+                background: 'rgba(247,252,242,.92)',
+                color: '#274b38',
+                fontSize: '21px',
+                fontWeight: '1000',
+                lineHeight: '26px',
+                cursor: 'pointer',
+                boxShadow: '0 3px 8px rgba(0,0,0,.18)',
+                userSelect: 'none',
+                WebkitTapHighlightColor: 'transparent',
+            });
+            button.addEventListener('pointerdown', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                this.paintUtilityCollapsed = !this.paintUtilityCollapsed;
+                this.syncPaintUtilityCollapseUi();
+            });
+            document.body.appendChild(button);
+            this.paintUtilityToggleDom = button;
+        }
+
+        this.syncPaintUtilityCollapseUi();
+
+        const anchorRect =
+            this.paintAssistButton?.getBoundingClientRect() ??
+            this.hiderSkillPickerDom?.getBoundingClientRect();
+        const canvasRect = this.game.canvas.getBoundingClientRect();
+
+        this.paintUtilityToggleDom.style.left =
+            `${Math.round(anchorRect ? anchorRect.right + 6 : canvasRect.left + 12)}px`;
+        this.paintUtilityToggleDom.style.top =
+            `${Math.round(anchorRect ? anchorRect.top : canvasRect.top + canvasRect.height * 0.42)}px`;
+    }
+
+    private clearHiderSkillChargePreview(): void {
+        this.hiderSkillChargeActive = false;
+        this.hiderSkillChargeGraphics?.clear().setVisible(false);
+    }
+
+    private beginHiderSkillCharge(aimAngleOverride?: number): void {
+        if (!this.isLocalHiderOwnHuntView()) return;
+
+        if (this.selectedHiderSkill === 'laser') {
+            this.fireHiderSkill(aimAngleOverride);
+            return;
+        }
+
+        if (this.hiderSkillChargeActive) return;
+
+        this.hiderSkillChargeActive = true;
+        this.hiderSkillChargeStartedAt = this.time.now;
+        this.hiderSkillChargeAngle =
+            Number.isFinite(aimAngleOverride)
+                ? (aimAngleOverride as number)
+                : this.hunterFocusAngle;
+        this.hiderSkillChargeDistance = 80;
+    }
+
+    private releaseHiderSkillCharge(): void {
+        if (!this.hiderSkillChargeActive) return;
+
+        const angle = this.hiderSkillChargeAngle;
+        const distance = this.hiderSkillChargeDistance;
+        this.clearHiderSkillChargePreview();
+
+        if (this.isLocalHiderOwnHuntView()) {
+            this.fireHiderSkill(angle, distance);
+        }
+    }
+
+    private updateHiderSkillRuntimeUi(): void {
+        this.ensurePaintUtilityToggle();
+
+        if (!this.isLocalHiderOwnHuntView()) {
+            this.clearHiderSkillChargePreview();
+            this.hiderLaserAimGraphics?.clear().setVisible(false);
+            return;
+        }
+
+        const origin = this.networkPlayerManager.getLocalPlayerPosition();
+        if (!origin) return;
+
+        if (this.selectedHiderSkill === 'paintball' && this.hiderSkillChargeActive) {
+            if (!this.hiderSkillChargeGraphics) {
+                this.hiderSkillChargeGraphics = this.add.graphics().setDepth(181);
+            }
+
+            const t = Phaser.Math.Clamp(
+                Math.max(0, this.time.now - this.hiderSkillChargeStartedAt) / 900,
+                0,
+                1,
+            );
+            const distance = Phaser.Math.Linear(80, 245, t);
+            this.hiderSkillChargeDistance = distance;
+
+            const g = this.hiderSkillChargeGraphics;
+            const angle = this.hiderSkillChargeAngle;
+            const ux = Math.cos(angle);
+            const uy = Math.sin(angle);
+            const phase = (this.time.now / 28) % 14;
+
+            g.clear().setVisible(true);
+
+            for (let d = 14 - phase; d < distance - 14; d += 14) {
+                g.fillStyle(0xffffff, 0.42);
+                g.fillCircle(origin.x + ux * d, origin.y + uy * d, 2.1);
+            }
+
+            const endX = origin.x + ux * distance;
+            const endY = origin.y + uy * distance;
+
+            g.lineStyle(2, 0xffffff, 0.68);
+            g.strokeCircle(endX, endY, 12);
+
+            const head = 11;
+            g.lineBetween(
+                endX, endY,
+                endX - Math.cos(angle - 0.55) * head,
+                endY - Math.sin(angle - 0.55) * head,
+            );
+            g.lineBetween(
+                endX, endY,
+                endX - Math.cos(angle + 0.55) * head,
+                endY - Math.sin(angle + 0.55) * head,
+            );
+        } else {
+            this.hiderSkillChargeGraphics?.clear().setVisible(false);
+        }
+
+        if (this.selectedHiderSkill === 'laser' && !this.hiderSkillChargeActive) {
+            if (!this.hiderLaserAimGraphics) {
+                this.hiderLaserAimGraphics = this.add.graphics().setDepth(180);
+            }
+            const range = 390;
+            const angle = this.hunterFocusAngle;
+            this.hiderLaserAimGraphics
+                .clear()
+                .setVisible(true)
+                .lineStyle(1, 0xffffff, 0.28)
+                .lineBetween(
+                    origin.x,
+                    origin.y,
+                    origin.x + Math.cos(angle) * range,
+                    origin.y + Math.sin(angle) * range,
+                );
+        } else {
+            this.hiderLaserAimGraphics?.clear().setVisible(false);
+        }
+    }
+
+    private applyHiderSpectatorAndViewPostPass(): void {
+        const localRole = multiplayerClient.getLocalPlayer()?.role;
+        const localHider =
+            this.phase === 'hunt' &&
+            this.isMultiplayerSession() &&
+            (
+                localRole === 'hider' ||
+                this.networkPlayerManager.isLocalHider()
+            );
+
+        if (!localHider) {
+            this.spectatorMobileButtonFrame?.setVisible(false);
+            return;
+        }
+
+        const spectating = Boolean(this.spectatorSessionId);
+
+        if (this.mobileControlsEnabled) {
+            if (!this.spectatorMobileButtonFrame) {
+                this.spectatorMobileButtonFrame =
+                    this.add.graphics().setScrollFactor(0).setDepth(6002);
+            }
+
+            const buttonX = this.gameWidth / 2;
+            const buttonY = this.gameHeight - 28;
+            const frame = this.spectatorMobileButtonFrame;
+
+            frame.clear().setVisible(true);
+            frame.fillStyle(0x3d9ed1, 0.84);
+            frame.fillRoundedRect(-94, -23, 188, 46, 13);
+            frame.lineStyle(3, 0xd9f3ff, 0.88);
+            frame.strokeRoundedRect(-94, -23, 188, 46, 13);
+            this.setFixedHudScreenPosition(frame, buttonX, buttonY);
+
+            if (this.spectatorButton) {
+                this.spectatorButton
+                    .setBackgroundColor('rgba(0,0,0,0)')
+                    .setFixedSize(180, 40)
+                    .setFontSize(16)
+                    .setPadding(0, 8, 0, 0)
+                    .setVisible(true);
+                this.setFixedHudScreenPosition(this.spectatorButton, buttonX, buttonY);
+            }
+
+            const showOwn = !spectating;
+
+            this.mobileMoveBase?.setVisible(showOwn);
+            this.mobileMoveKnob?.setVisible(showOwn);
+            this.mobileMoveLabel?.setVisible(showOwn);
+            this.mobileAimBase?.setVisible(showOwn);
+            this.mobileAimKnob?.setVisible(showOwn);
+            this.mobileAimLabel?.setVisible(showOwn);
+            this.mobileFireButton?.setVisible(showOwn);
+            this.mobileFireLabel?.setVisible(showOwn);
+
+            this.mobileFartButton?.setVisible(false);
+            this.mobileFartLabel?.setVisible(false);
+
+            if (showOwn && this.mobileAimPointerId < 0 && this.mobileAimKnob) {
+                this.setFixedHudScreenPosition(
+                    this.mobileAimKnob,
+                    this.gameWidth - 170,
+                    this.gameHeight - 190,
+                );
+                this.mobileAimKnob.setAlpha(0.62).setVisible(true);
+            }
+        } else {
+            this.spectatorMobileButtonFrame?.setVisible(false);
+        }
+
+        if (spectating) {
+            this.clearHiderSkillChargePreview();
+            this.hiderLaserAimGraphics?.clear().setVisible(false);
+            this.aimLine?.clear().setVisible(false);
+            this.crosshair?.clear().setVisible(false);
+            this.gun?.setVisible(false);
+            return;
+        }
+
+        this.hiderVisionGraphics?.clear().setVisible(false);
+        this.hiderVisionOverlays.forEach((overlay) => overlay.setVisible(false));
+
+        const hiderSkillZoom = 1.28;
+        if (Math.abs(this.cameras.main.zoom - hiderSkillZoom) > 0.001) {
+            this.cameras.main.setZoom(hiderSkillZoom);
+            this.applyFixedHudForZoom(hiderSkillZoom);
+        }
     }
 
     private createHiderSkillPicker(): void {
@@ -1441,6 +1770,7 @@ export class GameScene extends Phaser.Scene {
                 this.updateHiderSkillPickerResponsivePosition(),
         );
 
+        this.syncPaintUtilityCollapseUi();
         multiplayerClient.requestSkillState();
     }
 
@@ -4631,9 +4961,7 @@ export class GameScene extends Phaser.Scene {
                     this.networkPlayerManager
                         .isLocalHider()
                 ) {
-                    this.fireHiderSkill(
-                        fireAngle,
-                    );
+                    this.beginHiderSkillCharge(fireAngle);
                     return;
                 }
 
@@ -8058,6 +8386,9 @@ export class GameScene extends Phaser.Scene {
          */
         this.updateHiderSkillPickerResponsivePosition();
         this.updateUnifiedBgmButtonPosition();
+
+        this.updateHiderSkillRuntimeUi();
+        this.applyHiderSpectatorAndViewPostPass();
 }
 
     /*
@@ -49159,7 +49490,7 @@ const roomPlayers =
                                     .isLocalHider()
                             )
                         ) {
-                            this.fireHiderSkill();
+                            this.beginHiderSkillCharge(this.hunterFocusAngle);
                         } else if (
                             !this.isMultiplayerSession() ||
                             this.networkPlayerManager
@@ -50427,7 +50758,14 @@ const roomPlayers =
                 event.preventDefault();
             },
         );
-    }
+    
+        this.input.on(
+            Phaser.Input.Events.POINTER_UP,
+            () => {
+                this.releaseHiderSkillCharge();
+            },
+        );
+}
 
     private paintOnHider(
         hider: Hider,
@@ -53717,317 +54055,217 @@ const roomPlayers =
 
     private fireHiderSkill(
         aimAngleOverride?: number,
+        paintballDistanceOverride?: number,
     ): void {
-        /*
-         * V1010452K / SPECTATOR_INPUT_LOCK
-         * Switching away from SELF is observation-only.
-         */
-        if (this.spectatorSessionId) {
-            return;
-        }
-
         if (
             this.phase !== 'hunt' ||
             !this.isMultiplayerSession() ||
             !(
-                multiplayerClient
-                    .getLocalPlayer()
-                    ?.role === 'hider' ||
-                this.networkPlayerManager
-                    .isLocalHider()
-            )
+                multiplayerClient.getLocalPlayer()?.role === 'hider' ||
+                this.networkPlayerManager.isLocalHider()
+            ) ||
+            this.spectatorSessionId
         ) {
             return;
         }
 
-        const origin =
-            this.networkPlayerManager
-                .getLocalPlayerPosition();
+        const origin = this.networkPlayerManager.getLocalPlayerPosition();
+        if (!origin) return;
 
-        if (!origin) {
-            return;
-        }
-
-        const pointer =
-            this.input.activePointer;
-
+        const pointer = this.input.activePointer;
         const desktopAimWorld =
             !this.mobileControlsEnabled
-                ? this.getPointerWorldPoint(
-                    pointer,
-                )
+                ? this.getPointerWorldPoint(pointer)
                 : undefined;
 
         const angle =
             aimAngleOverride ??
             (
-                this.mobileControlsEnabled &&
-                this.mobileAimHasDirection
+                this.mobileControlsEnabled && this.mobileAimHasDirection
                     ? this.mobileAimAngle
                     : Phaser.Math.Angle.Between(
                         origin.x,
                         origin.y,
-                        desktopAimWorld?.x ??
-                            pointer.worldX,
-                        desktopAimWorld?.y ??
-                            pointer.worldY,
+                        desktopAimWorld?.x ?? pointer.worldX,
+                        desktopAimWorld?.y ?? pointer.worldY,
                     )
             );
 
-        this.hunterFocusAngle =
-            angle;
+        this.hunterFocusAngle = angle;
 
-        /*
-         * LASER
-         * Same instant point-and-fire feeling the first Paintball prototype had,
-         * but extends far beyond the full logical map so its gameplay range is
-         * effectively unlimited.
-         */
         if (this.selectedHiderSkill === 'laser') {
-            const infiniteRange =
-                Math.max(
-                    this.gameWidth,
-                    this.gameHeight,
-                ) * 8;
+            const range = 390;
+            const ux = Math.cos(angle);
+            const uy = Math.sin(angle);
+            let hitDistance = range;
 
-            const endX =
-                origin.x +
-                Math.cos(angle) *
-                    infiniteRange;
-            const endY =
-                origin.y +
-                Math.sin(angle) *
-                    infiniteRange;
+            this.networkPlayerManager.getAliveHunterPositions().forEach((hunter) => {
+                const vx = hunter.x - origin.x;
+                const vy = hunter.y - origin.y;
+                const projection = vx * ux + vy * uy;
 
-            const beam =
-                this.add.graphics()
-                    .setDepth(179);
+                if (projection <= 0 || projection >= hitDistance) return;
 
-            /*
-             * faint tail + bright core = small laser pointer rather than weapon beam
-             */
-            beam.lineStyle(
-                4,
-                0xff2038,
-                0.16,
-            );
-            beam.lineBetween(
-                origin.x,
-                origin.y,
-                endX,
-                endY,
-            );
+                const nearestX = origin.x + ux * projection;
+                const nearestY = origin.y + uy * projection;
+                const miss = Phaser.Math.Distance.Between(
+                    nearestX,
+                    nearestY,
+                    hunter.x,
+                    hunter.y,
+                );
 
-            beam.lineStyle(
-                1.5,
-                0xff334d,
-                0.92,
-            );
-            beam.lineBetween(
-                origin.x,
-                origin.y,
-                endX,
-                endY,
-            );
+                if (miss <= 18) hitDistance = projection;
+            });
+
+            const endX = origin.x + ux * hitDistance;
+            const endY = origin.y + uy * hitDistance;
+
+            const beam = this.add.graphics().setDepth(179);
+            beam.lineStyle(1, 0xff102f, 0.98);
+            beam.lineBetween(origin.x, origin.y, endX, endY);
+
+            if (hitDistance < range) {
+                const hitFx = this.add.graphics().setDepth(182);
+                hitFx.fillStyle(0xff1238, 1);
+                hitFx.fillCircle(endX, endY, 4);
+                hitFx.lineStyle(3, 0xff3152, 0.90);
+                hitFx.lineBetween(
+                    endX - ux * 10,
+                    endY - uy * 10,
+                    endX + ux * 10,
+                    endY + uy * 10,
+                );
+
+                this.tweens.add({
+                    targets: hitFx,
+                    alpha: 0,
+                    scale: 1.45,
+                    duration: 180,
+                    ease: 'Quad.easeOut',
+                    onComplete: () => hitFx.destroy(),
+                });
+            }
 
             this.tweens.add({
                 targets: beam,
                 alpha: 0,
-                duration: 210,
+                duration: 150,
                 ease: 'Quad.easeOut',
-                onComplete: () =>
-                    beam.destroy(),
+                onComplete: () => beam.destroy(),
             });
-
             return;
         }
 
-        /*
-         * PAINTBALL
-         * "슈우우웅 -> 철퍽"
-         * A real visible projectile travels before the splash is created.
-         */
         const paintColors = [
-            0xff4f87,
-            0x38bdf8,
-            0xfacc15,
-            0x22c55e,
-            0x8b5cf6,
-            0xf97316,
-            0xef4444,
-            0x14b8a6,
+            0xff4f87, 0x38bdf8, 0xfacc15, 0x22c55e,
+            0x8b5cf6, 0xf97316, 0xef4444, 0x14b8a6,
         ] as const;
 
-        const paintColor =
-            Phaser.Utils.Array.GetRandom(
-                [...paintColors],
-            );
-
-        const travelDistance =
-            245;
-
-        const impactX =
-            origin.x +
-            Math.cos(angle) *
-                travelDistance;
-        const impactY =
-            origin.y +
-            Math.sin(angle) *
-                travelDistance;
-
-        const ball =
-            this.add.circle(
-                origin.x,
-                origin.y,
-                7,
-                paintColor,
-                1,
-            )
-                .setDepth(179);
-
-        ball.setStrokeStyle(
-            2,
-            0xffffff,
-            0.72,
+        const paintColor = Phaser.Utils.Array.GetRandom([...paintColors]);
+        const travelDistance = Phaser.Math.Clamp(
+            paintballDistanceOverride ?? 168,
+            80,
+            245,
         );
 
-        /*
-         * Small highlight makes the projectile readable while moving over
-         * bright/dark maps.
-         */
-        const highlight =
-            this.add.circle(
-                origin.x - 2,
-                origin.y - 2,
-                2,
-                0xffffff,
-                0.78,
-            )
-                .setDepth(180);
+        const impactX = origin.x + Math.cos(angle) * travelDistance;
+        const impactY = origin.y + Math.sin(angle) * travelDistance;
 
-        let lastTrailAt =
-            -Infinity;
+        const ball = this.add.graphics().setDepth(179);
+        ball.fillStyle(paintColor, 1);
+        ball.fillRect(-6, -6, 12, 12);
+        ball.fillRect(-8, -3, 16, 6);
+        ball.fillRect(-3, -8, 6, 16);
+        ball.fillStyle(0xffffff, 0.34);
+        ball.fillRect(-3, -4, 3, 3);
+        ball.setPosition(origin.x, origin.y);
+
+        const travelDuration = Phaser.Math.Linear(
+            250,
+            430,
+            travelDistance / 245,
+        );
+
+        let lastTrailAt = -Infinity;
 
         this.tweens.add({
-            targets: [
-                ball,
-                highlight,
-            ],
+            targets: ball,
             x: impactX,
             y: impactY,
-            duration: 390,
-            ease: 'Sine.easeIn',
+            duration: travelDuration,
+            ease: 'Sine.easeInOut',
             onUpdate: () => {
-                /*
-                 * "슈우우웅" dotted fading trajectory.
-                 */
-                if (
-                    this.time.now -
-                    lastTrailAt <
-                    42
-                ) {
-                    return;
-                }
+                if (this.time.now - lastTrailAt < 38) return;
+                lastTrailAt = this.time.now;
 
-                lastTrailAt =
-                    this.time.now;
-
-                const trailDot =
-                    this.add.circle(
-                        ball.x,
-                        ball.y,
-                        Phaser.Math.Between(
-                            2,
-                            4,
-                        ),
-                        paintColor,
-                        0.68,
-                    )
-                        .setDepth(177);
+                const trailDot = this.add.rectangle(
+                    ball.x,
+                    ball.y,
+                    Phaser.Math.Between(3, 6),
+                    Phaser.Math.Between(3, 6),
+                    paintColor,
+                    0.60,
+                ).setDepth(177);
 
                 this.tweens.add({
                     targets: trailDot,
                     alpha: 0,
                     scale: 0.35,
-                    duration: 230,
+                    duration: 220,
                     ease: 'Quad.easeOut',
-                    onComplete: () =>
-                        trailDot.destroy(),
+                    onComplete: () => trailDot.destroy(),
                 });
             },
             onComplete: () => {
                 ball.destroy();
-                highlight.destroy();
 
-                /*
-                 * "철퍽" — much larger than the previous tiny 8px mark.
-                 * Entire cluster stays for this Hunt, then Lobby cleanup removes it.
-                 */
-                const splat =
-                    this.add.graphics()
-                        .setDepth(124);
-
-                splat.fillStyle(
-                    paintColor,
-                    0.94,
-                );
-
-                splat.fillCircle(
-                    impactX,
-                    impactY,
-                    20,
-                );
+                const splat = this.add.graphics().setDepth(124);
+                splat.fillStyle(paintColor, 0.94);
+                splat.fillCircle(impactX, impactY, 24);
 
                 [
-                    [-24, -8, 9],
-                    [23, -12, 8],
-                    [-20, 17, 7],
-                    [25, 16, 6],
-                    [-6, -28, 6],
-                    [8, 29, 5],
-                    [-32, 6, 4],
-                    [34, 3, 4],
-                ].forEach(
-                    ([dx, dy, radius]) => {
-                        splat.fillCircle(
-                            impactX + dx,
-                            impactY + dy,
-                            radius,
-                        );
-                    },
-                );
+                    [-30, -10, 10], [29, -14, 9], [-25, 21, 8],
+                    [30, 19, 8], [-7, -34, 7], [10, 35, 6],
+                    [-39, 7, 5], [41, 4, 5], [-19, -28, 4], [22, 31, 4],
+                ].forEach(([dx, dy, radius]) => {
+                    splat.fillCircle(impactX + dx, impactY + dy, radius);
+                });
 
-                /*
-                 * A quick impact ring sells the "철퍽" without changing the
-                 * persistent stain itself.
-                 */
-                const impactRing =
-                    this.add.circle(
-                        impactX,
-                        impactY,
-                        10,
-                    )
-                        .setStrokeStyle(
-                            3,
-                            paintColor,
-                            0.9,
-                        )
-                        .setDepth(178);
+                const impactRing = this.add.circle(impactX, impactY, 12)
+                    .setStrokeStyle(3, paintColor, 0.86)
+                    .setDepth(178);
 
                 this.tweens.add({
                     targets: impactRing,
-                    scale: 3.2,
+                    scale: 3.6,
                     alpha: 0,
-                    duration: 220,
+                    duration: 230,
                     ease: 'Quad.easeOut',
-                    onComplete: () =>
-                        impactRing.destroy(),
+                    onComplete: () => impactRing.destroy(),
                 });
 
-                this.hiderSkillRoundFx.add(
-                    splat,
-                );
+                this.hiderSkillRoundFx.add(splat);
             },
+        });
+
+        this.tweens.add({
+            targets: ball,
+            scaleX: 1.65,
+            scaleY: 1.65,
+            duration: travelDuration / 2,
+            ease: 'Sine.easeOut',
+            yoyo: true,
+        });
+
+        this.tweens.add({
+            targets: ball,
+            angle: 14,
+            scaleX: '+=0.10',
+            scaleY: '-=0.08',
+            duration: 70,
+            yoyo: true,
+            repeat: Math.max(1, Math.floor(travelDuration / 140)),
         });
     }
 
