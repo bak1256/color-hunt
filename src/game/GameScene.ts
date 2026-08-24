@@ -85,6 +85,8 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010451M4_VICTORY_ACHIEVEMENT_BADGES: collectible-looking victory emblems replace flat pill badges. */
+
     /* V1010451M3K4_HUNTER_HELP_EXTERNAL_ROW: Hunter explanation is a dedicated flow row outside the clipped status card. */
     /* V1010451M3K3_HUNTER_STATUS_HARDFIX: inline-important Hunter status rendering defeats legacy mobile CSS/textContent overrides. */
     /* V1010451M3K2_HUNTER_HELP_TOAST_CENTER: show Hunter helper line; center host-transfer toast inside game canvas. */
@@ -8411,6 +8413,622 @@ export class GameScene extends Phaser.Scene {
                 : language === 'zh'
                     ? '✓ 已获得上色帮助'
                     : '✓ 색칠 도움받음';
+    }
+
+    private drawVictoryRibbon(
+        context: CanvasRenderingContext2D,
+        centerX: number,
+        y: number,
+        width: number,
+        height: number,
+        fill: string,
+        edge: string,
+    ): void {
+        const x =
+            centerX - width / 2;
+context.save();
+
+        context.fillStyle =
+            edge;
+        context.beginPath();
+        context.moveTo(
+            x - 14,
+            y + 7,
+        );
+        context.lineTo(
+            x + 14,
+            y + 7,
+        );
+        context.lineTo(
+            x + 14,
+            y + height - 7,
+        );
+        context.lineTo(
+            x - 14,
+            y + height - 1,
+        );
+        context.lineTo(
+            x - 4,
+            y + height / 2,
+        );
+        context.closePath();
+        context.fill();
+
+        context.beginPath();
+        context.moveTo(
+            x + width + 14,
+            y + 7,
+        );
+        context.lineTo(
+            x + width - 14,
+            y + 7,
+        );
+        context.lineTo(
+            x + width - 14,
+            y + height - 7,
+        );
+        context.lineTo(
+            x + width + 14,
+            y + height - 1,
+        );
+        context.lineTo(
+            x + width + 4,
+            y + height / 2,
+        );
+        context.closePath();
+        context.fill();
+
+        context.shadowColor =
+            'rgba(37,41,45,.16)';
+        context.shadowBlur = 8;
+        context.shadowOffsetY = 4;
+
+        context.fillStyle =
+            fill;
+        context.strokeStyle =
+            edge;
+        context.lineWidth = 2;
+        context.beginPath();
+        context.roundRect(
+            x,
+            y,
+            width,
+            height,
+            12,
+        );
+        context.fill();
+        context.stroke();
+
+        context.shadowColor =
+            'transparent';
+
+        context.fillStyle =
+            'rgba(255,255,255,.22)';
+        context.beginPath();
+        context.roundRect(
+            x + 5,
+            y + 4,
+            width - 10,
+            Math.max(
+                4,
+                height * 0.24,
+            ),
+            8,
+        );
+        context.fill();
+
+        context.restore();
+    }
+
+    private drawHiderPaintAchievementBadge(
+        context: CanvasRenderingContext2D,
+        centerX: number,
+        centerY: number,
+    ): void {
+        const badge =
+            this.getPaintSkillBadge();
+        const rookie =
+            this.paintAssistUsedThisRound;
+
+        const outer =
+            rookie
+                ? '#8fd66f'
+                : '#7557c7';
+        const inner =
+            rookie
+                ? '#eef9c9'
+                : '#f2e9ff';
+        const core =
+            rookie
+                ? '#bfe77f'
+                : '#cbb4ff';
+const ribbon =
+            rookie
+                ? '#f6c75d'
+                : '#8d6bd8';
+        const ribbonEdge =
+            rookie
+                ? '#d59a2f'
+                : '#6245ad';
+
+        context.save();
+
+        /*
+         * Medal silhouette first: unlike the old rounded pill, the badge is
+         * recognizable even when the poster is viewed as a small SNS image.
+         */
+        context.shadowColor =
+            'rgba(37,41,45,.22)';
+        context.shadowBlur = 12;
+        context.shadowOffsetY = 5;
+
+        context.fillStyle =
+            outer;
+        context.beginPath();
+        for (
+            let i = 0;
+            i < 24;
+            i += 1
+        ) {
+            const angle =
+                -Math.PI / 2 +
+                i * Math.PI / 12;
+            const radius =
+                i % 2 === 0
+                    ? 38
+                    : 33;
+            const px =
+                centerX +
+                Math.cos(angle) *
+                    radius;
+            const py =
+                centerY - 8 +
+                Math.sin(angle) *
+                    radius;
+
+            if (i === 0) {
+                context.moveTo(
+                    px,
+                    py,
+                );
+            } else {
+                context.lineTo(
+                    px,
+                    py,
+                );
+            }
+        }
+        context.closePath();
+        context.fill();
+
+        context.shadowColor =
+            'transparent';
+
+        context.fillStyle =
+            inner;
+        context.strokeStyle =
+            '#ffffff';
+        context.lineWidth = 3;
+        context.beginPath();
+        context.arc(
+            centerX,
+            centerY - 8,
+            29,
+            0,
+            Math.PI * 2,
+        );
+        context.fill();
+        context.stroke();
+
+        context.fillStyle =
+            core;
+        context.beginPath();
+        context.arc(
+            centerX,
+            centerY - 8,
+            22,
+            0,
+            Math.PI * 2,
+        );
+        context.fill();
+
+        context.textAlign =
+            'center';
+        context.textBaseline =
+            'middle';
+
+        if (rookie) {
+            /*
+             * Cute seedling: simple vector face + sprout, no platform-dependent
+             * emoji rendering required.
+             */
+            context.strokeStyle =
+                '#3e7c3b';
+            context.lineWidth = 4;
+            context.lineCap =
+                'round';
+            context.beginPath();
+            context.moveTo(
+                centerX,
+                centerY + 4,
+            );
+            context.lineTo(
+                centerX,
+                centerY - 18,
+            );
+            context.stroke();
+
+            context.fillStyle =
+                '#68bd58';
+            context.beginPath();
+            context.ellipse(
+                centerX - 9,
+                centerY - 19,
+                10,
+                6,
+                -0.55,
+                0,
+                Math.PI * 2,
+            );
+            context.fill();
+
+            context.beginPath();
+            context.ellipse(
+                centerX + 9,
+                centerY - 19,
+                10,
+                6,
+                0.55,
+                0,
+                Math.PI * 2,
+            );
+            context.fill();
+
+            context.fillStyle =
+                '#315a2e';
+            context.beginPath();
+            context.arc(
+                centerX - 7,
+                centerY - 1,
+                2.2,
+                0,
+                Math.PI * 2,
+            );
+            context.arc(
+                centerX + 7,
+                centerY - 1,
+                2.2,
+                0,
+                Math.PI * 2,
+            );
+            context.fill();
+
+            context.strokeStyle =
+                '#315a2e';
+            context.lineWidth = 2;
+            context.beginPath();
+            context.arc(
+                centerX,
+                centerY + 2,
+                7,
+                0.15 * Math.PI,
+                0.85 * Math.PI,
+            );
+            context.stroke();
+        } else {
+            /*
+             * Master palette: compact palette + brush + sparkle.
+             */
+            context.fillStyle =
+                '#fffaf0';
+            context.strokeStyle =
+                '#5a3c96';
+            context.lineWidth = 3;
+            context.beginPath();
+            context.ellipse(
+                centerX - 2,
+                centerY - 8,
+                19,
+                16,
+                -0.25,
+                0,
+                Math.PI * 2,
+            );
+            context.fill();
+            context.stroke();
+
+            [
+                [-10, -14, '#ef6a6a'],
+                [1, -18, '#f0bf45'],
+                [10, -8, '#59b878'],
+                [-5, 2, '#62a7e8'],
+            ].forEach(
+                ([dx, dy, color]) => {
+                    context.fillStyle =
+                        String(color);
+                    context.beginPath();
+                    context.arc(
+                        centerX + Number(dx),
+                        centerY - 8 + Number(dy),
+                        3.5,
+                        0,
+                        Math.PI * 2,
+                    );
+                    context.fill();
+                },
+            );
+
+            context.strokeStyle =
+                '#5a3c96';
+            context.lineWidth = 5;
+            context.beginPath();
+            context.moveTo(
+                centerX + 10,
+                centerY + 8,
+            );
+            context.lineTo(
+                centerX + 25,
+                centerY - 19,
+            );
+            context.stroke();
+
+            context.fillStyle =
+                '#f6c75d';
+            context.beginPath();
+            context.moveTo(
+                centerX + 25,
+                centerY - 19,
+            );
+            context.lineTo(
+                centerX + 31,
+                centerY - 31,
+            );
+            context.lineTo(
+                centerX + 18,
+                centerY - 24,
+            );
+            context.closePath();
+            context.fill();
+
+            context.fillStyle =
+                '#ffffff';
+            context.font =
+                '900 16px Arial, sans-serif';
+            context.fillText(
+                '✦',
+                centerX + 25,
+                centerY - 30,
+            );
+        }
+
+        this.drawVictoryRibbon(
+            context,
+            centerX,
+            centerY + 28,
+            164,
+            36,
+            ribbon,
+            ribbonEdge,
+        );
+
+        context.fillStyle =
+            rookie
+                ? '#5d430e'
+                : '#ffffff';
+        context.font =
+            '900 18px Arial, sans-serif';
+        context.textAlign =
+            'center';
+        context.textBaseline =
+            'middle';
+        context.fillText(
+            badge.label,
+            centerX,
+            centerY + 46,
+        );
+
+        context.restore();
+    }
+
+    private drawHunterAllKillAchievementBadge(
+        context: CanvasRenderingContext2D,
+        centerX: number,
+        centerY: number,
+        language: GameLanguage,
+    ): void {
+        context.save();
+
+        /*
+         * Trophy/seal treatment: strong silhouette, layered gold, laurel and
+         * a red championship ribbon instead of a generic rounded rectangle.
+         */
+        context.shadowColor =
+            'rgba(82,45,16,.24)';
+        context.shadowBlur = 14;
+        context.shadowOffsetY = 6;
+
+        context.fillStyle =
+            '#f0b63d';
+        context.beginPath();
+        for (
+            let i = 0;
+            i < 28;
+            i += 1
+        ) {
+            const angle =
+                -Math.PI / 2 +
+                i * Math.PI / 14;
+            const radius =
+                i % 2 === 0
+                    ? 49
+                    : 43;
+            const px =
+                centerX +
+                Math.cos(angle) *
+                    radius;
+            const py =
+                centerY - 5 +
+                Math.sin(angle) *
+                    radius;
+
+            if (i === 0) {
+                context.moveTo(
+                    px,
+                    py,
+                );
+            } else {
+                context.lineTo(
+                    px,
+                    py,
+                );
+            }
+        }
+        context.closePath();
+        context.fill();
+
+        context.shadowColor =
+            'transparent';
+
+        context.fillStyle =
+            '#fff6c8';
+        context.strokeStyle =
+            '#d98c28';
+        context.lineWidth = 4;
+        context.beginPath();
+        context.arc(
+            centerX,
+            centerY - 5,
+            38,
+            0,
+            Math.PI * 2,
+        );
+        context.fill();
+        context.stroke();
+
+        context.fillStyle =
+            '#e45f4f';
+        context.beginPath();
+        context.arc(
+            centerX,
+            centerY - 5,
+            28,
+            0,
+            Math.PI * 2,
+        );
+        context.fill();
+
+        context.fillStyle =
+            '#fff7d6';
+        context.font =
+            '900 31px Arial, sans-serif';
+        context.textAlign =
+            'center';
+        context.textBaseline =
+            'middle';
+        context.fillText(
+            '★',
+            centerX,
+            centerY - 6,
+        );
+
+        /*
+         * Small laurel marks around the medal.
+         */
+        context.strokeStyle =
+            '#bd7422';
+        context.lineWidth = 3;
+        context.lineCap =
+            'round';
+
+        [-1, 1].forEach(
+            (side) => {
+                context.beginPath();
+                context.arc(
+                    centerX +
+                        side * 12,
+                    centerY - 3,
+                    48,
+                    side < 0
+                        ? 0.65 * Math.PI
+                        : -0.35 * Math.PI,
+                    side < 0
+                        ? 1.35 * Math.PI
+                        : 0.35 * Math.PI,
+                    side > 0,
+                );
+                context.stroke();
+
+                for (
+                    let i = 0;
+                    i < 4;
+                    i += 1
+                ) {
+                    const leafY =
+                        centerY - 28 +
+                        i * 16;
+                    context.fillStyle =
+                        '#e6a936';
+                    context.beginPath();
+                    context.ellipse(
+                        centerX +
+                            side *
+                                (
+                                    45 -
+                                    i * 3
+                                ),
+                        leafY,
+                        7,
+                        3.5,
+                        side * 0.65,
+                        0,
+                        Math.PI * 2,
+                    );
+                    context.fill();
+                }
+            },
+        );
+
+        this.drawVictoryRibbon(
+            context,
+            centerX,
+            centerY + 39,
+            190,
+            42,
+            '#e45f4f',
+            '#b83f35',
+        );
+
+        context.fillStyle =
+            '#fffdf2';
+        context.font =
+            '900 22px Arial, sans-serif';
+        context.textAlign =
+            'center';
+        context.textBaseline =
+            'middle';
+        context.fillText(
+            'ALL KILL!!',
+            centerX,
+            centerY + 60,
+        );
+
+        context.fillStyle =
+            '#b94e3d';
+        context.font =
+            '900 13px Arial, sans-serif';
+        context.fillText(
+            language === 'ko'
+                ? '완벽한 사냥'
+                : language === 'ja'
+                    ? 'パーフェクトハント'
+                    : language === 'zh'
+                        ? '完美狩猎'
+                        : 'PERFECT HUNT',
+            centerX,
+            centerY + 92,
+        );
+
+        context.restore();
     }
 
     private getPaintSkillBadge(): {
@@ -39054,73 +39672,12 @@ const roomPlayers =
         );
 
         if (personalAllKill) {
-            context.save();
-
-            context.fillStyle =
-                '#fff8d8';
-            context.strokeStyle =
-                '#ef795f';
-            context.lineWidth = 4;
-            context.beginPath();
-            context.roundRect(
-                735,
-                42,
-                285,
-                88,
-                28,
+            this.drawHunterAllKillAchievementBadge(
+                context,
+                884,
+                79,
+                language,
             );
-            context.fill();
-            context.stroke();
-
-            context.fillStyle =
-                '#d64f40';
-            context.font =
-                '900 29px Arial, sans-serif';
-            context.textAlign =
-                'center';
-            context.fillText(
-                '★ ALL KILL!! ★',
-                878,
-                80,
-            );
-
-            context.fillStyle =
-                '#ef795f';
-            context.font =
-                '900 17px Arial, sans-serif';
-            context.fillText(
-                language === 'ko'
-                    ? '빠밤!!'
-                    : 'PERFECT HUNT!',
-                878,
-                108,
-            );
-
-            const confetti = [
-                [708, 48], [1032, 58],
-                [720, 118], [1008, 137],
-                [682, 86], [1040, 105],
-            ];
-
-            confetti.forEach(
-                ([x, y], index) => {
-                    context.fillStyle =
-                        index % 2 === 0
-                            ? '#ffd05b'
-                            : '#62b7e7';
-                    context.beginPath();
-                    context.arc(
-                        x,
-                        y,
-                        7,
-                        0,
-                        Math.PI * 2,
-                    );
-                    context.fill();
-                },
-            );
-
-            context.restore();
         }
 
         const frameX = 60;
@@ -39567,44 +40124,16 @@ const roomPlayers =
                 : 1104;
 
         /*
-         * V1010450ZE_HIDER_ONLY_PAINT_SKILL_BADGE
-         * Paint Master / Paint Rookie describes Hider Paint Help usage.
-         * Hunter victory cards must never show either badge.
+         * V1010451M4_VICTORY_ACHIEVEMENT_BADGES / HIDER_PAINT_ACHIEVEMENT
+         * Collectible medal + ribbon. Rookie is cute/soft; Master is richer
+         * and more prestigious. Hunter cards still never show paint badges.
          */
         if (!isHunter) {
-            const paintSkillBadge =
-                this.getPaintSkillBadge();
-
-            context.save();
-            context.fillStyle =
-                paintSkillBadge.background;
-            context.strokeStyle =
-                'rgba(95,66,10,.20)';
-            context.lineWidth = 2;
-            context.beginPath();
-            context.roundRect(
-                72,
-                memoryPanelY - 18,
-                245,
-                54,
-                27,
+            this.drawHiderPaintAchievementBadge(
+                context,
+                176,
+                memoryPanelY + 2,
             );
-            context.fill();
-            context.stroke();
-            context.fillStyle =
-                paintSkillBadge.color;
-            context.font =
-                '900 20px Arial, sans-serif';
-            context.textAlign =
-                'left';
-            context.textBaseline =
-                'middle';
-            context.fillText(
-                `${paintSkillBadge.emoji} ${paintSkillBadge.label}`,
-                94,
-                memoryPanelY + 9,
-            );
-            context.restore();
         }
 
         /*
