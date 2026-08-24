@@ -85,6 +85,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010451M3I_WAITING_SPACING_BALANCE: approved light lobby spacing/balance follow-up after m3h. */
     /* V1010451M3H_GAME_FLASH_WAITING_UI_POLISH: fart flash is canvas-only; waiting panel gets unified spacing, tactile buttons, readable timing and desktop trim. */
     /* V1010451L_VICTORY_BRUSH_DIAMETER_PARITY: victory-card paint replay uses the same N-pixel brush diameter as live gameplay. */
     /* V1010450ZE_UI_STABILITY_PASS: mobile Hunter palette rebuild, Hider READY visual lock, strong Lobby READY colors, translucent Hunter result tiles, Hider-only paint badges. */
@@ -28191,6 +28192,208 @@ export class GameScene extends Phaser.Scene {
 
         document.body.appendChild(root);
         this.waitingRoomRoot = root;
+
+        /*
+         * V1010451M3I_WAITING_SPACING_BALANCE
+         * Follow-up to m3h: airy/light lobby rhythm matching the approved mock.
+         * This is deliberately geometry-only; no waiting-room game logic changes.
+         */
+        {
+            const styleId =
+                'colorhunt-v451m3i-spacing-balance';
+
+            document
+                .getElementById(
+                    styleId,
+                )
+                ?.remove();
+
+            const style =
+                document.createElement(
+                    'style',
+                );
+
+            style.id =
+                styleId;
+
+            style.textContent = `
+                /* Main vertical rhythm: stop adjacent cards from touching. */
+                .colorhunt-waiting-room .ch-waiting-shell {
+                    gap: 10px !important;
+                }
+
+                /* Hunter buttons -> hunter status -> timing must each breathe. */
+                .colorhunt-waiting-room .ch-waiting-role-wrap {
+                    display: flex !important;
+                    flex-direction: column !important;
+                    gap: 10px !important;
+                    margin: 0 !important;
+                    padding: 0 0 2px 0 !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-role {
+                    gap: 10px !important;
+                    margin: 0 !important;
+                    padding: 0 0 3px 0 !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-role-status {
+                    margin: 0 0 3px 0 !important;
+                    padding: 7px 8px !important;
+                    min-height: 30px !important;
+                    box-sizing: border-box !important;
+                    line-height: 1.2 !important;
+                }
+
+                /* Each timing card gets a real header row and a separate button row. */
+                .colorhunt-waiting-room .ch-waiting-timing {
+                    display: flex !important;
+                    flex-direction: column !important;
+                    gap: 10px !important;
+                    margin: 0 !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-timing section {
+                    display: flex !important;
+                    flex-direction: column !important;
+                    gap: 9px !important;
+                    padding: 9px 9px 10px !important;
+                    box-sizing: border-box !important;
+                    overflow: visible !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-timing-title {
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: space-between !important;
+                    gap: 12px !important;
+                    width: 100% !important;
+                    min-height: 20px !important;
+                    margin: 0 !important;
+                    padding: 0 1px !important;
+                    box-sizing: border-box !important;
+                    position: static !important;
+                    line-height: 1.2 !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-timing-title span,
+                .colorhunt-waiting-room .ch-waiting-timing-title b {
+                    position: static !important;
+                    transform: none !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    font-size: 14px !important;
+                    font-weight: 900 !important;
+                    line-height: 1.2 !important;
+                    white-space: nowrap !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-time-options {
+                    display: grid !important;
+                    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+                    gap: 7px !important;
+                    width: 100% !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    position: static !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-time-options button {
+                    width: 100% !important;
+                    min-width: 0 !important;
+                    min-height: 34px !important;
+                    margin: 0 !important;
+                    font-size: 13px !important;
+                    font-weight: 900 !important;
+                    line-height: 1 !important;
+                }
+
+                /* Footer: equal columns, equal edges, no mysterious right shift. */
+                .colorhunt-waiting-room .ch-waiting-footer {
+                    display: grid !important;
+                    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+                    gap: 10px !important;
+                    width: 100% !important;
+                    margin: 0 !important;
+                    padding: 1px 0 4px !important;
+                    box-sizing: border-box !important;
+                    align-items: stretch !important;
+                    justify-content: stretch !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-footer button {
+                    width: 100% !important;
+                    min-width: 0 !important;
+                    max-width: none !important;
+                    margin: 0 0 3px 0 !important;
+                    padding-left: 8px !important;
+                    padding-right: 8px !important;
+                    box-sizing: border-box !important;
+                    justify-self: stretch !important;
+                    font-size: 13px !important;
+                    font-weight: 850 !important;
+                    text-align: center !important;
+                }
+
+                /* Keep the approved light look; only add depth, never darken fills. */
+                .colorhunt-waiting-room .ch-waiting-role button,
+                .colorhunt-waiting-room .ch-waiting-footer button,
+                .colorhunt-waiting-room .ch-waiting-map button {
+                    filter: none !important;
+                }
+
+                /* Mobile portrait: preserve readable gaps instead of squeezing headers. */
+                .colorhunt-waiting-room.ch-uniform-mobile-scale
+                .ch-waiting-shell {
+                    gap: 9px !important;
+                }
+
+                .colorhunt-waiting-room.ch-uniform-mobile-scale
+                .ch-waiting-role-wrap {
+                    gap: 9px !important;
+                }
+
+                .colorhunt-waiting-room.ch-uniform-mobile-scale
+                .ch-waiting-timing {
+                    gap: 9px !important;
+                }
+
+                .colorhunt-waiting-room.ch-uniform-mobile-scale
+                .ch-waiting-timing section {
+                    gap: 8px !important;
+                    padding: 8px 8px 9px !important;
+                }
+
+                .colorhunt-waiting-room.ch-uniform-mobile-scale
+                .ch-waiting-timing-title span,
+                .colorhunt-waiting-room.ch-uniform-mobile-scale
+                .ch-waiting-timing-title b {
+                    font-size: 13.5px !important;
+                }
+
+                .colorhunt-waiting-room.ch-uniform-mobile-scale
+                .ch-waiting-footer {
+                    gap: 9px !important;
+                }
+
+                /* Desktop: content-sized panel, with the same balanced bottom inset. */
+                .colorhunt-waiting-room:not(.ch-uniform-mobile-scale),
+                .colorhunt-waiting-room:not(.ch-uniform-mobile-scale)
+                .ch-waiting-shell {
+                    height: auto !important;
+                    min-height: 0 !important;
+                }
+
+                .colorhunt-waiting-room:not(.ch-uniform-mobile-scale)
+                .ch-waiting-shell {
+                    padding-bottom: 10px !important;
+                }
+            `;
+
+            document.head.appendChild(
+                style,
+            );
+        }
 
         /*
          * V1010451M3H_GAME_FLASH_WAITING_UI_POLISH
