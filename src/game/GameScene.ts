@@ -85,6 +85,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010452G3_PC_PARITY_MOBILE_WAITING_SKILL_POLISH */
     /* V1010452F_FINAL_MOBILE_WAITING_AND_SKILL_LAYOUT */
     /* V1010451M6D_REAL_DESKTOP_VIEWPORT_MODE: touchscreen capability no longer decides desktop lobby scaling. */
     /* V1010451M6C_PC_DETECTION_ROBUST: PC/Fold selection follows mobileControlsEnabled instead of touch hardware. */
@@ -1047,22 +1048,42 @@ export class GameScene extends Phaser.Scene {
             );
             root.style.setProperty(
                 'width',
-                mobile ? '210px' : '220px',
+                mobile ? '190px' : '205px',
                 'important',
             );
             root.style.setProperty(
                 'max-width',
-                mobile ? '210px' : '220px',
+                mobile ? '190px' : '205px',
+                'important',
+            );
+            root.style.setProperty(
+                'background',
+                'rgba(15, 28, 31, .72)',
+                'important',
+            );
+            root.style.setProperty(
+                'border',
+                '1.5px solid rgba(126, 173, 139, .62)',
+                'important',
+            );
+            root.style.setProperty(
+                'backdrop-filter',
+                'blur(7px)',
+                'important',
+            );
+            root.style.setProperty(
+                '-webkit-backdrop-filter',
+                'blur(7px)',
                 'important',
             );
             root.style.setProperty(
                 'padding',
-                mobile ? '5px 6px' : '6px 7px',
+                mobile ? '4px 5px' : '5px 6px',
                 'important',
             );
             root.style.setProperty(
                 'gap',
-                mobile ? '4px' : '5px',
+                '3px',
                 'important',
             );
             root.style.setProperty(
@@ -11633,8 +11654,38 @@ const ribbon =
                     ),
                 );
 
+            /*
+             * V1010452G3_PC_PARITY_MOBILE_WAITING_SKILL_POLISH / PC_PAINT_HELP_ALIGN
+             * Align to the right edge of chat/send when available.
+             */
+            const chatSendButton =
+                document.querySelector<HTMLElement>(
+                    '.colorhunt-chat-send, .ch-chat-send, [data-chat-send]',
+                );
+            const chatRoot =
+                document.querySelector<HTMLElement>(
+                    '.colorhunt-chat, .colorhunt-chat-ui, .ch-chat',
+                );
+            const chatAnchorRect =
+                chatSendButton?.getBoundingClientRect() ??
+                chatRoot?.getBoundingClientRect();
+
+            const alignedPaintAssistX =
+                chatAnchorRect
+                    ? Phaser.Math.Clamp(
+                        chatAnchorRect.right + 12,
+                        8,
+                        Math.max(
+                            8,
+                            window.innerWidth -
+                                buttonWidth -
+                                8,
+                        ),
+                    )
+                    : x;
+
             this.paintAssistButton.style.left =
-                `${Math.round(x)}px`;
+                `${Math.round(alignedPaintAssistX)}px`;
             this.paintAssistButton.style.top =
                 `${Math.round(rect.top + rect.height * 0.42)}px`;
             this.paintAssistButton.style.transform =
@@ -30114,15 +30165,11 @@ const ribbon =
                 );
 
         const designWidth =
-            touch
-                ? 300
-                : 340;
+            340;
 
         const naturalHeight =
             Math.max(
-                touch
-                    ? 460
-                    : 520,
+                520,
                 shell?.scrollHeight ?? 0,
                 this.waitingRoomRoot.scrollHeight,
             );
@@ -30212,15 +30259,13 @@ const ribbon =
             ) / 2;
 
         this.waitingRoomRoot
-            .classList.toggle(
+            .classList.remove(
                 'ch-uniform-mobile-scale',
-                touch,
             );
 
         this.waitingRoomRoot
-            .classList.toggle(
+            .classList.add(
                 'ch-uniform-desktop-scale',
-                !touch,
             );
 
         const style =
