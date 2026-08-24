@@ -85,6 +85,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010451M3K2_HUNTER_HELP_TOAST_CENTER: show Hunter helper line; center host-transfer toast inside game canvas. */
     /* V1010451M3K_WAITING_LAYOUT_RESCUE: deterministic compact waiting flow; complete Hunt controls; toast inside canvas. */
     /* V1010451M3J2_WAITING_MOCK_HOST_TRANSFER_ROBUST: approved bright lobby status/timing spacing + large host badge + localized host-transfer toast. */
     /* V1010451M3I_WAITING_SPACING_BALANCE: approved light lobby spacing/balance follow-up after m3h. */
@@ -28206,6 +28207,92 @@ export class GameScene extends Phaser.Scene {
         this.waitingRoomRoot = root;
 
         /*
+         * V1010451M3K2_HUNTER_HELP_TOAST_CENTER
+         * Final micro-polish after m3k.
+         */
+        {
+            const styleId =
+                'colorhunt-v451m3k2-final-polish';
+
+            document
+                .getElementById(
+                    styleId,
+                )
+                ?.remove();
+
+            const style =
+                document.createElement(
+                    'style',
+                );
+
+            style.id =
+                styleId;
+
+            style.textContent = `
+                /* Hunter card: enough height for title + helper line. */
+                .colorhunt-waiting-room .ch-waiting-role-status {
+                    height: 52px !important;
+                    min-height: 52px !important;
+                    max-height: 52px !important;
+                    flex: 0 0 52px !important;
+                    gap: 3px !important;
+                    padding: 5px 7px 6px !important;
+                    overflow: visible !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-role-status-main {
+                    height: 20px !important;
+                    min-height: 20px !important;
+                    line-height: 20px !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-role-status-text {
+                    line-height: 20px !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-role-status-help {
+                    display: block !important;
+                    width: 100% !important;
+                    height: 15px !important;
+                    min-height: 15px !important;
+                    max-height: 15px !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    overflow: visible !important;
+                    text-overflow: clip !important;
+                    white-space: nowrap !important;
+                    font-size: 9.2px !important;
+                    font-weight: 750 !important;
+                    line-height: 15px !important;
+                    text-align: center !important;
+                    opacity: 1 !important;
+                    visibility: visible !important;
+                }
+
+                /* Keep a visible gap before Paint after the taller Hunter card. */
+                .colorhunt-waiting-room .ch-waiting-role-wrap {
+                    gap: 7px !important;
+                    padding-bottom: 4px !important;
+                }
+
+                /* Toast: JS positions it inside the game canvas; center it vertically. */
+                .ch-waiting-host-transfer-toast {
+                    transform:
+                        translate(-50%, -50%) scale(.96) !important;
+                }
+
+                .ch-waiting-host-transfer-toast.is-visible {
+                    transform:
+                        translate(-50%, -50%) scale(1) !important;
+                }
+            `;
+
+            document.head.appendChild(
+                style,
+            );
+        }
+
+        /*
          * V1010451M3K_WAITING_LAYOUT_RESCUE
          * Rescue layout: the previous visual patches increased child heights while
          * the mobile waiting shell was still height-constrained/scaled.  That caused
@@ -29666,13 +29753,7 @@ export class GameScene extends Phaser.Scene {
             toast.style.left =
                 `${canvasRect.left + canvasRect.width / 2}px`;
             toast.style.top =
-                `${canvasRect.top + Math.max(
-                    14,
-                    Math.min(
-                        72,
-                        canvasRect.height * 0.045,
-                    ),
-                )}px`;
+                `${canvasRect.top + canvasRect.height * 0.50}px`;
         }
 
         requestAnimationFrame(
