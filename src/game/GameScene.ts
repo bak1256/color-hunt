@@ -1076,6 +1076,8 @@ export class GameScene extends Phaser.Scene {
     private updateAllHidersReadyBubble(
         button: HTMLButtonElement,
         show: boolean,
+        message: string =
+            tr('모두 준비 완료! 바로 찾기 시작 가능!'),
     ): void {
         if (!show) {
             this.hideAllHidersReadyBubble();
@@ -1097,7 +1099,7 @@ export class GameScene extends Phaser.Scene {
                 'colorhunt-all-hiders-ready-bubble';
 
             bubble.textContent =
-                tr('모두 준비 완료! 바로 찾기 시작 가능!');
+                message;
 
             Object.assign(
                 bubble.style,
@@ -1350,6 +1352,31 @@ export class GameScene extends Phaser.Scene {
 
         if (role === 'hider') {
             this.hideAllHidersReadyBubble();
+
+            /*
+             * V1010451M3_HIDER_READY_HINT
+             * Explain the purpose of READY in the same speech-bubble language
+             * as the Hunter's early-start hint. It disappears as soon as this
+             * Hider marks themselves ready.
+             */
+            if (!this.localPaintReady) {
+                const language =
+                    getLanguage();
+                const readyHint =
+                    language === 'ja'
+                        ? '塗り終わったら「準備完了」！\n全員が準備すると、すぐにハントを始められます。'
+                        : language === 'en'
+                            ? 'Finished painting? Press READY!\nWhen everyone is ready, the hunt can start early.'
+                            : language === 'zh'
+                                ? '涂完后点击「准备完成」！\n所有人都准备好后，就能提前开始狩猎。'
+                                : '색칠을 마쳤다면 준비 완료!\n모두 준비하면 바로 찾기를 시작할 수 있어요.';
+
+                this.updateAllHidersReadyBubble(
+                    button,
+                    true,
+                    readyHint,
+                );
+            }
 
             button.classList
                 .remove(
@@ -10336,6 +10363,21 @@ export class GameScene extends Phaser.Scene {
         button.textContent =
             copy.button;
 
+        /*
+         * V1010451M3_CONTROLS_BUTTON_PARITY
+         * Match the unified in-game BGM button footprint so the two utility
+         * buttons read as one UI family on PC and mobile. Inline !important
+         * wins over older stylesheet sizes without moving its anchor.
+         */
+        button.style.setProperty('box-sizing', 'border-box', 'important');
+        button.style.setProperty('min-width', '92px', 'important');
+        button.style.setProperty('min-height', '34px', 'important');
+        button.style.setProperty('padding', '6px 10px', 'important');
+        button.style.setProperty('font-size', '11px', 'important');
+        button.style.setProperty('line-height', '1', 'important');
+        button.style.setProperty('border-radius', '11px', 'important');
+        button.style.setProperty('white-space', 'nowrap', 'important');
+
         const panel =
             document.createElement(
                 'div',
@@ -17269,6 +17311,7 @@ export class GameScene extends Phaser.Scene {
 
     /*
      * V1010451M_FIRST_PLAY_GUIDES
+     * V1010451M3_READY_HELP_EMPTY_HUNTER_CARD
      * V1010451M2_ZH_GUIDES
      * Lightweight, one-time onboarding for invite-link players.
      */
@@ -36439,10 +36482,91 @@ export class GameScene extends Phaser.Scene {
                 ?.alive ??
             false;
 
+        /*
+         * V1010451M3_EMPTY_MULTI_HUNTER_CARD_SUPPRESSION
+         * Team victory still counts normally, but when 2+ Hunters played,
+         * a Hunter who personally found zero Hiders has no meaningful trophy
+         * memory to show. Suppress only that empty personal card. A solo Hunter
+         * still receives the normal team-win card.
+         */
+        const roomPlayersForVictory =
+            multiplayerClient.getRoom()
+                ?.state.players;
+        const victoryHunterCount =
+            roomPlayersForVictory
+                ? [...roomPlayersForVictory.values()]
+                    .filter((player) => player.role === 'hunter')
+                    .length
+                : 0;
+
+        const victoryExtended =
+            result as NetworkRoundResult & {
+                victoryShowcase?: {
+                    personalFoundHiders?: Array<{ sessionId: string }>;
+                    foundHiders?: Array<{
+                        sessionId: string;
+                        foundByHunterSessionId?: string;
+                        foundByHunterClientKey?: string;
+                    }>;
+                    recipientSessionId?: string;
+                    recipientClientKey?: string;
+                };
+            };
+
+        const victoryRecipientSessionId =
+            String(
+                victoryExtended.victoryShowcase
+                    ?.recipientSessionId ??
+                localSessionId ??
+                '',
+            );
+        const victoryRecipientClientKey =
+            String(
+                victoryExtended.victoryShowcase
+                    ?.recipientClientKey ??
+                '',
+            );
+
+        const explicitPersonalFoundCount =
+            victoryExtended.victoryShowcase
+                ?.personalFoundHiders
+                ?.length ??
+            0;
+        const identityPersonalFoundCount =
+            (victoryExtended.victoryShowcase
+                ?.foundHiders ?? [])
+                .filter((entry) => {
+                    const finderClientKey =
+                        String(entry.foundByHunterClientKey ?? '');
+                    if (victoryRecipientClientKey && finderClientKey) {
+                        return finderClientKey === victoryRecipientClientKey;
+                    }
+                    return (
+                        String(entry.foundByHunterSessionId ?? '') ===
+                        victoryRecipientSessionId
+                    );
+                })
+                .length;
+        const cachedPersonalFoundCount =
+            multiplayerClient
+                .getPersonalVictoryFoundHiders()
+                .length;
+        const personalHunterFoundCount =
+            Math.max(
+                explicitPersonalFoundCount,
+                identityPersonalFoundCount,
+                cachedPersonalFoundCount,
+            );
+
+        const hunterCardEligible =
+            victoryHunterCount <= 1 ||
+            personalHunterFoundCount > 0;
+
         const localWon =
             (
                 result.winner === 'hunters' &&
-                localRole === 'hunter'
+                localRole === 'hunter' &&
+                hunterCardEligible
             ) ||
             (
                 result.winner === 'hiders' &&
@@ -36456,6 +36580,9 @@ export class GameScene extends Phaser.Scene {
                 winner: result.winner,
                 localRole,
                 localAlive,
+                victoryHunterCount,
+                personalHunterFoundCount,
+                hunterCardEligible,
                 localWon,
             },
         );
