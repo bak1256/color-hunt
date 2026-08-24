@@ -8220,6 +8220,55 @@ export class GameScene extends Phaser.Scene {
                 )}px`,
             );
     }
+    /*
+     * V1010451M7_CLIENT_CHAT_FOLLOW_NEWEST
+     *
+     * New chat can arrive while Phaser changes phase/HUD geometry. In that
+     * case scrollHeight may settle after the old immediate + rAF pass.
+     * Re-follow newest over a short settling window.
+     */
+    private followNewestChatMessage(): void {
+        const scroll =
+            (): void => {
+                if (!this.chatLog) {
+                    return;
+                }
+
+                this.chatLog.scrollTop =
+                    this.chatLog.scrollHeight;
+            };
+
+        scroll();
+
+        queueMicrotask(
+            scroll,
+        );
+
+        window.requestAnimationFrame(
+            scroll,
+        );
+
+        [
+            40,
+            120,
+            260,
+        ].forEach(
+            (delay) => {
+                window.setTimeout(
+                    () => {
+                        if (!this.sys.isActive()) {
+                            return;
+                        }
+
+                        scroll();
+                    },
+                    delay,
+                );
+            },
+        );
+    }
+
+
 
     private showChatUi(): void {
         if (!this.chatRoot) {
@@ -8241,7 +8290,9 @@ export class GameScene extends Phaser.Scene {
                 this.updateChatKeyboardOffset();
             },
         );
-    }
+    
+        this.followNewestChatMessage();
+}
 
     private hideChatUi(
         clear = false,
@@ -8351,7 +8402,9 @@ export class GameScene extends Phaser.Scene {
         window.requestAnimationFrame(
             scrollChatToBottom,
         );
-    }
+    
+        this.followNewestChatMessage();
+}
 
     private showChatNotice(
         message: string,
