@@ -950,12 +950,18 @@ export class GameScene extends Phaser.Scene {
     private createHiderSkillPicker(): void {
         this.destroyHiderSkillPicker();
 
-        const localPlayer = multiplayerClient.getLocalPlayer();
-        const role = localPlayer?.role;
+        /* V1010452A_HIDER_SKILL_PICKER_ROLE_FIX
+         * During Paint the local schema/player snapshot can lag behind the
+         * phase transition. Use the same local-Hider authority fallback that
+         * the rest of GameScene already uses instead of requiring getLocalPlayer().
+         */
+        const localIsHider =
+            multiplayerClient.getLocalPlayer()?.role === 'hider' ||
+            this.networkPlayerManager?.isLocalHider() === true;
 
         if (
             this.phase !== 'paint' ||
-            role !== 'hider' ||
+            !localIsHider ||
             !this.isMultiplayerSession()
         ) return;
 
@@ -56823,6 +56829,8 @@ const roomPlayers =
         /* V1010452_HIDER_SKILL_PICKER: create picker after Paint/role state settles. */
         this.time.delayedCall(80, () => this.createHiderSkillPicker());
         this.time.delayedCall(420, () => this.createHiderSkillPicker());
+        this.time.delayedCall(900, () => this.createHiderSkillPicker());
+        this.time.delayedCall(1600, () => this.createHiderSkillPicker());
 
         this.time.delayedCall(260, () => {
             if (this.phase === 'paint') this.showFirstRoleGuide();
