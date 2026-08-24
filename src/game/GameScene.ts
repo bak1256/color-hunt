@@ -85,6 +85,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010452K_SPECTATOR_SAFE_HIDER_MOBILE_FIRE */
     /* V1010452J_PAINTBALL_ARC_SPLASH_LASER_INFINITE */
     /* V1010452I5_HIDER_SKILL_IMMEDIATE_CONTROLS */
     /* V1010452H_FINAL_LEFT_COLUMN_ALIGNMENT */
@@ -3288,23 +3289,34 @@ export class GameScene extends Phaser.Scene {
                 .setOrigin(0.5)
                 .setScrollFactor(0)
                 .setDepth(6003)
-                .setVisible(false)
+                .setVisible(false);
+
+        /*
+         * V1010452K:
+         * Desktop spectator hint is intentionally NON-interactive.
+         * World clicks can therefore never accidentally change view.
+         * Mobile keeps an explicit button.
+         */
+        if (this.mobileControlsEnabled) {
+            this.spectatorButton
                 .setInteractive({
                     useHandCursor: true,
-                });
+                })
+                .on(
+                    'pointerdown',
+                    (
+                        pointer:
+                            Phaser.Input.Pointer,
+                    ) => {
+                        pointer.event
+                            ?.preventDefault?.();
+                        pointer.event
+                            ?.stopPropagation?.();
 
-        this.spectatorButton.on(
-            'pointerdown',
-            (
-                pointer:
-                    Phaser.Input.Pointer,
-            ) => {
-                pointer.event
-                    ?.stopPropagation?.();
-
-                this.cycleSpectatorView();
-            },
-        );
+                        this.cycleSpectatorView();
+                    },
+                );
+        }
 
         this.spectatorStatusText =
             this.add.text(
@@ -5315,8 +5327,41 @@ export class GameScene extends Phaser.Scene {
         this.spectatorButton
             ?.setText(
                 this.mobileControlsEnabled
-                    ? tr('시야 전환')
-                    : tr('TAB · 시야 전환'),
+                    ? tr('시야 전환하기')
+                    : tr('TAB으로 시야 전환하기'),
+            )
+            .setStyle(
+                this.mobileControlsEnabled
+                    ? {
+                        fontFamily:
+                            '"Arial Black", "Noto Sans KR", Arial, sans-serif',
+                        fontSize: '15px',
+                        fontStyle: 'bold',
+                        color: '#ffffff',
+                        backgroundColor:
+                            'rgba(57, 174, 226, 0.72)',
+                        stroke: '#082b3a',
+                        strokeThickness: 3,
+                        fixedWidth: 170,
+                        fixedHeight: 40,
+                        align: 'center',
+                        padding: { top: 7 },
+                    }
+                    : {
+                        fontFamily:
+                            '"Arial Black", "Noto Sans KR", Arial, sans-serif',
+                        fontSize: '18px',
+                        fontStyle: 'bold',
+                        color: '#ffffff',
+                        backgroundColor:
+                            'rgba(0,0,0,0)',
+                        stroke: '#111111',
+                        strokeThickness: 4,
+                        fixedWidth: 260,
+                        fixedHeight: 34,
+                        align: 'center',
+                        padding: { top: 4 },
+                    },
             )
             .setVisible(
                 showSpectatorButton,
@@ -5337,7 +5382,9 @@ export class GameScene extends Phaser.Scene {
             this.setFixedHudScreenPosition(
                 this.spectatorButton,
                 this.gameWidth / 2,
-                344,
+                this.mobileControlsEnabled
+                    ? this.gameHeight - 76
+                    : this.gameHeight - 34,
             );
 
             if (
@@ -5389,6 +5436,9 @@ export class GameScene extends Phaser.Scene {
                     .isLocalHider()
             );
 
+        const hiderSkillSelfView =
+            !this.spectatorSessionId;
+
         const showHunterCombat =
             canMove &&
             this.phase === 'hunt' &&
@@ -5397,7 +5447,8 @@ export class GameScene extends Phaser.Scene {
                     'hunter' ||
                 this.practiceMode ===
                     'hunter'
-            );
+            ) &&
+            hiderSkillSelfView;
 
         const showAimFireCombat =
             showHunterCombat ||
@@ -7809,6 +7860,7 @@ export class GameScene extends Phaser.Scene {
             }
 
             if (
+                !this.mobileControlsEnabled &&
                 Phaser.Input.Keyboard.JustDown(
                     this.spectatorKey,
                 )
@@ -53470,6 +53522,14 @@ const roomPlayers =
     private fireHiderSkill(
         aimAngleOverride?: number,
     ): void {
+        /*
+         * V1010452K / SPECTATOR_INPUT_LOCK
+         * Switching away from SELF is observation-only.
+         */
+        if (this.spectatorSessionId) {
+            return;
+        }
+
         if (
             this.phase !== 'hunt' ||
             !this.isMultiplayerSession() ||
