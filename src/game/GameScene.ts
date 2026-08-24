@@ -85,6 +85,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010452F_FINAL_MOBILE_WAITING_AND_SKILL_LAYOUT */
     /* V1010451M6D_REAL_DESKTOP_VIEWPORT_MODE: touchscreen capability no longer decides desktop lobby scaling. */
     /* V1010451M6C_PC_DETECTION_ROBUST: PC/Fold selection follows mobileControlsEnabled instead of touch hardware. */
     /* V1010451M4_VICTORY_ACHIEVEMENT_BADGES: collectible-looking victory emblems replace flat pill badges. */
@@ -1003,6 +1004,73 @@ export class GameScene extends Phaser.Scene {
             'width:max-content',
             'max-width:min(320px, calc(100vw - 24px))'
         ].join(';');
+
+        /*
+         * V1010452F_FINAL_MOBILE_WAITING_AND_SKILL_LAYOUT / SKILL_PICKER
+         * Final authored alignment:
+         * - desktop: compact block aligned with the left edge rhythm of Paint dock
+         * - mobile: compact block parked left of avatar/READY, never centered on avatar
+         */
+        {
+            const mobile = this.mobileControlsEnabled;
+            const finalLeft =
+                canvasRect.left +
+                canvasRect.width *
+                    (
+                        mobile
+                            ? 0.16
+                            : 0.105
+                    );
+            const finalTop =
+                canvasRect.top +
+                canvasRect.height *
+                    (
+                        mobile
+                            ? 0.56
+                            : 0.50
+                    );
+
+            root.style.setProperty(
+                'left',
+                `${Math.round(finalLeft)}px`,
+                'important',
+            );
+            root.style.setProperty(
+                'top',
+                `${Math.round(finalTop)}px`,
+                'important',
+            );
+            root.style.setProperty(
+                'transform',
+                'none',
+                'important',
+            );
+            root.style.setProperty(
+                'width',
+                mobile ? '210px' : '220px',
+                'important',
+            );
+            root.style.setProperty(
+                'max-width',
+                mobile ? '210px' : '220px',
+                'important',
+            );
+            root.style.setProperty(
+                'padding',
+                mobile ? '5px 6px' : '6px 7px',
+                'important',
+            );
+            root.style.setProperty(
+                'gap',
+                mobile ? '4px' : '5px',
+                'important',
+            );
+            root.style.setProperty(
+                'border-radius',
+                mobile ? '11px' : '12px',
+                'important',
+            );
+        }
 
         const render = (): void => {
             root.innerHTML = '';
@@ -31607,6 +31675,133 @@ const ribbon =
             `;
 
             document.head.appendChild(style);
+        }
+
+        /*
+         * V1010452F_FINAL_MOBILE_WAITING_AND_SKILL_LAYOUT / MOBILE_WAITING_TIMING
+         *
+         * Final compact geometry authority.
+         * Do NOT resize the left/right action buttons.
+         * Keep Paint + Hunt fully visible above READY within the existing panel.
+         */
+        {
+            const styleId =
+                'colorhunt-v452f-final-mobile-waiting-layout';
+
+            document
+                .getElementById(styleId)
+                ?.remove();
+
+            const style =
+                document.createElement('style');
+
+            style.id =
+                styleId;
+
+            style.textContent = `
+                .colorhunt-waiting-room.ch-uniform-mobile-scale
+                .ch-waiting-timing {
+                    display: grid !important;
+                    grid-template-columns: minmax(0, 1fr) !important;
+                    grid-template-rows: 55px 55px !important;
+                    grid-auto-rows: 55px !important;
+                    gap: 6px !important;
+                    width: 100% !important;
+                    height: 116px !important;
+                    min-height: 116px !important;
+                    max-height: 116px !important;
+                    flex: 0 0 116px !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    box-sizing: border-box !important;
+                    overflow: visible !important;
+                }
+
+                .colorhunt-waiting-room.ch-uniform-mobile-scale
+                .ch-waiting-timing > section {
+                    position: relative !important;
+                    display: grid !important;
+                    grid-template-rows: 17px 28px !important;
+                    align-content: start !important;
+                    row-gap: 4px !important;
+                    width: 100% !important;
+                    height: 55px !important;
+                    min-height: 55px !important;
+                    max-height: 55px !important;
+                    margin: 0 !important;
+                    padding: 3px 7px !important;
+                    box-sizing: border-box !important;
+                    overflow: hidden !important;
+                }
+
+                .colorhunt-waiting-room.ch-uniform-mobile-scale
+                .ch-waiting-timing-title {
+                    position: static !important;
+                    inset: auto !important;
+                    transform: none !important;
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: space-between !important;
+                    gap: 5px !important;
+                    width: 100% !important;
+                    height: 17px !important;
+                    min-height: 17px !important;
+                    max-height: 17px !important;
+                    margin: 0 !important;
+                    padding: 0 1px !important;
+                    box-sizing: border-box !important;
+                    line-height: 17px !important;
+                    overflow: visible !important;
+                }
+
+                .colorhunt-waiting-room.ch-uniform-mobile-scale
+                .ch-waiting-timing-title span,
+                .colorhunt-waiting-room.ch-uniform-mobile-scale
+                .ch-waiting-timing-title b {
+                    font-size: 12px !important;
+                    line-height: 17px !important;
+                    white-space: nowrap !important;
+                }
+
+                .colorhunt-waiting-room.ch-uniform-mobile-scale
+                .ch-waiting-time-options {
+                    position: static !important;
+                    inset: auto !important;
+                    transform: none !important;
+                    display: grid !important;
+                    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+                    gap: 5px !important;
+                    width: 100% !important;
+                    height: 28px !important;
+                    min-height: 28px !important;
+                    max-height: 28px !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    box-sizing: border-box !important;
+                }
+
+                .colorhunt-waiting-room.ch-uniform-mobile-scale
+                .ch-waiting-time-options button {
+                    width: 100% !important;
+                    height: 28px !important;
+                    min-height: 28px !important;
+                    max-height: 28px !important;
+                    margin: 0 !important;
+                    padding: 0 4px !important;
+                    box-sizing: border-box !important;
+                    font-size: 11.5px !important;
+                    line-height: 1 !important;
+                }
+
+                /*
+                 * Explicitly preserve the existing widths of the two role buttons,
+                 * main READY button and footer buttons. No width rules here.
+                 */
+            `;
+
+            document.head.appendChild(
+                style,
+            );
         }
 
         const waitingFooter =
