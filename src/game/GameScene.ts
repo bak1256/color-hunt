@@ -973,14 +973,15 @@ export class GameScene extends Phaser.Scene {
             this.game.canvas.getBoundingClientRect();
 
         /* V1010452B_HIDER_SKILL_PICKER_VISIBLE_POSITION: keep picker above the Paint palette instead of behind it. */
+        /* V1010452C_HIDER_SKILL_PICKER_RESPONSIVE_POLISH / RESPONSIVE_POSITION */
         const pickerLeft =
             this.mobileControlsEnabled
                 ? canvasRect.left + canvasRect.width * 0.50
-                : canvasRect.left + Math.max(130, canvasRect.width * 0.18);
+                : canvasRect.left + Math.max(150, canvasRect.width * 0.17);
 
         const pickerTop =
             canvasRect.top + canvasRect.height *
-                (this.mobileControlsEnabled ? 0.56 : 0.60);
+                (this.mobileControlsEnabled ? 0.58 : 0.47);
 
         root.style.cssText = [
             'position:fixed',
@@ -990,10 +991,10 @@ export class GameScene extends Phaser.Scene {
             'transform:' + (this.mobileControlsEnabled ? 'translateX(-50%)' : 'translateX(-50%)'),
             'z-index:2147483646',
             'display:flex',
-            'gap:8px',
-            'padding:7px',
-            'border-radius:16px',
-            'background:rgba(15,18,28,.82)',
+            'gap:' + (this.mobileControlsEnabled ? '4px' : '8px'),
+            'padding:' + (this.mobileControlsEnabled ? '5px' : '7px'),
+            'border-radius:' + (this.mobileControlsEnabled ? '12px' : '16px'),
+            'background:rgba(15,18,28,.84)',
             'backdrop-filter:blur(8px)',
             'box-shadow:0 6px 22px rgba(0,0,0,.28)',
             'font-family:inherit',
@@ -1009,8 +1010,10 @@ export class GameScene extends Phaser.Scene {
             const title = document.createElement('div');
             title.textContent = '😈 도발 스킬 선택';
             title.style.cssText =
-                'width:100%;color:#fff;font-size:12px;font-weight:1000;' +
-                'text-align:center;margin:0 0 4px 0;';
+                'width:100%;color:#fff;font-size:' +
+                (this.mobileControlsEnabled ? '10px' : '12px') +
+                ';font-weight:1000;text-align:center;margin:0 0 ' +
+                (this.mobileControlsEnabled ? '2px' : '4px') + ' 0;';
             root.appendChild(title);
             const items: Array<{
                 id: 'paintball' | 'laser';
@@ -1032,9 +1035,9 @@ export class GameScene extends Phaser.Scene {
                     'background:' + (selected ? 'rgba(255,224,102,.22)' : 'rgba(255,255,255,.09)'),
                     'color:#fff',
                     'font-weight:900',
-                    'font-size:14px',
-                    'padding:9px 12px',
-                    'border-radius:12px',
+                    'font-size:' + (this.mobileControlsEnabled ? '11px' : '14px'),
+                    'padding:' + (this.mobileControlsEnabled ? '6px 8px' : '9px 12px'),
+                    'border-radius:' + (this.mobileControlsEnabled ? '9px' : '12px'),
                     'cursor:pointer',
                     'white-space:nowrap',
                     this.localPaintReady ? 'opacity:.55' : 'opacity:1'
@@ -1052,8 +1055,12 @@ export class GameScene extends Phaser.Scene {
             const tag = document.createElement('div');
             tag.textContent = 'SKILL';
             tag.style.cssText =
-                'position:absolute;top:-9px;left:12px;background:#fff;color:#111;' +
-                'font-size:9px;font-weight:1000;padding:2px 6px;border-radius:999px;';
+                'position:absolute;top:' + (this.mobileControlsEnabled ? '-7px' : '-9px') +
+                ';left:12px;background:#fff;color:#111;font-size:' +
+                (this.mobileControlsEnabled ? '8px' : '9px') +
+                ';font-weight:1000;padding:' +
+                (this.mobileControlsEnabled ? '1px 5px' : '2px 6px') +
+                ';border-radius:999px;';
             root.appendChild(tag);
         };
 
@@ -56852,10 +56859,17 @@ const roomPlayers =
         this.phase = 'paint';
 
         /* V1010452_HIDER_SKILL_PICKER: create picker after Paint/role state settles. */
-        this.time.delayedCall(80, () => this.createHiderSkillPicker());
-        this.time.delayedCall(420, () => this.createHiderSkillPicker());
-        this.time.delayedCall(900, () => this.createHiderSkillPicker());
-        this.time.delayedCall(1600, () => this.createHiderSkillPicker());
+        /* V1010452C_HIDER_SKILL_PICKER_RESPONSIVE_POLISH / INTRO_SAFE_DELAY
+         * Mobile role/tutorial card owns the opening seconds of Paint.
+         * Delay the skill picker until that card has had time to clear.
+         */
+        if (this.mobileControlsEnabled) {
+            this.time.delayedCall(2600, () => this.createHiderSkillPicker());
+            this.time.delayedCall(3400, () => this.createHiderSkillPicker());
+        } else {
+            this.time.delayedCall(120, () => this.createHiderSkillPicker());
+            this.time.delayedCall(500, () => this.createHiderSkillPicker());
+        }
 
         this.time.delayedCall(260, () => {
             if (this.phase === 'paint') this.showFirstRoleGuide();
