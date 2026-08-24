@@ -1,0 +1,224 @@
+#root {
+  width: 100%;
+}
+
+.app {
+  width: min(1100px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 24px 0 30px;
+}
+
+.game-header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.game-header h1 {
+  margin: 0;
+  color: #315c46;
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: clamp(36px, 7vw, 72px);
+  font-weight: 950;
+  line-height: 0.9;
+  letter-spacing: -0.055em;
+  text-shadow:
+    0 2px 0 #ffffff,
+    2px 0 0 #ffffff,
+    -2px 0 0 #ffffff,
+    0 -2px 0 #ffffff,
+    3px 4px 0 rgb(72 111 81 / 12%);
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  color: #718b7a;
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.ammo {
+  display: none;
+}
+
+.game-container {
+  overflow: hidden;
+  width: 100%;
+  border: 2px solid #496a58;
+  border-radius: 16px;
+  background: #eef7df;
+  box-shadow:
+    0 10px 0 rgb(77 107 83 / 10%),
+    0 22px 48px rgb(69 91 72 / 22%);
+}
+
+.game-container canvas {
+  display: block;
+}
+
+.game-footer {
+  display: none;
+}
+
+@media (max-width: 600px) {
+  .app {
+    width: min(100%, calc(100% - 12px));
+    padding: 8px 0 12px;
+  }
+
+  .game-header {
+    align-items: start;
+    margin-bottom: 8px;
+  }
+
+  .game-header h1 {
+    font-size: clamp(30px, 11vw, 50px);
+  }
+
+  .eyebrow {
+    margin-bottom: 5px;
+    font-size: 10px;
+  }
+
+  .game-container {
+    border-radius: 12px;
+  }
+}
+
+
+/* v0.10.10.116 — mobile is game-first */
+html.colorhunt-mobile .app {
+  width: 100vw;
+  height: var(--ch-viewport-height);
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+html.colorhunt-mobile .game-header,
+html.colorhunt-mobile .game-footer {
+  display: none !important;
+}
+
+html.colorhunt-mobile .game-container {
+  width: 100vw;
+  height: var(--ch-viewport-height);
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 0;
+  background: #0d1711;
+  box-shadow: none;
+}
+
+html.colorhunt-mobile .game-container canvas {
+  display: block;
+  max-width: 100vw !important;
+  max-height: var(--ch-viewport-height) !important;
+  margin: auto !important;
+}
+
+/* v0.10.10.191 — mobile viewport must never inherit document-flow offsets */
+html.colorhunt-mobile .app,
+html.colorhunt-mobile .game-container {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+}
+
+
+/* v0.10.10.192: active mobile paint strokes must never be stolen by the DOM palette. */
+.colorhunt-paint-dock--paint-pass-through {
+  pointer-events: none !important;
+}
+
+
+/* V101023812_DESKTOP_FIXED_FIRST_VIEWPORT */
+/*
+ * Desktop lobby/game shell stability
+ * ----------------------------------
+ * Phaser is authored at 960x540 (16:9). Previously the desktop
+ * .game-container had width but no explicit aspect-ratio/height.
+ * Phaser.Scale.FIT therefore participated in document-flow measurement while
+ * the page itself could still scroll. Scroll/viewport callbacks could then
+ * re-measure the canvas, making the map appear to slowly resize underneath
+ * the fixed DOM lobby.
+ *
+ * Desktop now has one stable first-screen geometry:
+ * - document does not vertically scroll
+ * - app width also respects available viewport height
+ * - game container owns an explicit 16:9 box from the first layout pass
+ * - canvas fills that box and no longer changes merely because page scroll did
+ *
+ * Touch/mobile/fold rules are intentionally untouched.
+ */
+@media (pointer: fine) and (min-width: 769px) {
+  .app {
+    /*
+     * Reserve ~126px for top/bottom padding + eyebrow/title/header gap.
+     * On normal desktop monitors the existing 1100px cap still wins.
+     * On a short laptop window, width shrinks just enough to keep the complete
+     * 16:9 game inside one viewport instead of creating a tiny page scrollbar.
+     */
+    width: min(
+      1100px,
+      calc(100% - 32px),
+      calc((100dvh - 126px) * 16 / 9)
+    ) !important;
+
+    min-width: 0;
+    min-height: 100dvh;
+    height: 100dvh;
+    margin: 0 auto;
+    padding: 16px 0 12px !important;
+
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+
+    overflow: hidden;
+  }
+
+  .game-header {
+    flex: 0 0 auto;
+    margin-bottom: 12px !important;
+  }
+
+  .game-container {
+    flex: 0 0 auto;
+    width: 100% !important;
+    height: auto !important;
+    aspect-ratio: 16 / 9;
+    min-width: 0;
+    min-height: 0;
+    max-width: 100%;
+    max-height: calc(100dvh - 126px);
+
+    margin: 0 auto;
+    overflow: hidden !important;
+    contain: layout paint;
+  }
+
+  .game-container canvas {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 100% !important;
+    max-height: 100% !important;
+    margin: 0 !important;
+  }
+}
