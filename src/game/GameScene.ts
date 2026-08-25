@@ -40912,6 +40912,32 @@ this.networkUnsubscribers.push(
     }
 
     private syncPhaseMusic(): void {
+
+        /*
+         * V1010455L_FORCE_TACTICAL_BGM_TRANSITION
+         * Sniper Support is a GLOBAL late-game music state. No normal phase
+         * sync is allowed to resurrect Hunt BGM while it is active.
+         */
+        if (
+            this.sniperTacticalBgmActive
+        ) {
+            this.huntMusic?.stop();
+            this.paintMusic?.stop();
+            this.lobbyMusic?.stop();
+            this.backgroundMusic?.stop();
+
+            if (
+                this.audioUnlocked &&
+                this.bgmEnabled &&
+                this.sniperTacticalMusic &&
+                !this.sniperTacticalMusic.isPlaying
+            ) {
+                this.sniperTacticalMusic.play();
+            }
+
+            return;
+        }
+
         if (
             !this.audioUnlocked ||
             !this.bgmEnabled
@@ -57133,32 +57159,39 @@ const roomPlayers =
 
     /* V1010392C_FIX_CURRENT_BUILD_4_ERRORS */
     private startSniperTacticalBgm(): void {
+        /*
+         * V1010455L_FORCE_TACTICAL_BGM_TRANSITION
+         * Set the global tactical state FIRST. If the network packet arrives
+         * before browser audio unlock, unlockGameAudio()/syncPhaseMusic() can
+         * still honor it later instead of losing the one activation event.
+         */
+        this.sniperTacticalBgmActive =
+            true;
+
         if (
-            this.sniperTacticalBgmActive ||
             !this.audioUnlocked ||
             !this.bgmEnabled
         ) {
             return;
         }
 
-        /*
-         * V1010455K_GLOBAL_TACTICAL_BGM_SCOPE_VICTORY_AUDIO
-         * Network sniper-state is broadcast to every client. Therefore every
-         * player switches to the same tactical score, while this singleton guard
-         * guarantees Hunter 2+ cannot stack/phase two copies on one client.
-         */
-        this.sniperTacticalBgmActive =
-            true;
-
         this.huntMusic?.stop();
         this.paintMusic?.stop();
         this.lobbyMusic?.stop();
         this.backgroundMusic?.stop();
 
-        if (
-            this.sniperTacticalMusic &&
-            !this.sniperTacticalMusic.isPlaying
-        ) {
+        if (this.sniperTacticalMusic) {
+            if (
+                this.sniperTacticalMusic.isPlaying
+            ) {
+                return;
+            }
+
+            /*
+             * Force a clearly audible transition from the beginning instead of
+             * inheriting any stale playback position.
+             */
+            this.sniperTacticalMusic.stop();
             this.sniperTacticalMusic.play();
         }
 
