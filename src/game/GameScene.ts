@@ -58436,9 +58436,20 @@ const roomPlayers =
             const safeHoleRadius =
                 Math.max(
                     8,
-                    holeRadius,
+                    holeRadius -
+                        (
+                            this.mobileControlsEnabled
+                                ? 2
+                                : 0
+                        ),
                 );
 
+            /*
+             * V1010455E_MOBILE_SNIPER_SCOPE_ALPHA_HOLE
+             * Explicit alpha mask:
+             *   rgba(...,0) = completely remove backdrop blur in the lens
+             *   rgba(...,1) = keep backdrop blur outside the lens
+             */
             const scopeHoleMask =
                 'radial-gradient(circle at ' +
                 String(
@@ -58452,24 +58463,24 @@ const roomPlayers =
                         holeY,
                     ),
                 ) +
-                'px, transparent 0 ' +
+                'px, rgba(0,0,0,0) 0 ' +
                 String(
                     Math.round(
                         safeHoleRadius,
                     ),
                 ) +
-                'px, transparent ' +
+                'px, rgba(0,0,0,0) ' +
                 String(
                     Math.round(
                         safeHoleRadius +
                             1,
                     ),
                 ) +
-                'px, #000 ' +
+                'px, rgba(0,0,0,1) ' +
                 String(
                     Math.round(
                         safeHoleRadius +
-                            3,
+                            2,
                     ),
                 ) +
                 'px 100%)';
@@ -58479,6 +58490,20 @@ const roomPlayers =
 
             blurLayer.style.webkitMaskImage =
                 scopeHoleMask;
+
+            /*
+             * V1010455E_MOBILE_SNIPER_SCOPE_ALPHA_HOLE
+             * Force alpha semantics instead of browser-dependent luminance/match-source.
+             */
+            blurLayer.style.setProperty(
+                'mask-mode',
+                'alpha',
+            );
+
+            blurLayer.style.setProperty(
+                '-webkit-mask-source-type',
+                'alpha',
+            );
 
             blurLayer.style.maskComposite =
                 '';
