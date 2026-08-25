@@ -824,6 +824,8 @@ export class GameScene extends Phaser.Scene {
     private backgroundMusic!: Phaser.Sound.BaseSound;
     private lobbyMusic!: Phaser.Sound.BaseSound;
     private huntMusic!: Phaser.Sound.BaseSound;
+    /* V1010455K_GLOBAL_TACTICAL_BGM_SCOPE_VICTORY_AUDIO: one dedicated global Sniper Support score per client. */
+    private sniperTacticalMusic?: Phaser.Sound.BaseSound;
     private paintSound!: Phaser.Sound.BaseSound;
     private paintMusic!: Phaser.Sound.BaseSound;
     private victorySound!: Phaser.Sound.BaseSound;
@@ -7442,6 +7444,15 @@ private timerText!: Phaser.GameObjects.Text;
             'hunt-tension-bgm',
             'assets/audio/hunt-tension-bgm.wav',
         );
+
+        /*
+         * V1010455K_GLOBAL_TACTICAL_BGM_SCOPE_VICTORY_AUDIO
+         * Generated locally by this patch: original loop, no external asset/license dependency.
+         */
+        this.load.audio(
+            'sniper-tactical-bgm',
+            'assets/audio/sniper-tactical-bgm.wav',
+        );
         /*
          * V1010454_SNIPER_CINEMATIC_CORE
          * CC0 source selected for the project:
@@ -8382,6 +8393,15 @@ private timerText!: Phaser.GameObjects.Text;
                 'hunt-tension-bgm',
                 {
                     volume: 0.40,
+                    loop: true,
+                },
+            );
+
+        this.sniperTacticalMusic =
+            this.sound.add(
+                'sniper-tactical-bgm',
+                {
+                    volume: 0.50,
                     loop: true,
                 },
             );
@@ -46100,6 +46120,15 @@ const roomPlayers =
             this.setHunterCamoPaletteVisible(false);
             this.hideLegacySinglePlayerActors();
 
+            /*
+             * V1010455K_GLOBAL_TACTICAL_BGM_SCOPE_VICTORY_AUDIO
+             * Round result owns audio immediately: no helicopter rotor or
+             * tactical loop may leak under the victory countdown/fanfare.
+             */
+            this.stopSniperTacticalBgm(
+                false,
+            );
+
             if (
                 this.phase !== 'finished' &&
                 this.audioUnlocked
@@ -56844,7 +56873,7 @@ const roomPlayers =
         this.sniperScopeRadius =
             this.mobileControlsEnabled
                 ? 194
-                : 250;
+                : 325;
 
         this.sniperScopeScreenX =
             this.gameWidth /
@@ -57113,30 +57142,33 @@ const roomPlayers =
         }
 
         /*
-         * V1010392_SNIPER_MOBILE_THERMAL_AUDIO_BLUR_INTRO_BUTTON: no oscillator hum. All clients hear the real rotor WAV
-         * plus the stable Hunt BGM. Singleton sounds prevent stacking.
+         * V1010455K_GLOBAL_TACTICAL_BGM_SCOPE_VICTORY_AUDIO
+         * Network sniper-state is broadcast to every client. Therefore every
+         * player switches to the same tactical score, while this singleton guard
+         * guarantees Hunter 2+ cannot stack/phase two copies on one client.
          */
-        this.sniperTacticalBgmActive = true;
-        this.startSniperHelicopterAudio();
+        this.sniperTacticalBgmActive =
+            true;
 
-        if (this.huntMusic) {
-            (
-                this.huntMusic as unknown as {
-                    setVolume?: (
-                        volume: number,
-                    ) => unknown;
-                    volume?: number;
-                }
-            ).setVolume?.(
-                0.48,
-            );
-            if (!this.huntMusic.isPlaying) {
-                this.huntMusic.play();
-            }
+        this.huntMusic?.stop();
+        this.paintMusic?.stop();
+        this.lobbyMusic?.stop();
+        this.backgroundMusic?.stop();
+
+        if (
+            this.sniperTacticalMusic &&
+            !this.sniperTacticalMusic.isPlaying
+        ) {
+            this.sniperTacticalMusic.play();
         }
+
+        this.startSniperHelicopterAudio();
     }
 
-    private stopSniperTacticalBgm(): void {
+    private stopSniperTacticalBgm(
+        restorePhaseMusic =
+            true,
+    ): void {
         this.sniperTacticalOscillators
             .forEach(
                 (oscillator) => {
@@ -57175,17 +57207,10 @@ const roomPlayers =
             this.sniperHelicopterSound.stop();
         }
 
-        if (this.huntMusic) {
-            (
-                this.huntMusic as unknown as {
-                    setVolume?: (
-                        volume: number,
-                    ) => unknown;
-                    volume?: number;
-                }
-            ).setVolume?.(
-                0.40,
-            );
+        if (
+            this.sniperTacticalMusic?.isPlaying
+        ) {
+            this.sniperTacticalMusic.stop();
         }
 
         const wasActive =
@@ -57195,6 +57220,7 @@ const roomPlayers =
             false;
 
         if (
+            restorePhaseMusic &&
             wasActive &&
             this.phase === 'hunt' &&
             this.bgmEnabled
