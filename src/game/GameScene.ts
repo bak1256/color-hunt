@@ -19632,26 +19632,53 @@ this.networkUnsubscribers.push(
         const mobile =
             this.mobileControlsEnabled;
 
+        /*
+         * V1010455I_FART_HINT_TWO_LINE_I18N_LAYOUT: every locale is authored as exactly two short lines.
+         */
         const fartHintCopy =
             (
                 {
                     ko: mobile
-                        ? '못 찾겠다면 💨 방구 버튼으로 탐지!\n코로 찾는 것도 실력이지!'
+                        ? '못 찾겠다면 💨 방구로 탐지!\n코로 찾는 것도 실력이지!'
                         : '못 찾겠다면 💨 SPACE로 탐지!\n코로 찾는 것도 실력이지!',
                     ja: mobile
-                        ? '見つからないなら 💨 おならボタンで探知！\n鼻で探すのも立派な技術！'
-                        : '見つからないなら 💨 SPACEでおなら探知！\n鼻で探すのも立派な技術！',
+                        ? '見つからないなら 💨 おならで探知！\n鼻で探すのも立派な技術！'
+                        : '見つからないなら 💨 SPACEで探知！\n鼻で探すのも立派な技術！',
                     en: mobile
-                        ? 'Can’t find them? 💨 Use FART DETECT!\nSometimes your nose finds the clue!'
-                        : 'Can’t find them? 💨 Press SPACE to detect!\nSometimes your nose finds the clue!',
+                        ? 'Can’t find them? 💨 Use FART DETECT!\nYour nose can find clues too!'
+                        : 'Can’t find them? 💨 Press SPACE to detect!\nYour nose can find clues too!',
                     zh: mobile
-                        ? '找不到吗？💨 用放屁按钮探测！\n用鼻子找也是本事！'
-                        : '找不到吗？💨 按 SPACE 放屁探测！\n用鼻子找也是本事！',
+                        ? '找不到吗？💨 用放屁探测！\n用鼻子找也是本事！'
+                        : '找不到吗？💨 按 SPACE 探测！\n用鼻子找也是本事！',
                 } as const
             )[getLanguage()];
 
         bubble.textContent =
             fartHintCopy;
+
+        const fartHintLanguage =
+            getLanguage();
+
+        const fartHintDesktopWidth =
+            fartHintLanguage === 'ja' ||
+            fartHintLanguage === 'en'
+                ? '390px'
+                : '360px';
+
+        const fartHintFontSize =
+            mobile
+                ? (
+                    fartHintLanguage === 'ja' ||
+                    fartHintLanguage === 'en'
+                        ? '12px'
+                        : '13px'
+                )
+                : (
+                    fartHintLanguage === 'ja' ||
+                    fartHintLanguage === 'en'
+                        ? '15px'
+                        : '16px'
+                );
 
         Object.assign(
             bubble.style,
@@ -19661,14 +19688,14 @@ this.networkUnsubscribers.push(
                 pointerEvents: 'none',
                 boxSizing: 'border-box',
                 width: mobile
-                    ? '248px'
-                    : '360px',
+                    ? '258px'
+                    : fartHintDesktopWidth,
                 maxWidth: mobile
-                    ? '248px'
-                    : '360px',
+                    ? '258px'
+                    : fartHintDesktopWidth,
                 padding: mobile
-                    ? '10px 12px'
-                    : '11px 16px',
+                    ? '9px 10px'
+                    : '11px 12px',
                 borderRadius: '18px',
                 border:
                     '2px solid rgba(255,255,255,.78)',
@@ -19677,13 +19704,14 @@ this.networkUnsubscribers.push(
                 color: '#fff8d9',
                 fontFamily:
                     '"Arial Black", "Noto Sans KR", Arial, sans-serif',
-                fontSize: mobile
-                    ? '13px'
-                    : '16px',
+                fontSize:
+                    fartHintFontSize,
                 fontWeight: '900',
                 lineHeight: '1.28',
                 letterSpacing: '-0.25px',
                 whiteSpace: 'pre-line',
+                wordBreak: 'keep-all',
+                overflowWrap: 'normal',
                 textAlign: 'center',
                 textShadow:
                     '0 2px 2px rgba(0,0,0,.85)',
