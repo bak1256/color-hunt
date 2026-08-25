@@ -1,3 +1,4 @@
+/* V1010470_FRESH_HANDOFF_RELEASE: successful fresh reconnect no longer waits on stale Room.leave(); transport gate releases as soon as replacement local state is authoritative. */
 /* V1010468D_REPAIR_RESUME_FUNCTIONS: restores lifecycle function declarations accidentally removed by 468c while preserving v468 fast reconnect behavior. */
 /* V1010468_FAST_MOBILE_FOREGROUND_RECONNECT: Lobby now probes immediately on mobile foreground; confirmed onDrop gets an 850ms same-session grace then bounded stable-clientKey handoff; post-leave retries/convergence are faster. */
 /* V1010452_SKILL_SYSTEM_FOUNDATION: client skill selection/state API. */
@@ -1678,11 +1679,26 @@ private async attemptFreshRejoin(
         },
       );
 
-      try {
-        await sourceRoom.leave();
-      } catch {
-        // The old half-open transport may already be dead.
-      }
+      /*
+       * V1010470_FRESH_HANDOFF_RELEASE
+       *
+       * The replacement Room is already attached and authoritative here.
+       * NEVER await cleanup of the stale half-open source Room:
+       * mobile WebViews can leave that Promise pending for many seconds.
+       *
+       * While this function waits, freshRejoinInFlight stays true, which makes
+       * isGameplayTransportStable() false. That blocks sendMove()/aim/fire even
+       * though the new Room is alive. Local prediction then moves only on this
+       * screen while every other client sees the player frozen.
+       *
+       * Server clientKey handoff already supersedes the old session, so cleanup
+       * is best-effort and must not be on the critical recovery path.
+       */
+      void sourceRoom
+        .leave()
+        .catch(() => {
+          // Old half-open transport may already be dead or never fully settle.
+        });
 
       /* V101023840D_MOBILE_RECONNECT_CONVERGENCE: wait for authoritative replacement session */
       let authorityAttempts = 0;
@@ -1699,7 +1715,14 @@ private async attemptFreshRejoin(
           this.requestLobbySnapshot();
           this.requestPaintReadyState();
           this.requestRoundPaintState();
+
+          /*
+           * V1010470_FRESH_HANDOFF_RELEASE / AUTHORITATIVE_RELEASE
+           * The replacement session is now real. Clear the recovery transport
+           * gate immediately so movement replication resumes for other clients.
+           */
           this.clearConnectionIssue();
+          this.freshRejoinInFlight = false;
           return;
         }
 
