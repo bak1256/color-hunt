@@ -7077,6 +7077,23 @@ export class GameScene extends Phaser.Scene {
             'sniper-helicopter-rotor',
             'assets/audio/helicopter-rotor.wav',
         );
+
+        this.load.on(
+            'loaderror',
+            (
+                failedFile:
+                    Phaser.Loader.File,
+            ) => {
+                if (
+                    failedFile.key ===
+                    'sniper-helicopter-rotor'
+                ) {
+                    console.warn(
+                        '[Color Hunt] optional sniper helicopter audio failed to load; continuing without it.',
+                    );
+                }
+            },
+        );
         this.load.audio(
             'paint-dab',
             'assets/audio/paint-dab.wav',
@@ -7994,15 +8011,11 @@ export class GameScene extends Phaser.Scene {
                 },
             );
 
-        this.sniperHelicopterSound =
-            this.sound.add(
-                'sniper-helicopter-rotor',
-                {
-                    volume: 0.48,
-                    loop: true,
-                },
-            );
-
+        /*
+         * V1010454B_SNIPER_AUDIO_LAZY_SAFE
+         * Helicopter audio is created lazily only when Sniper Mode actually
+         * starts. A missing/failed optional SFX asset must NEVER block Lobby.
+         */
         this.paintSound =
             this.sound.add(
                 'paint-dab',
@@ -55148,13 +55161,49 @@ const roomPlayers =
 
         this.createSniperHelicopter();
 
+        /*
+         * V1010454B_SNIPER_AUDIO_LAZY_SAFE
+         * Optional cinematic audio must be fail-open:
+         * gameplay/camera/sniper mechanics continue even if the asset is absent.
+         */
         if (
             this.audioUnlocked &&
-            this.bgmEnabled &&
-            this.sniperHelicopterSound &&
-            !this.sniperHelicopterSound.isPlaying
+            this.bgmEnabled
         ) {
-            this.sniperHelicopterSound.play();
+            try {
+                const hasRotorAudio =
+                    this.cache.audio.exists(
+                        'sniper-helicopter-rotor',
+                    );
+
+                if (
+                    hasRotorAudio &&
+                    !this.sniperHelicopterSound
+                ) {
+                    this.sniperHelicopterSound =
+                        this.sound.add(
+                            'sniper-helicopter-rotor',
+                            {
+                                volume: 0.48,
+                                loop: true,
+                            },
+                        );
+                }
+
+                if (
+                    this.sniperHelicopterSound &&
+                    !this.sniperHelicopterSound
+                        .isPlaying
+                ) {
+                    this.sniperHelicopterSound
+                        .play();
+                }
+            } catch (error) {
+                console.warn(
+                    '[Color Hunt] optional sniper helicopter audio unavailable',
+                    error,
+                );
+            }
         }
 
         const camera = this.cameras.main;
