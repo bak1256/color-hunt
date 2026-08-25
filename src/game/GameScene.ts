@@ -1,3 +1,7 @@
+/* V1010477H_REMOVE_DEAD_SNIPER_SUPPORT_STATE: remove obsolete write-only sniper support state and reset writes; keep 477e UI behavior unchanged. */
+/* V1010477G_RESTORE_SNIPER_SUPPORT_FIELDS: restore sniper support state fields still referenced by reset logic. */
+/* V1010477F_SNIPER_BUILD_REPAIR: restore sniper helpers/field removed by prior patch drift and remove obsolete unused fields. */
+/* V1010477E_SNIPER_UI_BRACE_PARSER: sniper methods replaced by signature + true brace-depth parsing; formatting-independent. */
 /* V1010476_JAPANESE_MAIN_LOBBY_TEXT_FIT: Japanese main-lobby start title and avatar-edit button fit without clipping. */
 /* V1010475_MOBILE_PAINT_UX_POLISH: compact mobile Paint Assist modal, exact finger pipette touch/preview/sample alignment, vivid Paint Help, no Precision Brush hint cards. */
 /* V1010474B_STANDALONE_MOBILE_PAINT_UX: standalone cumulative patch: Paint READY debounce, chat STOP, solid paint controls, 5-level Paint Assist, synchronized finger eyedropper, instant/middle-grip Precision Brush, Hunt cleanup. */
@@ -896,6 +900,7 @@ export class GameScene extends Phaser.Scene {
     private sniperActive = false;
     private sniperAvailable = false;
     private sniperReadyAt = 0;
+
     private sniperButton?: Phaser.GameObjects.Container;
     private sniperButtonBg?: Phaser.GameObjects.Rectangle;
     private sniperButtonText?: Phaser.GameObjects.Text;
@@ -906,6 +911,7 @@ export class GameScene extends Phaser.Scene {
     /* V1010454_SNIPER_CINEMATIC_CORE */
     /* V1010454A_SNIPER_UNUSED_FIELDS_FIX */
     private sniperRadioText?: Phaser.GameObjects.Text;
+    private sniperRadioLastSecond = -1;
     private sniperCinematicActive = false;
     private sniperHelicopter?: Phaser.GameObjects.Container;
     private sniperHelicopterRotorTween?: Phaser.Tweens.Tween;
@@ -41927,8 +41933,6 @@ this.networkUnsubscribers.push(
         this.exitSniperCinematic();
         this.sniperActive = false;
         this.sniperAvailable = false;
-        this.sniperSupportAvailableSince = 0;
-        this.sniperSupportExpired = false;
         this.sniperReadyAt = 0;
         this.sniperHelicopterArrived = false;
         this.sniperRadioText?.setVisible(false);
@@ -56620,155 +56624,133 @@ const roomPlayers =
     private ensureSniperSupportUi(): void {
         if (this.sniperButton) return;
 
-        /* V1010392_SNIPER_MOBILE_THERMAL_AUDIO_BLUR_INTRO_BUTTON: support button uses same scale as pre-button radio copy. */
-        const supportButtonWidth =
+        /* V1010477E_SNIPER_UI_BRACE_PARSER: obvious, tactile sniper-mode action. */
+        const sniperButtonWidth =
             this.mobileControlsEnabled
-                ? 176
-                : 204;
-        const supportButtonHeight =
-            this.mobileControlsEnabled ? 42 : 48;
+                ? 214
+                : 198;
+
+        const sniperButtonHeight =
+            this.mobileControlsEnabled
+                ? 62
+                : 54;
 
         /*
-         * V1010455F_DESKTOP_BLUR_AND_SAFE_SUPPORT_BUTTON
-         * Desktop support action lives in the right HUD rail instead of
-         * overlapping the player's normal shotgun aim area.
+         * Mobile: move away from the center/avatar so it reads as a HUD button.
          */
-        /*
-         * V1010455H_FIX_DESKTOP_SCOPE_ALIGNMENT_RESTORE_SUPPORT_BUTTON: restore original under-character position.
-         */
-        const supportButtonX =
-            this.gameWidth / 2;
+        const sniperButtonX =
+            this.mobileControlsEnabled
+                ? this.gameWidth -
+                    sniperButtonWidth / 2 -
+                    18
+                : this.gameWidth / 2;
 
-        const supportButtonY =
-            this.gameHeight / 2 + 94;
+        const sniperButtonY =
+            this.mobileControlsEnabled
+                ? 142
+                : 116;
 
         const bg =
             this.add.rectangle(
                 0,
                 0,
-                supportButtonWidth,
-                supportButtonHeight,
-                0x0b1715,
-                this.mobileControlsEnabled
-                    ? 0.82
-                    : 0.62,
+                sniperButtonWidth,
+                sniperButtonHeight,
+                0xd94b3d,
+                0.98,
             )
                 .setStrokeStyle(
-                    2,
-                    0x9fe7b5,
-                    0.95,
+                    4,
+                    0xffef9a,
+                    1,
                 );
 
-        const tacticalCorners =
-            this.add.graphics();
+        const language =
+            getLanguage();
 
-        tacticalCorners
-            .lineStyle(
-                3,
-                0xd8ffe3,
-                0.92,
-            );
-
-        const w = supportButtonWidth / 2;
-        const h = supportButtonHeight / 2;
-        const c = this.mobileControlsEnabled ? 9 : 10;
-
-        tacticalCorners.lineBetween(-w, -h, -w + c, -h);
-        tacticalCorners.lineBetween(-w, -h, -w, -h + c);
-        tacticalCorners.lineBetween(w, -h, w - c, -h);
-        tacticalCorners.lineBetween(w, -h, w, -h + c);
-        tacticalCorners.lineBetween(-w, h, -w + c, h);
-        tacticalCorners.lineBetween(-w, h, -w, h - c);
-        tacticalCorners.lineBetween(w, h, w - c, h);
-        tacticalCorners.lineBetween(w, h, w, h - c);
+        const sniperButtonLabel =
+            language === 'ja'
+                ? '🎯 狙撃モード\nタップして切替'
+                : language === 'en'
+                    ? '🎯 SNIPER MODE\nTAP TO SWITCH'
+                    : language === 'zh'
+                        ? '🎯 狙击模式\n点击切换'
+                        : '🎯 저격 모드\n눌러서 전환';
 
         const label =
             this.add.text(
                 0,
-                0,
-                '저격 지원 가능',
+                -1,
+                sniperButtonLabel,
                 {
                     fontFamily:
-                        '"Arial Black", "Noto Sans KR", Arial, sans-serif',
+                        'Arial, sans-serif',
                     fontSize:
                         this.mobileControlsEnabled
-                            ? '16px'
-                            : '20px',
+                            ? '15px'
+                            : '14px',
                     fontStyle:
                         'bold',
                     color:
-                        '#ffd85a',
+                        '#ffffff',
                     stroke:
-                        '#111111',
+                        '#4b110d',
                     strokeThickness:
-                        5,
+                        3,
                     align:
                         'center',
+                    lineSpacing:
+                        2,
                 },
             )
-                .setOrigin(0.5)
-                .setShadow(
-                    0,
-                    2,
-                    '#000000',
-                    3,
-                    false,
-                    true,
-                );
+                .setOrigin(0.5);
+
+        const tapBadge =
+            this.add.text(
+                sniperButtonWidth / 2 - 13,
+                -sniperButtonHeight / 2 + 10,
+                '!',
+                {
+                    fontFamily:
+                        'Arial, sans-serif',
+                    fontSize:
+                        '13px',
+                    fontStyle:
+                        'bold',
+                    color:
+                        '#472100',
+                    backgroundColor:
+                        '#ffe86a',
+                    padding: {
+                        left: 5,
+                        right: 5,
+                        top: 1,
+                        bottom: 1,
+                    },
+                },
+            )
+                .setOrigin(0.5);
 
         const button =
             this.add.container(
-                supportButtonX,
-                supportButtonY,
+                sniperButtonX,
+                sniperButtonY,
                 [
                     bg,
-                    tacticalCorners,
                     label,
+                    tapBadge,
                 ],
             )
                 .setDepth(25020)
                 .setScrollFactor(0)
                 .setSize(
-                    supportButtonWidth,
-                    supportButtonHeight,
+                    sniperButtonWidth,
+                    sniperButtonHeight,
                 )
                 .setInteractive({
-                    useHandCursor:
-                        true,
+                    useHandCursor: true,
                 })
                 .setVisible(false);
-
-        button.on(
-            'pointerover',
-            () => {
-                this.tweens.killTweensOf(button);
-
-                if (
-                    this.sniperAvailable &&
-                    !this.sniperActive
-                ) {
-                    bg.setFillStyle(
-                        0x173428,
-                        this.mobileControlsEnabled
-                            ? 0.92
-                            : 0.76,
-                    );
-                }
-            },
-        );
-
-        button.on(
-            'pointerout',
-            () => {
-                this.tweens.killTweensOf(button);
-                bg.setFillStyle(
-                    0x0b1715,
-                    this.mobileControlsEnabled
-                        ? 0.82
-                        : 0.62,
-                );
-            },
-        );
 
         button.on(
             'pointerdown',
@@ -56778,6 +56760,7 @@ const roomPlayers =
             ) => {
                 pointer.event
                     ?.preventDefault?.();
+
                 pointer.event
                     ?.stopPropagation?.();
 
@@ -56790,36 +56773,8 @@ const roomPlayers =
 
                 this.unlockGameAudio();
 
-                /*
-                 * V1010457_SNIPER_FINAL_FLOW_REWORK
-                 * Consume the support-button click completely.
-                 * Local movement locks NOW instead of waiting for network RTT.
-                 */
-                this.sniperButtonPressBlockUntil =
-                    Date.now() +
-                    650;
-
-                this.networkPlayerManager
-                    .setLocalHunterSpeedMultiplier(
-                        0,
-                    );
-
-                this.networkPlayerManager
-                    .setLocalMovementHardLocked(
-                        true,
-                    );
-
-                this.mobileMoveBase
-                    ?.setVisible(false);
-                this.mobileMoveKnob
-                    ?.setVisible(false);
-                this.mobileMoveLabel
-                    ?.setVisible(false);
-
                 multiplayerClient
-                    .sendSniperToggle(
-                        true,
-                    );
+                    .sendSniperToggle(true);
             },
         );
 
@@ -56833,41 +56788,79 @@ const roomPlayers =
         this.fixedHudBaseTransforms.set(
             button,
             {
-                x:
-                    supportButtonX,
-                y:
-                    supportButtonY,
-                scaleX:
-                    1,
-                scaleY:
-                    1,
+                x: sniperButtonX,
+                y: sniperButtonY,
+                scaleX: 1,
+                scaleY: 1,
             },
         );
 
         /*
-         * Text only. No blue panel, no radio box.
-         * Exact visual language of the main Hunt intro.
+         * Slow breathing pulse = clear "press me" affordance.
          */
+        this.tweens.add({
+            targets:
+                button,
+            scaleX:
+                1.045,
+            scaleY:
+                1.045,
+            duration:
+                620,
+            yoyo:
+                true,
+            repeat:
+                -1,
+            ease:
+                'Sine.easeInOut',
+        });
+
+        button.on(
+            'pointerover',
+            () => {
+                bg.setFillStyle(
+                    0xee5c48,
+                    1,
+                );
+            },
+        );
+
+        button.on(
+            'pointerout',
+            () => {
+                bg.setFillStyle(
+                    0xd94b3d,
+                    0.98,
+                );
+            },
+        );
+
         this.sniperRadioText =
             this.add.text(
                 this.gameWidth / 2,
-                this.gameHeight / 2 + 60,
+                106,
                 '',
                 {
                     fontFamily:
-                        '"Arial Black", "Noto Sans KR", Arial, sans-serif',
+                        'monospace',
                     fontSize:
-                        this.mobileControlsEnabled
-                            ? '16px'
-                            : '20px',
+                        '15px',
                     fontStyle:
                         'bold',
                     color:
-                        '#ffd85a',
+                        '#d8f3ff',
+                    backgroundColor:
+                        'rgba(6, 20, 30, 0.76)',
                     stroke:
-                        '#111111',
+                        '#06131c',
                     strokeThickness:
-                        5,
+                        4,
+                    padding: {
+                        left: 14,
+                        right: 14,
+                        top: 8,
+                        bottom: 8,
+                    },
                     align:
                         'center',
                 },
@@ -56875,30 +56868,15 @@ const roomPlayers =
                 .setOrigin(0.5)
                 .setScrollFactor(0)
                 .setDepth(25019)
-                .setShadow(
-                    0,
-                    3,
-                    '#000000',
-                    4,
-                    false,
-                    true,
-                )
                 .setVisible(false);
 
         this.fixedHudBaseTransforms.set(
             this.sniperRadioText,
             {
-                x:
-                    this.gameWidth /
-                    2,
-                y:
-                    this.gameHeight /
-                        2 +
-                    94,
-                scaleX:
-                    1,
-                scaleY:
-                    1,
+                x: this.gameWidth / 2,
+                y: 106,
+                scaleX: 1,
+                scaleY: 1,
             },
         );
 
@@ -56928,19 +56906,25 @@ const roomPlayers =
             ) => {
                 if (
                     !this.sniperActive ||
-                    !this.sniperCinematicActive ||
-                    !this.sniperScopeInteractive ||
-                    this.sniperScopeIntroTween?.isPlaying() ||
-                    this.phase !==
-                        'hunt' ||
+                    this.phase !== 'hunt'
+                ) {
+                    return;
+                }
+
+                if (
                     this.mobileControlsEnabled
                 ) {
                     return;
                 }
 
-                this.syncSniperScopeToPointer(
-                    pointer,
-                    true,
+                const world =
+                    pointer.positionToCamera(
+                        this.cameras.main,
+                    ) as Phaser.Math.Vector2;
+
+                this.setSniperAimWorld(
+                    world.x,
+                    world.y,
                 );
             },
         );
@@ -56953,9 +56937,7 @@ const roomPlayers =
             ) => {
                 if (
                     !this.sniperActive ||
-                    !this.sniperScopeInteractive ||
-                    this.phase !==
-                        'hunt'
+                    this.phase !== 'hunt'
                 ) {
                     return;
                 }
@@ -56966,20 +56948,22 @@ const roomPlayers =
                     return;
                 }
 
-                /*
-                 * V1010455O_PC_SNIPER_FIRE_LOW_MID_TACTICAL_BGM
-                 * Never let the hidden support-button bounds eat a PC sniper shot.
-                 * The active optic owns pointer-down completely.
-                 */
+                if (
+                    this.sniperButton
+                        ?.getBounds()
+                        .contains(
+                            pointer.x,
+                            pointer.y,
+                        )
+                ) {
+                    return;
+                }
+
                 pointer.event
                     ?.preventDefault?.();
+
                 pointer.event
                     ?.stopPropagation?.();
-
-                this.syncSniperScopeToPointer(
-                    pointer,
-                    true,
-                );
 
                 this.fireSniperAtCurrentAim();
             },
@@ -57050,6 +57034,68 @@ const roomPlayers =
     }
 
     /* V1010456A_REMOVE_UNUSED_SET_SNIPER_AIM_WORLD: obsolete helper removed; syncSniperScopeToPointer is authoritative. */
+
+    private getSniperRadioMessage(
+        seconds: number,
+    ): string {
+        const language =
+            getLanguage();
+
+        if (language === 'ja') {
+            if (seconds >= 4) return '狙撃支援まであと5秒...';
+            if (seconds === 3) return '支援要請中...';
+            if (seconds === 2) return '狙撃支援 待機中...';
+            return '支援チーム 接近中...';
+        }
+
+        if (language === 'en') {
+            if (seconds >= 4) return 'Sniper support in 5 seconds...';
+            if (seconds === 3) return 'Requesting support...';
+            if (seconds === 2) return 'Sniper support standing by...';
+            return 'Support team approaching...';
+        }
+
+        if (language === 'zh') {
+            if (seconds >= 4) return '狙击支援还有5秒...';
+            if (seconds === 3) return '正在请求支援...';
+            if (seconds === 2) return '狙击支援待命中...';
+            return '支援小队接近中...';
+        }
+
+        if (seconds >= 4) return '지원 요청 가능까지 5초...';
+        if (seconds === 3) return '지원 요청 바람...';
+        if (seconds === 2) return '저격 지원 대기 중...';
+        return '지원팀 접근 중...';
+    }
+
+    private setSniperAimWorld(
+        x: number,
+        y: number,
+    ): void {
+        this.sniperAimWorldX =
+            Phaser.Math.Clamp(
+                x,
+                0,
+                this.gameWidth,
+            );
+
+        this.sniperAimWorldY =
+            Phaser.Math.Clamp(
+                y,
+                0,
+                this.gameHeight,
+            );
+
+        this.drawLocalSniperScope(
+            this.sniperAimWorldX,
+            this.sniperAimWorldY,
+        );
+
+        multiplayerClient.sendSniperAim(
+            this.sniperAimWorldX,
+            this.sniperAimWorldY,
+        );
+    }
 
     private fireSniperAtCurrentAim(): void {
         if (!this.sniperScopeInteractive) {
@@ -59813,21 +59859,183 @@ const roomPlayers =
         this.syncSniperScopeDom();
     }
 
-    private drawRemoteSniperScope(aim: NetworkSniperAim): void {
-        let g = this.remoteSniperScopes.get(aim.sessionId);
+    private drawRemoteSniperScope(
+        aim: NetworkSniperAim,
+    ): void {
+        let g =
+            this.remoteSniperScopes
+                .get(
+                    aim.sessionId,
+                );
+
         if (!g) {
-            g = this.add.graphics().setDepth(1190);
-            this.remoteSniperScopes.set(aim.sessionId, g);
+            g =
+                this.add.graphics()
+                    .setDepth(1190);
+
+            this.remoteSniperScopes
+                .set(
+                    aim.sessionId,
+                    g,
+                );
         }
+
         g.clear();
-        g.fillStyle(0xff2436, 0.07);
-        g.fillCircle(aim.x, aim.y, 54);
-        g.lineStyle(2, 0xff4d5d, 0.62);
-        g.strokeCircle(aim.x, aim.y, 54);
-        g.lineBetween(aim.x - 64, aim.y, aim.x - 42, aim.y);
-        g.lineBetween(aim.x + 42, aim.y, aim.x + 64, aim.y);
-        g.lineBetween(aim.x, aim.y - 64, aim.x, aim.y - 42);
-        g.lineBetween(aim.x, aim.y + 42, aim.x, aim.y + 64);
+
+        const radius =
+            62;
+
+        const armOuter =
+            76;
+
+        const armInner =
+            18;
+
+        /*
+         * V1010477E_SNIPER_UI_BRACE_PARSER / HIDER_DANGER_SCOPE
+         */
+        g.fillStyle(
+            0xff1d2f,
+            0.13,
+        );
+
+        g.fillCircle(
+            aim.x,
+            aim.y,
+            radius - 3,
+        );
+
+        /* Thick black outer silhouette. */
+        g.lineStyle(
+            8,
+            0x050505,
+            0.90,
+        );
+
+        g.strokeCircle(
+            aim.x,
+            aim.y,
+            radius + 2,
+        );
+
+        /* Hot red danger ring. */
+        g.lineStyle(
+            4,
+            0xff3348,
+            1,
+        );
+
+        g.strokeCircle(
+            aim.x,
+            aim.y,
+            radius,
+        );
+
+        /* Black crosshair backing. */
+        g.lineStyle(
+            7,
+            0x050505,
+            0.92,
+        );
+
+        g.lineBetween(
+            aim.x - armOuter,
+            aim.y,
+            aim.x - armInner,
+            aim.y,
+        );
+
+        g.lineBetween(
+            aim.x + armInner,
+            aim.y,
+            aim.x + armOuter,
+            aim.y,
+        );
+
+        g.lineBetween(
+            aim.x,
+            aim.y - armOuter,
+            aim.x,
+            aim.y - armInner,
+        );
+
+        g.lineBetween(
+            aim.x,
+            aim.y + armInner,
+            aim.x,
+            aim.y + armOuter,
+        );
+
+        /* Red crosshair layer. */
+        g.lineStyle(
+            3,
+            0xff4053,
+            1,
+        );
+
+        g.lineBetween(
+            aim.x - armOuter,
+            aim.y,
+            aim.x - armInner,
+            aim.y,
+        );
+
+        g.lineBetween(
+            aim.x + armInner,
+            aim.y,
+            aim.x + armOuter,
+            aim.y,
+        );
+
+        g.lineBetween(
+            aim.x,
+            aim.y - armOuter,
+            aim.x,
+            aim.y - armInner,
+        );
+
+        g.lineBetween(
+            aim.x,
+            aim.y + armInner,
+            aim.x,
+            aim.y + armOuter,
+        );
+
+        /* Center bullseye. */
+        g.lineStyle(
+            5,
+            0x050505,
+            0.96,
+        );
+
+        g.strokeCircle(
+            aim.x,
+            aim.y,
+            10,
+        );
+
+        g.lineStyle(
+            2,
+            0xffd7dc,
+            1,
+        );
+
+        g.strokeCircle(
+            aim.x,
+            aim.y,
+            7,
+        );
+
+        g.fillStyle(
+            0xff3348,
+            1,
+        );
+
+        g.fillCircle(
+            aim.x,
+            aim.y,
+            3,
+        );
     }
 
     private showSniperImpact(shot: NetworkSniperFired): void {
@@ -60269,8 +60477,6 @@ const roomPlayers =
     }
 
     /* V1010460_SNIPER_OVERWATCH_UI_SCOPE_INPUT_TIMEOUT */
-    private sniperSupportAvailableSince = 0;
-    private sniperSupportExpired = false;
     private sniperScopeStripCameras: Phaser.Cameras.Scene2D.Camera[] = [];
 
     private refreshSniperSupportUi(): void {
@@ -60278,8 +60484,6 @@ const roomPlayers =
             this.phase === 'hunt' &&
             (
                 !this.sniperButton ||
-                !this.sniperButtonText ||
-                !this.sniperButtonBg ||
                 !this.sniperRadioText
             )
         ) {
@@ -60304,110 +60508,82 @@ const roomPlayers =
             this.networkPlayerManager
                 ?.getLocalRole?.();
 
-        const localIsHunter =
-            localRole === 'hunter' ||
-            managerLocalRole === 'hunter';
+        const hunter =
+            this.phase === 'hunt' &&
+            (
+                localRole === 'hunter' ||
+                managerLocalRole === 'hunter'
+            );
 
         const remainingMs =
             Math.max(
                 0,
                 this.phaseEndTime -
-                    this.time.now,
+                this.time.now,
             );
 
-        const hunter =
-            this.phase === 'hunt' &&
-            localIsHunter;
+        this.sniperAvailable =
+            hunter &&
+            remainingMs <= 30000;
 
         const warning =
             hunter &&
-            remainingMs <= 35_000 &&
-            remainingMs > 30_000;
-
-        const rawAvailable =
-            hunter &&
-            remainingMs <= 30_000 &&
-            !this.sniperActive;
-
-        if (
-            !hunter ||
-            remainingMs > 30_000
-        ) {
-            this.sniperSupportAvailableSince =
-                0;
-            this.sniperSupportExpired =
-                false;
-        }
-
-        if (
-            rawAvailable &&
-            !this.sniperSupportAvailableSince &&
-            !this.sniperSupportExpired
-        ) {
-            this.sniperSupportAvailableSince =
-                this.time.now;
-        }
-
-        let available =
-            rawAvailable &&
-            !this.sniperSupportExpired;
-
-        let blinkVisible =
-            true;
-
-        if (
-            available &&
-            this.sniperSupportAvailableSince > 0
-        ) {
-            const age =
-                this.time.now -
-                    this.sniperSupportAvailableSince;
-
-            if (age >= 15_000) {
-                this.sniperSupportExpired =
-                    true;
-                available =
-                    false;
-            } else if (age >= 10_000) {
-                blinkVisible =
-                    Math.floor(
-                        (age - 10_000) /
-                            260,
-                    ) %
-                        2 ===
-                    0;
-            }
-        }
-
-        this.sniperAvailable =
-            available;
+            remainingMs <= 35000 &&
+            remainingMs > 30000;
 
         if (warning) {
             const seconds =
-                Phaser.Math.Clamp(
+                Math.max(
+                    1,
                     Math.ceil(
                         (
                             remainingMs -
-                            30_000
+                            30000
                         ) /
-                            1000,
+                        1000,
                     ),
-                    1,
-                    5,
                 );
+
+            if (
+                seconds !==
+                this.sniperRadioLastSecond
+            ) {
+                this.sniperRadioLastSecond =
+                    seconds;
+
+                this.sniperRadioText
+                    .setText(
+                        this.getSniperRadioMessage(
+                            seconds,
+                        ),
+                    );
+
+                this.tweens
+                    .killTweensOf(
+                        this.sniperRadioText,
+                    );
+
+                this.sniperRadioText
+                    .setScale(0.96)
+                    .setAlpha(0.2);
+
+                this.tweens.add({
+                    targets:
+                        this.sniperRadioText,
+                    scale:
+                        1,
+                    alpha:
+                        1,
+                    duration:
+                        150,
+                });
+            }
+
+            this.sniperRadioText
+                .setVisible(true);
 
             this.sniperButton
                 .setVisible(false);
-
-            this.sniperRadioText
-                .setVisible(true)
-                .setAlpha(1)
-                .setScale(1)
-                .setText(
-                    '저격 지원 요청 가능까지 ' +
-                    String(seconds) +
-                    '초...',
-                );
 
             return;
         }
@@ -60415,33 +60591,46 @@ const roomPlayers =
         this.sniperRadioText
             .setVisible(false);
 
-        this.tweens.killTweensOf(
-            this.sniperButton,
-        );
+        if (
+            !this.sniperAvailable ||
+            this.sniperActive
+        ) {
+            this.sniperButton
+                .setVisible(false);
+        } else {
+            const language =
+                getLanguage();
 
-        this.sniperButton
-            .setDepth(25002)
-            .setVisible(
-                !this.sniperActive &&
-                available &&
-                blinkVisible,
-            );
+            this.sniperButtonText
+                .setText(
+                    language === 'ja'
+                        ? '🎯 狙撃モード\nタップして切替'
+                        : language === 'en'
+                            ? '🎯 SNIPER MODE\nTAP TO SWITCH'
+                            : language === 'zh'
+                                ? '🎯 狙击模式\n点击切换'
+                                : '🎯 저격 모드\n눌러서 전환',
+                );
 
-        if (!available) {
-            return;
+            this.sniperButtonBg
+                .setFillStyle(
+                    0xd94b3d,
+                    0.98,
+                )
+                .setStrokeStyle(
+                    4,
+                    0xffef9a,
+                    1,
+                );
+
+            this.sniperButton
+                .setDepth(25020)
+                .setVisible(true);
         }
 
-        this.sniperButtonText
-            .setText(
-                '저격 지원 가능',
-            );
-
-        this.sniperButtonBg
-            .setFillStyle(
-                0x0b1715,
-                this.mobileControlsEnabled
-                    ? 0.82
-                    : 0.62,
+        this.sniperScope
+            ?.setVisible(
+                this.sniperActive,
             );
     }
 
