@@ -6904,7 +6904,6 @@ private timerText!: Phaser.GameObjects.Text;
      * Accident #2 -> permanent floor 72 (one fart to next accident)
      * Accident #3 -> FART locked for the rest of the round.
      */
-    private practiceFartAccidentCount = 0;
     private practiceFartLocked = false;
 
     /*
@@ -18432,26 +18431,9 @@ this.networkUnsubscribers.push(
             );
     }
 
+    /* V1010386B_REMOVE_UNUSED_PRACTICE_FART_ACCIDENT_COUNT: obsolete 3->2->1 Practice accident counter removed. */
     private getPracticeFartFloor(): number {
-        if (
-            this.practiceFartLocked ||
-            this.practiceFartAccidentCount >= 3
-        ) {
-            return 100;
-        }
-
-        if (
-            this.practiceFartAccidentCount === 2
-        ) {
-            return 72;
-        }
-
-        if (
-            this.practiceFartAccidentCount === 1
-        ) {
-            return 36;
-        }
-
+        /* V1010386_CLIENT_SIMPLE_THREE_FART_CYCLE: every accident resets to a fresh three-fart cycle. */
         return 0;
     }
 
@@ -18490,34 +18472,11 @@ this.networkUnsubscribers.push(
                 );
 
             /*
-             * During the 14-second punishment GAS visibly drains 100 -> 0.
+             * V1010386_CLIENT_SIMPLE_THREE_FART_CYCLE
+             * Third fart already triggered the accident.
+             * Keep GAS at 0 for the entire 5-second debuff.
              */
-            const postPoopFloor =
-                this.practicePoopGasTarget;
-
-            const poopProgress =
-                Phaser.Math.Clamp(
-                    this.practicePoopRemainingMs /
-                        this.practicePoopDurationMs,
-                    0,
-                    1,
-                );
-
-            /*
-             * V1010302_CLIENT_UI_FART_PROGRESSION: accident animation still starts at MAX, but now drains to:
-             * #1 -> 36, #2 -> 72, #3 -> 0 + permanent lock.
-             */
-            this.fartGauge =
-                Phaser.Math.Clamp(
-                    postPoopFloor +
-                        (
-                            100 -
-                            postPoopFloor
-                        ) *
-                            poopProgress,
-                    0,
-                    100,
-                );
+            this.fartGauge = 0;
 
             /*
              * Keep legacy/shared values mirrored only for HUD/comedy helpers.
@@ -18586,11 +18545,7 @@ this.networkUnsubscribers.push(
             this.updateFartHud();
         }
 
-        if (
-            this.practiceFartLocked
-        ) {
-            return;
-        }
+        /* V1010386_CLIENT_SIMPLE_THREE_FART_CYCLE: no permanent fart lock between accidents. */
 
         if (
             Phaser.Input.Keyboard.JustDown(
@@ -18736,29 +18691,11 @@ this.networkUnsubscribers.push(
         }
 
         if (willPoop) {
-            this.practiceFartAccidentCount =
-                Math.min(
-                    3,
-                    this.practiceFartAccidentCount +
-                        1,
-                );
-
-            if (
-                this.practiceFartAccidentCount >=
-                3
-            ) {
-                this.practiceFartLocked =
-                    true;
-            }
-
-            this.practicePoopGasTarget =
-                this.practiceFartAccidentCount ===
-                    1
-                    ? 36
-                    : this.practiceFartAccidentCount ===
-                        2
-                        ? 72
-                        : 100;
+            /*
+             * V1010386_CLIENT_SIMPLE_THREE_FART_CYCLE: accident completes one cycle; immediately prepare the next.
+             */
+            this.practiceFartLocked = false;
+            this.practicePoopGasTarget = 0;
 
             /*
              * Start the REAL Practice state BEFORE any visual helper runs.
@@ -18774,7 +18711,7 @@ this.networkUnsubscribers.push(
                 this.practicePoopUntil;
 
             this.fartGauge =
-                100;
+                0;
 
             this.practiceLastPoopTrailAt =
                 0;
@@ -18932,7 +18869,7 @@ this.networkUnsubscribers.push(
             0;
 
         this.fartGauge =
-            this.practicePoopGasTarget;
+            0;
 
         this.practiceLastPoopTrailAt =
             0;
@@ -19823,7 +19760,6 @@ this.networkUnsubscribers.push(
 
         this.fartGauge = 0;
         this.lastFartUseAt = 0;
-        this.practiceFartAccidentCount = 0;
         this.practiceFartLocked = false;
         this.practicePoopGasTarget = 0;
         this.practicePoopRemainingMs = 0;
@@ -61747,27 +61683,8 @@ this.weaponHeat =
                 localPoopRemainingMs >
                 0
             ) {
-                const progress =
-                    Phaser.Math.Clamp(
-                        localPoopRemainingMs /
-                            5_000,
-                        0,
-                        1,
-                    );
-
-                /*
-                 * V1010307_CLIENT_FOLD_WAITING_AUTHORITATIVE_GAS:
-                 * first accident  100 -> 36
-                 * second accident 100 -> 72
-                 * third accident  100 -> 100
-                 */
-                this.fartGauge =
-                    target +
-                    (
-                        100 -
-                        target
-                    ) *
-                        progress;
+                /* V1010386_CLIENT_SIMPLE_THREE_FART_CYCLE: GAS stays at zero for the whole 5s debuff. */
+                this.fartGauge = 0;
 
                 this.updateFartHud();
             } else {
