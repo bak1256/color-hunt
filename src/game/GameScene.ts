@@ -6463,28 +6463,32 @@ private timerText!: Phaser.GameObjects.Text;
             this.mobileFartLabel
                 ?.setVisible(false);
 
+            /*
+             * V1010391C_MOBILE_SCOPE_CLEAR_CIRCLE_UI_HOLES: original Phaser controls, highest in-canvas HUD depth.
+             * Blur holes above guarantee these remain visually sharp.
+             */
             this.mobileAimBase
                 ?.setVisible(true)
-                .setDepth(28000);
+                .setDepth(60000);
 
             this.mobileAimKnob
                 ?.setVisible(true)
-                .setDepth(28001);
+                .setDepth(60001);
 
             this.mobileAimLabel
                 ?.setText(
                     tr('조준'),
                 )
                 .setVisible(true)
-                .setDepth(28002);
+                .setDepth(60002);
 
             this.mobileFireButton
                 ?.setVisible(true)
-                .setDepth(28000);
+                .setDepth(60000);
 
             this.mobileFireLabel
                 ?.setVisible(true)
-                .setDepth(28002);
+                .setDepth(60002);
 
             /*
              * V1010389B_MOBILE_SNIPER_OPTIONAL_UI_GUARDS
@@ -13199,8 +13203,15 @@ const ribbon =
          * wins over older stylesheet sizes without moving its anchor.
          */
         button.style.setProperty('box-sizing', 'border-box', 'important');
+        /*
+         * V1010391C_MOBILE_SCOPE_CLEAR_CIRCLE_UI_HOLES: gameplay BGM / Controls exact footprint parity.
+         */
+        button.style.setProperty('width', '92px', 'important');
         button.style.setProperty('min-width', '92px', 'important');
+        button.style.setProperty('max-width', '92px', 'important');
+        button.style.setProperty('height', '34px', 'important');
         button.style.setProperty('min-height', '34px', 'important');
+        button.style.setProperty('max-height', '34px', 'important');
         button.style.setProperty('padding', '6px 10px', 'important');
         button.style.setProperty('font-size', '11px', 'important');
         button.style.setProperty('line-height', '1', 'important');
@@ -40497,6 +40508,60 @@ this.networkUnsubscribers.push(
         button.className =
             'ch-unified-bgm';
 
+        /*
+         * V1010391C_MOBILE_SCOPE_CLEAR_CIRCLE_UI_HOLES: exact parity with the Controls button.
+         */
+        button.style.setProperty(
+            'width',
+            '92px',
+            'important',
+        );
+        button.style.setProperty(
+            'min-width',
+            '92px',
+            'important',
+        );
+        button.style.setProperty(
+            'max-width',
+            '92px',
+            'important',
+        );
+        button.style.setProperty(
+            'height',
+            '34px',
+            'important',
+        );
+        button.style.setProperty(
+            'min-height',
+            '34px',
+            'important',
+        );
+        button.style.setProperty(
+            'max-height',
+            '34px',
+            'important',
+        );
+        button.style.setProperty(
+            'padding',
+            '6px 10px',
+            'important',
+        );
+        button.style.setProperty(
+            'font-size',
+            '11px',
+            'important',
+        );
+        button.style.setProperty(
+            'line-height',
+            '1',
+            'important',
+        );
+        button.style.setProperty(
+            'border-radius',
+            '11px',
+            'important',
+        );
+
         const refresh =
             (): void => {
                 button.textContent =
@@ -57666,9 +57731,14 @@ const roomPlayers =
          * Each Phaser camera is another scene render pass.
          * Mobile now uses ONE magnification camera; desktop keeps 32 strips.
          */
+        /*
+         * V1010391C_MOBILE_SCOPE_CLEAR_CIRCLE_UI_HOLES
+         * Mobile: 5 chord strips = circular-looking lens without returning to
+         * the expensive old 10/32-camera path.
+         */
         const stripCount =
             this.mobileControlsEnabled
-                ? 1
+                ? 5
                 : 32;
 
         const scopeZoom =
@@ -58430,13 +58500,17 @@ const roomPlayers =
              * Include the heavy rifle-optic rim in the clear hole so blur never
              * muddies the edge of the scope itself.
              */
+            /*
+             * V1010391C_MOBILE_SCOPE_CLEAR_CIRCLE_UI_HOLES: only the optical lens is sharp.
+             * The metal rim stays above blur via DOM; no oversized clear halo.
+             */
             const holeRadius =
                 this.sniperScopeRadius *
                     Math.min(
                         sx,
                         sy,
-                    ) +
-                13;
+                    ) -
+                5;
 
             const feather =
                 8;
@@ -58445,24 +58519,145 @@ const roomPlayers =
 
             if (this.mobileControlsEnabled) {
                 /*
-                 * V1010391B_RESTORE_ORIGINAL_MOBILE_SNIPER_CONTROLS_I18N
-                 * SVG mask makes three transparent holes:
-                 * scope + real AIM joystick + real red FIRE button.
+                 * V1010391C_MOBILE_SCOPE_CLEAR_CIRCLE_UI_HOLES
+                 * Important: final SVG pixels have REAL alpha holes.
+                 * That keeps the scope interior, AIM, FIRE, BGM and Controls
+                 * completely untouched by backdrop blur/dimming.
                  */
                 const aimHoleX =
                     (this.gameWidth - 170) * sx;
+
                 const fireHoleX =
                     (this.gameWidth - 64) * sx;
+
                 const controlHoleY =
                     (this.gameHeight - 150) * sy;
+
                 const controlHoleRadius =
-                    56 * Math.min(sx, sy);
+                    58 * Math.min(sx, sy);
 
                 const maskWidth =
-                    Math.max(1, Math.round(rect.width));
-                const maskHeight =
-                    Math.max(1, Math.round(rect.height));
+                    Math.max(
+                        1,
+                        Math.round(
+                            rect.width,
+                        ),
+                    );
 
+                const maskHeight =
+                    Math.max(
+                        1,
+                        Math.round(
+                            rect.height,
+                        ),
+                    );
+
+                const utilityHole =
+                    (
+                        element:
+                            HTMLElement |
+                            undefined,
+                    ): string => {
+                        if (
+                            !element ||
+                            element.style.display === 'none'
+                        ) {
+                            return '';
+                        }
+
+                        const utilityRect =
+                            element.getBoundingClientRect();
+
+                        const x =
+                            Phaser.Math.Clamp(
+                                utilityRect.left -
+                                    rect.left -
+                                    4,
+                                0,
+                                rect.width,
+                            );
+
+                        const y =
+                            Phaser.Math.Clamp(
+                                utilityRect.top -
+                                    rect.top -
+                                    4,
+                                0,
+                                rect.height,
+                            );
+
+                        const width =
+                            Math.max(
+                                0,
+                                Math.min(
+                                    utilityRect.width +
+                                        8,
+                                    rect.width -
+                                        x,
+                                ),
+                            );
+
+                        const height =
+                            Math.max(
+                                0,
+                                Math.min(
+                                    utilityRect.height +
+                                        8,
+                                    rect.height -
+                                        y,
+                                ),
+                            );
+
+                        if (
+                            width <= 0 ||
+                            height <= 0
+                        ) {
+                            return '';
+                        }
+
+                        return (
+                            '<rect x="' +
+                            String(
+                                Math.round(
+                                    x,
+                                ),
+                            ) +
+                            '" y="' +
+                            String(
+                                Math.round(
+                                    y,
+                                ),
+                            ) +
+                            '" width="' +
+                            String(
+                                Math.round(
+                                    width,
+                                ),
+                            ) +
+                            '" height="' +
+                            String(
+                                Math.round(
+                                    height,
+                                ),
+                            ) +
+                            '" rx="13" fill="black"/>'
+                        );
+                    };
+
+                const bgmHole =
+                    utilityHole(
+                        this.unifiedBgmButton,
+                    );
+
+                const controlsHole =
+                    utilityHole(
+                        this.controlsHelpButton,
+                    );
+
+                /*
+                 * Inner <mask> converts black shapes to transparent alpha in
+                 * the final SVG output. CSS then consumes that ALPHA image.
+                 */
                 const svgMask =
                     '<svg xmlns="http://www.w3.org/2000/svg" width="' +
                     String(maskWidth) +
@@ -58473,25 +58668,84 @@ const roomPlayers =
                     ' ' +
                     String(maskHeight) +
                     '">' +
+                    '<defs><mask id="m" maskUnits="userSpaceOnUse" mask-type="luminance">' +
                     '<rect width="100%" height="100%" fill="white"/>' +
-                    '<circle cx="' + String(Math.round(holeX)) +
-                    '" cy="' + String(Math.round(holeY)) +
-                    '" r="' + String(Math.round(holeRadius + feather)) +
+                    '<circle cx="' +
+                    String(
+                        Math.round(
+                            holeX,
+                        ),
+                    ) +
+                    '" cy="' +
+                    String(
+                        Math.round(
+                            holeY,
+                        ),
+                    ) +
+                    '" r="' +
+                    String(
+                        Math.round(
+                            Math.max(
+                                0,
+                                holeRadius -
+                                    5,
+                            ),
+                        ),
+                    ) +
                     '" fill="black"/>' +
-                    '<circle cx="' + String(Math.round(aimHoleX)) +
-                    '" cy="' + String(Math.round(controlHoleY)) +
-                    '" r="' + String(Math.round(controlHoleRadius)) +
+                    '<circle cx="' +
+                    String(
+                        Math.round(
+                            aimHoleX,
+                        ),
+                    ) +
+                    '" cy="' +
+                    String(
+                        Math.round(
+                            controlHoleY,
+                        ),
+                    ) +
+                    '" r="' +
+                    String(
+                        Math.round(
+                            controlHoleRadius,
+                        ),
+                    ) +
                     '" fill="black"/>' +
-                    '<circle cx="' + String(Math.round(fireHoleX)) +
-                    '" cy="' + String(Math.round(controlHoleY)) +
-                    '" r="' + String(Math.round(controlHoleRadius)) +
+                    '<circle cx="' +
+                    String(
+                        Math.round(
+                            fireHoleX,
+                        ),
+                    ) +
+                    '" cy="' +
+                    String(
+                        Math.round(
+                            controlHoleY,
+                        ),
+                    ) +
+                    '" r="' +
+                    String(
+                        Math.round(
+                            controlHoleRadius,
+                        ),
+                    ) +
                     '" fill="black"/>' +
+                    bgmHole +
+                    controlsHole +
+                    '</mask></defs>' +
+                    '<rect width="100%" height="100%" fill="white" mask="url(#m)"/>' +
                     '</svg>';
 
                 mask =
                     'url("data:image/svg+xml,' +
-                    encodeURIComponent(svgMask) +
+                    encodeURIComponent(
+                        svgMask,
+                    ) +
                     '")';
+
+                blurLayer.style.maskMode =
+                    'alpha';
             } else {
                 mask =
                     'radial-gradient(circle at ' +
