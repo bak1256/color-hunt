@@ -6892,6 +6892,8 @@ private timerText!: Phaser.GameObjects.Text;
     /* V1010389_MOBILE_SNIPER_PERFORMANCE_CONTROLS */
     private mobileSniperAimX = 0;
     private mobileSniperAimY = 0;
+    /* V1010390_MOBILE_SNIPER_SINGLE_CAMERA_SMOOTH_ZOOM_BLUR */
+    private mobileSniperScopeDirty = true;
     private readonly mobileJoystickRadius = 58;
     private mobileTouchPoints =
         new Map<number, Phaser.Math.Vector2>();
@@ -56183,6 +56185,7 @@ const roomPlayers =
 
         this.mobileSniperAimX = 0;
         this.mobileSniperAimY = 0;
+        this.mobileSniperScopeDirty = true;
 
         this.startSniperHelicopterAudio();
         this.createSniperHelicopter();
@@ -56483,9 +56486,14 @@ const roomPlayers =
                 'none';
         }
 
+        /*
+         * V1010390_MOBILE_SNIPER_SINGLE_CAMERA_SMOOTH_ZOOM_BLUR
+         * Mobile optic size restored. Performance comes from renderer cost,
+         * not from shrinking the useful search area.
+         */
         this.sniperScopeRadius =
             this.mobileControlsEnabled
-                ? 168
+                ? 194
                 : 250;
 
         this.sniperScopeScreenX =
@@ -56496,6 +56504,9 @@ const roomPlayers =
             this.gameHeight +
             this.sniperScopeRadius +
             86;
+
+        this.mobileSniperScopeDirty =
+            true;
 
         this.createSniperScopeCamera();
         this.ensureSniperScopeDom();
@@ -57448,14 +57459,19 @@ const roomPlayers =
             this.sniperScopeRadius;
 
         /*
-         * V1010389_MOBILE_SNIPER_PERFORMANCE_CONTROLS
-         * Each strip is a full Phaser camera render pass.
-         * Desktop can afford 32; mobile uses 10 (~69% fewer extra cameras).
+         * V1010390_MOBILE_SNIPER_SINGLE_CAMERA_SMOOTH_ZOOM_BLUR
+         * Each Phaser camera is another scene render pass.
+         * Mobile now uses ONE magnification camera; desktop keeps 32 strips.
          */
         const stripCount =
             this.mobileControlsEnabled
-                ? 10
+                ? 1
                 : 32;
+
+        const scopeZoom =
+            this.mobileControlsEnabled
+                ? 3.35
+                : 2.7;
 
         for (
             let index = 0;
@@ -57528,12 +57544,14 @@ const roomPlayers =
                 );
 
             camera
-                .setZoom(2.7)
+                .setZoom(
+                    scopeZoom,
+                )
                 .centerOn(
                     this.sniperAimWorldX,
                     this.sniperAimWorldY +
                         midY /
-                            2.7,
+                            scopeZoom,
                 )
                 .setBackgroundColor(
                     'rgba(0,0,0,0)',
@@ -57669,17 +57687,22 @@ const roomPlayers =
                  * on mobile GPUs. Mobile uses a cheap tactical dim; desktop keeps
                  * the full optical blur.
                  */
+                /*
+                 * V1010390_MOBILE_SNIPER_SINGLE_CAMERA_SMOOTH_ZOOM_BLUR
+                 * Mobile gets a real lightweight blur again. The major win is
+                 * 10 -> 1 extra scene render, so a 2px tactical blur is affordable.
+                 */
                 backdropFilter:
                     this.mobileControlsEnabled
-                        ? 'none'
+                        ? 'blur(2px) brightness(0.72) saturate(0.80)'
                         : 'blur(5px) brightness(0.76) saturate(0.82)',
                 webkitBackdropFilter:
                     this.mobileControlsEnabled
-                        ? 'none'
+                        ? 'blur(2px) brightness(0.72) saturate(0.80)'
                         : 'blur(5px) brightness(0.76) saturate(0.82)',
                 background:
                     this.mobileControlsEnabled
-                        ? 'rgba(2,8,10,0.10)'
+                        ? 'rgba(2,8,10,0.07)'
                         : 'rgba(2,8,10,0.08)',
                 maskRepeat:
                     'no-repeat',
@@ -58260,6 +58283,11 @@ const roomPlayers =
         const stripCount =
             this.sniperScopeStripCameras.length;
 
+        const scopeZoom =
+            this.mobileControlsEnabled
+                ? 3.35
+                : 2.7;
+
         this.sniperScopeStripCameras
             .forEach(
                 (
@@ -58325,7 +58353,7 @@ const roomPlayers =
                             x,
                             y +
                                 midY /
-                                    2.7,
+                                    scopeZoom,
                         );
                 },
             );
@@ -58572,6 +58600,12 @@ const roomPlayers =
                 7.4 *
                 frameScale;
 
+            const previousScopeX =
+                this.sniperScopeScreenX;
+
+            const previousScopeY =
+                this.sniperScopeScreenY;
+
             this.sniperScopeScreenX =
                 Phaser.Math.Clamp(
                     this.sniperScopeScreenX +
@@ -58589,6 +58623,20 @@ const roomPlayers =
                     0,
                     this.gameHeight,
                 );
+
+            if (
+                Math.abs(
+                    this.sniperScopeScreenX -
+                        previousScopeX,
+                ) > 0.01 ||
+                Math.abs(
+                    this.sniperScopeScreenY -
+                        previousScopeY,
+                ) > 0.01
+            ) {
+                this.mobileSniperScopeDirty =
+                    true;
+            }
 
             const world =
                 this.cameras.main
@@ -58626,10 +58674,25 @@ const roomPlayers =
                     );
             }
 
-            this.drawLocalSniperScope(
-                this.sniperAimWorldX,
-                this.sniperAimWorldY,
-            );
+            if (
+                this.mobileSniperScopeDirty ||
+                this.sniperScopeStripCameras.length ===
+                    0
+            ) {
+                this.drawLocalSniperScope(
+                    this.sniperAimWorldX,
+                    this.sniperAimWorldY,
+                );
+
+                this.mobileSniperScopeDirty =
+                    false;
+            } else {
+                /*
+                 * Keep timer/reload/mask fresh without rewriting the camera
+                 * viewport when the stick is idle.
+                 */
+                this.syncSniperScopeDom();
+            }
         } else if (
             this.sniperScopeInteractive &&
             !this.mobileControlsEnabled
