@@ -1,3 +1,4 @@
+/* V1010476_JAPANESE_MAIN_LOBBY_TEXT_FIT: Japanese main-lobby start title and avatar-edit button fit without clipping. */
 /* V1010475_MOBILE_PAINT_UX_POLISH: compact mobile Paint Assist modal, exact finger pipette touch/preview/sample alignment, vivid Paint Help, no Precision Brush hint cards. */
 /* V1010474B_STANDALONE_MOBILE_PAINT_UX: standalone cumulative patch: Paint READY debounce, chat STOP, solid paint controls, 5-level Paint Assist, synchronized finger eyedropper, instant/middle-grip Precision Brush, Hunt cleanup. */
 /* V1010472_MAIN_LOBBY_RECONNECT_OVERLAY_CLEANUP: public-main-lobby/Scene shutdown hard-cleans orphan reconnect DOM without changing reconnect transport behavior. */
@@ -30716,6 +30717,19 @@ this.networkUnsubscribers.push(
                 'text-align',
                 'center',
             );
+
+            if (japaneseLobby) {
+                force(editButton, 'width', '100%');
+                force(editButton, 'max-width', '100%');
+                force(editButton, 'min-width', '0');
+                force(editButton, 'padding', '5px 6px');
+                force(editButton, 'font-size', isCoarse ? '11px' : '12px');
+                force(editButton, 'white-space', 'normal');
+                force(editButton, 'overflow', 'visible');
+                force(editButton, 'word-break', 'keep-all');
+                force(editButton, 'overflow-wrap', 'anywhere');
+            }
+
             force(editButton, 'box-sizing', 'border-box');
         }
 
@@ -30795,7 +30809,9 @@ this.networkUnsubscribers.push(
             force(
                 titleRow,
                 'grid-template-columns',
-                'minmax(0, 1fr) minmax(176px, 58%)',
+                getLanguage() === 'ja'
+                    ? 'minmax(0, 1fr) minmax(168px, 54%)'
+                    : 'minmax(0, 1fr) minmax(176px, 58%)',
             );
             force(
                 titleRow,
@@ -30836,8 +30852,14 @@ this.networkUnsubscribers.push(
             force(
                 title,
                 'font-size',
-                '18px',
+                getLanguage() === 'ja'
+                    ? '15px'
+                    : '18px',
             );
+            if (getLanguage() === 'ja') {
+                force(title, 'letter-spacing', '-0.45px');
+                force(title, 'line-height', '1');
+            }
             force(
                 title,
                 'white-space',
@@ -31556,7 +31578,7 @@ this.networkUnsubscribers.push(
 
                 <section class="ch-lobby-actions">
                     <div class="ch-lobby-actions-title-row">
-                        <h2 class="${getLanguage() === 'en' ? 'ch-lobby-start-title--en' : ''}">🎮 ${tr('게임 시작하기')}</h2><!-- V1010238162_ENGLISH_LOBBY_START_FIT -->
+                        <h2 class="${getLanguage() === 'en' ? 'ch-lobby-start-title--en' : getLanguage() === 'ja' ? 'ch-lobby-start-title--ja' : ''}">🎮 ${tr('게임 시작하기')}</h2><!-- V1010476_JAPANESE_MAIN_LOBBY_TEXT_FIT -->
                         <div class="ch-lobby-inline-actions">
                             <button
                                 type="button"
@@ -31579,7 +31601,7 @@ this.networkUnsubscribers.push(
                         </div>
                         <div class="ch-lobby-profile-copy">
                             <strong>${tr('내 캐릭터')}</strong>
-                            <button type="button" class="ch-lobby-avatar-edit">
+                            <button type="button" class="ch-lobby-avatar-edit ${getLanguage() === 'ja' ? 'ch-lobby-avatar-edit--ja' : ''}">
                                 🎨 ${tr('내 캐릭터 꾸미기')}
                             </button>
                         </div>
