@@ -1,3 +1,4 @@
+/* V1010482_EMERGENCY_TRUE_SNIPER_ROLLBACK: exact rollback to known-good sniper scope; no new behavior. */
 /* V1010481H_REMOVE_FINAL_DEAD_SNIPER_HELPERS: remove final unreferenced sniper experiment helpers only. */
 /* V1010481G_REMOVE_DEAD_SNIPER_TRANSITION_HELPERS: remove only unreferenced sniper transition helpers left by reverted experiments. */
 /* V1010481F_REMOVE_UNUSED_START_SNIPER_WHOLE_MAP_ZOOM: remove dead helper left behind by reverted sniper experiments. */
@@ -56281,27 +56282,7 @@ const roomPlayers =
     }
 
     private updateAim(): void {
-        /*
-         * V1010480B_SNIPER_TRANSITION_AIM_SEAL
-         *
-         * PC's normal shotgun crosshair includes a small center circle at the
-         * mouse world point. During sniper transition it looked like a strange
-         * clear/bright circle under the incoming scope.
-         */
-        if (
-            this.sniperCinematicActive ||
-            this.sniperActive
-        ) {
-            this.aimLine
-                ?.clear()
-                .setVisible(false);
-
-            this.crosshair
-                ?.clear()
-                .setVisible(false);
-
-            return;
-        }
+        
 
         /*
          * V1010461_VICTORY_NO_AIM_LINES
@@ -57379,7 +57360,6 @@ const roomPlayers =
 
         const camera = this.cameras.main;
         this.tweens.killTweensOf(camera);
-
         this.tweens.add({
             targets: camera,
             zoom: 1,
@@ -57390,23 +57370,8 @@ const roomPlayers =
                 camera.stopFollow();
                 camera.centerOn(this.gameWidth / 2, this.gameHeight / 2);
                 this.applyFixedHudForZoom(camera.zoom);
-
-                /*
-                 * V1010481E_TRUE_ROLLBACK_SCOPE_ORDER_FIX
-                 * Draw the scope shell BEFORE creating the magnified camera.
-                 * This is the ONLY behavioral change from the old good scope.
-                 */
-                this.drawLocalSniperScope(
-                    this.sniperAimWorldX,
-                    this.sniperAimWorldY,
-                );
-
                 this.createSniperScopeCamera();
-
-                this.drawLocalSniperScope(
-                    this.sniperAimWorldX,
-                    this.sniperAimWorldY,
-                );
+                this.drawLocalSniperScope(this.sniperAimWorldX, this.sniperAimWorldY);
             },
         });
     }
@@ -57487,14 +57452,12 @@ const roomPlayers =
             this.cameras.remove(this.sniperScopeCamera);
             this.sniperScopeCamera = undefined;
         }
-
         this.sniperScopeMaskGraphics?.destroy();
         this.sniperScopeMaskGraphics = undefined;
 
         if (this.phase === 'hunt') {
             const camera = this.cameras.main;
             this.tweens.killTweensOf(camera);
-
             this.tweens.add({
                 targets: camera,
                 zoom: this.sniperSavedCameraZoom || 1.65,
@@ -58112,7 +58075,6 @@ const roomPlayers =
             false,
             'sniper-scope-camera',
         );
-
         camera.setZoom(2.55);
         camera.centerOn(this.sniperAimWorldX, this.sniperAimWorldY);
         camera.setBackgroundColor('rgba(0,0,0,0)');
@@ -58120,7 +58082,6 @@ const roomPlayers =
         const maskGraphics = this.make.graphics({ x: 0, y: 0 }, false);
         maskGraphics.fillStyle(0xffffff, 1);
         maskGraphics.fillCircle(cx, cy, radius - 3);
-
         const mask = maskGraphics.createGeometryMask();
         camera.setMask(mask);
 
@@ -58653,39 +58614,21 @@ const roomPlayers =
             shade.clear().setVisible(true);
             shade.fillStyle(0x02070b, 0.42);
             shade.fillRect(0, 0, this.gameWidth, cy - radius);
-            shade.fillRect(
-                0,
-                cy + radius,
-                this.gameWidth,
-                this.gameHeight - cy - radius,
-            );
-            shade.fillRect(
-                0,
-                cy - radius,
-                cx - radius,
-                radius * 2,
-            );
-            shade.fillRect(
-                cx + radius,
-                cy - radius,
-                this.gameWidth - cx - radius,
-                radius * 2,
-            );
+            shade.fillRect(0, cy + radius, this.gameWidth, this.gameHeight - cy - radius);
+            shade.fillRect(0, cy - radius, cx - radius, radius * 2);
+            shade.fillRect(cx + radius, cy - radius, this.gameWidth - cx - radius, radius * 2);
         }
 
         const g = this.sniperScope;
         if (!g) return;
-
         g.clear().setVisible(true);
         g.lineStyle(4, 0x101820, 0.96);
         g.strokeCircle(cx, cy, radius);
-
         g.lineStyle(1.5, 0xe7f7ff, 0.92);
         g.lineBetween(cx - radius + 12, cy, cx - 10, cy);
         g.lineBetween(cx + 10, cy, cx + radius - 12, cy);
         g.lineBetween(cx, cy - radius + 12, cx, cy - 10);
         g.lineBetween(cx, cy + 10, cx, cy + radius - 12);
-
         g.fillStyle(0xffe9b0, 0.95);
         g.fillCircle(cx, cy, 2.5);
 
