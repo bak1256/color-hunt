@@ -1940,11 +1940,23 @@ export class NetworkPlayerManager {
   }
 
   setLocalHunterSpeedMultiplier(multiplier: number): void {
-    this.localHunterSpeedMultiplier = Phaser.Math.Clamp(
-      Number.isFinite(multiplier) ? multiplier : 1,
-      0.1,
-      1,
-    );
+    /* V1010453C_SNIPER_ROLE_LOCK_FIX
+     * 0 is a deliberate hard movement lock for Sniper Mode.
+     * Existing slowdown callers keep their previous 0.1..1 clamp.
+     */
+    const normalized =
+      Number.isFinite(multiplier)
+        ? multiplier
+        : 1;
+
+    this.localHunterSpeedMultiplier =
+      normalized <= 0
+        ? 0
+        : Phaser.Math.Clamp(
+            normalized,
+            0.1,
+            1,
+          );
   }
 
   getPlayerPosition(

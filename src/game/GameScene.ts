@@ -55034,10 +55034,18 @@ const roomPlayers =
                 .getLocalPlayer()
                 ?.role;
 
+        /* V1010453C_SNIPER_ROLE_LOCK_FIX
+         * isLocalHunter() is NOT an independent fallback online: it requires
+         * BOTH manager-role and MultiplayerClient Schema-role. For the
+         * time-driven sniper HUD use the manager's own local role directly.
+         */
+        const managerLocalRole =
+            this.networkPlayerManager
+                ?.getLocalRole?.();
+
         const localIsHunter =
             localRole === 'hunter' ||
-            this.networkPlayerManager
-                ?.isLocalHunter?.() === true;
+            managerLocalRole === 'hunter';
 
         const remainingMs =
             Math.max(
