@@ -1,3 +1,4 @@
+/* V1010472_MAIN_LOBBY_RECONNECT_OVERLAY_CLEANUP: public-main-lobby/Scene shutdown hard-cleans orphan reconnect DOM without changing reconnect transport behavior. */
 /* V1010469_RECONNECT_OVERLAY_COMPLETION: reconnect notice closes from the actual gameplay movement-readiness gate instead of waiting on a lagging local-player cache. */
 /* V1010467_MOBILE_RECONNECT_WAIT_OVERLAY: persistent mobile app-switch reconnect notice stays visible until transport + local player + gameplay input are actually ready. */
 /* V1010466_LOBBY_MOBILE_RECONNECT_MOVEMENT: Lobby movement stays locally responsive across short mobile app switches; stale recovery locks are scrubbed; host-transfer toast ignores unstable reconnect handoffs. */
@@ -15784,6 +15785,11 @@ this.networkUnsubscribers.push(
         this.events.once(
             Phaser.Scenes.Events.SHUTDOWN,
             () => {
+                /*
+                 * V1010472_MAIN_LOBBY_RECONNECT_OVERLAY_CLEANUP / SCENE_SHUTDOWN
+                 * Body-level reconnect UI must never survive its owning Scene.
+                 */
+                this.clearOrphanReconnectOverlayForMainLobby();
                 this.closeMenuModal();
 
                 this.networkUnsubscribers.forEach(
@@ -35246,7 +35252,93 @@ this.networkUnsubscribers.push(
             );
     }
 
+    /*
+     * V1010472_MAIN_LOBBY_RECONNECT_OVERLAY_CLEANUP
+     *
+     * A reconnect notice belongs to a room, never to the public main lobby.
+     * Some reconnect UI was intentionally created as document.body DOM so it
+     * survives Phaser camera/layout changes. If recovery is abandoned by an
+     * explicit/terminal room exit, that DOM can otherwise outlive the Room.
+     *
+     * Keep this cleanup UI-only. It does NOT disconnect, shorten reconnect
+     * windows, alter fresh handoff, or touch normal tab/app-switch recovery.
+     */
+    private clearOrphanReconnectOverlayForMainLobby(): void {
+        const reconnectTextFragments = [
+            '게임에 재접속 중입니다',
+            '조작이 가능해질 때까지',
+            'ゲームに再接続中',
+            '操作できるようになるまで',
+            'Reconnecting to the game',
+            'until controls are available',
+            '正在重新连接游戏',
+            '请稍候，直到可以操作',
+        ];
+
+        document
+            .querySelectorAll<HTMLElement>(
+                'body *',
+            )
+            .forEach(
+                (element) => {
+                    /*
+                     * Do not touch the separate terminal-rejoin explanation
+                     * dialog ("game already started").
+                     */
+                    if (
+                        element.closest(
+                            '.colorhunt-terminal-rejoin-overlay',
+                        )
+                    ) {
+                        return;
+                    }
+
+                    const text =
+                        element.textContent ?? '';
+
+                    const isReconnectNotice =
+                        reconnectTextFragments.some(
+                            (fragment) =>
+                                text.includes(
+                                    fragment,
+                                ),
+                        );
+
+                    if (!isReconnectNotice) {
+                        return;
+                    }
+
+                    /*
+                     * Remove the highest reconnect-looking DOM owner so a card's
+                     * translucent backdrop/container does not remain behind.
+                     */
+                    const owner =
+                        element.closest<HTMLElement>(
+                            '[class*="reconnect" i], [id*="reconnect" i], [data-reconnect]',
+                        ) ??
+                        element;
+
+                    owner.remove();
+                },
+            );
+
+        /*
+         * Public lobby has no recoverable gameplay ownership. Clear only the
+         * Scene-side recovery gates so a stale timer cannot poison the next room.
+         */
+        this.reconnectGameplayLocked =
+            false;
+        this.reconnectGameplayUnlockNotBefore =
+            0;
+        this.recoveryPaintSnapshotPending =
+            false;
+        this.recoveryPaintSnapshotDeadline =
+            0;
+    }
+
     private showMainMenu(): void {
+        this.clearOrphanReconnectOverlayForMainLobby();
+
         /*
          * Public main lobby never keeps room-scoped chat.
          * This also fixes the stale chat panel left behind after a terminal
