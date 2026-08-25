@@ -8405,7 +8405,8 @@ private timerText!: Phaser.GameObjects.Text;
             this.sound.add(
                 'sniper-tactical-bgm',
                 {
-                    volume: 0.78,
+                    /* V1010455N_HIGH_INTENSITY_TACTICAL_BGM: high-intensity tactical mix */
+                    volume: 0.86,
                     loop: true,
                 },
             );
