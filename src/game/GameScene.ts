@@ -57730,6 +57730,16 @@ const roomPlayers =
                 },
             );
 
+            /*
+             * V1010455B_SNIPER_PC_MOBILE_RENDER_SPLIT_SAFE: exclude helicopter shadow/rotor child objects too.
+             */
+            if (this.sniperHelicopter) {
+                camera.ignore(
+                    this.sniperHelicopter
+                        .list,
+                );
+            }
+
             this.sniperScopeStripCameras.push(
                 camera,
             );
@@ -57835,13 +57845,16 @@ const roomPlayers =
                  * Mobile gets a real lightweight blur again. The major win is
                  * 10 -> 1 extra scene render, so a 2px tactical blur is affordable.
                  */
+                /*
+                 * V1010455B_SNIPER_PC_MOBILE_RENDER_SPLIT_SAFE: separate platform cost/appearance.
+                 */
                 backdropFilter:
                     this.mobileControlsEnabled
-                        ? 'blur(1.75px) brightness(0.72) saturate(0.80)'
+                        ? 'blur(2px) brightness(0.74) saturate(0.84)'
                         : 'blur(5px) brightness(0.76) saturate(0.82)',
                 webkitBackdropFilter:
                     this.mobileControlsEnabled
-                        ? 'blur(1.75px) brightness(0.72) saturate(0.80)'
+                        ? 'blur(2px) brightness(0.74) saturate(0.84)'
                         : 'blur(5px) brightness(0.76) saturate(0.82)',
                 background:
                     this.mobileControlsEnabled
@@ -58390,71 +58403,83 @@ const roomPlayers =
                         sx,
                         sy,
                     ) -
-                5;
+                11;
 
             /* V1010392H_REMOVE_UNUSED_FEATHER: feather removed after desktop mask cleanup. */
 
             /* V1010392D_REMOVE_UNUSED_MASK_DECLARATION: branch-local mask assignments no longer need a shared variable. */
 
-            if (this.mobileControlsEnabled) {
-                /*
-                 * V1010392_SNIPER_MOBILE_THERMAL_AUDIO_BLUR_INTRO_BUTTON: Chrome/Android-safe CSS intersect masks.
-                 * Blur stays visible everywhere except the scope and utility controls.
-                 */
-                const aimHoleX = (this.gameWidth - 170) * sx;
-                const fireHoleX = (this.gameWidth - 64) * sx;
-                const controlHoleY = (this.gameHeight - 150) * sy;
-                const controlHoleRadius = 59 * Math.min(sx, sy);
+            /*
+             * V1010455B_SNIPER_PC_MOBILE_RENDER_SPLIT_SAFE
+             *
+             * Platform split:
+             * MOBILE -> one simple radial mask; reliable on Android Chrome.
+             * DESKTOP -> one simple radial mask; never blur inside the optic.
+             */
+            const safeHoleRadius =
+                Math.max(
+                    8,
+                    holeRadius,
+                );
 
-                const circularHole = (
-                    x: number,
-                    y: number,
-                    radius: number,
-                ): string =>
-                    'radial-gradient(circle at ' +
-                    String(Math.round(x)) + 'px ' +
-                    String(Math.round(y)) + 'px, transparent 0 ' +
-                    String(Math.round(radius)) + 'px, #000 ' +
-                    String(Math.round(radius + 2)) + 'px)';
+            const scopeHoleMask =
+                'radial-gradient(circle at ' +
+                String(
+                    Math.round(
+                        holeX,
+                    ),
+                ) +
+                'px ' +
+                String(
+                    Math.round(
+                        holeY,
+                    ),
+                ) +
+                'px, transparent 0 ' +
+                String(
+                    Math.round(
+                        safeHoleRadius,
+                    ),
+                ) +
+                'px, transparent ' +
+                String(
+                    Math.round(
+                        safeHoleRadius +
+                            1,
+                    ),
+                ) +
+                'px, #000 ' +
+                String(
+                    Math.round(
+                        safeHoleRadius +
+                            3,
+                    ),
+                ) +
+                'px 100%)';
 
-                const utilityHole = (
-                    element: HTMLElement | undefined,
-                ): string | null => {
-                    if (!element) return null;
-                    const r = element.getBoundingClientRect();
-                    if (r.width <= 0 || r.height <= 0) return null;
-                    return circularHole(
-                        r.left - rect.left + r.width / 2,
-                        r.top - rect.top + r.height / 2,
-                        Math.max(r.width, r.height) / 2 + 7,
-                    );
-                };
+            blurLayer.style.maskImage =
+                scopeHoleMask;
 
-                const masks: string[] = [
-                    circularHole(holeX, holeY, Math.max(0, holeRadius)),
-                    circularHole(aimHoleX, controlHoleY, controlHoleRadius),
-                    circularHole(fireHoleX, controlHoleY, controlHoleRadius),
-                ];
+            blurLayer.style.webkitMaskImage =
+                scopeHoleMask;
 
-                const bgmMask = utilityHole(this.unifiedBgmButton);
-                const controlsMask = utilityHole(this.controlsHelpButton);
-                if (bgmMask) masks.push(bgmMask);
-                if (controlsMask) masks.push(controlsMask);
+            blurLayer.style.maskComposite =
+                '';
 
-                const joined = masks.join(', ');
-                blurLayer.style.maskImage = joined;
-                blurLayer.style.webkitMaskImage = joined;
-                blurLayer.style.maskSize = '100% 100%';
-                blurLayer.style.webkitMaskSize = '100% 100%';
-                blurLayer.style.maskPosition = '0 0';
-                blurLayer.style.webkitMaskPosition = '0 0';
-                blurLayer.style.maskComposite =
-                    Array(Math.max(0,masks.length-1)).fill('intersect').join(', ');
-                blurLayer.style.webkitMaskComposite =
-                    Array(Math.max(0,masks.length-1)).fill('source-in').join(', ');
-            } else {
-                /* V1010392G_REMOVE_UNUSED_392E_DESKTOP_MASK_VALUE: removed dead desktop radial-gradient value. */
-            }
+            blurLayer.style.webkitMaskComposite =
+                '';
+
+            blurLayer.style.maskSize =
+                '100% 100%';
+
+            blurLayer.style.webkitMaskSize =
+                '100% 100%';
+
+            blurLayer.style.maskPosition =
+                '0 0';
+
+            blurLayer.style.webkitMaskPosition =
+                '0 0';
 
             /* V1010392C_FIX_CURRENT_BUILD_4_ERRORS: mobile/desktop branches already assign maskImage. */
         }
@@ -58783,6 +58808,58 @@ const roomPlayers =
             .setLocalMovementHardLocked(
                 true,
             );
+
+        /*
+         * V1010455B_SNIPER_PC_MOBILE_RENDER_SPLIT_SAFE
+         * Once rack-in starts, Overwatch owns the main camera absolutely.
+         */
+        if (
+            this.sniperHelicopterArrived &&
+            (
+                this.sniperScopeRackInRunning ||
+                this.sniperScopeInteractive
+            )
+        ) {
+            const overwatchCamera =
+                this.cameras.main;
+
+            overwatchCamera
+                .stopFollow()
+                .removeBounds()
+                .setSize(
+                    this.gameWidth,
+                    this.gameHeight,
+                );
+
+            if (
+                Math.abs(
+                    overwatchCamera.zoom -
+                        1,
+                ) >
+                    0.0001 ||
+                Math.abs(
+                    overwatchCamera.scrollX,
+                ) >
+                    0.01 ||
+                Math.abs(
+                    overwatchCamera.scrollY,
+                ) >
+                    0.01
+            ) {
+                overwatchCamera
+                    .setZoom(
+                        1,
+                    )
+                    .setScroll(
+                        0,
+                        0,
+                    );
+
+                this.applyFixedHudForZoom(
+                    1,
+                );
+            }
+        }
 
         /*
          * V1010460_SNIPER_OVERWATCH_UI_SCOPE_INPUT_TIMEOUT
