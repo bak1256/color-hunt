@@ -1,3 +1,4 @@
+/* V1010466_LOBBY_MOBILE_RECONNECT_MOVEMENT: Lobby movement stays locally responsive across short mobile app switches; stale recovery locks are scrubbed; host-transfer toast ignores unstable reconnect handoffs. */
 /* V1010465_MOBILE_SNIPER_RECONNECT_INPUT_RECOVERY: full-screen mobile sniper tap/drag ownership + authoritative fresh-session input rebinding after app resume. */
 /* V1010451J_ASSIST_READY_FINAL_PARITY: assisted Hider publishes one complete final paint raster before READY=true, guaranteeing Hunter/Hider Hunt parity. */
 /* V1010451I_HUNTER_CARD_DIRECT_FULL_MAP_ASSET: Hunter card background uses the direct full round-map texture, never a live Hunt screenshot. */
@@ -15390,14 +15391,22 @@ this.networkUnsubscribers.push(
             multiplayerClient.onConnectionDrop(
                 () => {
                     /*
-                     * V1010373_RECONNECT_SINGLE_AUTHORITY_GAMEPLAY_LOCK / DROP_LOCK
+                     * V1010466_LOBBY_MOBILE_RECONNECT_MOVEMENT / DROP_POLICY
+                     * Lobby keeps local prediction alive during short mobile app
+                     * switches. Paint/Hunt/Countdown retain the strict lock.
                      */
+                    const lockGameplayForDrop =
+                        this.phase === 'paint' ||
+                        this.phase === 'hunt' ||
+                        this.phase === 'countdown';
+
                     this.reconnectGameplayLocked =
-                        true;
+                        lockGameplayForDrop;
 
                     this.reconnectGameplayUnlockNotBefore =
-                        this.time.now +
-                        250;
+                        lockGameplayForDrop
+                            ? this.time.now + 250
+                            : 0;
 
                     if (
                         this.input.keyboard
@@ -15431,9 +15440,15 @@ this.networkUnsubscribers.push(
                             1;
                     }
 
-                    this.showStatus(
-                        tr('연결이 불안정합니다. 재접속 중...'),
-                    );
+                    /*
+                     * Do not flash a connection-warning banner for a brief Lobby
+                     * app switch. Active gameplay still reports recovery visibly.
+                     */
+                    if (lockGameplayForDrop) {
+                        this.showStatus(
+                            tr('연결이 불안정합니다. 재접속 중...'),
+                        );
+                    }
                 },
             ),
         );
@@ -23225,6 +23240,73 @@ this.networkUnsubscribers.push(
     }
 
     private canUseRecoveredGameplayNow(): boolean {
+        /*
+         * V1010466_LOBBY_MOBILE_RECONNECT_MOVEMENT
+         * Lobby is intentionally LOCAL-PREDICTION tolerant.
+         *
+         * Mobile app switching can make Colyseus briefly report a real transport
+         * drop even when the user returns within only a few seconds. The old
+         * recovery gate froze ALL lobby movement until connectionIssueNotified
+         * cleared, while DOM buttons continued to work. That produced the exact
+         * "buttons work, joystick is dead" split.
+         *
+         * In Lobby there is no combat authority to protect. Keep the local actor
+         * movable as long as the current Room/local view still exists. Movement
+         * packets are already independently gated by MultiplayerClient, so a dead
+         * socket cannot leak invalid traffic; local prediction simply catches up
+         * after recovery.
+         */
+        if (this.phase === 'lobby') {
+            const lobbyRoom =
+                multiplayerClient.getRoom();
+
+            if (!lobbyRoom) {
+                return false;
+            }
+
+            this.networkPlayerManager
+                .syncPlayersFromCurrentRoom();
+
+            const lobbyLocalReady =
+                this.networkPlayerManager
+                    .hasPlayer(
+                        lobbyRoom.sessionId,
+                    ) ||
+                this.ensureLocalNetworkPlayer(
+                    lobbyRoom,
+                );
+
+            if (!lobbyLocalReady) {
+                return false;
+            }
+
+            /*
+             * A previous Paint/Hunt drop or a replaced Room must never poison a
+             * newly-created Lobby with stale recovery state.
+             */
+            this.recoveryPaintSnapshotPending =
+                false;
+            this.recoveryPaintSnapshotDeadline =
+                0;
+            this.reconnectGameplayLocked =
+                false;
+            this.reconnectGameplayUnlockNotBefore =
+                0;
+
+            this.networkPlayerManager
+                .setLocalMovementHardLocked(
+                    false,
+                );
+            this.networkPlayerManager
+                .setLocalHunterSpeedMultiplier(
+                    1,
+                );
+
+            this.input.enabled = true;
+
+            return true;
+        }
+
         if (
             !this.reconnectGameplayLocked
         ) {
@@ -34088,16 +34170,27 @@ this.networkUnsubscribers.push(
         const isHost =
             multiplayerClient.isHost();
 
+        /*
+         * V1010466_LOBBY_MOBILE_RECONNECT_MOVEMENT / HOST_TOAST_STABLE_BASELINE
+         * Do not treat reconnect handoff's temporary false -> true as a real
+         * host transfer. A legitimate transfer while the Room is stable still
+         * shows the toast normally.
+         */
         if (
-            this.waitingRoomLastHostState ===
-                false &&
-            isHost
+            multiplayerClient
+                .isGameplayTransportStable()
         ) {
-            this.showWaitingRoomHostTransferToast();
-        }
+            if (
+                this.waitingRoomLastHostState ===
+                    false &&
+                isHost
+            ) {
+                this.showWaitingRoomHostTransferToast();
+            }
 
-        this.waitingRoomLastHostState =
-            isHost;
+            this.waitingRoomLastHostState =
+                isHost;
+        }
 
         const localPlayer =
             multiplayerClient.getLocalPlayer();
