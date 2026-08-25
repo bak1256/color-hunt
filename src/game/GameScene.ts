@@ -8407,6 +8407,17 @@ export class GameScene extends Phaser.Scene {
         this.syncMapBackground();
 
         /*
+         * V1010453B_SNIPER_FRAME_UPDATE_FIX
+         * Sniper support availability is time-driven (35s warning / 30s ready),
+         * therefore it MUST be refreshed from the real Phaser frame update.
+         * Previous patch accidentally placed this refresh in a secondary UI
+         * routine, so no event necessarily fired when the clock crossed 35/30.
+         */
+        if (this.phase === 'hunt') {
+            this.refreshSniperSupportUi();
+        }
+
+        /*
          * V1010368_MOBILE_RENDER_BUDGET
          *
          * These are UI reconciliation/redraw paths, not gameplay simulation.
