@@ -922,6 +922,10 @@ export class GameScene extends Phaser.Scene {
     private sniperScopeDom?: HTMLDivElement;
     private sniperScopeReloadDom?: HTMLDivElement;
 
+    /* V1010387_SNIPER_SCOPE_CLIP_AND_OUTSIDE_BLUR */
+    private sniperScopeClipDom?: HTMLDivElement;
+    private sniperScopeBlurDom?: HTMLDivElement;
+
     /* V1010457_SNIPER_FINAL_FLOW_REWORK */
     private sniperButtonPressBlockUntil = 0;
 
@@ -36764,6 +36768,22 @@ this.networkUnsubscribers.push(
         const isRoundEnd =
             this.phase === 'finished';
 
+        if (isRoundEnd) {
+            /*
+             * V1010387_SNIPER_SCOPE_CLIP_AND_OUTSIDE_BLUR
+             * Victory/Game Over presentation is always clean.
+             */
+            if (this.sniperScopeClipDom) {
+                this.sniperScopeClipDom.style.display =
+                    'none';
+            }
+
+            if (this.sniperScopeBlurDom) {
+                this.sniperScopeBlurDom.style.display =
+                    'none';
+            }
+        }
+
         /*
          * V1010465_HIDE_SNIPER_SCOPE_ON_FINISHED
          *
@@ -56283,6 +56303,11 @@ const roomPlayers =
                 'none';
         }
 
+        if (this.sniperScopeClipDom) {
+            this.sniperScopeClipDom.style.display =
+                'none';
+        }
+
         this.sniperScopeRadius =
             this.mobileControlsEnabled
                 ? 188
@@ -56362,6 +56387,19 @@ const roomPlayers =
         this.sniperCinematicActive = false;
         this.sniperScopeInteractive = false;
         this.sniperHelicopterArrived = false;
+
+        /*
+         * V1010387_SNIPER_SCOPE_CLIP_AND_OUTSIDE_BLUR: remove the outside blur and clipped optical DOM immediately.
+         */
+        if (this.sniperScopeClipDom) {
+            this.sniperScopeClipDom.style.display =
+                'none';
+        }
+
+        if (this.sniperScopeBlurDom) {
+            this.sniperScopeBlurDom.style.display =
+                'none';
+        }
 
         if (this.chatRoot) {
             this.chatRoot.style.pointerEvents =
@@ -57357,6 +57395,79 @@ const roomPlayers =
             return;
         }
 
+        /*
+         * V1010387_SNIPER_SCOPE_CLIP_AND_OUTSIDE_BLUR
+         * Scope DOM now lives inside a container matching the Phaser canvas.
+         * overflow:hidden guarantees the optical body never leaks outside the
+         * actual game window even when its center reaches an edge.
+         */
+        const clipRoot =
+            document.createElement(
+                'div',
+            );
+
+        Object.assign(
+            clipRoot.style,
+            {
+                position:
+                    'fixed',
+                zIndex:
+                    '2147482500',
+                pointerEvents:
+                    'none',
+                overflow:
+                    'hidden',
+                display:
+                    'none',
+                margin:
+                    '0',
+                padding:
+                    '0',
+                border:
+                    '0',
+                background:
+                    'transparent',
+                contain:
+                    'layout paint style',
+            },
+        );
+
+        /*
+         * One masked backdrop layer:
+         * - outside scope = blurred/dimmed
+         * - circular hole = untouched/sharp Phaser scope camera
+         */
+        const blurLayer =
+            document.createElement(
+                'div',
+            );
+
+        Object.assign(
+            blurLayer.style,
+            {
+                position:
+                    'absolute',
+                inset:
+                    '0',
+                zIndex:
+                    '0',
+                pointerEvents:
+                    'none',
+                backdropFilter:
+                    'blur(5px) brightness(0.76) saturate(0.82)',
+                webkitBackdropFilter:
+                    'blur(5px) brightness(0.76) saturate(0.82)',
+                background:
+                    'rgba(2,8,10,0.08)',
+                maskRepeat:
+                    'no-repeat',
+                webkitMaskRepeat:
+                    'no-repeat',
+                willChange:
+                    'mask-image, -webkit-mask-image',
+            },
+        );
+
         const scope =
             document.createElement(
                 'div',
@@ -57366,9 +57477,9 @@ const roomPlayers =
             scope.style,
             {
                 position:
-                    'fixed',
+                    'absolute',
                 zIndex:
-                    '2147482600',
+                    '2',
                 pointerEvents:
                     'none',
                 display:
@@ -57567,23 +57678,45 @@ const roomPlayers =
             reloadTrack,
         );
 
-        document.body.appendChild(
+        clipRoot.appendChild(
+            blurLayer,
+        );
+
+        clipRoot.appendChild(
             scope,
         );
 
+        document.body.appendChild(
+            clipRoot,
+        );
+
+        this.sniperScopeClipDom =
+            clipRoot;
+
+        this.sniperScopeBlurDom =
+            blurLayer;
+
         this.sniperScopeDom =
             scope;
+
         this.sniperScopeReloadDom =
             reload;
 
         this.events.once(
             Phaser.Scenes.Events.SHUTDOWN,
             () => {
-                this.sniperScopeDom
+                this.sniperScopeClipDom
                     ?.remove();
+
+                this.sniperScopeClipDom =
+                    undefined;
+
+                this.sniperScopeBlurDom =
+                    undefined;
 
                 this.sniperScopeDom =
                     undefined;
+
                 this.sniperScopeReloadDom =
                     undefined;
             },
@@ -57617,13 +57750,58 @@ const roomPlayers =
             this.sniperScopeRadius *
             2;
 
+        const clipRoot =
+            this.sniperScopeClipDom;
+
+        const blurLayer =
+            this.sniperScopeBlurDom;
+
+        if (clipRoot) {
+            clipRoot.style.display =
+                '';
+
+            clipRoot.style.left =
+                String(
+                    Math.round(
+                        rect.left,
+                    ),
+                ) +
+                'px';
+
+            clipRoot.style.top =
+                String(
+                    Math.round(
+                        rect.top,
+                    ),
+                ) +
+                'px';
+
+            clipRoot.style.width =
+                String(
+                    Math.round(
+                        rect.width,
+                    ),
+                ) +
+                'px';
+
+            clipRoot.style.height =
+                String(
+                    Math.round(
+                        rect.height,
+                    ),
+                ) +
+                'px';
+        }
+
         scope.style.display =
             '';
 
+        /*
+         * Scope is now positioned RELATIVE to the clipped canvas root.
+         */
         scope.style.left =
             String(
                 Math.round(
-                    rect.left +
                     (
                         this.sniperScopeScreenX -
                         this.sniperScopeRadius
@@ -57636,7 +57814,6 @@ const roomPlayers =
         scope.style.top =
             String(
                 Math.round(
-                    rect.top +
                     (
                         this.sniperScopeScreenY -
                         this.sniperScopeRadius
@@ -57645,6 +57822,76 @@ const roomPlayers =
                 ),
             ) +
             'px';
+
+        if (blurLayer) {
+            const holeX =
+                this.sniperScopeScreenX *
+                sx;
+
+            const holeY =
+                this.sniperScopeScreenY *
+                sy;
+
+            /*
+             * Include the heavy rifle-optic rim in the clear hole so blur never
+             * muddies the edge of the scope itself.
+             */
+            const holeRadius =
+                this.sniperScopeRadius *
+                    Math.min(
+                        sx,
+                        sy,
+                    ) +
+                13;
+
+            const feather =
+                8;
+
+            const mask =
+                'radial-gradient(circle at ' +
+                String(
+                    Math.round(
+                        holeX,
+                    ),
+                ) +
+                'px ' +
+                String(
+                    Math.round(
+                        holeY,
+                    ),
+                ) +
+                'px, transparent 0 ' +
+                String(
+                    Math.max(
+                        0,
+                        Math.round(
+                            holeRadius,
+                        ),
+                    ),
+                ) +
+                'px, rgba(0,0,0,0.15) ' +
+                String(
+                    Math.round(
+                        holeRadius +
+                        feather *
+                            0.35,
+                    ),
+                ) +
+                'px, #000 ' +
+                String(
+                    Math.round(
+                        holeRadius +
+                        feather,
+                    ),
+                ) +
+                'px)';
+
+            blurLayer.style.maskImage =
+                mask;
+
+            blurLayer.style.webkitMaskImage =
+                mask;
+        }
 
         scope.style.width =
             String(
