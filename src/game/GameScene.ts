@@ -912,7 +912,21 @@ export class GameScene extends Phaser.Scene {
     private sniperScopeInteractive = false;
     private sniperScopeScreenX = 480;
     private sniperScopeScreenY = 270;
+    /*
+     * V1010455G_MOBILE_TOUCH_ONLY_SCOPE_CLARITY_PC_SCOPE_SIZE
+     * Desktop optic is intentionally smaller for balance.
+     * Mobile keeps the large optic for touch readability.
+     */
     private sniperScopeRadius = 112;
+    private getActiveSniperScopeRadius(): number {
+        return this.mobileControlsEnabled
+            ? this.sniperScopeRadius
+            : Math.round(
+                this.sniperScopeRadius *
+                    0.60,
+            );
+    }
+
     private sniperLastAimBroadcastAt = 0;
     private sniperScopeIntroTween?: Phaser.Tweens.Tween;
     /* V1010392_SNIPER_MOBILE_THERMAL_AUDIO_BLUR_INTRO_BUTTON: one scope owns the mobile rack-in animation. */
@@ -927,6 +941,7 @@ export class GameScene extends Phaser.Scene {
     /* V1010387_SNIPER_SCOPE_CLIP_AND_OUTSIDE_BLUR */
     private sniperScopeClipDom?: HTMLDivElement;
     private sniperScopeBlurDom?: HTMLDivElement;
+    private sniperScopeLensShieldDom?: HTMLDivElement;
     /* V1010388_SNIPER_UI_PASS_THROUGH_PRIORITY_TIMER_FIXED_BUTTON */
     private sniperPriorityTimerDom?: HTMLDivElement;
 
@@ -6469,28 +6484,26 @@ private timerText!: Phaser.GameObjects.Text;
              * V1010391C_MOBILE_SCOPE_CLEAR_CIRCLE_UI_HOLES: original Phaser controls, highest in-canvas HUD depth.
              * Blur holes above guarantee these remain visually sharp.
              */
+            /*
+             * V1010455G_MOBILE_TOUCH_ONLY_SCOPE_CLARITY_PC_SCOPE_SIZE
+             * Mobile sniper is touch-only:
+             *   drag screen = aim
+             *   tap screen  = fire
+             */
             this.mobileAimBase
-                ?.setVisible(true)
-                .setDepth(60000);
+                ?.setVisible(false);
 
             this.mobileAimKnob
-                ?.setVisible(true)
-                .setDepth(60001);
+                ?.setVisible(false);
 
             this.mobileAimLabel
-                ?.setText(
-                    tr('조준'),
-                )
-                .setVisible(true)
-                .setDepth(60002);
+                ?.setVisible(false);
 
             this.mobileFireButton
-                ?.setVisible(true)
-                .setDepth(60000);
+                ?.setVisible(false);
 
             this.mobileFireLabel
-                ?.setVisible(true)
-                .setDepth(60002);
+                ?.setVisible(false);
 
             /*
              * V1010389B_MOBILE_SNIPER_OPTIONAL_UI_GUARDS
@@ -57626,7 +57639,7 @@ const roomPlayers =
         }
 
         const radius =
-            this.sniperScopeRadius;
+            this.getActiveSniperScopeRadius();
 
         /*
          * V1010390_MOBILE_SNIPER_SINGLE_CAMERA_SMOOTH_ZOOM_BLUR
@@ -57902,6 +57915,28 @@ const roomPlayers =
             },
         );
 
+        const lensShield =
+            document.createElement(
+                'div',
+            );
+
+        Object.assign(
+            lensShield.style,
+            {
+                position: 'absolute',
+                zIndex: '1',
+                display: 'none',
+                pointerEvents: 'none',
+                borderRadius: '50%',
+                overflow: 'hidden',
+                background: 'transparent',
+                backdropFilter: 'none',
+                webkitBackdropFilter: 'none',
+                isolation: 'isolate',
+                contain: 'paint',
+            },
+        );
+
         const scope =
             document.createElement(
                 'div',
@@ -58150,6 +58185,10 @@ const roomPlayers =
         );
 
         clipRoot.appendChild(
+            lensShield,
+        );
+
+        clipRoot.appendChild(
             scope,
         );
 
@@ -58209,6 +58248,9 @@ const roomPlayers =
         this.sniperScopeBlurDom =
             blurLayer;
 
+        this.sniperScopeLensShieldDom =
+            lensShield;
+
         this.sniperPriorityTimerDom =
             priorityTimer;
 
@@ -58231,6 +58273,9 @@ const roomPlayers =
                     undefined;
 
                 this.sniperScopeBlurDom =
+                    undefined;
+
+                this.sniperScopeLensShieldDom =
                     undefined;
 
                 this.sniperPriorityTimerDom =
@@ -58281,8 +58326,11 @@ const roomPlayers =
             rect.height /
             this.gameHeight;
 
+        const activeScopeRadius =
+            this.getActiveSniperScopeRadius();
+
         const diameter =
-            this.sniperScopeRadius *
+            activeScopeRadius *
             2;
 
         const clipRoot =
@@ -58365,12 +58413,12 @@ const roomPlayers =
 
             this.sniperMobileHintDom.textContent =
                 lang === 'ja'
-                    ? '照準：スティック または 画面ドラッグ\n射撃：FIREボタン または 画面タップ'
+                    ? '画面をドラッグして照準移動\n画面をタップして射撃'
                     : lang === 'en'
-                        ? 'AIM: joystick or drag the screen\nFIRE: FIRE button or tap the screen'
+                        ? 'Drag the screen to aim\nTap the screen to fire'
                         : lang === 'zh'
-                            ? '瞄准：摇杆或拖动画面\n射击：FIRE按钮或点击画面'
-                            : '조준: 조이스틱 또는 화면 드래그\n발사: FIRE 버튼 또는 화면 터치';
+                            ? '拖动画面移动准星\n点击画面射击'
+                            : '화면을 드래그해 조준\n화면을 터치해 발사';
 
             this.sniperMobileHintDom.style.display =
                 this.mobileControlsEnabled &&
@@ -58431,7 +58479,7 @@ const roomPlayers =
              * The metal rim stays above blur via DOM; no oversized clear halo.
              */
             const holeRadius =
-                this.sniperScopeRadius *
+                activeScopeRadius *
                     Math.min(
                         sx,
                         sy,
@@ -58598,150 +58646,71 @@ const roomPlayers =
                 '0 0';
 
             /*
-             * V1010455C_SNIPER_MOBILE_CONTROLS_PC_HELI_FLICKER_FIRE_PERF
-             * Mobile controls are Phaser objects under this DOM blur.
-             * Use one stable concave clip-path so their original visuals remain
-             * sharp without duplicating buttons or using fragile mask-composite.
+             * V1010455G_MOBILE_TOUCH_ONLY_SCOPE_CLARITY_PC_SCOPE_SIZE
+             * No mobile AIM/FIRE widgets exist in Overwatch now, so the blur
+             * layer no longer needs a right-side control notch.
              */
-            if (this.mobileControlsEnabled) {
-                const uniform =
-                    Math.min(
-                        sx,
-                        sy,
-                    );
+            blurLayer.style.clipPath =
+                'none';
 
-                const utilityBottom =
-                    Phaser.Math.Clamp(
-                        88 * sy,
-                        54,
-                        rect.height *
-                            0.24,
-                    );
-
-                const controlCenterY =
-                    (
-                        this.gameHeight -
-                        150
-                    ) *
-                    sy;
-
-                const controlTop =
-                    Phaser.Math.Clamp(
-                        controlCenterY -
-                            76 *
-                                uniform,
-                        utilityBottom +
-                            8,
-                        rect.height -
-                            110,
-                    );
-
-                const controlBottom =
-                    Phaser.Math.Clamp(
-                        controlCenterY +
-                            76 *
-                                uniform,
-                        controlTop +
-                            44,
-                        rect.height,
-                    );
-
-                const notchLeft =
-                    Phaser.Math.Clamp(
-                        (
-                            this.gameWidth -
-                            275
-                        ) *
-                            sx,
-                        rect.width *
-                            0.56,
-                        rect.width -
-                            100,
-                    );
-
-                const rw =
-                    Math.round(
-                        rect.width,
-                    );
-
-                const rh =
-                    Math.round(
-                        rect.height,
-                    );
-
-                const nl =
-                    Math.round(
-                        notchLeft,
-                    );
-
-                const ub =
-                    Math.round(
-                        utilityBottom,
-                    );
-
-                const ct =
-                    Math.round(
-                        controlTop,
-                    );
-
-                const cb =
-                    Math.round(
-                        controlBottom,
-                    );
-
-                /*
-                 * Polygon walks clockwise and takes two bites from the right edge.
-                 * Everything inside those bites is the untouched Phaser canvas.
-                 */
-                const polygon =
-                    [
-                        '0px 0px',
-                        rw + 'px 0px',
-
-                        rw + 'px ' + ub + 'px',
-                        nl + 'px ' + ub + 'px',
-                        nl + 'px ' + (ub + 1) + 'px',
-                        rw + 'px ' + (ub + 1) + 'px',
-
-                        rw + 'px ' + ct + 'px',
-                        nl + 'px ' + ct + 'px',
-                        nl + 'px ' + cb + 'px',
-                        rw + 'px ' + cb + 'px',
-
-                        rw + 'px ' + rh + 'px',
-                        '0px ' + rh + 'px',
-                    ].join(
-                        ', ',
-                    );
-
-                blurLayer.style.clipPath =
-                    'polygon(' +
-                    polygon +
-                    ')';
-
-                /*
-                 * V1010455D_FIX_WEBKIT_CLIP_PATH_TYPESCRIPT
-                 * CSSStyleDeclaration in the current TS DOM typings does not
-                 * expose webkitClipPath as a typed property. setProperty keeps
-                 * the exact same WebKit CSS behavior without a TS2339 error.
-                 */
-                blurLayer.style.setProperty(
-                    '-webkit-clip-path',
-                    'polygon(' +
-                        polygon +
-                        ')',
-                );
-            } else {
-                blurLayer.style.clipPath =
-                    'none';
-
-                blurLayer.style.setProperty(
-                    '-webkit-clip-path',
-                    'none',
-                );
-            }
+            blurLayer.style.setProperty(
+                '-webkit-clip-path',
+                'none',
+            );
 
             /* V1010392C_FIX_CURRENT_BUILD_4_ERRORS: mobile/desktop branches already assign maskImage. */
+        }
+
+        if (this.sniperScopeLensShieldDom) {
+            const shield =
+                this.sniperScopeLensShieldDom;
+
+            shield.style.display =
+                this.mobileControlsEnabled
+                    ? ''
+                    : 'none';
+
+            shield.style.left =
+                String(
+                    Math.round(
+                        (
+                            this.sniperScopeScreenX -
+                            activeScopeRadius
+                        ) *
+                        sx,
+                    ),
+                ) +
+                'px';
+
+            shield.style.top =
+                String(
+                    Math.round(
+                        (
+                            this.sniperScopeScreenY -
+                            activeScopeRadius
+                        ) *
+                        sy,
+                    ),
+                ) +
+                'px';
+
+            shield.style.width =
+                String(
+                    Math.round(
+                        diameter *
+                        sx,
+                    ),
+                ) +
+                'px';
+
+            shield.style.height =
+                String(
+                    Math.round(
+                        diameter *
+                        sy,
+                    ),
+                ) +
+                'px';
         }
 
         scope.style.width =
@@ -58810,7 +58779,7 @@ const roomPlayers =
         }
 
         const radius =
-            this.sniperScopeRadius;
+            this.getActiveSniperScopeRadius();
 
         const stripCount =
             this.sniperScopeStripCameras.length;
