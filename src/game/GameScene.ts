@@ -1,3 +1,4 @@
+/* V1010467_MOBILE_RECONNECT_WAIT_OVERLAY: persistent mobile app-switch reconnect notice stays visible until transport + local player + gameplay input are actually ready. */
 /* V1010466_LOBBY_MOBILE_RECONNECT_MOVEMENT: Lobby movement stays locally responsive across short mobile app switches; stale recovery locks are scrubbed; host-transfer toast ignores unstable reconnect handoffs. */
 /* V1010465_MOBILE_SNIPER_RECONNECT_INPUT_RECOVERY: full-screen mobile sniper tap/drag ownership + authoritative fresh-session input rebinding after app resume. */
 /* V1010451J_ASSIST_READY_FINAL_PARITY: assisted Hider publishes one complete final paint raster before READY=true, guaranteeing Hunter/Hider Hunt parity. */
@@ -5680,7 +5681,18 @@ private timerText!: Phaser.GameObjects.Text;
                 this.mobileSniperTouchPointerId = -1;
                 this.mobileTouchPoints.clear();
                 this.mobilePinchDistance = 0;
-                this.mobilePinchActive = false;
+                this.mobilePinchActive = false;                /*
+                 * V1010467_MOBILE_RECONNECT_WAIT_OVERLAY / FOREGROUND_NOTICE
+                 * Returning from Kakao/LINE/etc. may leave WebSocket recovery
+                 * running for several seconds. Explain that state immediately.
+                 */
+                if (
+                    !document.hidden &&
+                    multiplayerClient.getRoom()
+                ) {
+                    this.waitForMobileReconnectControlsReady();
+                }
+
             };
 
         window.addEventListener(
@@ -7103,6 +7115,17 @@ private timerText!: Phaser.GameObjects.Text;
     private mobileMovePointerId = -1;
     private mobileMoveSafetyReleaseHandler?: (event?: Event) => void;
     private mobileVisibilitySafetyHandler?: () => void;
+
+    /*
+     * V1010467_MOBILE_RECONNECT_WAIT_OVERLAY
+     * Dedicated reconnect UX is intentionally separate from statusText:
+     * normal status messages auto-clear quickly, but app-switch recovery may
+     * legitimately take several seconds on mobile.
+     */
+    private mobileReconnectNoticeDom?: HTMLDivElement;
+    private mobileReconnectNoticePoll?: number;
+    private mobileReconnectNoticeGeneration = 0;
+
     private mobileAimPointerId = -1;
     private mobileFirePointerId = -1;
     private mobileMoveX = 0;
@@ -8651,6 +8674,24 @@ private timerText!: Phaser.GameObjects.Text;
                         this.mobileVisibilitySafetyHandler,
                     );
                 }
+
+                if (
+                    this.mobileReconnectNoticePoll !==
+                    undefined
+                ) {
+                    window.clearTimeout(
+                        this.mobileReconnectNoticePoll,
+                    );
+                    this.mobileReconnectNoticePoll =
+                        undefined;
+                }
+
+                this.mobileReconnectNoticeGeneration +=
+                    1;
+                this.mobileReconnectNoticeDom
+                    ?.remove();
+                this.mobileReconnectNoticeDom =
+                    undefined;
 
                 this.saveLobbyBgmResumePosition();
             },
@@ -15391,6 +15432,15 @@ this.networkUnsubscribers.push(
             multiplayerClient.onConnectionDrop(
                 () => {
                     /*
+                     * V1010467_MOBILE_RECONNECT_WAIT_OVERLAY / DROP_NOTICE
+                     */
+                    if (
+                        this.mobileControlsEnabled
+                    ) {
+                        this.waitForMobileReconnectControlsReady();
+                    }
+
+                    /*
                      * V1010466_LOBBY_MOBILE_RECONNECT_MOVEMENT / DROP_POLICY
                      * Lobby keeps local prediction alive during short mobile app
                      * switches. Paint/Hunt/Countdown retain the strict lock.
@@ -15456,6 +15506,16 @@ this.networkUnsubscribers.push(
         this.networkUnsubscribers.push(
             multiplayerClient.onConnectionRecovered(
                 () => {
+                    /*
+                     * V1010467_MOBILE_RECONNECT_WAIT_OVERLAY / RECOVERED_WAIT_FOR_CONTROLS
+                     * Socket recovery alone is not the finish line.
+                     */
+                    if (
+                        this.mobileControlsEnabled
+                    ) {
+                        this.waitForMobileReconnectControlsReady();
+                    }
+
                     this.attachJoinRejectedListener();
                     this.attachRoleDisconnectCountdownListener();
 
@@ -15587,16 +15647,20 @@ this.networkUnsubscribers.push(
                      * or request paint at 0/300/1000/2400ms.
                      */
 
-                    this.showStatus(
-                        tr('재접속했습니다.'),
-                    );
+                    if (
+                        !this.mobileControlsEnabled
+                    ) {
+                        this.showStatus(
+                            tr('재접속했습니다.'),
+                        );
 
-                    this.time.delayedCall(
-                        1400,
-                        () => {
-                            this.clearStatus();
-                        },
-                    );
+                        this.time.delayedCall(
+                            1400,
+                            () => {
+                                this.clearStatus();
+                            },
+                        );
+                    }
                 },
             ),
         );
@@ -41277,6 +41341,296 @@ this.networkUnsubscribers.push(
             ?.setDepth(
                 visible ? 975 : 205,
             );
+    }
+
+    private ensureMobileReconnectNotice(): HTMLDivElement | undefined {
+        if (
+            !this.mobileControlsEnabled ||
+            typeof document === 'undefined'
+        ) {
+            return undefined;
+        }
+
+        if (
+            this.mobileReconnectNoticeDom &&
+            document.body.contains(
+                this.mobileReconnectNoticeDom,
+            )
+        ) {
+            return this.mobileReconnectNoticeDom;
+        }
+
+        document
+            .querySelectorAll(
+                '.colorhunt-mobile-reconnect-notice',
+            )
+            .forEach(
+                (node) => node.remove(),
+            );
+
+        const root =
+            document.createElement(
+                'div',
+            );
+
+        root.className =
+            'colorhunt-mobile-reconnect-notice';
+
+        Object.assign(
+            root.style,
+            {
+                position: 'fixed',
+                left: '50%',
+                top: '18%',
+                transform:
+                    'translate(-50%, -50%)',
+                zIndex: '2147483646',
+                width:
+                    'min(430px, calc(100vw - 32px))',
+                boxSizing: 'border-box',
+                padding: '14px 18px',
+                border:
+                    '2px solid rgba(71,121,168,.58)',
+                borderRadius: '16px',
+                background:
+                    'rgba(247,252,255,.97)',
+                boxShadow:
+                    '0 6px 0 rgba(56,92,126,.16), 0 12px 30px rgba(16,35,52,.22)',
+                color: '#263d50',
+                fontFamily:
+                    '"Arial Black","Noto Sans KR","Noto Sans JP",Arial,sans-serif',
+                textAlign: 'center',
+                pointerEvents: 'none',
+                userSelect: 'none',
+                opacity: '0',
+                transition:
+                    'opacity .16s ease, transform .18s ease',
+                whiteSpace: 'pre-line',
+                lineHeight: '1.35',
+            },
+        );
+
+        document.body.appendChild(
+            root,
+        );
+
+        this.mobileReconnectNoticeDom =
+            root;
+
+        return root;
+    }
+
+    private getMobileReconnectWaitingText(): string {
+        const lang =
+            getLanguage();
+
+        if (lang === 'ja') {
+            return '📡 ゲームに再接続しています…\n操作できるようになるまで少々お待ちください';
+        }
+
+        if (lang === 'en') {
+            return '📡 Reconnecting to the game…\nPlease wait until controls are restored';
+        }
+
+        if (lang === 'zh') {
+            return '📡 正在重新连接游戏…\n请稍候，连接恢复后即可操作';
+        }
+
+        return '📡 게임에 재접속 중입니다…\n조작이 가능해질 때까지 잠시만 기다려주세요';
+    }
+
+    private getMobileReconnectDoneText(): string {
+        const lang =
+            getLanguage();
+
+        if (lang === 'ja') {
+            return '✅ 再接続しました！';
+        }
+
+        if (lang === 'en') {
+            return '✅ Reconnected!';
+        }
+
+        if (lang === 'zh') {
+            return '✅ 已重新连接！';
+        }
+
+        return '✅ 재접속 완료!';
+    }
+
+    private showMobileReconnectWaitingNotice(): void {
+        if (
+            !this.mobileControlsEnabled ||
+            !multiplayerClient.getRoom()
+        ) {
+            return;
+        }
+
+        const notice =
+            this.ensureMobileReconnectNotice();
+
+        if (!notice) {
+            return;
+        }
+
+        this.mobileReconnectNoticeGeneration +=
+            1;
+
+        if (
+            this.mobileReconnectNoticePoll !==
+            undefined
+        ) {
+            window.clearTimeout(
+                this.mobileReconnectNoticePoll,
+            );
+            this.mobileReconnectNoticePoll =
+                undefined;
+        }
+
+        notice.textContent =
+            this.getMobileReconnectWaitingText();
+
+        notice.style.opacity =
+            '1';
+        notice.style.transform =
+            'translate(-50%, -50%) scale(1)';
+    }
+
+    private hideMobileReconnectNotice(
+        showCompleted = false,
+    ): void {
+        const notice =
+            this.mobileReconnectNoticeDom;
+
+        if (!notice) {
+            return;
+        }
+
+        if (
+            this.mobileReconnectNoticePoll !==
+            undefined
+        ) {
+            window.clearTimeout(
+                this.mobileReconnectNoticePoll,
+            );
+            this.mobileReconnectNoticePoll =
+                undefined;
+        }
+
+        const generation =
+            ++this.mobileReconnectNoticeGeneration;
+
+        if (showCompleted) {
+            notice.textContent =
+                this.getMobileReconnectDoneText();
+
+            notice.style.opacity =
+                '1';
+
+            window.setTimeout(
+                () => {
+                    if (
+                        generation !==
+                        this.mobileReconnectNoticeGeneration ||
+                        !this.mobileReconnectNoticeDom
+                    ) {
+                        return;
+                    }
+
+                    this.mobileReconnectNoticeDom
+                        .style.opacity =
+                        '0';
+
+                    this.mobileReconnectNoticeDom
+                        .style.transform =
+                        'translate(-50%, -50%) scale(.96)';
+                },
+                850,
+            );
+
+            return;
+        }
+
+        notice.style.opacity =
+            '0';
+        notice.style.transform =
+            'translate(-50%, -50%) scale(.96)';
+    }
+
+    private waitForMobileReconnectControlsReady(): void {
+        if (
+            !this.mobileControlsEnabled
+        ) {
+            return;
+        }
+
+        this.showMobileReconnectWaitingNotice();
+
+        const generation =
+            this.mobileReconnectNoticeGeneration;
+
+        const poll =
+            (): void => {
+                if (
+                    generation !==
+                    this.mobileReconnectNoticeGeneration
+                ) {
+                    return;
+                }
+
+                const room =
+                    multiplayerClient.getRoom();
+
+                const transportReady =
+                    multiplayerClient
+                        .isGameplayTransportStable();
+
+                const localReady =
+                    Boolean(
+                        room &&
+                        multiplayerClient
+                            .getLocalPlayer() &&
+                        this.networkPlayerManager &&
+                        this.networkPlayerManager
+                            .hasPlayer(
+                                room.sessionId,
+                            ),
+                    );
+
+                /*
+                 * Lobby v466 intentionally allows local movement while the
+                 * transport is recovering. We still keep this notice visible
+                 * until the actual server transport and replacement local state
+                 * have converged, so the player knows why remote sync may lag.
+                 */
+                const gameplayReady =
+                    this.phase === 'lobby'
+                        ? true
+                        : !this.reconnectGameplayLocked &&
+                          !this.recoveryPaintSnapshotPending;
+
+                if (
+                    transportReady &&
+                    localReady &&
+                    gameplayReady
+                ) {
+                    this.input.enabled =
+                        true;
+
+                    this.hideMobileReconnectNotice(
+                        true,
+                    );
+                    return;
+                }
+
+                this.mobileReconnectNoticePoll =
+                    window.setTimeout(
+                        poll,
+                        180,
+                    );
+            };
+
+        poll();
     }
 
     private clearStatus(): void {
