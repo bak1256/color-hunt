@@ -1,3 +1,4 @@
+/* V1010469_RECONNECT_OVERLAY_COMPLETION: reconnect notice closes from the actual gameplay movement-readiness gate instead of waiting on a lagging local-player cache. */
 /* V1010467_MOBILE_RECONNECT_WAIT_OVERLAY: persistent mobile app-switch reconnect notice stays visible until transport + local player + gameplay input are actually ready. */
 /* V1010466_LOBBY_MOBILE_RECONNECT_MOVEMENT: Lobby movement stays locally responsive across short mobile app switches; stale recovery locks are scrubbed; host-transfer toast ignores unstable reconnect handoffs. */
 /* V1010465_MOBILE_SNIPER_RECONNECT_INPUT_RECOVERY: full-screen mobile sniper tap/drag ownership + authoritative fresh-session input rebinding after app resume. */
@@ -41578,40 +41579,33 @@ this.networkUnsubscribers.push(
                     return;
                 }
 
-                const room =
-                    multiplayerClient.getRoom();
-
                 const transportReady =
                     multiplayerClient
                         .isGameplayTransportStable();
 
-                const localReady =
-                    Boolean(
-                        room &&
-                        multiplayerClient
-                            .getLocalPlayer() &&
-                        this.networkPlayerManager &&
-                        this.networkPlayerManager
-                            .hasPlayer(
-                                room.sessionId,
-                            ),
-                    );
-
                 /*
-                 * Lobby v466 intentionally allows local movement while the
-                 * transport is recovering. We still keep this notice visible
-                 * until the actual server transport and replacement local state
-                 * have converged, so the player knows why remote sync may lag.
+                 * V1010469_RECONNECT_OVERLAY_COMPLETION
+                 *
+                 * v467 waited for getLocalPlayer() + hasPlayer(sessionId) even
+                 * in Lobby. After a fast fresh handoff, Lobby movement can already
+                 * be fully usable while that plain snapshot/local cache lags one
+                 * callback behind, leaving the notice stuck forever.
+                 *
+                 * Use the SAME readiness gate that actually controls movement.
+                 * v466 canUseRecoveredGameplayNow() also rebinds a missing local
+                 * view and clears stale Lobby recovery locks.
                  */
+                const controlsReady =
+                    this.canUseRecoveredGameplayNow();
+
                 const gameplayReady =
                     this.phase === 'lobby'
-                        ? true
-                        : !this.reconnectGameplayLocked &&
+                        ? controlsReady
+                        : controlsReady &&
                           !this.recoveryPaintSnapshotPending;
 
                 if (
                     transportReady &&
-                    localReady &&
                     gameplayReady
                 ) {
                     this.input.enabled =
