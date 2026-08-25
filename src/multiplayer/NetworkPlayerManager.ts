@@ -145,6 +145,12 @@ export class NetworkPlayerManager {
   private readonly hunterMoveSpeed = 125;
   /* V1010242_HUNTER_FART_SKILL: poop debuff. */
   private localHunterSpeedMultiplier = 1;
+
+  /* V1010458_SNIPER_CAMERA_SCOPE_LOCK_BGM
+   * Sniper support requires a true input/prediction lock.
+   * This is separate from speed debuffs and blocks moveLocalPlayer itself.
+   */
+  private localMovementHardLocked = false;
   /*
    * V1010370_LARGE_ROOM_TRANSPORT_BUDGET / MOVE_15HZ
    * Local prediction stays frame-rate smooth. Only WebSocket movement
@@ -1397,6 +1403,33 @@ export class NetworkPlayerManager {
     directionY: number,
     delta: number,
   ): void {
+    if (this.localMovementHardLocked) {
+      /*
+       * Flush one final stop coordinate, then reject every local prediction
+       * input while the sniper cinematic owns the Hunter.
+       */
+      if (this.localWasMoving) {
+        if (!this.practiceLocalSessionId) {
+          multiplayerClient.sendMove(
+            this.localX,
+            this.localY,
+          );
+        }
+
+        this.rememberSentPosition(
+          this.localX,
+          this.localY,
+        );
+
+        this.lastSendTime =
+          this.scene.time.now;
+
+        this.localWasMoving = false;
+      }
+
+      return;
+    }
+
     const sessionId =
       this.getEffectiveLocalSessionId();
 
@@ -1937,6 +1970,21 @@ export class NetworkPlayerManager {
       multiplayerClient.getLocalPlayer()
         ?.role === "hunter"
     );
+  }
+
+  setLocalMovementHardLocked(
+    locked: boolean,
+  ): void {
+    this.localMovementHardLocked =
+      Boolean(locked);
+
+    if (this.localMovementHardLocked) {
+      this.localWasMoving = false;
+    }
+  }
+
+  isLocalMovementHardLocked(): boolean {
+    return this.localMovementHardLocked;
   }
 
   setLocalHunterSpeedMultiplier(multiplier: number): void {
