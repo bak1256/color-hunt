@@ -924,14 +924,10 @@ export class GameScene extends Phaser.Scene {
     private sniperScopeReloadDom?: HTMLDivElement;
 
     /* V1010457_SNIPER_FINAL_FLOW_REWORK */
-    private sniperScopeCanvas?: HTMLCanvasElement;
-    private sniperScopeCanvasContext?: CanvasRenderingContext2D;
     private sniperButtonPressBlockUntil = 0;
 
     /* V1010458_SNIPER_CAMERA_SCOPE_LOCK_BGM */
-    private sniperScopeSnapshotBusy = false;
-    private sniperScopeSnapshotLastAt = 0;
-    private sniperTacticalBgmActive = false;
+private sniperTacticalBgmActive = false;
     private sniperTacticalOscillators: OscillatorNode[] = [];
     private sniperTacticalAudioNodes: AudioNode[] = [];
 private timerText!: Phaser.GameObjects.Text;
@@ -23056,6 +23052,35 @@ const ribbon =
             return;
         }
 
+        /*
+         * V1010459_SNIPER_INDEPENDENT_OVERWATCH
+         * Second independent movement barrier.
+         * Even if keyboard/mobile state stays pressed, sniper mode never reaches
+         * the normal movement calculation or local prediction path.
+         */
+        if (
+            this.phase === 'hunt' &&
+            this.sniperActive
+        ) {
+            this.resetMobileMoveControl();
+
+            if (this.input.keyboard) {
+                this.input.keyboard.resetKeys();
+            }
+
+            this.networkPlayerManager
+                .setLocalMovementHardLocked(
+                    true,
+                );
+
+            this.networkPlayerManager
+                .update(
+                    delta,
+                );
+
+            return;
+        }
+
         let directionX = 0;
         let directionY = 0;
 
@@ -38336,8 +38361,7 @@ const ribbon =
 
         if (localRole === 'hunter') {
             if (
-                this.sniperActive &&
-                this.sniperHelicopterArrived
+                this.sniperActive
             ) {
                 this.hiderVisionGraphics
                     ?.clear()
@@ -41368,6 +41392,18 @@ const ribbon =
     }
 
     private ensureGameplayCameraFollow(): void {
+        /*
+         * V1010459_SNIPER_INDEPENDENT_OVERWATCH
+         * Sniper support is a separate overwatch camera mode.
+         * Normal Hunt follow must not snap zoom/center back to the Hunter.
+         */
+        if (
+            this.sniperCinematicActive ||
+            this.sniperActive
+        ) {
+            return;
+        }
+
         if (
             this.phase !== 'hunt'
         ) {
@@ -55634,6 +55670,33 @@ const roomPlayers =
         this.sniperRadioText
             ?.setVisible(false);
 
+        /*
+         * V1010459_SNIPER_INDEPENDENT_OVERWATCH
+         * The instant support is accepted, Hunter vision restrictions are gone.
+         * Helicopter/zoom are cinematic follow-up, not prerequisites.
+         */
+        this.hiderVisionGraphics
+            ?.clear()
+            .setVisible(false);
+
+        this.hiderVisionOverlays
+            .forEach(
+                (overlay) =>
+                    overlay.setVisible(false),
+            );
+
+        this.heartbeatDangerOverlay
+            .setVisible(false)
+            .setAlpha(0);
+
+        this.heartbeatBorders
+            .forEach(
+                (border) =>
+                    border
+                        .setVisible(false)
+                        .setAlpha(0),
+            );
+
         this.mobileMoveBase
             ?.setVisible(false);
         this.mobileMoveKnob
@@ -55825,51 +55888,87 @@ const roomPlayers =
         const camera =
             this.cameras.main;
 
-        camera.stopFollow();
+        camera
+            .stopFollow()
+            .removeBounds()
+            .setSize(
+                this.gameWidth,
+                this.gameHeight,
+            );
+
         this.tweens.killTweensOf(
             camera,
         );
 
-        const state = {
-            zoom:
-                camera.zoom,
-            scrollX:
-                camera.scrollX,
-            scrollY:
-                camera.scrollY,
+        const initialZoom =
+            camera.zoom;
+
+        const initialScrollX =
+            camera.scrollX;
+
+        const initialScrollY =
+            camera.scrollY;
+
+        const progress = {
+            value:
+                0,
         };
 
-/*
-         * V1010458_SNIPER_CAMERA_SCOPE_LOCK_BGM
-         * Animate the actual camera values ourselves. Final contract is strict:
-         * viewport = logical 960x540, zoom = 1, scroll = 0,0.
+        /*
+         * V1010459_SNIPER_INDEPENDENT_OVERWATCH
+         * Explicit visual interpolation.
+         * Normal camera-follow is disabled above, so nothing can steal this.
          */
         this.tweens.add({
             targets:
-                state,
-            zoom:
+                progress,
+            value:
                 1,
-            scrollX:
-                0,
-            scrollY:
-                0,
             duration:
-                980,
+                1050,
             ease:
                 'Sine.easeInOut',
             onUpdate:
                 () => {
-                    camera.setZoom(
-                        state.zoom,
-                    );
+                    const t =
+                        Phaser.Math.Clamp(
+                            progress.value,
+                            0,
+                            1,
+                        );
 
-                    camera.setScroll(
-                        state.scrollX,
-                        state.scrollY,
-                    );
+                    const zoom =
+                        Phaser.Math.Linear(
+                            initialZoom,
+                            1,
+                            t,
+                        );
+
+                    const scrollX =
+                        Phaser.Math.Linear(
+                            initialScrollX,
+                            0,
+                            t,
+                        );
+
+                    const scrollY =
+                        Phaser.Math.Linear(
+                            initialScrollY,
+                            0,
+                            t,
+                        );
+
+                    camera
+                        .setZoom(
+                            zoom,
+                        )
+                        .setScroll(
+                            scrollX,
+                            scrollY,
+                        );
 
                     this.applyFixedHudForZoom(
-                        state.zoom,
+                        zoom,
                     );
                 },
             onComplete:
@@ -55882,43 +55981,41 @@ const roomPlayers =
                         return;
                     }
 
-                    camera.setViewport(
-                        0,
-                        0,
-                        this.gameWidth,
-                        this.gameHeight,
-                    );
-
-                    camera.setZoom(
-                        1,
-                    );
-
-                    camera.setScroll(
-                        0,
-                        0,
-                    );
-
-                    camera.centerOn(
-                        this.gameWidth /
-                            2,
-                        this.gameHeight /
-                            2,
-                    );
-
-                    /*
-                     * centerOn can derive scroll internally; enforce exact
-                     * logical-map origin one final time.
-                     */
-                    camera.setScroll(
-                        0,
-                        0,
-                    );
+                    camera
+                        .stopFollow()
+                        .removeBounds()
+                        .setSize(
+                            this.gameWidth,
+                            this.gameHeight,
+                        )
+                        .setZoom(
+                            1,
+                        )
+                        .setScroll(
+                            0,
+                            0,
+                        );
 
                     this.applyFixedHudForZoom(
                         1,
                     );
 
-this.startSniperScopeRackIn();
+                    /*
+                     * Wait two render frames in the true full-map state before
+                     * the scope racks into view.
+                     */
+                    this.time.delayedCall(
+                        70,
+                        () => {
+                            if (
+                                this.sniperActive &&
+                                this.phase ===
+                                    'hunt'
+                            ) {
+                                this.startSniperScopeRackIn();
+                            }
+                        },
+                    );
                 },
         });
     }
@@ -56781,31 +56878,96 @@ this.startSniperScopeRackIn();
     }
 
     private createSniperScopeCamera(): void {
-        /*
-         * V1010457_SNIPER_FINAL_FLOW_REWORK
-         * Do NOT render a Phaser secondary-camera rectangle.
-         * The circular HTML canvas below samples the already-rendered full-map
-         * canvas and magnifies only the area inside the circle.
-         */
         if (
             this.sniperScopeCamera
         ) {
-            this.cameras.remove(
-                this.sniperScopeCamera,
-            );
-            this.sniperScopeCamera =
-                undefined;
+            return;
         }
 
-        this.ensureSniperScopeDom();
+        const radius =
+            this.sniperScopeRadius;
+
+        const camera =
+            this.cameras.add(
+                this.sniperScopeScreenX -
+                    radius,
+                this.sniperScopeScreenY -
+                    radius,
+                radius *
+                    2,
+                radius *
+                    2,
+                false,
+                'sniper-overwatch-camera',
+            );
+
+        camera
+            .setZoom(
+                2.7,
+            )
+            .centerOn(
+                this.sniperAimWorldX,
+                this.sniperAimWorldY,
+            )
+            .setBackgroundColor(
+                'rgba(0,0,0,0)',
+            );
+
+        /*
+         * Never render HUD/cinematic elements inside the magnified world lens.
+         */
+        [
+            this.sniperButton,
+            this.sniperRadioText,
+            this.sniperScope,
+            this.sniperScopeShade,
+            this.sniperReloadGraphics,
+            this.sniperScopeCornerMask,
+            this.sniperHelicopter,
+            this.timerText,
+            this.phaseText,
+            this.guideText,
+            this.statusText,
+            this.hunterWeaponHudContainer,
+            this.fartHudContainer,
+            this.mobileMoveBase,
+            this.mobileMoveKnob,
+            this.mobileMoveLabel,
+            this.mobileAimBase,
+            this.mobileAimKnob,
+            this.mobileAimLabel,
+            this.mobileFireButton,
+            this.mobileFireLabel,
+        ].forEach(
+            (object) => {
+                if (object) {
+                    camera.ignore(
+                        object,
+                    );
+                }
+            },
+        );
+
+        this.sniperScopeCamera =
+            camera;
+
+        this.sniperScopeCornerMask =
+            this.add.graphics()
+                .setDepth(
+                    25031,
+                )
+                .setScrollFactor(
+                    0,
+                )
+                .setVisible(
+                    true,
+                );
     }
 
+    /* V1010459C_REMOVE_OBSOLETE_SCOPE_CANVAS_FIELDS: old DOM snapshot canvas fields removed; Phaser overwatch camera is authoritative. */
     private ensureSniperScopeDom(): void {
         if (
-            this.sniperScopeDom &&
-            this.sniperScopeReloadDom &&
-            this.sniperScopeCanvas &&
-            this.sniperScopeCanvasContext
+            this.sniperScopeDom
         ) {
             return;
         }
@@ -56822,9 +56984,6 @@ this.startSniperScopeRackIn();
                 'div',
             );
 
-        scope.className =
-            'colorhunt-sniper-scope';
-
         Object.assign(
             scope.style,
             {
@@ -56840,39 +56999,12 @@ this.startSniperScopeRackIn();
                     '50%',
                 boxSizing:
                     'border-box',
-                overflow:
-                    'hidden',
                 border:
-                    '7px solid rgba(5,10,12,.99)',
+                    '6px solid rgba(5,10,12,.98)',
                 boxShadow:
-                    '0 0 0 2px rgba(192,218,203,.58), 0 0 0 9999px rgba(2,7,11,.44), inset 0 0 28px rgba(0,0,0,.70), 0 5px 20px rgba(0,0,0,.55)',
+                    '0 0 0 2px rgba(190,220,205,.60), inset 0 0 20px rgba(0,0,0,.48)',
                 background:
-                    '#05090b',
-                transformOrigin:
-                    '50% 50%',
-            },
-        );
-
-        const magnifier =
-            document.createElement(
-                'canvas',
-            );
-
-        Object.assign(
-            magnifier.style,
-            {
-                position:
-                    'absolute',
-                inset:
-                    '0',
-                width:
-                    '100%',
-                height:
-                    '100%',
-                borderRadius:
-                    '50%',
-                display:
-                    'block',
+                    'transparent',
             },
         );
 
@@ -56889,15 +57021,13 @@ this.startSniperScopeRackIn();
                 left:
                     'calc(50% - 1px)',
                 top:
-                    '8%',
+                    '7%',
                 width:
                     '2px',
                 height:
-                    '84%',
+                    '86%',
                 background:
-                    'rgba(235,249,255,.88)',
-                boxShadow:
-                    '0 0 2px #000',
+                    'rgba(240,250,255,.90)',
             },
         );
 
@@ -56912,46 +57042,15 @@ this.startSniperScopeRackIn();
                 position:
                     'absolute',
                 left:
-                    '8%',
+                    '7%',
                 top:
                     'calc(50% - 1px)',
                 width:
-                    '84%',
+                    '86%',
                 height:
                     '2px',
                 background:
-                    'rgba(235,249,255,.88)',
-                boxShadow:
-                    '0 0 2px #000',
-            },
-        );
-
-        const centerDot =
-            document.createElement(
-                'div',
-            );
-
-        Object.assign(
-            centerDot.style,
-            {
-                position:
-                    'absolute',
-                width:
-                    '7px',
-                height:
-                    '7px',
-                left:
-                    '50%',
-                top:
-                    '50%',
-                transform:
-                    'translate(-50%, -50%)',
-                borderRadius:
-                    '50%',
-                background:
-                    '#ffe2a0',
-                boxShadow:
-                    '0 0 8px rgba(255,226,160,.95)',
+                    'rgba(240,250,255,.90)',
             },
         );
 
@@ -56966,11 +57065,11 @@ this.startSniperScopeRackIn();
                 position:
                     'absolute',
                 left:
-                    '18%',
+                    '23%',
                 right:
-                    '18%',
+                    '23%',
                 bottom:
-                    '12px',
+                    '16px',
                 height:
                     '9px',
                 borderRadius:
@@ -56981,8 +57080,6 @@ this.startSniperScopeRackIn();
                     '1px solid rgba(255,255,255,.62)',
                 background:
                     'rgba(4,10,14,.88)',
-                boxShadow:
-                    '0 1px 4px rgba(0,0,0,.65)',
             },
         );
 
@@ -57012,16 +57109,10 @@ this.startSniperScopeRackIn();
         );
 
         scope.appendChild(
-            magnifier,
-        );
-        scope.appendChild(
             crossV,
         );
         scope.appendChild(
             crossH,
-        );
-        scope.appendChild(
-            centerDot,
         );
         scope.appendChild(
             reloadTrack,
@@ -57031,43 +57122,20 @@ this.startSniperScopeRackIn();
             scope,
         );
 
-        const context =
-            magnifier.getContext(
-                '2d',
-                {
-                    alpha:
-                        false,
-                },
-            );
-
         this.sniperScopeDom =
             scope;
         this.sniperScopeReloadDom =
             reload;
-        this.sniperScopeCanvas =
-            magnifier;
-        this.sniperScopeCanvasContext =
-            context ??
-            undefined;
 
         this.events.once(
             Phaser.Scenes.Events.SHUTDOWN,
             () => {
-                this.stopSniperTacticalBgm();
-
-                this.sniperScopeSnapshotBusy =
-                    false;
-
                 this.sniperScopeDom
                     ?.remove();
 
                 this.sniperScopeDom =
                     undefined;
                 this.sniperScopeReloadDom =
-                    undefined;
-                this.sniperScopeCanvas =
-                    undefined;
-                this.sniperScopeCanvasContext =
                     undefined;
             },
         );
@@ -57077,16 +57145,8 @@ this.startSniperScopeRackIn();
         const scope =
             this.sniperScopeDom;
 
-        const magnifier =
-            this.sniperScopeCanvas;
-
-        const context =
-            this.sniperScopeCanvasContext;
-
         if (
             !scope ||
-            !magnifier ||
-            !context ||
             !this.sniperCinematicActive
         ) {
             return;
@@ -57104,27 +57164,9 @@ this.startSniperScopeRackIn();
             rect.height /
             this.gameHeight;
 
-        const diameterLogical =
+        const diameter =
             this.sniperScopeRadius *
             2;
-
-        const cssWidth =
-            Math.max(
-                1,
-                Math.round(
-                    diameterLogical *
-                    sx,
-                ),
-            );
-
-        const cssHeight =
-            Math.max(
-                1,
-                Math.round(
-                    diameterLogical *
-                    sy,
-                ),
-            );
 
         scope.style.display =
             '';
@@ -57157,206 +57199,21 @@ this.startSniperScopeRackIn();
 
         scope.style.width =
             String(
-                cssWidth,
+                Math.round(
+                    diameter *
+                    sx,
+                ),
             ) +
             'px';
 
         scope.style.height =
             String(
-                cssHeight,
+                Math.round(
+                    diameter *
+                    sy,
+                ),
             ) +
             'px';
-
-        const pixelRatio =
-            Math.max(
-                1,
-                Math.min(
-                    1.5,
-                    window.devicePixelRatio ||
-                        1,
-                ),
-            );
-
-        const targetW =
-            Math.max(
-                1,
-                Math.round(
-                    cssWidth *
-                    pixelRatio,
-                ),
-            );
-
-        const targetH =
-            Math.max(
-                1,
-                Math.round(
-                    cssHeight *
-                    pixelRatio,
-                ),
-            );
-
-        if (
-            magnifier.width !==
-                targetW ||
-            magnifier.height !==
-                targetH
-        ) {
-            magnifier.width =
-                targetW;
-            magnifier.height =
-                targetH;
-        }
-
-        /*
-         * V1010458_SNIPER_CAMERA_SCOPE_LOCK_BGM
-         * WebGL canvas can be black when read directly before buffer presentation.
-         * Snapshot the scope source via renderer AFTER render. Throttle to ~24fps.
-         */
-        const now =
-            this.time.now;
-
-        if (
-            !this.sniperScopeSnapshotBusy &&
-            now -
-                this.sniperScopeSnapshotLastAt >=
-                42
-        ) {
-            this.sniperScopeSnapshotBusy =
-                true;
-
-            this.sniperScopeSnapshotLastAt =
-                now;
-
-            const magnification =
-                2.65;
-
-            const sourceHalfW =
-                this.sniperScopeRadius /
-                magnification;
-
-            const sourceHalfH =
-                this.sniperScopeRadius /
-                magnification;
-
-            const sourceX =
-                Phaser.Math.Clamp(
-                    this.sniperAimWorldX -
-                        sourceHalfW,
-                    0,
-                    Math.max(
-                        0,
-                        this.gameWidth -
-                            sourceHalfW *
-                                2,
-                    ),
-                );
-
-            const sourceY =
-                Phaser.Math.Clamp(
-                    this.sniperAimWorldY -
-                        sourceHalfH,
-                    0,
-                    Math.max(
-                        0,
-                        this.gameHeight -
-                            sourceHalfH *
-                                2,
-                    ),
-                );
-
-            const renderer =
-                this.game.renderer as unknown as {
-                    snapshotArea?: (
-                        x:
-                            number,
-                        y:
-                            number,
-                        width:
-                            number,
-                        height:
-                            number,
-                        callback:
-                            (
-                                image:
-                                    HTMLImageElement |
-                                    HTMLCanvasElement,
-                            ) =>
-                                void,
-                        type?:
-                            string,
-                        encoderOptions?:
-                            number,
-                    ) =>
-                        void;
-                };
-
-            if (
-                renderer.snapshotArea
-            ) {
-                renderer.snapshotArea(
-                    sourceX,
-                    sourceY,
-                    sourceHalfW *
-                        2,
-                    sourceHalfH *
-                        2,
-                    (
-                        image,
-                    ) => {
-                        try {
-                            context.save();
-
-                            context.clearRect(
-                                0,
-                                0,
-                                targetW,
-                                targetH,
-                            );
-
-                            context.beginPath();
-
-                            context.arc(
-                                targetW /
-                                    2,
-                                targetH /
-                                    2,
-                                Math.min(
-                                    targetW,
-                                    targetH,
-                                ) /
-                                    2,
-                                0,
-                                Math.PI *
-                                    2,
-                            );
-
-                            context.clip();
-
-                            context.imageSmoothingEnabled =
-                                false;
-
-                            context.drawImage(
-                                image,
-                                0,
-                                0,
-                                targetW,
-                                targetH,
-                            );
-
-                            context.restore();
-                        } finally {
-                            this.sniperScopeSnapshotBusy =
-                                false;
-                        }
-                    },
-                    'image/png',
-                    0.80,
-                );
-            } else {
-                this.sniperScopeSnapshotBusy =
-                    false;
-            }
-        }
 
         const remain =
             Math.max(
@@ -57384,12 +57241,6 @@ this.startSniperScopeRackIn();
                     ready,
                 ) +
                 ')';
-
-            this.sniperScopeReloadDom
-                .style.background =
-                remain > 0
-                    ? 'linear-gradient(90deg,#b56d2b,#ffd27d)'
-                    : 'linear-gradient(90deg,#54b77c,#b7f2cb)';
         }
     }
 
@@ -57404,31 +57255,113 @@ this.startSniperScopeRackIn();
             return;
         }
 
-        void x;
-        void y;
+        const radius =
+            this.sniperScopeRadius;
+
+        const cx =
+            this.sniperScopeScreenX;
+
+        const cy =
+            this.sniperScopeScreenY;
+
+        this.sniperScopeCamera
+            ?.setViewport(
+                cx -
+                    radius,
+                cy -
+                    radius,
+                radius *
+                    2,
+                radius *
+                    2,
+            );
+
+        this.sniperScopeCamera
+            ?.centerOn(
+                x,
+                y,
+            );
 
         /*
-         * DOM bezel is above the WebGL canvas and therefore really masks the
-         * square secondary-camera corners into one unmistakable circle.
+         * Cover ONLY the portions of the square camera lying outside a circle.
+         * The underlying magnified Phaser camera remains fully visible inside.
          */
-        this.ensureSniperScopeDom();
+        const cover =
+            this.sniperScopeCornerMask;
+
+        if (cover) {
+            cover
+                .clear()
+                .setVisible(
+                    true,
+                );
+
+            cover.fillStyle(
+                0x02070b,
+                1,
+            );
+
+            const step =
+                3;
+
+            for (
+                let oy =
+                    -radius;
+                oy <
+                    radius;
+                oy +=
+                    step
+            ) {
+                const sampleY =
+                    oy +
+                    step /
+                        2;
+
+                const insideHalf =
+                    Math.sqrt(
+                        Math.max(
+                            0,
+                            radius *
+                                radius -
+                                sampleY *
+                                    sampleY,
+                        ),
+                    );
+
+                const outsideWidth =
+                    radius -
+                    insideHalf;
+
+                if (
+                    outsideWidth >
+                    0.1
+                ) {
+                    cover.fillRect(
+                        cx -
+                            radius,
+                        cy +
+                            oy,
+                        outsideWidth +
+                            1,
+                        step +
+                            1,
+                    );
+
+                    cover.fillRect(
+                        cx +
+                            insideHalf,
+                        cy +
+                            oy,
+                        outsideWidth +
+                            1,
+                        step +
+                            1,
+                    );
+                }
+            }
+        }
+
         this.syncSniperScopeDom();
-
-        this.sniperScope
-            ?.clear()
-            .setVisible(false);
-
-        this.sniperScopeShade
-            ?.clear()
-            .setVisible(false);
-
-        this.sniperScopeCornerMask
-            ?.clear()
-            .setVisible(false);
-
-        this.sniperReloadGraphics
-            ?.clear()
-            .setVisible(false);
     }
 
     private drawSniperReloadGauge(): void {
@@ -57595,6 +57528,14 @@ this.startSniperScopeRackIn();
             return;
         }
 
+        /*
+         * Local Hunter never moves during overwatch.
+         */
+        this.networkPlayerManager
+            .setLocalMovementHardLocked(
+                true,
+            );
+
         const localPosition =
             this.networkPlayerManager
                 .getLocalPlayerPosition();
@@ -57603,10 +57544,6 @@ this.startSniperScopeRackIn();
             localPosition &&
             this.sniperHelicopter
         ) {
-            /*
-             * During ascent only X follows Hunter.
-             * After arrival the shadow is pinned exactly over Hunter center.
-             */
             this.sniperHelicopter.x =
                 localPosition.x;
 
@@ -57619,35 +57556,50 @@ this.startSniperScopeRackIn();
         }
 
         if (
-            this.mobileControlsEnabled &&
             this.sniperScopeInteractive &&
-            this.mobileAimBase
-                ?.visible
+            !this.mobileControlsEnabled
         ) {
-            const angle =
-                this.mobileAimAngle;
+            /*
+             * FULL MAP authority:
+             * no shotgun range, no player-radius clamp, no hunter cone.
+             * pointer -> full-map world point directly.
+             */
+            const pointer =
+                this.input.activePointer;
 
-            const speed =
-                2.6;
+            this.sniperScopeScreenX =
+                Phaser.Math.Clamp(
+                    pointer.x,
+                    70,
+                    this.gameWidth -
+                        70,
+                );
+
+            this.sniperScopeScreenY =
+                Phaser.Math.Clamp(
+                    pointer.y,
+                    70,
+                    this.gameHeight -
+                        70,
+                );
+
+            const world =
+                this.cameras.main
+                    .getWorldPoint(
+                        pointer.x,
+                        pointer.y,
+                    );
 
             this.sniperAimWorldX =
                 Phaser.Math.Clamp(
-                    this.sniperAimWorldX +
-                        Math.cos(
-                            angle,
-                        ) *
-                            speed,
+                    world.x,
                     0,
                     this.gameWidth,
                 );
 
             this.sniperAimWorldY =
                 Phaser.Math.Clamp(
-                    this.sniperAimWorldY +
-                        Math.sin(
-                            angle,
-                        ) *
-                            speed,
+                    world.y,
                     0,
                     this.gameHeight,
                 );
@@ -57672,20 +57624,8 @@ this.startSniperScopeRackIn();
                 this.sniperAimWorldY,
             );
         } else if (
-            this.sniperScopeInteractive &&
-            !this.mobileControlsEnabled
-        ) {
-            this.syncSniperScopeToPointer(
-                this.input
-                    .activePointer,
-                true,
-            );
-        } else if (
             this.sniperScopeCamera
         ) {
-            /*
-             * Rack-in animation renders even before input is unlocked.
-             */
             this.drawLocalSniperScope(
                 this.sniperAimWorldX,
                 this.sniperAimWorldY,
@@ -57693,12 +57633,6 @@ this.startSniperScopeRackIn();
         }
 
         this.drawSniperReloadGauge();
-
-        if (
-            this.sniperScopeInteractive
-        ) {
-            this.syncSniperScopeDom();
-        }
     }
 
     private refreshSniperSupportUi(): void {
