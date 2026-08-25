@@ -4835,6 +4835,48 @@ private timerText!: Phaser.GameObjects.Text;
                     return;
                 }
 
+                /*
+                 * V1010391_MOBILE_SNIPER_TOUCH_CONTROLS_VISIBILITY: empty game area = drag aim / tap fire.
+                 * Existing AIM/FIRE circles retain priority.
+                 */
+                const sniperAimDistance =
+                    Phaser.Math.Distance.Between(
+                        pointer.x,
+                        pointer.y,
+                        aimX,
+                        aimY,
+                    );
+
+                if (
+                    this.mobileControlsEnabled &&
+                    this.sniperActive &&
+                    this.sniperScopeInteractive &&
+                    fireDistance > 54 &&
+                    sniperAimDistance >
+                        this.mobileJoystickRadius *
+                            1.65
+                ) {
+                    this.mobileSniperTouchPointerId =
+                        pointer.id;
+
+                    this.mobileSniperTouchLastX =
+                        pointer.x;
+
+                    this.mobileSniperTouchLastY =
+                        pointer.y;
+
+                    this.mobileSniperTouchTravel =
+                        0;
+
+                    this.mobilePinchDistance =
+                        0;
+
+                    this.mobilePinchActive =
+                        false;
+
+                    return;
+                }
+
                 const moveDistance =
                     Phaser.Math.Distance.Between(
                         pointer.x,
@@ -5034,6 +5076,93 @@ private timerText!: Phaser.GameObjects.Text;
 
                 if (
                     pointer.id ===
+                    this.mobileSniperTouchPointerId &&
+                    this.mobileControlsEnabled &&
+                    this.sniperActive &&
+                    this.sniperScopeInteractive
+                ) {
+                    const deltaX =
+                        pointer.x -
+                        this.mobileSniperTouchLastX;
+
+                    const deltaY =
+                        pointer.y -
+                        this.mobileSniperTouchLastY;
+
+                    this.mobileSniperTouchLastX =
+                        pointer.x;
+
+                    this.mobileSniperTouchLastY =
+                        pointer.y;
+
+                    this.mobileSniperTouchTravel +=
+                        Math.sqrt(
+                            deltaX * deltaX +
+                            deltaY * deltaY,
+                        );
+
+                    this.sniperScopeScreenX =
+                        Phaser.Math.Clamp(
+                            this.sniperScopeScreenX +
+                                deltaX *
+                                    1.08,
+                            0,
+                            this.gameWidth,
+                        );
+
+                    this.sniperScopeScreenY =
+                        Phaser.Math.Clamp(
+                            this.sniperScopeScreenY +
+                                deltaY *
+                                    1.08,
+                            0,
+                            this.gameHeight,
+                        );
+
+                    const sniperWorld =
+                        this.cameras.main
+                            .getWorldPoint(
+                                this.sniperScopeScreenX,
+                                this.sniperScopeScreenY,
+                            );
+
+                    this.sniperAimWorldX =
+                        Phaser.Math.Clamp(
+                            sniperWorld.x,
+                            0,
+                            this.gameWidth,
+                        );
+
+                    this.sniperAimWorldY =
+                        Phaser.Math.Clamp(
+                            sniperWorld.y,
+                            0,
+                            this.gameHeight,
+                        );
+
+                    this.mobileSniperScopeDirty =
+                        true;
+
+                    if (
+                        this.time.now -
+                            this.sniperLastAimBroadcastAt >=
+                            90
+                    ) {
+                        this.sniperLastAimBroadcastAt =
+                            this.time.now;
+
+                        multiplayerClient
+                            .sendSniperAim(
+                                this.sniperAimWorldX,
+                                this.sniperAimWorldY,
+                            );
+                    }
+
+                    return;
+                }
+
+                if (
+                    pointer.id ===
                     this.mobileFirePointerId
                 ) {
                     /*
@@ -5111,6 +5240,28 @@ private timerText!: Phaser.GameObjects.Text;
                         }
                     } catch {
                         // Safe fallback for embedded mobile WebViews.
+                    }
+                }
+
+                if (
+                    pointer.id ===
+                    this.mobileSniperTouchPointerId
+                ) {
+                    const shouldTapFire =
+                        this.mobileControlsEnabled &&
+                        this.sniperActive &&
+                        this.sniperScopeInteractive &&
+                        this.mobileSniperTouchTravel <
+                            12;
+
+                    this.mobileSniperTouchPointerId =
+                        -1;
+
+                    this.mobileSniperTouchTravel =
+                        0;
+
+                    if (shouldTapFire) {
+                        this.fireSniperAtCurrentAim();
                     }
                 }
 
@@ -5280,6 +5431,14 @@ private timerText!: Phaser.GameObjects.Text;
                 }
 
                 if (this.phase !== 'hunt') {
+                    return;
+                }
+
+                if (
+                    this.sniperActive &&
+                    this.sniperScopeInteractive
+                ) {
+                    this.fireSniperAtCurrentAim();
                     return;
                 }
 
@@ -6894,6 +7053,16 @@ private timerText!: Phaser.GameObjects.Text;
     private mobileSniperAimY = 0;
     /* V1010390_MOBILE_SNIPER_SINGLE_CAMERA_SMOOTH_ZOOM_BLUR */
     private mobileSniperScopeDirty = true;
+
+    /* V1010391_MOBILE_SNIPER_TOUCH_CONTROLS_VISIBILITY */
+    private mobileSniperTouchPointerId = -1;
+    private mobileSniperTouchLastX = 0;
+    private mobileSniperTouchLastY = 0;
+    private mobileSniperTouchTravel = 0;
+    private sniperMobileAimVisualDom?: HTMLDivElement;
+    private sniperMobileFireVisualDom?: HTMLDivElement;
+    private sniperMobileHintDom?: HTMLDivElement;
+    private sniperMobileHintHideAt = 0;
     private readonly mobileJoystickRadius = 58;
     private mobileTouchPoints =
         new Map<number, Phaser.Math.Vector2>();
@@ -55506,8 +55675,8 @@ const roomPlayers =
             this.add.rectangle(
                 0,
                 0,
-                112,
-                28,
+                128,
+                32,
                 0x0b1715,
                 0.96,
             )
@@ -55527,9 +55696,9 @@ const roomPlayers =
                 0.92,
             );
 
-        const w = 56;
-        const h = 14;
-        const c = 7;
+        const w = 64;
+        const h = 16;
+        const c = 8;
 
         tacticalCorners.lineBetween(-w, -h, -w + c, -h);
         tacticalCorners.lineBetween(-w, -h, -w, -h + c);
@@ -55549,7 +55718,7 @@ const roomPlayers =
                     fontFamily:
                         '"Arial Black", "Noto Sans KR", Arial, sans-serif',
                     fontSize:
-                        '11px',
+                        '12px',
                     fontStyle:
                         'bold',
                     color:
@@ -55585,8 +55754,8 @@ const roomPlayers =
                 .setDepth(25020)
                 .setScrollFactor(0)
                 .setSize(
-                    112,
-                    28,
+                    128,
+                    32,
                 )
                 .setInteractive({
                     useHandCursor:
@@ -56551,6 +56720,14 @@ const roomPlayers =
                             true;
 
                         if (
+                            this.mobileControlsEnabled
+                        ) {
+                            this.sniperMobileHintHideAt =
+                                Date.now() +
+                                5_000;
+                        }
+
+                        if (
                             !this.mobileControlsEnabled
                         ) {
                             this.syncSniperScopeToPointer(
@@ -56576,6 +56753,8 @@ const roomPlayers =
 
         this.mobileSniperAimX = 0;
         this.mobileSniperAimY = 0;
+        this.mobileSniperTouchPointerId = -1;
+        this.mobileSniperTouchTravel = 0;
 
         /*
          * V1010387_SNIPER_SCOPE_CLIP_AND_OUTSIDE_BLUR: remove the outside blur and clipped optical DOM immediately.
@@ -56592,6 +56771,21 @@ const roomPlayers =
 
         if (this.sniperPriorityTimerDom) {
             this.sniperPriorityTimerDom.style.display =
+                'none';
+        }
+
+        if (this.sniperMobileAimVisualDom) {
+            this.sniperMobileAimVisualDom.style.display =
+                'none';
+        }
+
+        if (this.sniperMobileFireVisualDom) {
+            this.sniperMobileFireVisualDom.style.display =
+                'none';
+        }
+
+        if (this.sniperMobileHintDom) {
+            this.sniperMobileHintDom.style.display =
                 'none';
         }
 
@@ -57964,8 +58158,103 @@ const roomPlayers =
             scope,
         );
 
+        const makeMobileControlVisual =
+            (
+                labelText: string,
+            ): HTMLDivElement => {
+                const element =
+                    document.createElement(
+                        'div',
+                    );
+
+                Object.assign(
+                    element.style,
+                    {
+                        position: 'absolute',
+                        zIndex: '7',
+                        display: 'none',
+                        pointerEvents: 'none',
+                        userSelect: 'none',
+                        boxSizing: 'border-box',
+                        border: '3px solid rgba(245,255,250,.94)',
+                        borderRadius: '999px',
+                        background: 'rgba(8,17,21,.78)',
+                        color: '#ffffff',
+                        fontFamily: '"Arial Black","Noto Sans KR",Arial,sans-serif',
+                        fontWeight: '900',
+                        fontSize: '15px',
+                        textAlign: 'center',
+                        lineHeight: '1',
+                        textShadow: '0 2px 4px rgba(0,0,0,.9)',
+                        boxShadow: '0 0 0 3px rgba(8,18,20,.44), 0 5px 16px rgba(0,0,0,.40)',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                    },
+                );
+
+                element.textContent =
+                    labelText;
+
+                return element;
+            };
+
+        const mobileAimVisual =
+            makeMobileControlVisual(
+                'AIM',
+            );
+
+        const mobileFireVisual =
+            makeMobileControlVisual(
+                'FIRE',
+            );
+
+        const mobileHint =
+            document.createElement(
+                'div',
+            );
+
+        Object.assign(
+            mobileHint.style,
+            {
+                position: 'absolute',
+                zIndex: '8',
+                display: 'none',
+                pointerEvents: 'none',
+                userSelect: 'none',
+                left: '50%',
+                bottom: '12px',
+                transform: 'translateX(-50%)',
+                maxWidth: '88%',
+                padding: '8px 13px',
+                border: '1px solid rgba(220,245,232,.80)',
+                borderRadius: '10px',
+                background: 'rgba(4,12,15,.90)',
+                color: '#f4fff8',
+                fontFamily: '"Noto Sans KR","Noto Sans JP",Arial,sans-serif',
+                fontSize: '13px',
+                fontWeight: '800',
+                lineHeight: '1.35',
+                textAlign: 'center',
+                whiteSpace: 'nowrap',
+                textShadow: '0 1px 3px rgba(0,0,0,.9)',
+                boxShadow: '0 4px 14px rgba(0,0,0,.30)',
+            },
+        );
+
         clipRoot.appendChild(
             priorityTimer,
+        );
+
+        clipRoot.appendChild(
+            mobileAimVisual,
+        );
+
+        clipRoot.appendChild(
+            mobileFireVisual,
+        );
+
+        clipRoot.appendChild(
+            mobileHint,
         );
 
         document.body.appendChild(
@@ -57980,6 +58269,15 @@ const roomPlayers =
 
         this.sniperPriorityTimerDom =
             priorityTimer;
+
+        this.sniperMobileAimVisualDom =
+            mobileAimVisual;
+
+        this.sniperMobileFireVisualDom =
+            mobileFireVisual;
+
+        this.sniperMobileHintDom =
+            mobileHint;
 
         this.sniperScopeDom =
             scope;
@@ -58000,6 +58298,15 @@ const roomPlayers =
                     undefined;
 
                 this.sniperPriorityTimerDom =
+                    undefined;
+
+                this.sniperMobileAimVisualDom =
+                    undefined;
+
+                this.sniperMobileFireVisualDom =
+                    undefined;
+
+                this.sniperMobileHintDom =
                     undefined;
 
                 this.sniperScopeDom =
@@ -58110,6 +58417,111 @@ const roomPlayers =
                 ),
             ) +
             'px';
+
+        if (
+            this.mobileControlsEnabled &&
+            this.sniperMobileAimVisualDom &&
+            this.sniperMobileFireVisualDom
+        ) {
+            const controlDiameter =
+                88 *
+                Math.min(
+                    sx,
+                    sy,
+                );
+
+            const controlY =
+                (
+                    this.gameHeight -
+                    150
+                ) *
+                sy;
+
+            const positionControl =
+                (
+                    element: HTMLDivElement,
+                    logicalX: number,
+                ): void => {
+                    const centerX =
+                        logicalX *
+                        sx;
+
+                    element.style.display =
+                        this.sniperActive &&
+                        this.phase === 'hunt'
+                            ? 'flex'
+                            : 'none';
+
+                    element.style.width =
+                        String(
+                            Math.round(
+                                controlDiameter,
+                            ),
+                        ) +
+                        'px';
+
+                    element.style.height =
+                        String(
+                            Math.round(
+                                controlDiameter,
+                            ),
+                        ) +
+                        'px';
+
+                    element.style.left =
+                        String(
+                            Math.round(
+                                centerX -
+                                    controlDiameter /
+                                        2,
+                            ),
+                        ) +
+                        'px';
+
+                    element.style.top =
+                        String(
+                            Math.round(
+                                controlY -
+                                    controlDiameter /
+                                        2,
+                            ),
+                        ) +
+                        'px';
+                };
+
+            positionControl(
+                this.sniperMobileAimVisualDom,
+                this.gameWidth - 170,
+            );
+
+            positionControl(
+                this.sniperMobileFireVisualDom,
+                this.gameWidth - 64,
+            );
+        }
+
+        if (this.sniperMobileHintDom) {
+            const lang =
+                getLanguage();
+
+            this.sniperMobileHintDom.textContent =
+                lang === 'ja'
+                    ? '照準：スティック / 画面ドラッグ　　射撃：FIRE / 画面タップ'
+                    : lang === 'en'
+                        ? 'AIM: stick / drag screen    FIRE: button / tap screen'
+                        : lang === 'zh'
+                            ? '瞄准：摇杆 / 拖动画面　　射击：FIRE / 点击画面'
+                            : '조준: 조이스틱 / 화면 드래그    발사: FIRE / 화면 터치';
+
+            this.sniperMobileHintDom.style.display =
+                this.mobileControlsEnabled &&
+                this.sniperActive &&
+                this.phase === 'hunt' &&
+                Date.now() <
+                    this.sniperMobileHintHideAt
+                    ? ''
+                    : 'none';
+        }
 
         if (this.sniperPriorityTimerDom) {
             const remainingSeconds =
