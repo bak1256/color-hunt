@@ -1,3 +1,4 @@
+/* V1010478D_SNIPER_CLEAN_TEXT_SOFT_PULSE: countdown is clean text under Hunter; activation button uses only a subtle heartbeat pulse. */
 /* V1010478C_SNIPER_UI_FORMAT_PROOF: method-name based patch tolerates multiline signatures and prior sniper patch formatting. */
 /* V1010477H_REMOVE_DEAD_SNIPER_SUPPORT_STATE: remove obsolete write-only sniper support state and reset writes; keep 477e UI behavior unchanged. */
 /* V1010477G_RESTORE_SNIPER_SUPPORT_FIELDS: restore sniper support state fields still referenced by reset logic. */
@@ -56627,13 +56628,13 @@ const roomPlayers =
 
         const buttonWidth =
             this.mobileControlsEnabled
-                ? 196
-                : 184;
+                ? 190
+                : 180;
 
         const buttonHeight =
             this.mobileControlsEnabled
-                ? 50
-                : 46;
+                ? 48
+                : 44;
 
         const bg =
             this.add.rectangle(
@@ -56691,7 +56692,7 @@ const roomPlayers =
         const button =
             this.add.container(
                 this.gameWidth / 2,
-                this.gameHeight / 2 + 70,
+                this.gameHeight / 2 + 68,
                 [
                     bg,
                     label,
@@ -56730,9 +56731,7 @@ const roomPlayers =
                 this.unlockGameAudio();
 
                 multiplayerClient
-                    .sendSniperToggle(
-                        true,
-                    );
+                    .sendSniperToggle(true);
             },
         );
 
@@ -56749,7 +56748,7 @@ const roomPlayers =
                 x:
                     this.gameWidth / 2,
                 y:
-                    this.gameHeight / 2 + 70,
+                    this.gameHeight / 2 + 68,
                 scaleX:
                     1,
                 scaleY:
@@ -56757,32 +56756,31 @@ const roomPlayers =
             },
         );
 
+        /*
+         * V1010478D_SNIPER_CLEAN_TEXT_SOFT_PULSE
+         * Countdown returns to a clean text-only look.
+         * No panel/background box.
+         */
         this.sniperRadioText =
             this.add.text(
                 this.gameWidth / 2,
-                106,
+                this.gameHeight / 2 + 64,
                 '',
                 {
                     fontFamily:
-                        'monospace',
+                        'Arial, sans-serif',
                     fontSize:
-                        '15px',
+                        this.mobileControlsEnabled
+                            ? '16px'
+                            : '15px',
                     fontStyle:
                         'bold',
                     color:
-                        '#d8f3ff',
-                    backgroundColor:
-                        'rgba(6, 20, 30, 0.76)',
+                        '#f5fbff',
                     stroke:
                         '#06131c',
                     strokeThickness:
                         4,
-                    padding: {
-                        left: 14,
-                        right: 14,
-                        top: 8,
-                        bottom: 8,
-                    },
                     align:
                         'center',
                 },
@@ -56798,7 +56796,7 @@ const roomPlayers =
                 x:
                     this.gameWidth / 2,
                 y:
-                    106,
+                    this.gameHeight / 2 + 64,
                 scaleX:
                     1,
                 scaleY:
@@ -56823,6 +56821,27 @@ const roomPlayers =
                 .setDepth(25033)
                 .setScrollFactor(0)
                 .setVisible(false);
+
+        /*
+         * Subtle heartbeat only.
+         * 1.00 -> 1.02 -> 1.00
+         */
+        this.tweens.add({
+            targets:
+                button,
+            scaleX:
+                1.02,
+            scaleY:
+                1.02,
+            duration:
+                760,
+            yoyo:
+                true,
+            repeat:
+                -1,
+            ease:
+                'Sine.easeInOut',
+        });
 
         this.input.on(
             Phaser.Input.Events.POINTER_MOVE,
@@ -60443,6 +60462,49 @@ const roomPlayers =
             hunter &&
             remainingMs <= 30000;
 
+        /*
+         * Compute one shared "under my Hunter" anchor.
+         */
+        let hudX =
+            this.gameWidth / 2;
+
+        let hudY =
+            this.gameHeight / 2 + 64;
+
+        const localPosition =
+            this.networkPlayerManager
+                ?.getLocalPlayerPosition?.();
+
+        if (localPosition) {
+            const camera =
+                this.cameras.main;
+
+            const topLeft =
+                camera.getWorldPoint(
+                    0,
+                    0,
+                );
+
+            hudX =
+                (
+                    localPosition.x -
+                    topLeft.x
+                ) *
+                camera.zoom;
+
+            hudY =
+                (
+                    localPosition.y -
+                    topLeft.y
+                ) *
+                camera.zoom +
+                (
+                    this.mobileControlsEnabled
+                        ? 58
+                        : 52
+                );
+        }
+
         const warning =
             hunter &&
             remainingMs <= 35000 &&
@@ -60473,10 +60535,6 @@ const roomPlayers =
                         this.sniperRadioText,
                     );
 
-                /*
-                 * No pop/fade each second.
-                 * Same font, same box, number only.
-                 */
                 this.sniperRadioText
                     .setScale(1)
                     .setAlpha(1)
@@ -60487,7 +60545,27 @@ const roomPlayers =
                     );
             }
 
+            const textHalfWidth =
+                Math.max(
+                    70,
+                    this.sniperRadioText.width / 2,
+                );
+
             this.sniperRadioText
+                .setPosition(
+                    Phaser.Math.Clamp(
+                        hudX,
+                        textHalfWidth + 8,
+                        this.gameWidth -
+                            textHalfWidth -
+                            8,
+                    ),
+                    Phaser.Math.Clamp(
+                        hudY,
+                        22,
+                        this.gameHeight - 22,
+                    ),
+                )
                 .setVisible(true);
 
             this.sniperButton
@@ -60506,89 +60584,45 @@ const roomPlayers =
             this.sniperButton
                 .setVisible(false);
         } else {
-            const localPosition =
-                this.networkPlayerManager
-                    ?.getLocalPlayerPosition?.();
-
-            if (localPosition) {
-                const camera =
-                    this.cameras.main;
-
-                const topLeft =
-                    camera.getWorldPoint(
-                        0,
-                        0,
-                    );
-
-                const screenX =
-                    (
-                        localPosition.x -
-                        topLeft.x
-                    ) *
-                    camera.zoom;
-
-                const screenY =
-                    (
-                        localPosition.y -
-                        topLeft.y
-                    ) *
-                    camera.zoom;
-
-                const buttonWidth =
-                    this.sniperButton.width ||
-                    (
-                        this.mobileControlsEnabled
-                            ? 196
-                            : 184
-                    );
-
-                const buttonHeight =
-                    this.sniperButton.height ||
-                    (
-                        this.mobileControlsEnabled
-                            ? 50
-                            : 46
-                    );
-
-                const halfW =
-                    buttonWidth / 2;
-
-                const halfH =
-                    buttonHeight / 2;
-
-                /*
-                 * Directly below the Hunter without covering the body.
-                 */
-                const belowGap =
+            const buttonWidth =
+                this.sniperButton.width ||
+                (
                     this.mobileControlsEnabled
-                        ? 62
-                        : 54;
+                        ? 190
+                        : 180
+                );
 
-                this.sniperButton
-                    .setPosition(
-                        Phaser.Math.Clamp(
-                            screenX,
-                            halfW + 10,
-                            this.gameWidth -
-                                halfW -
-                                10,
-                        ),
-                        Phaser.Math.Clamp(
-                            screenY +
-                                belowGap,
-                            halfH + 10,
-                            this.gameHeight -
-                                halfH -
-                                10,
-                        ),
-                    );
-            } else {
-                this.sniperButton
-                    .setPosition(
-                        this.gameWidth / 2,
-                        this.gameHeight / 2 + 70,
-                    );
-            }
+            const buttonHeight =
+                this.sniperButton.height ||
+                (
+                    this.mobileControlsEnabled
+                        ? 48
+                        : 44
+                );
+
+            const halfW =
+                buttonWidth / 2;
+
+            const halfH =
+                buttonHeight / 2;
+
+            this.sniperButton
+                .setPosition(
+                    Phaser.Math.Clamp(
+                        hudX,
+                        halfW + 10,
+                        this.gameWidth -
+                            halfW -
+                            10,
+                    ),
+                    Phaser.Math.Clamp(
+                        hudY + 3,
+                        halfH + 10,
+                        this.gameHeight -
+                            halfH -
+                            10,
+                    ),
+                );
 
             const language =
                 getLanguage();
