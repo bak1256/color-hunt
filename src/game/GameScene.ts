@@ -8397,11 +8397,15 @@ private timerText!: Phaser.GameObjects.Text;
                 },
             );
 
+        /*
+         * V1010455M_CINEMATIC_WAR_TACTICAL_BGM_REMIX
+         * Tactical score intentionally dominates the helicopter bed.
+         */
         this.sniperTacticalMusic =
             this.sound.add(
                 'sniper-tactical-bgm',
                 {
-                    volume: 0.50,
+                    volume: 0.78,
                     loop: true,
                 },
             );
@@ -56675,8 +56679,12 @@ const roomPlayers =
                     this.sound.add(
                         'sniper-helicopter-rotor',
                         {
+                            /*
+                             * V1010455M_CINEMATIC_WAR_TACTICAL_BGM_REMIX
+                             * Rotor is ambience, not the main mix.
+                             */
                             volume:
-                                0.52,
+                                0.26,
                             loop:
                                 true,
                         },
@@ -57193,6 +57201,10 @@ const roomPlayers =
              */
             this.sniperTacticalMusic.stop();
             this.sniperTacticalMusic.play();
+
+            /*
+             * V1010455M_CINEMATIC_WAR_TACTICAL_BGM_REMIX: start rotor after the music attack is established.
+             */
         }
 
         this.startSniperHelicopterAudio();
