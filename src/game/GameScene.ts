@@ -55773,7 +55773,7 @@ const roomPlayers =
         const supportButtonWidth =
             this.mobileControlsEnabled
                 ? 176
-                : 194;
+                : 204;
         const supportButtonHeight =
             this.mobileControlsEnabled ? 42 : 48;
 
@@ -55782,17 +55782,14 @@ const roomPlayers =
          * Desktop support action lives in the right HUD rail instead of
          * overlapping the player's normal shotgun aim area.
          */
+        /*
+         * V1010455H_FIX_DESKTOP_SCOPE_ALIGNMENT_RESTORE_SUPPORT_BUTTON: restore original under-character position.
+         */
         const supportButtonX =
-            this.mobileControlsEnabled
-                ? this.gameWidth / 2
-                : this.gameWidth -
-                    supportButtonWidth / 2 -
-                    18;
+            this.gameWidth / 2;
 
         const supportButtonY =
-            this.mobileControlsEnabled
-                ? this.gameHeight / 2 + 94
-                : this.gameHeight / 2 + 118;
+            this.gameHeight / 2 + 94;
 
         const bg =
             this.add.rectangle(
@@ -55801,7 +55798,9 @@ const roomPlayers =
                 supportButtonWidth,
                 supportButtonHeight,
                 0x0b1715,
-                0.96,
+                this.mobileControlsEnabled
+                    ? 0.82
+                    : 0.62,
             )
                 .setStrokeStyle(
                     2,
@@ -55899,7 +55898,9 @@ const roomPlayers =
                 ) {
                     bg.setFillStyle(
                         0x173428,
-                        1,
+                        this.mobileControlsEnabled
+                            ? 0.92
+                            : 0.76,
                     );
                 }
             },
@@ -55911,7 +55912,9 @@ const roomPlayers =
                 this.tweens.killTweensOf(button);
                 bg.setFillStyle(
                     0x0b1715,
-                    0.96,
+                    this.mobileControlsEnabled
+                        ? 0.82
+                        : 0.62,
                 );
             },
         );
@@ -58382,12 +58385,16 @@ const roomPlayers =
         /*
          * Scope is now positioned RELATIVE to the clipped canvas root.
          */
+        /*
+         * V1010455H_FIX_DESKTOP_SCOPE_ALIGNMENT_RESTORE_SUPPORT_BUTTON
+         * Ring / magnified lens / blur hole all share activeScopeRadius.
+         */
         scope.style.left =
             String(
                 Math.round(
                     (
                         this.sniperScopeScreenX -
-                        this.sniperScopeRadius
+                        activeScopeRadius
                     ) *
                         sx,
                 ),
@@ -58399,7 +58406,7 @@ const roomPlayers =
                 Math.round(
                     (
                         this.sniperScopeScreenY -
-                        this.sniperScopeRadius
+                        activeScopeRadius
                     ) *
                         sy,
                 ),
@@ -59500,7 +59507,9 @@ const roomPlayers =
         this.sniperButtonBg
             .setFillStyle(
                 0x0b1715,
-                0.96,
+                this.mobileControlsEnabled
+                    ? 0.82
+                    : 0.62,
             );
     }
 
