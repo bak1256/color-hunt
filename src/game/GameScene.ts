@@ -915,6 +915,8 @@ export class GameScene extends Phaser.Scene {
     private sniperScopeRadius = 112;
     private sniperLastAimBroadcastAt = 0;
     private sniperScopeIntroTween?: Phaser.Tweens.Tween;
+    /* V1010392_SNIPER_MOBILE_THERMAL_AUDIO_BLUR_INTRO_BUTTON: one scope owns the mobile rack-in animation. */
+    private sniperScopeRackInRunning = false;
     private sniperScopeCornerMask?: Phaser.GameObjects.Graphics;
 
     /* V1010456_SNIPER_SEQUENCE_SCOPE_REWORK */
@@ -55754,13 +55756,18 @@ const roomPlayers =
     private ensureSniperSupportUi(): void {
         if (this.sniperButton) return;
 
-        /* V1010388B_COMPACT_SNIPER_SUPPORT_BUTTON: compact support button. */
+        /* V1010392_SNIPER_MOBILE_THERMAL_AUDIO_BLUR_INTRO_BUTTON: support button uses same scale as pre-button radio copy. */
+        const supportButtonWidth =
+            this.mobileControlsEnabled ? 176 : 204;
+        const supportButtonHeight =
+            this.mobileControlsEnabled ? 42 : 48;
+
         const bg =
             this.add.rectangle(
                 0,
                 0,
-                128,
-                32,
+                supportButtonWidth,
+                supportButtonHeight,
                 0x0b1715,
                 0.96,
             )
@@ -55780,9 +55787,9 @@ const roomPlayers =
                 0.92,
             );
 
-        const w = 64;
-        const h = 16;
-        const c = 8;
+        const w = supportButtonWidth / 2;
+        const h = supportButtonHeight / 2;
+        const c = this.mobileControlsEnabled ? 9 : 10;
 
         tacticalCorners.lineBetween(-w, -h, -w + c, -h);
         tacticalCorners.lineBetween(-w, -h, -w, -h + c);
@@ -55802,15 +55809,17 @@ const roomPlayers =
                     fontFamily:
                         '"Arial Black", "Noto Sans KR", Arial, sans-serif',
                     fontSize:
-                        '12px',
+                        this.mobileControlsEnabled
+                            ? '16px'
+                            : '20px',
                     fontStyle:
                         'bold',
                     color:
-                        '#effff3',
+                        '#ffd85a',
                     stroke:
-                        '#07110d',
+                        '#111111',
                     strokeThickness:
-                        4,
+                        5,
                     align:
                         'center',
                 },
@@ -55838,8 +55847,8 @@ const roomPlayers =
                 .setDepth(25020)
                 .setScrollFactor(0)
                 .setSize(
-                    128,
-                    32,
+                    supportButtonWidth,
+                    supportButtonHeight,
                 )
                 .setInteractive({
                     useHandCursor:
@@ -56715,6 +56724,8 @@ const roomPlayers =
         /* V1010463_VICTORY_CAMERA_LOCK_SNIPER_INTRO_CHAT_FIX: rack-in owns the only visible scope until tween completion. */
         this.sniperScopeInteractive =
             false;
+        this.sniperScopeRackInRunning =
+            true;
 
         this.sniperScopeStripCameras
             .forEach(
@@ -56802,6 +56813,8 @@ const roomPlayers =
 
                         this.sniperScopeInteractive =
                             true;
+                        this.sniperScopeRackInRunning =
+                            false;
 
                         if (
                             this.mobileControlsEnabled
@@ -56834,6 +56847,7 @@ const roomPlayers =
         this.sniperCinematicActive = false;
         this.sniperScopeInteractive = false;
         this.sniperHelicopterArrived = false;
+        this.sniperScopeRackInRunning = false;
 
         this.mobileSniperAimX = 0;
         this.mobileSniperAimY = 0;
@@ -56986,6 +57000,7 @@ const roomPlayers =
         }
     }
 
+    /* V1010392C_FIX_CURRENT_BUILD_4_ERRORS */
     private startSniperTacticalBgm(): void {
         if (
             this.sniperTacticalBgmActive ||
@@ -56995,190 +57010,27 @@ const roomPlayers =
             return;
         }
 
-        try {
-            const soundManager =
-                this.sound as unknown as {
-                    context?: AudioContext;
-                };
+        /*
+         * V1010392_SNIPER_MOBILE_THERMAL_AUDIO_BLUR_INTRO_BUTTON: no oscillator hum. All clients hear the real rotor WAV
+         * plus the stable Hunt BGM. Singleton sounds prevent stacking.
+         */
+        this.sniperTacticalBgmActive = true;
+        this.startSniperHelicopterAudio();
 
-            const context =
-                soundManager.context;
-
-            if (!context) {
-                return;
+        if (this.huntMusic) {
+            (
+                this.huntMusic as unknown as {
+                    setVolume?: (
+                        volume: number,
+                    ) => unknown;
+                    volume?: number;
+                }
+            ).setVolume?.(
+                0.48,
+            );
+            if (!this.huntMusic.isPlaying) {
+                this.huntMusic.play();
             }
-
-            this.sniperTacticalBgmActive =
-                true;
-
-            if (this.huntMusic?.isPlaying) {
-                this.huntMusic.stop();
-            }
-
-            const master =
-                context.createGain();
-
-            master.gain
-                .setValueAtTime(
-                    0.0001,
-                    context.currentTime,
-                );
-
-            master.gain
-                .exponentialRampToValueAtTime(
-                    0.20,
-                    context.currentTime +
-                        0.65,
-                );
-
-            master.connect(
-                context.destination,
-            );
-
-            const filter =
-                context.createBiquadFilter();
-
-            filter.type =
-                'lowpass';
-
-            filter.frequency
-                .setValueAtTime(
-                    440,
-                    context.currentTime,
-                );
-
-            filter.Q.value =
-                1.2;
-
-            filter.connect(
-                master,
-            );
-
-            const pulseGain =
-                context.createGain();
-
-            pulseGain.gain.value =
-                0.42;
-
-            pulseGain.connect(
-                filter,
-            );
-
-            const bass =
-                context.createOscillator();
-
-            bass.type =
-                'sawtooth';
-
-            bass.frequency.value =
-                48;
-
-            bass.connect(
-                pulseGain,
-            );
-
-            const sub =
-                context.createOscillator();
-
-            sub.type =
-                'sine';
-
-            sub.frequency.value =
-                32;
-
-            const subGain =
-                context.createGain();
-
-            subGain.gain.value =
-                0.55;
-
-            sub.connect(
-                subGain,
-            );
-
-            subGain.connect(
-                master,
-            );
-
-            const fifth =
-                context.createOscillator();
-
-            fifth.type =
-                'triangle';
-
-            fifth.frequency.value =
-                72;
-
-            const fifthGain =
-                context.createGain();
-
-            fifthGain.gain.value =
-                0.12;
-
-            fifth.connect(
-                fifthGain,
-            );
-
-            fifthGain.connect(
-                filter,
-            );
-
-            /*
-             * Slow helicopter/tactical pulse via LFO on bass amplitude.
-             */
-            const lfo =
-                context.createOscillator();
-
-            lfo.type =
-                'square';
-
-            lfo.frequency.value =
-                1.65;
-
-            const lfoDepth =
-                context.createGain();
-
-            lfoDepth.gain.value =
-                0.22;
-
-            lfo.connect(
-                lfoDepth,
-            );
-
-            lfoDepth.connect(
-                pulseGain.gain,
-            );
-
-            [
-                bass,
-                sub,
-                fifth,
-                lfo,
-            ].forEach(
-                (oscillator) => {
-                    oscillator.start();
-                    this.sniperTacticalOscillators.push(
-                        oscillator,
-                    );
-                },
-            );
-
-            this.sniperTacticalAudioNodes.push(
-                master,
-                filter,
-                pulseGain,
-                subGain,
-                fifthGain,
-                lfoDepth,
-            );
-        } catch (error) {
-            this.sniperTacticalBgmActive =
-                false;
-
-            console.warn(
-                '[Color Hunt] tactical sniper BGM unavailable',
-                error,
-            );
         }
     }
 
@@ -57216,6 +57068,23 @@ const roomPlayers =
 
         this.sniperTacticalAudioNodes =
             [];
+
+        if (this.sniperHelicopterSound?.isPlaying) {
+            this.sniperHelicopterSound.stop();
+        }
+
+        if (this.huntMusic) {
+            (
+                this.huntMusic as unknown as {
+                    setVolume?: (
+                        volume: number,
+                    ) => unknown;
+                    volume?: number;
+                }
+            ).setVolume?.(
+                0.40,
+            );
+        }
 
         const wasActive =
             this.sniperTacticalBgmActive;
@@ -57736,9 +57605,10 @@ const roomPlayers =
          * Mobile: 5 chord strips = circular-looking lens without returning to
          * the expensive old 10/32-camera path.
          */
+        /* V1010392_SNIPER_MOBILE_THERMAL_AUDIO_BLUR_INTRO_BUTTON: mobile thermal pass, one fewer full scene render. */
         const stripCount =
             this.mobileControlsEnabled
-                ? 5
+                ? 4
                 : 32;
 
         const scopeZoom =
@@ -57967,11 +57837,11 @@ const roomPlayers =
                  */
                 backdropFilter:
                     this.mobileControlsEnabled
-                        ? 'blur(2px) brightness(0.72) saturate(0.80)'
+                        ? 'blur(1.75px) brightness(0.72) saturate(0.80)'
                         : 'blur(5px) brightness(0.76) saturate(0.82)',
                 webkitBackdropFilter:
                     this.mobileControlsEnabled
-                        ? 'blur(2px) brightness(0.72) saturate(0.80)'
+                        ? 'blur(1.75px) brightness(0.72) saturate(0.80)'
                         : 'blur(5px) brightness(0.76) saturate(0.82)',
                 background:
                     this.mobileControlsEnabled
@@ -58343,6 +58213,16 @@ const roomPlayers =
             return;
         }
 
+        if (
+            this.sniperActive &&
+            !this.sniperScopeInteractive &&
+            !this.sniperScopeRackInRunning
+        ) {
+            if (this.sniperScopeDom) this.sniperScopeDom.style.display = 'none';
+            if (this.sniperScopeClipDom) this.sniperScopeClipDom.style.display = 'none';
+            return;
+        }
+
         const rect =
             this.game.canvas
                 .getBoundingClientRect();
@@ -58512,260 +58392,71 @@ const roomPlayers =
                     ) -
                 5;
 
-            const feather =
-                8;
+            /* V1010392H_REMOVE_UNUSED_FEATHER: feather removed after desktop mask cleanup. */
 
-            let mask: string;
+            /* V1010392D_REMOVE_UNUSED_MASK_DECLARATION: branch-local mask assignments no longer need a shared variable. */
 
             if (this.mobileControlsEnabled) {
                 /*
-                 * V1010391C_MOBILE_SCOPE_CLEAR_CIRCLE_UI_HOLES
-                 * Important: final SVG pixels have REAL alpha holes.
-                 * That keeps the scope interior, AIM, FIRE, BGM and Controls
-                 * completely untouched by backdrop blur/dimming.
+                 * V1010392_SNIPER_MOBILE_THERMAL_AUDIO_BLUR_INTRO_BUTTON: Chrome/Android-safe CSS intersect masks.
+                 * Blur stays visible everywhere except the scope and utility controls.
                  */
-                const aimHoleX =
-                    (this.gameWidth - 170) * sx;
+                const aimHoleX = (this.gameWidth - 170) * sx;
+                const fireHoleX = (this.gameWidth - 64) * sx;
+                const controlHoleY = (this.gameHeight - 150) * sy;
+                const controlHoleRadius = 59 * Math.min(sx, sy);
 
-                const fireHoleX =
-                    (this.gameWidth - 64) * sx;
-
-                const controlHoleY =
-                    (this.gameHeight - 150) * sy;
-
-                const controlHoleRadius =
-                    58 * Math.min(sx, sy);
-
-                const maskWidth =
-                    Math.max(
-                        1,
-                        Math.round(
-                            rect.width,
-                        ),
-                    );
-
-                const maskHeight =
-                    Math.max(
-                        1,
-                        Math.round(
-                            rect.height,
-                        ),
-                    );
-
-                const utilityHole =
-                    (
-                        element:
-                            HTMLElement |
-                            undefined,
-                    ): string => {
-                        if (
-                            !element ||
-                            element.style.display === 'none'
-                        ) {
-                            return '';
-                        }
-
-                        const utilityRect =
-                            element.getBoundingClientRect();
-
-                        const x =
-                            Phaser.Math.Clamp(
-                                utilityRect.left -
-                                    rect.left -
-                                    4,
-                                0,
-                                rect.width,
-                            );
-
-                        const y =
-                            Phaser.Math.Clamp(
-                                utilityRect.top -
-                                    rect.top -
-                                    4,
-                                0,
-                                rect.height,
-                            );
-
-                        const width =
-                            Math.max(
-                                0,
-                                Math.min(
-                                    utilityRect.width +
-                                        8,
-                                    rect.width -
-                                        x,
-                                ),
-                            );
-
-                        const height =
-                            Math.max(
-                                0,
-                                Math.min(
-                                    utilityRect.height +
-                                        8,
-                                    rect.height -
-                                        y,
-                                ),
-                            );
-
-                        if (
-                            width <= 0 ||
-                            height <= 0
-                        ) {
-                            return '';
-                        }
-
-                        return (
-                            '<rect x="' +
-                            String(
-                                Math.round(
-                                    x,
-                                ),
-                            ) +
-                            '" y="' +
-                            String(
-                                Math.round(
-                                    y,
-                                ),
-                            ) +
-                            '" width="' +
-                            String(
-                                Math.round(
-                                    width,
-                                ),
-                            ) +
-                            '" height="' +
-                            String(
-                                Math.round(
-                                    height,
-                                ),
-                            ) +
-                            '" rx="13" fill="black"/>'
-                        );
-                    };
-
-                const bgmHole =
-                    utilityHole(
-                        this.unifiedBgmButton,
-                    );
-
-                const controlsHole =
-                    utilityHole(
-                        this.controlsHelpButton,
-                    );
-
-                /*
-                 * Inner <mask> converts black shapes to transparent alpha in
-                 * the final SVG output. CSS then consumes that ALPHA image.
-                 */
-                const svgMask =
-                    '<svg xmlns="http://www.w3.org/2000/svg" width="' +
-                    String(maskWidth) +
-                    '" height="' +
-                    String(maskHeight) +
-                    '" viewBox="0 0 ' +
-                    String(maskWidth) +
-                    ' ' +
-                    String(maskHeight) +
-                    '">' +
-                    '<defs><mask id="m" maskUnits="userSpaceOnUse" mask-type="luminance">' +
-                    '<rect width="100%" height="100%" fill="white"/>' +
-                    '<circle cx="' +
-                    String(
-                        Math.round(
-                            holeX,
-                        ),
-                    ) +
-                    '" cy="' +
-                    String(
-                        Math.round(
-                            holeY,
-                        ),
-                    ) +
-                    '" r="' +
-                    String(
-                        Math.round(
-                            Math.max(
-                                0,
-                                holeRadius -
-                                    5,
-                            ),
-                        ),
-                    ) +
-                    '" fill="black"/>' +
-                    '<circle cx="' +
-                    String(
-                        Math.round(
-                            aimHoleX,
-                        ),
-                    ) +
-                    '" cy="' +
-                    String(
-                        Math.round(
-                            controlHoleY,
-                        ),
-                    ) +
-                    '" r="' +
-                    String(
-                        Math.round(
-                            controlHoleRadius,
-                        ),
-                    ) +
-                    '" fill="black"/>' +
-                    '<circle cx="' +
-                    String(
-                        Math.round(
-                            fireHoleX,
-                        ),
-                    ) +
-                    '" cy="' +
-                    String(
-                        Math.round(
-                            controlHoleY,
-                        ),
-                    ) +
-                    '" r="' +
-                    String(
-                        Math.round(
-                            controlHoleRadius,
-                        ),
-                    ) +
-                    '" fill="black"/>' +
-                    bgmHole +
-                    controlsHole +
-                    '</mask></defs>' +
-                    '<rect width="100%" height="100%" fill="white" mask="url(#m)"/>' +
-                    '</svg>';
-
-                mask =
-                    'url("data:image/svg+xml,' +
-                    encodeURIComponent(
-                        svgMask,
-                    ) +
-                    '")';
-
-                blurLayer.style.maskMode =
-                    'alpha';
-            } else {
-                mask =
+                const circularHole = (
+                    x: number,
+                    y: number,
+                    radius: number,
+                ): string =>
                     'radial-gradient(circle at ' +
-                    String(Math.round(holeX)) +
-                    'px ' +
-                    String(Math.round(holeY)) +
-                    'px, transparent 0 ' +
-                    String(Math.max(0, Math.round(holeRadius))) +
-                    'px, rgba(0,0,0,0.15) ' +
-                    String(Math.round(holeRadius + feather * 0.35)) +
-                    'px, #000 ' +
-                    String(Math.round(holeRadius + feather)) +
-                    'px)';
+                    String(Math.round(x)) + 'px ' +
+                    String(Math.round(y)) + 'px, transparent 0 ' +
+                    String(Math.round(radius)) + 'px, #000 ' +
+                    String(Math.round(radius + 2)) + 'px)';
+
+                const utilityHole = (
+                    element: HTMLElement | undefined,
+                ): string | null => {
+                    if (!element) return null;
+                    const r = element.getBoundingClientRect();
+                    if (r.width <= 0 || r.height <= 0) return null;
+                    return circularHole(
+                        r.left - rect.left + r.width / 2,
+                        r.top - rect.top + r.height / 2,
+                        Math.max(r.width, r.height) / 2 + 7,
+                    );
+                };
+
+                const masks: string[] = [
+                    circularHole(holeX, holeY, Math.max(0, holeRadius)),
+                    circularHole(aimHoleX, controlHoleY, controlHoleRadius),
+                    circularHole(fireHoleX, controlHoleY, controlHoleRadius),
+                ];
+
+                const bgmMask = utilityHole(this.unifiedBgmButton);
+                const controlsMask = utilityHole(this.controlsHelpButton);
+                if (bgmMask) masks.push(bgmMask);
+                if (controlsMask) masks.push(controlsMask);
+
+                const joined = masks.join(', ');
+                blurLayer.style.maskImage = joined;
+                blurLayer.style.webkitMaskImage = joined;
+                blurLayer.style.maskSize = '100% 100%';
+                blurLayer.style.webkitMaskSize = '100% 100%';
+                blurLayer.style.maskPosition = '0 0';
+                blurLayer.style.webkitMaskPosition = '0 0';
+                blurLayer.style.maskComposite =
+                    Array(Math.max(0,masks.length-1)).fill('intersect').join(', ');
+                blurLayer.style.webkitMaskComposite =
+                    Array(Math.max(0,masks.length-1)).fill('source-in').join(', ');
+            } else {
+                /* V1010392G_REMOVE_UNUSED_392E_DESKTOP_MASK_VALUE: removed dead desktop radial-gradient value. */
             }
 
-            blurLayer.style.maskImage =
-                mask;
-
-            blurLayer.style.webkitMaskImage =
-                mask;
+            /* V1010392C_FIX_CURRENT_BUILD_4_ERRORS: mobile/desktop branches already assign maskImage. */
         }
 
         scope.style.width =
