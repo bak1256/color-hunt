@@ -54908,7 +54908,13 @@ const roomPlayers =
         }).setOrigin(0.5);
 
         const button = this.add.container(this.gameWidth - 105, 78, [bg, label])
-            .setDepth(5000)
+            /*
+             * V1010453D_SNIPER_FIXED_HUD_ANCHOR
+             * Hunter Hunt camera uses 1.65x zoom. A late-created setScrollFactor(0)
+             * object is still affected by camera zoom unless it joins the same
+             * fixed-HUD compensation map as HEAT/GAS.
+             */
+            .setDepth(25002)
             .setScrollFactor(0)
             .setSize(150, 42)
             .setInteractive({ useHandCursor: true });
@@ -54922,6 +54928,24 @@ const roomPlayers =
         this.sniperButton = button;
         this.sniperButtonBg = bg;
         this.sniperButtonText = label;
+
+        /*
+         * Register this late-created control with the existing screen-space HUD
+         * transform system, then immediately apply the CURRENT camera zoom.
+         */
+        this.fixedHudBaseTransforms.set(
+            button,
+            {
+                x: this.gameWidth - 105,
+                y: 78,
+                scaleX: 1,
+                scaleY: 1,
+            },
+        );
+
+        this.applyFixedHudForZoom(
+            this.cameras.main.zoom,
+        );
 
         this.sniperScope = this.add.graphics()
             .setDepth(4900)
@@ -55061,7 +55085,15 @@ const roomPlayers =
         this.sniperAvailable = hunter && remainingMs <= 30_000;
         const warning = hunter && remainingMs <= 35_000 && remainingMs > 30_000;
 
-        this.sniperButton.setVisible(hunter && (warning || this.sniperAvailable));
+        this.sniperButton
+            .setDepth(25002)
+            .setVisible(
+                hunter &&
+                (
+                    warning ||
+                    this.sniperAvailable
+                ),
+            );
 
         if (warning) {
             this.sniperButtonText.setText('SUPPORT ' + Math.ceil((remainingMs - 30000) / 1000));
