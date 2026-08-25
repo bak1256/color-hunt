@@ -56241,10 +56241,18 @@ const roomPlayers =
                 },
             );
 
-        this.cameras.main.shake(
-            210,
-            0.016,
-        );
+        /*
+         * V1010455C_SNIPER_MOBILE_CONTROLS_PC_HELI_FLICKER_FIRE_PERF
+         * Mobile keeps optic recoil but skips expensive full-canvas shake.
+         */
+        if (
+            !this.mobileControlsEnabled
+        ) {
+            this.cameras.main.shake(
+                210,
+                0.016,
+            );
+        }
 
         this.sniperScopeCamera
             ?.shake(
@@ -56726,6 +56734,15 @@ const roomPlayers =
             false;
         this.sniperScopeRackInRunning =
             true;
+
+        /*
+         * V1010455C_SNIPER_MOBILE_CONTROLS_PC_HELI_FLICKER_FIRE_PERF
+         * Arrival shadow must never remain behind transparent scope-strip seams.
+         */
+        this.sniperHelicopter
+            ?.setVisible(
+                false,
+            );
 
         this.sniperScopeStripCameras
             .forEach(
@@ -58480,6 +58497,150 @@ const roomPlayers =
 
             blurLayer.style.webkitMaskPosition =
                 '0 0';
+
+            /*
+             * V1010455C_SNIPER_MOBILE_CONTROLS_PC_HELI_FLICKER_FIRE_PERF
+             * Mobile controls are Phaser objects under this DOM blur.
+             * Use one stable concave clip-path so their original visuals remain
+             * sharp without duplicating buttons or using fragile mask-composite.
+             */
+            if (this.mobileControlsEnabled) {
+                const uniform =
+                    Math.min(
+                        sx,
+                        sy,
+                    );
+
+                const utilityBottom =
+                    Phaser.Math.Clamp(
+                        88 * sy,
+                        54,
+                        rect.height *
+                            0.24,
+                    );
+
+                const controlCenterY =
+                    (
+                        this.gameHeight -
+                        150
+                    ) *
+                    sy;
+
+                const controlTop =
+                    Phaser.Math.Clamp(
+                        controlCenterY -
+                            76 *
+                                uniform,
+                        utilityBottom +
+                            8,
+                        rect.height -
+                            110,
+                    );
+
+                const controlBottom =
+                    Phaser.Math.Clamp(
+                        controlCenterY +
+                            76 *
+                                uniform,
+                        controlTop +
+                            44,
+                        rect.height,
+                    );
+
+                const notchLeft =
+                    Phaser.Math.Clamp(
+                        (
+                            this.gameWidth -
+                            275
+                        ) *
+                            sx,
+                        rect.width *
+                            0.56,
+                        rect.width -
+                            100,
+                    );
+
+                const rw =
+                    Math.round(
+                        rect.width,
+                    );
+
+                const rh =
+                    Math.round(
+                        rect.height,
+                    );
+
+                const nl =
+                    Math.round(
+                        notchLeft,
+                    );
+
+                const ub =
+                    Math.round(
+                        utilityBottom,
+                    );
+
+                const ct =
+                    Math.round(
+                        controlTop,
+                    );
+
+                const cb =
+                    Math.round(
+                        controlBottom,
+                    );
+
+                /*
+                 * Polygon walks clockwise and takes two bites from the right edge.
+                 * Everything inside those bites is the untouched Phaser canvas.
+                 */
+                const polygon =
+                    [
+                        '0px 0px',
+                        rw + 'px 0px',
+
+                        rw + 'px ' + ub + 'px',
+                        nl + 'px ' + ub + 'px',
+                        nl + 'px ' + (ub + 1) + 'px',
+                        rw + 'px ' + (ub + 1) + 'px',
+
+                        rw + 'px ' + ct + 'px',
+                        nl + 'px ' + ct + 'px',
+                        nl + 'px ' + cb + 'px',
+                        rw + 'px ' + cb + 'px',
+
+                        rw + 'px ' + rh + 'px',
+                        '0px ' + rh + 'px',
+                    ].join(
+                        ', ',
+                    );
+
+                blurLayer.style.clipPath =
+                    'polygon(' +
+                    polygon +
+                    ')';
+
+                /*
+                 * V1010455D_FIX_WEBKIT_CLIP_PATH_TYPESCRIPT
+                 * CSSStyleDeclaration in the current TS DOM typings does not
+                 * expose webkitClipPath as a typed property. setProperty keeps
+                 * the exact same WebKit CSS behavior without a TS2339 error.
+                 */
+                blurLayer.style.setProperty(
+                    '-webkit-clip-path',
+                    'polygon(' +
+                        polygon +
+                        ')',
+                );
+            } else {
+                blurLayer.style.clipPath =
+                    'none';
+
+                blurLayer.style.setProperty(
+                    '-webkit-clip-path',
+                    'none',
+                );
+            }
 
             /* V1010392C_FIX_CURRENT_BUILD_4_ERRORS: mobile/desktop branches already assign maskImage. */
         }
