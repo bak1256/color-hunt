@@ -925,6 +925,8 @@ export class GameScene extends Phaser.Scene {
     /* V1010387_SNIPER_SCOPE_CLIP_AND_OUTSIDE_BLUR */
     private sniperScopeClipDom?: HTMLDivElement;
     private sniperScopeBlurDom?: HTMLDivElement;
+    /* V1010388_SNIPER_UI_PASS_THROUGH_PRIORITY_TIMER_FIXED_BUTTON */
+    private sniperPriorityTimerDom?: HTMLDivElement;
 
     /* V1010457_SNIPER_FINAL_FLOW_REWORK */
     private sniperButtonPressBlockUntil = 0;
@@ -55440,15 +55442,15 @@ const roomPlayers =
         button.on(
             'pointerover',
             () => {
+                this.tweens.killTweensOf(button);
+                button.setScale(1);
+
                 if (
                     this.sniperAvailable &&
                     !this.sniperActive
                 ) {
                     bg.setFillStyle(
                         0x173428,
-                        1,
-                    );
-                    button.setScale(
                         1,
                     );
                 }
@@ -55458,13 +55460,12 @@ const roomPlayers =
         button.on(
             'pointerout',
             () => {
+                this.tweens.killTweensOf(button);
                 bg.setFillStyle(
                     0x0b1715,
                     0.96,
                 );
-                button.setScale(
-                    1,
-                );
+                button.setScale(1);
             },
         );
 
@@ -55990,6 +55991,26 @@ const roomPlayers =
                 -1;
         }
 
+        if (this.unifiedBgmButton) {
+            this.unifiedBgmButton.style.pointerEvents = 'none';
+            this.unifiedBgmButton.style.cursor = 'default';
+            this.unifiedBgmButton.style.userSelect = 'none';
+            this.unifiedBgmButton.tabIndex = -1;
+        }
+
+        if (this.controlsHelpRoot) {
+            this.controlsHelpRoot.style.pointerEvents = 'none';
+            this.controlsHelpRoot.style.cursor = 'default';
+            this.controlsHelpRoot.style.userSelect = 'none';
+        }
+
+        if (this.controlsHelpButton) {
+            this.controlsHelpButton.style.pointerEvents = 'none';
+            this.controlsHelpButton.style.cursor = 'default';
+            this.controlsHelpButton.style.userSelect = 'none';
+            this.controlsHelpButton.tabIndex = -1;
+        }
+
         const localPosition =
             this.networkPlayerManager
                 .getLocalPlayerPosition();
@@ -56401,6 +56422,11 @@ const roomPlayers =
                 'none';
         }
 
+        if (this.sniperPriorityTimerDom) {
+            this.sniperPriorityTimerDom.style.display =
+                'none';
+        }
+
         if (this.chatRoot) {
             this.chatRoot.style.pointerEvents =
                 '';
@@ -56437,6 +56463,26 @@ const roomPlayers =
                 '';
             this.chatSendButton.tabIndex =
                 0;
+        }
+
+        if (this.unifiedBgmButton) {
+            this.unifiedBgmButton.style.pointerEvents = '';
+            this.unifiedBgmButton.style.cursor = '';
+            this.unifiedBgmButton.style.userSelect = '';
+            this.unifiedBgmButton.tabIndex = 0;
+        }
+
+        if (this.controlsHelpRoot) {
+            this.controlsHelpRoot.style.pointerEvents = '';
+            this.controlsHelpRoot.style.cursor = '';
+            this.controlsHelpRoot.style.userSelect = '';
+        }
+
+        if (this.controlsHelpButton) {
+            this.controlsHelpButton.style.pointerEvents = '';
+            this.controlsHelpButton.style.cursor = '';
+            this.controlsHelpButton.style.userSelect = '';
+            this.controlsHelpButton.tabIndex = 0;
         }
 
         this.sniperScopeStripCameras
@@ -57678,12 +57724,49 @@ const roomPlayers =
             reloadTrack,
         );
 
+        const priorityTimer =
+            document.createElement(
+                'div',
+            );
+
+        Object.assign(
+            priorityTimer.style,
+            {
+                position: 'absolute',
+                left: '50%',
+                top: '70px',
+                transform: 'translateX(-50%)',
+                zIndex: '5',
+                display: 'none',
+                pointerEvents: 'none',
+                userSelect: 'none',
+                whiteSpace: 'nowrap',
+                minWidth: '74px',
+                padding: '7px 13px',
+                border: '2px solid rgba(217,238,226,.82)',
+                borderRadius: '8px',
+                background: 'rgba(5,13,17,.92)',
+                color: '#f6fff8',
+                fontFamily: '"Arial Black","Noto Sans KR",Arial,sans-serif',
+                fontSize: '17px',
+                fontWeight: '900',
+                lineHeight: '1',
+                textAlign: 'center',
+                textShadow: '0 2px 3px rgba(0,0,0,.85)',
+                boxShadow: '0 4px 14px rgba(0,0,0,.40)',
+            },
+        );
+
         clipRoot.appendChild(
             blurLayer,
         );
 
         clipRoot.appendChild(
             scope,
+        );
+
+        clipRoot.appendChild(
+            priorityTimer,
         );
 
         document.body.appendChild(
@@ -57695,6 +57778,9 @@ const roomPlayers =
 
         this.sniperScopeBlurDom =
             blurLayer;
+
+        this.sniperPriorityTimerDom =
+            priorityTimer;
 
         this.sniperScopeDom =
             scope;
@@ -57712,6 +57798,9 @@ const roomPlayers =
                     undefined;
 
                 this.sniperScopeBlurDom =
+                    undefined;
+
+                this.sniperPriorityTimerDom =
                     undefined;
 
                 this.sniperScopeDom =
@@ -57822,6 +57911,37 @@ const roomPlayers =
                 ),
             ) +
             'px';
+
+        if (this.sniperPriorityTimerDom) {
+            const remainingSeconds =
+                Math.max(
+                    0,
+                    Math.ceil(
+                        (
+                            this.phaseEndTime -
+                            this.time.now
+                        ) /
+                            1000,
+                    ),
+                );
+
+            this.sniperPriorityTimerDom.textContent =
+                '⏱ ' +
+                String(
+                    remainingSeconds,
+                ) +
+                's';
+
+            this.sniperPriorityTimerDom.style.display =
+                this.phase === 'hunt'
+                    ? ''
+                    : 'none';
+
+            this.sniperPriorityTimerDom.style.color =
+                remainingSeconds <= 5
+                    ? '#ff7878'
+                    : '#f6fff8';
+        }
 
         if (blurLayer) {
             const holeX =
@@ -58485,7 +58605,12 @@ const roomPlayers =
         this.sniperRadioText
             .setVisible(false);
 
+        this.tweens.killTweensOf(
+            this.sniperButton,
+        );
+
         this.sniperButton
+            .setScale(1)
             .setDepth(25002)
             .setVisible(
                 !this.sniperActive &&
