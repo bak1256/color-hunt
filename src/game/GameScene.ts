@@ -1,5 +1,3 @@
-/* V1010481D_SCOPE_RESTORE_SELF_DELAYED_REVEAL: rollback scope regression; original circular scope + self-contained delayed reveal only. */
-/* V1010481B_PC_SNIPER_SCOPE_LEAK_BLUR_ROBUST: PC scope camera hidden until fully framed; outside main world blurred; clean reveal/exit. */
 /* V1010480B_ASSIST_PINHOLE_OPAQUE_MICROPULSE_CLEAN_SCOPE: organic FULL dab overlap, opaque Paint Help, true micro heartbeat, clean PC sniper transition. */
 /* V1010479D_RESTORE_ORGANIC_ASSIST_DENSITY_ONLY: remove FULL grid geometry; preserve original organic dots and change density only. */
 /* V1010479C_FIX_ASSIST_DENSITY_BUILD: canonicalize Paint Assist density block after 479b duplicate declaration. */
@@ -57366,55 +57364,6 @@ const roomPlayers =
 
     private enterSniperCinematic(): void {
         /*
-         * V1010481D_ROLLBACK_481B_AT_ENTRY
-         * Remove the blur experiment that caused the square/static regression.
-         */
-        try {
-            const camera =
-                this.cameras.main as unknown as {
-                    postFX?: {
-                        clear?: () => void;
-                    };
-                    __colorHuntSniperBlurApplied?: boolean;
-                };
-
-            camera.postFX?.clear?.();
-            camera.__colorHuntSniperBlurApplied = false;
-        } catch {
-            // Fail-open.
-        }
-
-        this.aimLine?.clear().setVisible(false);
-        this.crosshair?.clear().setVisible(false);
-        this.sniperScopeCamera?.setVisible(false);
-
-        /*
-         * V1010481B_CLEAN_SCOPE_START
-         */
-        this.aimLine
-            ?.clear()
-            .setVisible(false);
-
-        this.crosshair
-            ?.clear()
-            .setVisible(false);
-
-        this.sniperScope
-            ?.clear()
-            .setVisible(false);
-
-        this.sniperScopeShade
-            ?.clear()
-            .setVisible(false);
-
-        this.sniperReloadGraphics
-            ?.clear()
-            .setVisible(false);
-
-        this.sniperScopeCamera
-            ?.setVisible(false);
-
-        /*
          * V1010480B_ENTER_SNIPER_CLEAR_NORMAL_AIM
          * Clear the desktop shotgun cursor BEFORE sniper transition visuals.
          */
@@ -58020,52 +57969,6 @@ const roomPlayers =
     }
 
     private exitSniperCinematic(): void {
-        /*
-         * V1010481D_ROLLBACK_481B_AT_EXIT
-         */
-        try {
-            const camera =
-                this.cameras.main as unknown as {
-                    postFX?: {
-                        clear?: () => void;
-                    };
-                    __colorHuntSniperBlurApplied?: boolean;
-                };
-
-            camera.postFX?.clear?.();
-            camera.__colorHuntSniperBlurApplied = false;
-        } catch {
-            // Fail-open.
-        }
-
-        /*
-         * V1010481B_CLEAR_MAIN_BLUR
-         */
-        const sniperMainCamera =
-            this.cameras.main as unknown as {
-                postFX?: {
-                    clear?: () => void;
-                };
-                __colorHuntSniperBlurApplied?: boolean;
-            };
-
-        if (
-            sniperMainCamera
-                .__colorHuntSniperBlurApplied
-        ) {
-            try {
-                sniperMainCamera
-                    .postFX
-                    ?.clear?.();
-            } catch {
-                // Fail-open.
-            }
-
-            sniperMainCamera
-                .__colorHuntSniperBlurApplied =
-                false;
-        }
-
         if (!this.sniperCinematicActive) return;
         this.sniperCinematicActive = false;
         this.sniperScopeInteractive = false;
@@ -58824,73 +58727,181 @@ const roomPlayers =
     }
 
     private createSniperScopeCamera(): void {
-        if (this.sniperScopeCamera) return;
+        if (
+            this.sniperScopeStripCameras.length >
+            0
+        ) {
+            return;
+        }
 
-        const radius = this.mobileControlsEnabled ? 92 : 112;
-        const cx = this.gameWidth / 2;
-        const cy = this.gameHeight / 2;
-
-        const camera = this.cameras.add(
-            cx - radius,
-            cy - radius,
-            radius * 2,
-            radius * 2,
-            false,
-            'sniper-scope-camera',
-        );
+        const radius =
+            this.getActiveSniperScopeRadius();
 
         /*
-         * V1010481D_SCOPE_RESTORE_SELF_DELAYED_REVEAL
-         * Original circular scope camera, but hidden until the scope body
-         * has already rendered. Prevents the early clear zoom-circle flash.
+         * V1010390_MOBILE_SNIPER_SINGLE_CAMERA_SMOOTH_ZOOM_BLUR
+         * Each Phaser camera is another scene render pass.
+         * Mobile now uses ONE magnification camera; desktop keeps 32 strips.
          */
-        camera.setVisible(false);
+        /*
+         * V1010391C_MOBILE_SCOPE_CLEAR_CIRCLE_UI_HOLES
+         * Mobile: 5 chord strips = circular-looking lens without returning to
+         * the expensive old 10/32-camera path.
+         */
+        /* V1010392_SNIPER_MOBILE_THERMAL_AUDIO_BLUR_INTRO_BUTTON: mobile thermal pass, one fewer full scene render. */
+        const stripCount =
+            this.mobileControlsEnabled
+                ? 4
+                : 32;
 
-        camera.setZoom(2.55);
-        camera.centerOn(this.sniperAimWorldX, this.sniperAimWorldY);
-        camera.setBackgroundColor('rgba(0,0,0,0)');
+        const scopeZoom =
+            this.mobileControlsEnabled
+                ? 3.35
+                : 2.7;
 
-        const maskGraphics =
-            this.make.graphics(
-                { x: 0, y: 0 },
-                false,
+        for (
+            let index = 0;
+            index < stripCount;
+            index += 1
+        ) {
+            const y0 =
+                -radius +
+                (
+                    index /
+                    stripCount
+                ) *
+                    radius *
+                    2;
+
+            const y1 =
+                -radius +
+                (
+                    (index + 1) /
+                    stripCount
+                ) *
+                    radius *
+                    2;
+
+            const midY =
+                (
+                    y0 +
+                    y1
+                ) /
+                2;
+
+            const halfChord =
+                Math.sqrt(
+                    Math.max(
+                        0,
+                        radius *
+                            radius -
+                            midY *
+                                midY,
+                    ),
+                );
+
+            const stripHeight =
+                Math.ceil(
+                    y1 -
+                    y0,
+                ) +
+                1;
+
+            const stripWidth =
+                Math.max(
+                    2,
+                    Math.ceil(
+                        halfChord *
+                            2,
+                    ),
+                );
+
+            const camera =
+                this.cameras.add(
+                    this.sniperScopeScreenX -
+                        halfChord,
+                    this.sniperScopeScreenY +
+                        y0,
+                    stripWidth,
+                    stripHeight,
+                    false,
+                    'sniper-overwatch-strip-' +
+                        String(index),
+                );
+
+            camera
+                .setZoom(
+                    scopeZoom,
+                )
+                .centerOn(
+                    this.sniperAimWorldX,
+                    this.sniperAimWorldY +
+                        midY /
+                            scopeZoom,
+                )
+                .setBackgroundColor(
+                    'rgba(0,0,0,0)',
+                );
+
+            [
+                this.sniperButton,
+                this.sniperRadioText,
+                this.sniperScope,
+                this.sniperScopeShade,
+                this.sniperReloadGraphics,
+                this.sniperScopeCornerMask,
+                this.sniperHelicopter,
+                this.timerText,
+                this.phaseText,
+                this.guideText,
+                this.statusText,
+                this.hunterWeaponHudContainer,
+                this.fartHudContainer,
+                this.mobileMoveBase,
+                this.mobileMoveKnob,
+                this.mobileMoveLabel,
+                this.mobileAimBase,
+                this.mobileAimKnob,
+                this.mobileAimLabel,
+                this.mobileFireButton,
+                this.mobileFireLabel,
+            ].forEach(
+                (object) => {
+                    if (object) {
+                        camera.ignore(object);
+                    }
+                },
             );
 
-        maskGraphics.fillStyle(0xffffff, 1);
-        maskGraphics.fillCircle(cx, cy, radius - 3);
+            /*
+             * V1010455B_SNIPER_PC_MOBILE_RENDER_SPLIT_SAFE: exclude helicopter shadow/rotor child objects too.
+             */
+            if (this.sniperHelicopter) {
+                camera.ignore(
+                    this.sniperHelicopter
+                        .list,
+                );
+            }
 
-        const mask =
-            maskGraphics.createGeometryMask();
+            this.sniperScopeStripCameras.push(
+                camera,
+            );
+        }
 
-        camera.setMask(mask);
+        /*
+         * Compatibility only: old single-camera/corner-cover path is disabled.
+         */
+        if (this.sniperScopeCamera) {
+            this.cameras.remove(
+                this.sniperScopeCamera,
+                true,
+            );
+            this.sniperScopeCamera =
+                undefined;
+        }
 
-        this.sniperScopeCamera = camera;
-        this.sniperScopeMaskGraphics = maskGraphics;
-
-        [
-            this.sniperButton,
-            this.sniperRadioText,
-            this.sniperScope,
-            this.sniperScopeShade,
-            this.sniperReloadGraphics,
-            this.sniperHelicopter,
-            this.timerText,
-            this.phaseText,
-            this.guideText,
-            this.statusText,
-            this.hunterWeaponHudContainer,
-            this.fartHudContainer,
-            this.mobileMoveBase,
-            this.mobileMoveKnob,
-            this.mobileMoveLabel,
-            this.mobileAimBase,
-            this.mobileAimKnob,
-            this.mobileAimLabel,
-            this.mobileFireButton,
-            this.mobileFireLabel,
-        ].forEach((object) => {
-            if (object) camera.ignore(object);
-        });
+        this.sniperScopeCornerMask
+            ?.clear()
+            .setVisible(false);
     }
 
     private ensureSniperScopeDom(): void {
@@ -59895,113 +59906,110 @@ const roomPlayers =
         }
     }
 
-    private drawLocalSniperScope(x: number, y: number): void {
-        if (!this.sniperActive) return;
-
-        const radius = this.mobileControlsEnabled ? 92 : 112;
-        const cx = this.gameWidth / 2;
-        const cy = this.gameHeight / 2;
-
-        this.sniperScopeCamera?.centerOn(x, y);
-
-        const shade = this.sniperScopeShade;
-        if (shade) {
-            shade.clear().setVisible(true);
-            shade.fillStyle(0x02070b, 0.42);
-
-            shade.fillRect(
-                0,
-                0,
-                this.gameWidth,
-                cy - radius,
-            );
-
-            shade.fillRect(
-                0,
-                cy + radius,
-                this.gameWidth,
-                this.gameHeight - cy - radius,
-            );
-
-            shade.fillRect(
-                0,
-                cy - radius,
-                cx - radius,
-                radius * 2,
-            );
-
-            shade.fillRect(
-                cx + radius,
-                cy - radius,
-                this.gameWidth - cx - radius,
-                radius * 2,
-            );
+    private drawLocalSniperScope(
+        x: number,
+        y: number,
+    ): void {
+        if (
+            !this.sniperActive ||
+            !this.sniperCinematicActive
+        ) {
+            return;
         }
-
-        const g = this.sniperScope;
-        if (!g) return;
-
-        g.clear().setVisible(true);
-
-        g.lineStyle(4, 0x101820, 0.96);
-        g.strokeCircle(cx, cy, radius);
-
-        g.lineStyle(1.5, 0xe7f7ff, 0.92);
-        g.lineBetween(cx - radius + 12, cy, cx - 10, cy);
-        g.lineBetween(cx + 10, cy, cx + radius - 12, cy);
-        g.lineBetween(cx, cy - radius + 12, cx, cy - 10);
-        g.lineBetween(cx, cy + 10, cx, cy + radius - 12);
-
-        g.fillStyle(0xffe9b0, 0.95);
-        g.fillCircle(cx, cy, 2.5);
-
-        for (let tick = 28; tick < radius - 12; tick += 22) {
-            g.lineBetween(cx - 4, cy + tick, cx + 4, cy + tick);
-            g.lineBetween(cx - 4, cy - tick, cx + 4, cy - tick);
-        }
-
-        this.drawSniperReloadGauge();
-
-        /*
-         * V1010481D_SELF_DELAYED_REVEAL
-         *
-         * Schedule reveal ONCE while hidden.
-         * The scope body above gets a render beat first.
-         * This specifically fixes:
-         *   "clear magnified circle appears near mouse BEFORE scope exists".
-         */
-        const scopeCamera =
-            this.sniperScopeCamera as
-                | (
-                    Phaser.Cameras.Scene2D.Camera & {
-                        __colorHuntRevealScheduled?: boolean;
-                    }
-                )
-                | undefined;
 
         if (
-            scopeCamera &&
-            !scopeCamera.visible &&
-            !scopeCamera.__colorHuntRevealScheduled
+            this.sniperScopeStripCameras.length ===
+            0
         ) {
-            scopeCamera.__colorHuntRevealScheduled = true;
+            this.createSniperScopeCamera();
+        }
 
-            this.time.delayedCall(
-                34,
-                () => {
-                    scopeCamera.__colorHuntRevealScheduled = false;
+        const radius =
+            this.getActiveSniperScopeRadius();
 
-                    if (
-                        this.sniperActive &&
-                        this.sniperCinematicActive &&
-                        this.phase === 'hunt' &&
-                        this.sniperScopeCamera === scopeCamera
-                    ) {
-                        scopeCamera.setVisible(true);
-                    }
+        const stripCount =
+            this.sniperScopeStripCameras.length;
+
+        const scopeZoom =
+            this.mobileControlsEnabled
+                ? 3.35
+                : 2.7;
+
+        this.sniperScopeStripCameras
+            .forEach(
+                (
+                    camera,
+                    index,
+                ) => {
+                    const y0 =
+                        -radius +
+                        (
+                            index /
+                            stripCount
+                        ) *
+                            radius *
+                            2;
+
+                    const y1 =
+                        -radius +
+                        (
+                            (index + 1) /
+                            stripCount
+                        ) *
+                            radius *
+                            2;
+
+                    const midY =
+                        (
+                            y0 +
+                            y1
+                        ) /
+                            2;
+
+                    const halfChord =
+                        Math.sqrt(
+                            Math.max(
+                                0,
+                                radius *
+                                    radius -
+                                    midY *
+                                        midY,
+                            ),
+                        );
+
+                    camera
+                        .setViewport(
+                            this.sniperScopeScreenX -
+                                halfChord,
+                            this.sniperScopeScreenY +
+                                y0,
+                            Math.max(
+                                2,
+                                Math.ceil(
+                                    halfChord *
+                                        2,
+                                ),
+                            ),
+                            Math.ceil(
+                                y1 -
+                                    y0,
+                            ) +
+                                1,
+                        )
+                        .centerOn(
+                            x,
+                            y +
+                                midY /
+                                    scopeZoom,
+                        );
                 },
             );
-        }
+
+        this.sniperScopeCornerMask
+            ?.clear()
+            .setVisible(false);
+
+        this.syncSniperScopeDom();
     }
 
     private drawSniperReloadGauge(): void {
