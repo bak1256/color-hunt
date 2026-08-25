@@ -5170,6 +5170,10 @@ private timerText!: Phaser.GameObjects.Text;
                     this.mobileAimPointerId
                 ) {
                     this.mobileAimPointerId = -1;
+
+                    this.mobileSniperAimX = 0;
+                    this.mobileSniperAimY = 0;
+
                     this.mobileAimKnob
                         ?.setPosition(
                             this.getFixedHudCompensatedX(
@@ -6077,6 +6081,54 @@ private timerText!: Phaser.GameObjects.Text;
             );
 
         if (
+            this.sniperActive &&
+            this.sniperCinematicActive
+        ) {
+            const strength =
+                Phaser.Math.Clamp(
+                    length /
+                        this.mobileJoystickRadius,
+                    0,
+                    1,
+                );
+
+            const deadZone =
+                0.18;
+
+            if (
+                strength <=
+                deadZone
+            ) {
+                this.mobileSniperAimX = 0;
+                this.mobileSniperAimY = 0;
+            } else {
+                const liveStrength =
+                    Phaser.Math.Clamp(
+                        (
+                            strength -
+                            deadZone
+                        ) /
+                            (
+                                1 -
+                                deadZone
+                            ),
+                        0,
+                        1,
+                    );
+
+                this.mobileSniperAimX =
+                    normalizedX *
+                    liveStrength;
+
+                this.mobileSniperAimY =
+                    normalizedY *
+                    liveStrength;
+            }
+
+            return;
+        }
+
+        if (
             length >=
                 3 ||
             (
@@ -6226,6 +6278,102 @@ private timerText!: Phaser.GameObjects.Text;
         }
 
         if (!this.mobileControlsEnabled) {
+            return;
+        }
+
+        /*
+         * V1010389_MOBILE_SNIPER_PERFORMANCE_CONTROLS
+         * Mobile Overwatch has its own control layout.
+         * Normal Hunt visibility logic must never resurrect MOVE/FART.
+         */
+        if (
+            this.sniperActive &&
+            this.phase === 'hunt'
+        ) {
+            this.resetMobileMoveControl();
+
+            this.mobileMoveBase
+                ?.setVisible(false);
+            this.mobileMoveKnob
+                ?.setVisible(false);
+            this.mobileMoveLabel
+                ?.setVisible(false);
+
+            this.mobileFartButton
+                ?.setVisible(false);
+            this.mobileFartLabel
+                ?.setVisible(false);
+
+            this.mobileAimBase
+                ?.setVisible(true)
+                .setDepth(28000);
+
+            this.mobileAimKnob
+                ?.setVisible(true)
+                .setDepth(28001);
+
+            this.mobileAimLabel
+                ?.setText(
+                    tr('조준'),
+                )
+                .setVisible(true)
+                .setDepth(28002);
+
+            this.mobileFireButton
+                ?.setVisible(true)
+                .setDepth(28000);
+
+            this.mobileFireLabel
+                ?.setVisible(true)
+                .setDepth(28002);
+
+            /*
+             * V1010389B_MOBILE_SNIPER_OPTIONAL_UI_GUARDS
+             * TypeScript-safe narrowing for optional mobile HUD objects.
+             */
+            if (this.mobileAimBase) {
+                this.setFixedHudScreenPosition(
+                    this.mobileAimBase,
+                    this.gameWidth - 170,
+                    this.gameHeight - 150,
+                );
+            }
+
+            if (
+                this.mobileAimPointerId < 0 &&
+                this.mobileAimKnob
+            ) {
+                this.setFixedHudScreenPosition(
+                    this.mobileAimKnob,
+                    this.gameWidth - 170,
+                    this.gameHeight - 150,
+                );
+            }
+
+            if (this.mobileAimLabel) {
+                this.setFixedHudScreenPosition(
+                    this.mobileAimLabel,
+                    this.gameWidth - 170,
+                    this.gameHeight - 232,
+                );
+            }
+
+            if (this.mobileFireButton) {
+                this.setFixedHudScreenPosition(
+                    this.mobileFireButton,
+                    this.gameWidth - 64,
+                    this.gameHeight - 150,
+                );
+            }
+
+            if (this.mobileFireLabel) {
+                this.setFixedHudScreenPosition(
+                    this.mobileFireLabel,
+                    this.gameWidth - 64,
+                    this.gameHeight - 150,
+                );
+            }
+
             return;
         }
 
@@ -6740,6 +6888,10 @@ private timerText!: Phaser.GameObjects.Text;
     private mobileMoveY = 0;
     private mobileAimAngle = 0;
     private mobileAimHasDirection = false;
+
+    /* V1010389_MOBILE_SNIPER_PERFORMANCE_CONTROLS */
+    private mobileSniperAimX = 0;
+    private mobileSniperAimY = 0;
     private readonly mobileJoystickRadius = 58;
     private mobileTouchPoints =
         new Map<number, Phaser.Math.Vector2>();
@@ -56029,6 +56181,9 @@ const roomPlayers =
         this.sniperAimWorldY =
             localPosition.y;
 
+        this.mobileSniperAimX = 0;
+        this.mobileSniperAimY = 0;
+
         this.startSniperHelicopterAudio();
         this.createSniperHelicopter();
 
@@ -56330,7 +56485,7 @@ const roomPlayers =
 
         this.sniperScopeRadius =
             this.mobileControlsEnabled
-                ? 188
+                ? 168
                 : 250;
 
         this.sniperScopeScreenX =
@@ -56407,6 +56562,9 @@ const roomPlayers =
         this.sniperCinematicActive = false;
         this.sniperScopeInteractive = false;
         this.sniperHelicopterArrived = false;
+
+        this.mobileSniperAimX = 0;
+        this.mobileSniperAimY = 0;
 
         /*
          * V1010387_SNIPER_SCOPE_CLIP_AND_OUTSIDE_BLUR: remove the outside blur and clipped optical DOM immediately.
@@ -57289,8 +57447,15 @@ const roomPlayers =
         const radius =
             this.sniperScopeRadius;
 
+        /*
+         * V1010389_MOBILE_SNIPER_PERFORMANCE_CONTROLS
+         * Each strip is a full Phaser camera render pass.
+         * Desktop can afford 32; mobile uses 10 (~69% fewer extra cameras).
+         */
         const stripCount =
-            32;
+            this.mobileControlsEnabled
+                ? 10
+                : 32;
 
         for (
             let index = 0;
@@ -57498,12 +57663,24 @@ const roomPlayers =
                     '0',
                 pointerEvents:
                     'none',
+                /*
+                 * V1010389_MOBILE_SNIPER_PERFORMANCE_CONTROLS
+                 * Full-screen backdrop blur + moving mask is extremely expensive
+                 * on mobile GPUs. Mobile uses a cheap tactical dim; desktop keeps
+                 * the full optical blur.
+                 */
                 backdropFilter:
-                    'blur(5px) brightness(0.76) saturate(0.82)',
+                    this.mobileControlsEnabled
+                        ? 'none'
+                        : 'blur(5px) brightness(0.76) saturate(0.82)',
                 webkitBackdropFilter:
-                    'blur(5px) brightness(0.76) saturate(0.82)',
+                    this.mobileControlsEnabled
+                        ? 'none'
+                        : 'blur(5px) brightness(0.76) saturate(0.82)',
                 background:
-                    'rgba(2,8,10,0.08)',
+                    this.mobileControlsEnabled
+                        ? 'rgba(2,8,10,0.10)'
+                        : 'rgba(2,8,10,0.08)',
                 maskRepeat:
                     'no-repeat',
                 webkitMaskRepeat:
@@ -58375,6 +58552,85 @@ const roomPlayers =
         }
 
         if (
+            this.sniperScopeInteractive &&
+            this.mobileControlsEnabled
+        ) {
+            /*
+             * V1010389_MOBILE_SNIPER_PERFORMANCE_CONTROLS
+             * Continuous virtual-stick scope motion.
+             * Keep this independent from Hunter movement/shotgun aiming.
+             */
+            const frameScale =
+                Phaser.Math.Clamp(
+                    this.game.loop.delta /
+                        16.667,
+                    0.35,
+                    2.0,
+                );
+
+            const scopeSpeed =
+                7.4 *
+                frameScale;
+
+            this.sniperScopeScreenX =
+                Phaser.Math.Clamp(
+                    this.sniperScopeScreenX +
+                        this.mobileSniperAimX *
+                            scopeSpeed,
+                    0,
+                    this.gameWidth,
+                );
+
+            this.sniperScopeScreenY =
+                Phaser.Math.Clamp(
+                    this.sniperScopeScreenY +
+                        this.mobileSniperAimY *
+                            scopeSpeed,
+                    0,
+                    this.gameHeight,
+                );
+
+            const world =
+                this.cameras.main
+                    .getWorldPoint(
+                        this.sniperScopeScreenX,
+                        this.sniperScopeScreenY,
+                    );
+
+            this.sniperAimWorldX =
+                Phaser.Math.Clamp(
+                    world.x,
+                    0,
+                    this.gameWidth,
+                );
+
+            this.sniperAimWorldY =
+                Phaser.Math.Clamp(
+                    world.y,
+                    0,
+                    this.gameHeight,
+                );
+
+            if (
+                this.time.now -
+                    this.sniperLastAimBroadcastAt >=
+                    90
+            ) {
+                this.sniperLastAimBroadcastAt =
+                    this.time.now;
+
+                multiplayerClient
+                    .sendSniperAim(
+                        this.sniperAimWorldX,
+                        this.sniperAimWorldY,
+                    );
+            }
+
+            this.drawLocalSniperScope(
+                this.sniperAimWorldX,
+                this.sniperAimWorldY,
+            );
+        } else if (
             this.sniperScopeInteractive &&
             !this.mobileControlsEnabled
         ) {
