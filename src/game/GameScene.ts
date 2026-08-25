@@ -55758,9 +55758,28 @@ const roomPlayers =
 
         /* V1010392_SNIPER_MOBILE_THERMAL_AUDIO_BLUR_INTRO_BUTTON: support button uses same scale as pre-button radio copy. */
         const supportButtonWidth =
-            this.mobileControlsEnabled ? 176 : 204;
+            this.mobileControlsEnabled
+                ? 176
+                : 194;
         const supportButtonHeight =
             this.mobileControlsEnabled ? 42 : 48;
+
+        /*
+         * V1010455F_DESKTOP_BLUR_AND_SAFE_SUPPORT_BUTTON
+         * Desktop support action lives in the right HUD rail instead of
+         * overlapping the player's normal shotgun aim area.
+         */
+        const supportButtonX =
+            this.mobileControlsEnabled
+                ? this.gameWidth / 2
+                : this.gameWidth -
+                    supportButtonWidth / 2 -
+                    18;
+
+        const supportButtonY =
+            this.mobileControlsEnabled
+                ? this.gameHeight / 2 + 94
+                : this.gameHeight / 2 + 118;
 
         const bg =
             this.add.rectangle(
@@ -55836,8 +55855,8 @@ const roomPlayers =
 
         const button =
             this.add.container(
-                this.gameWidth / 2,
-                this.gameHeight / 2 + 94,
+                supportButtonX,
+                supportButtonY,
                 [
                     bg,
                     tacticalCorners,
@@ -55948,12 +55967,9 @@ const roomPlayers =
             button,
             {
                 x:
-                    this.gameWidth /
-                    2,
+                    supportButtonX,
                 y:
-                    this.gameHeight /
-                        2 +
-                    94,
+                    supportButtonY,
                 scaleX:
                     1,
                 scaleY:
@@ -58485,25 +58501,83 @@ const roomPlayers =
                 ) +
                 'px 100%)';
 
-            blurLayer.style.maskImage =
-                scopeHoleMask;
-
-            blurLayer.style.webkitMaskImage =
-                scopeHoleMask;
-
             /*
-             * V1010455E_MOBILE_SNIPER_SCOPE_ALPHA_HOLE
-             * Force alpha semantics instead of browser-dependent luminance/match-source.
+             * V1010455F_DESKTOP_BLUR_AND_SAFE_SUPPORT_BUTTON
+             * Keep platform mask behavior separate.
+             *
+             * MOBILE:
+             *   explicit alpha-hole semantics from 455e
+             *
+             * DESKTOP:
+             *   simple radial mask; no mobile WebKit alpha-source overrides
+             *   so backdrop blur remains visible outside the optic.
              */
-            blurLayer.style.setProperty(
-                'mask-mode',
-                'alpha',
-            );
+            if (this.mobileControlsEnabled) {
+                blurLayer.style.maskImage =
+                    scopeHoleMask;
 
-            blurLayer.style.setProperty(
-                '-webkit-mask-source-type',
-                'alpha',
-            );
+                blurLayer.style.webkitMaskImage =
+                    scopeHoleMask;
+
+                blurLayer.style.setProperty(
+                    'mask-mode',
+                    'alpha',
+                );
+
+                blurLayer.style.setProperty(
+                    '-webkit-mask-source-type',
+                    'alpha',
+                );
+            } else {
+                const desktopScopeHoleMask =
+                    'radial-gradient(circle at ' +
+                    String(
+                        Math.round(
+                            holeX,
+                        ),
+                    ) +
+                    'px ' +
+                    String(
+                        Math.round(
+                            holeY,
+                        ),
+                    ) +
+                    'px, transparent 0 ' +
+                    String(
+                        Math.round(
+                            safeHoleRadius,
+                        ),
+                    ) +
+                    'px, transparent ' +
+                    String(
+                        Math.round(
+                            safeHoleRadius +
+                                1,
+                        ),
+                    ) +
+                    'px, #000 ' +
+                    String(
+                        Math.round(
+                            safeHoleRadius +
+                                3,
+                        ),
+                    ) +
+                    'px 100%)';
+
+                blurLayer.style.maskImage =
+                    desktopScopeHoleMask;
+
+                blurLayer.style.webkitMaskImage =
+                    desktopScopeHoleMask;
+
+                blurLayer.style.removeProperty(
+                    'mask-mode',
+                );
+
+                blurLayer.style.removeProperty(
+                    '-webkit-mask-source-type',
+                );
+            }
 
             blurLayer.style.maskComposite =
                 '';
