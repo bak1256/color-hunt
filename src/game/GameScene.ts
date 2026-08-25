@@ -7059,8 +7059,7 @@ private timerText!: Phaser.GameObjects.Text;
     private mobileSniperTouchLastX = 0;
     private mobileSniperTouchLastY = 0;
     private mobileSniperTouchTravel = 0;
-    private sniperMobileAimVisualDom?: HTMLDivElement;
-    private sniperMobileFireVisualDom?: HTMLDivElement;
+    /* V1010391B_RESTORE_ORIGINAL_MOBILE_SNIPER_CONTROLS_I18N: real Phaser AIM/FIRE controls are authoritative. */
     private sniperMobileHintDom?: HTMLDivElement;
     private sniperMobileHintHideAt = 0;
     private readonly mobileJoystickRadius = 58;
@@ -19607,10 +19606,26 @@ this.networkUnsubscribers.push(
         const mobile =
             this.mobileControlsEnabled;
 
+        const fartHintCopy =
+            (
+                {
+                    ko: mobile
+                        ? '못 찾겠다면 💨 방구 버튼으로 탐지!\n코로 찾는 것도 실력이지!'
+                        : '못 찾겠다면 💨 SPACE로 탐지!\n코로 찾는 것도 실력이지!',
+                    ja: mobile
+                        ? '見つからないなら 💨 おならボタンで探知！\n鼻で探すのも立派な技術！'
+                        : '見つからないなら 💨 SPACEでおなら探知！\n鼻で探すのも立派な技術！',
+                    en: mobile
+                        ? 'Can’t find them? 💨 Use FART DETECT!\nSometimes your nose finds the clue!'
+                        : 'Can’t find them? 💨 Press SPACE to detect!\nSometimes your nose finds the clue!',
+                    zh: mobile
+                        ? '找不到吗？💨 用放屁按钮探测！\n用鼻子找也是本事！'
+                        : '找不到吗？💨 按 SPACE 放屁探测！\n用鼻子找也是本事！',
+                } as const
+            )[getLanguage()];
+
         bubble.textContent =
-            mobile
-                ? tr('못 찾겠다면… 💨 방구 버튼으로 탐지! 코로 찾는 것도 실력이지!')
-                : tr('못 찾겠다면… 💨 SPACE로 방구 탐지! 코로 찾는 것도 실력이지!');
+            fartHintCopy;
 
         Object.assign(
             bubble.style,
@@ -19619,9 +19634,12 @@ this.networkUnsubscribers.push(
                 zIndex: '2147483000',
                 pointerEvents: 'none',
                 boxSizing: 'border-box',
+                width: mobile
+                    ? '248px'
+                    : '360px',
                 maxWidth: mobile
-                    ? '210px'
-                    : '340px',
+                    ? '248px'
+                    : '360px',
                 padding: mobile
                     ? '10px 12px'
                     : '11px 16px',
@@ -19634,11 +19652,12 @@ this.networkUnsubscribers.push(
                 fontFamily:
                     '"Arial Black", "Noto Sans KR", Arial, sans-serif',
                 fontSize: mobile
-                    ? '15px'
-                    : '17px',
+                    ? '13px'
+                    : '16px',
                 fontWeight: '900',
-                lineHeight: '1.35',
-                letterSpacing: '-0.2px',
+                lineHeight: '1.28',
+                letterSpacing: '-0.25px',
+                whiteSpace: 'pre-line',
                 textAlign: 'center',
                 textShadow:
                     '0 2px 2px rgba(0,0,0,.85)',
@@ -56724,7 +56743,7 @@ const roomPlayers =
                         ) {
                             this.sniperMobileHintHideAt =
                                 Date.now() +
-                                5_000;
+                                6_000;
                         }
 
                         if (
@@ -56771,16 +56790,6 @@ const roomPlayers =
 
         if (this.sniperPriorityTimerDom) {
             this.sniperPriorityTimerDom.style.display =
-                'none';
-        }
-
-        if (this.sniperMobileAimVisualDom) {
-            this.sniperMobileAimVisualDom.style.display =
-                'none';
-        }
-
-        if (this.sniperMobileFireVisualDom) {
-            this.sniperMobileFireVisualDom.style.display =
                 'none';
         }
 
@@ -58158,56 +58167,10 @@ const roomPlayers =
             scope,
         );
 
-        const makeMobileControlVisual =
-            (
-                labelText: string,
-            ): HTMLDivElement => {
-                const element =
-                    document.createElement(
-                        'div',
-                    );
-
-                Object.assign(
-                    element.style,
-                    {
-                        position: 'absolute',
-                        zIndex: '7',
-                        display: 'none',
-                        pointerEvents: 'none',
-                        userSelect: 'none',
-                        boxSizing: 'border-box',
-                        border: '3px solid rgba(245,255,250,.94)',
-                        borderRadius: '999px',
-                        background: 'rgba(8,17,21,.78)',
-                        color: '#ffffff',
-                        fontFamily: '"Arial Black","Noto Sans KR",Arial,sans-serif',
-                        fontWeight: '900',
-                        fontSize: '15px',
-                        textAlign: 'center',
-                        lineHeight: '1',
-                        textShadow: '0 2px 4px rgba(0,0,0,.9)',
-                        boxShadow: '0 0 0 3px rgba(8,18,20,.44), 0 5px 16px rgba(0,0,0,.40)',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                    },
-                );
-
-                element.textContent =
-                    labelText;
-
-                return element;
-            };
-
-        const mobileAimVisual =
-            makeMobileControlVisual(
-                'AIM',
-            );
-
-        const mobileFireVisual =
-            makeMobileControlVisual(
-                'FIRE',
-            );
-
+        /*
+         * V1010391B_RESTORE_ORIGINAL_MOBILE_SNIPER_CONTROLS_I18N
+         * No duplicate AIM/FIRE art. Blur mask exposes original Phaser controls.
+         */
         const mobileHint =
             document.createElement(
                 'div',
@@ -58222,8 +58185,9 @@ const roomPlayers =
                 pointerEvents: 'none',
                 userSelect: 'none',
                 left: '50%',
-                bottom: '12px',
+                bottom: '10px',
                 transform: 'translateX(-50%)',
+                width: 'min(88%, 560px)',
                 maxWidth: '88%',
                 padding: '8px 13px',
                 border: '1px solid rgba(220,245,232,.80)',
@@ -58231,11 +58195,11 @@ const roomPlayers =
                 background: 'rgba(4,12,15,.90)',
                 color: '#f4fff8',
                 fontFamily: '"Noto Sans KR","Noto Sans JP",Arial,sans-serif',
-                fontSize: '13px',
+                fontSize: '12px',
                 fontWeight: '800',
                 lineHeight: '1.35',
                 textAlign: 'center',
-                whiteSpace: 'nowrap',
+                whiteSpace: 'pre-line',
                 textShadow: '0 1px 3px rgba(0,0,0,.9)',
                 boxShadow: '0 4px 14px rgba(0,0,0,.30)',
             },
@@ -58243,14 +58207,6 @@ const roomPlayers =
 
         clipRoot.appendChild(
             priorityTimer,
-        );
-
-        clipRoot.appendChild(
-            mobileAimVisual,
-        );
-
-        clipRoot.appendChild(
-            mobileFireVisual,
         );
 
         clipRoot.appendChild(
@@ -58269,12 +58225,6 @@ const roomPlayers =
 
         this.sniperPriorityTimerDom =
             priorityTimer;
-
-        this.sniperMobileAimVisualDom =
-            mobileAimVisual;
-
-        this.sniperMobileFireVisualDom =
-            mobileFireVisual;
 
         this.sniperMobileHintDom =
             mobileHint;
@@ -58298,12 +58248,6 @@ const roomPlayers =
                     undefined;
 
                 this.sniperPriorityTimerDom =
-                    undefined;
-
-                this.sniperMobileAimVisualDom =
-                    undefined;
-
-                this.sniperMobileFireVisualDom =
                     undefined;
 
                 this.sniperMobileHintDom =
@@ -58418,100 +58362,19 @@ const roomPlayers =
             ) +
             'px';
 
-        if (
-            this.mobileControlsEnabled &&
-            this.sniperMobileAimVisualDom &&
-            this.sniperMobileFireVisualDom
-        ) {
-            const controlDiameter =
-                88 *
-                Math.min(
-                    sx,
-                    sy,
-                );
-
-            const controlY =
-                (
-                    this.gameHeight -
-                    150
-                ) *
-                sy;
-
-            const positionControl =
-                (
-                    element: HTMLDivElement,
-                    logicalX: number,
-                ): void => {
-                    const centerX =
-                        logicalX *
-                        sx;
-
-                    element.style.display =
-                        this.sniperActive &&
-                        this.phase === 'hunt'
-                            ? 'flex'
-                            : 'none';
-
-                    element.style.width =
-                        String(
-                            Math.round(
-                                controlDiameter,
-                            ),
-                        ) +
-                        'px';
-
-                    element.style.height =
-                        String(
-                            Math.round(
-                                controlDiameter,
-                            ),
-                        ) +
-                        'px';
-
-                    element.style.left =
-                        String(
-                            Math.round(
-                                centerX -
-                                    controlDiameter /
-                                        2,
-                            ),
-                        ) +
-                        'px';
-
-                    element.style.top =
-                        String(
-                            Math.round(
-                                controlY -
-                                    controlDiameter /
-                                        2,
-                            ),
-                        ) +
-                        'px';
-                };
-
-            positionControl(
-                this.sniperMobileAimVisualDom,
-                this.gameWidth - 170,
-            );
-
-            positionControl(
-                this.sniperMobileFireVisualDom,
-                this.gameWidth - 64,
-            );
-        }
-
+        /* V1010391B_RESTORE_ORIGINAL_MOBILE_SNIPER_CONTROLS_I18N: original Phaser controls are exposed through blur holes. */
         if (this.sniperMobileHintDom) {
             const lang =
                 getLanguage();
 
             this.sniperMobileHintDom.textContent =
                 lang === 'ja'
-                    ? '照準：スティック / 画面ドラッグ　　射撃：FIRE / 画面タップ'
+                    ? '照準：スティック または 画面ドラッグ\n射撃：FIREボタン または 画面タップ'
                     : lang === 'en'
-                        ? 'AIM: stick / drag screen    FIRE: button / tap screen'
+                        ? 'AIM: joystick or drag the screen\nFIRE: FIRE button or tap the screen'
                         : lang === 'zh'
-                            ? '瞄准：摇杆 / 拖动画面　　射击：FIRE / 点击画面'
-                            : '조준: 조이스틱 / 화면 드래그    발사: FIRE / 화면 터치';
+                            ? '瞄准：摇杆或拖动画面\n射击：FIRE按钮或点击画面'
+                            : '조준: 조이스틱 또는 화면 드래그\n발사: FIRE 버튼 또는 화면 터치';
 
             this.sniperMobileHintDom.style.display =
                 this.mobileControlsEnabled &&
@@ -58578,44 +58441,71 @@ const roomPlayers =
             const feather =
                 8;
 
-            const mask =
-                'radial-gradient(circle at ' +
-                String(
-                    Math.round(
-                        holeX,
-                    ),
-                ) +
-                'px ' +
-                String(
-                    Math.round(
-                        holeY,
-                    ),
-                ) +
-                'px, transparent 0 ' +
-                String(
-                    Math.max(
-                        0,
-                        Math.round(
-                            holeRadius,
-                        ),
-                    ),
-                ) +
-                'px, rgba(0,0,0,0.15) ' +
-                String(
-                    Math.round(
-                        holeRadius +
-                        feather *
-                            0.35,
-                    ),
-                ) +
-                'px, #000 ' +
-                String(
-                    Math.round(
-                        holeRadius +
-                        feather,
-                    ),
-                ) +
-                'px)';
+            let mask: string;
+
+            if (this.mobileControlsEnabled) {
+                /*
+                 * V1010391B_RESTORE_ORIGINAL_MOBILE_SNIPER_CONTROLS_I18N
+                 * SVG mask makes three transparent holes:
+                 * scope + real AIM joystick + real red FIRE button.
+                 */
+                const aimHoleX =
+                    (this.gameWidth - 170) * sx;
+                const fireHoleX =
+                    (this.gameWidth - 64) * sx;
+                const controlHoleY =
+                    (this.gameHeight - 150) * sy;
+                const controlHoleRadius =
+                    56 * Math.min(sx, sy);
+
+                const maskWidth =
+                    Math.max(1, Math.round(rect.width));
+                const maskHeight =
+                    Math.max(1, Math.round(rect.height));
+
+                const svgMask =
+                    '<svg xmlns="http://www.w3.org/2000/svg" width="' +
+                    String(maskWidth) +
+                    '" height="' +
+                    String(maskHeight) +
+                    '" viewBox="0 0 ' +
+                    String(maskWidth) +
+                    ' ' +
+                    String(maskHeight) +
+                    '">' +
+                    '<rect width="100%" height="100%" fill="white"/>' +
+                    '<circle cx="' + String(Math.round(holeX)) +
+                    '" cy="' + String(Math.round(holeY)) +
+                    '" r="' + String(Math.round(holeRadius + feather)) +
+                    '" fill="black"/>' +
+                    '<circle cx="' + String(Math.round(aimHoleX)) +
+                    '" cy="' + String(Math.round(controlHoleY)) +
+                    '" r="' + String(Math.round(controlHoleRadius)) +
+                    '" fill="black"/>' +
+                    '<circle cx="' + String(Math.round(fireHoleX)) +
+                    '" cy="' + String(Math.round(controlHoleY)) +
+                    '" r="' + String(Math.round(controlHoleRadius)) +
+                    '" fill="black"/>' +
+                    '</svg>';
+
+                mask =
+                    'url("data:image/svg+xml,' +
+                    encodeURIComponent(svgMask) +
+                    '")';
+            } else {
+                mask =
+                    'radial-gradient(circle at ' +
+                    String(Math.round(holeX)) +
+                    'px ' +
+                    String(Math.round(holeY)) +
+                    'px, transparent 0 ' +
+                    String(Math.max(0, Math.round(holeRadius))) +
+                    'px, rgba(0,0,0,0.15) ' +
+                    String(Math.round(holeRadius + feather * 0.35)) +
+                    'px, #000 ' +
+                    String(Math.round(holeRadius + feather)) +
+                    'px)';
+            }
 
             blurLayer.style.maskImage =
                 mask;
