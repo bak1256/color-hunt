@@ -1,3 +1,5 @@
+/* V1010479C_FIX_ASSIST_DENSITY_BUILD: canonicalize Paint Assist density block after 479b duplicate declaration. */
+/* V1010479B_ROBUST_LOBBY_ASSIST_SNIPER: robust modal replacement, gapless FULL assist, translated lobby fit, true 2px sniper pulse. */
 /* V1010478D_SNIPER_CLEAN_TEXT_SOFT_PULSE: countdown is clean text under Hunter; activation button uses only a subtle heartbeat pulse. */
 /* V1010478C_SNIPER_UI_FORMAT_PROOF: method-name based patch tolerates multiline signatures and prior sniper patch formatting. */
 /* V1010477H_REMOVE_DEAD_SNIPER_SUPPORT_STATE: remove obsolete write-only sniper support state and reset writes; keep 477e UI behavior unchanged. */
@@ -11441,10 +11443,15 @@ const ribbon =
 
         const language =
             getLanguage();
+
         const overlay =
-            document.createElement('div');
+            document.createElement(
+                'div',
+            );
+
         overlay.className =
             'colorhunt-paint-assist-overlay';
+
         overlay.setAttribute(
             'role',
             'dialog',
@@ -11458,31 +11465,25 @@ const ribbon =
                     : language === 'zh'
                         ? '✨ 获取上色帮助'
                         : '✨ 색칠 도움받기';
+
         const description =
             language === 'ja'
                 ? '今いる場所の背景を参考に自動で塗ります。下のスライダーで手伝う量を選べます。'
                 : language === 'en'
-                    ? 'Paint Assist samples the background at your current position. Choose how much help you want below.'
+                    ? 'Paint Assist samples the background at your current position. Choose how much help you want.'
                     : language === 'zh'
                         ? '上色助手会参考当前位置的背景。请用下面的滑块选择帮助程度。'
                         : '현재 위치의 배경을 참고해 자동으로 칠해줘요. 아래 슬라이더에서 도움받을 정도를 골라주세요.';
 
-        const assistLevelLabels =
-            language === 'ja'
-                ? ['ほんの少し', '少し', 'ほどほど', 'たくさん', '全部お願い 🐣']
-                : language === 'en'
-                    ? ['Tiny bit', 'A little', 'Medium', 'A lot', 'Do it all 🐣']
-                    : language === 'zh'
-                        ? ['一点点', '少量', '适中', '很多', '全部帮我 🐣']
-                        : ['아주 조금만', '조금만', '적당히', '많이', '다 해줘 🐣'];
         const warning =
             language === 'ja'
-                ? 'サポートなしで勝利すると勝利カードに「色塗りマスター」マーク、サポートを使って勝利すると「色塗りひよこ」マークが表示されます。それでも使いますか？'
+                ? 'サポートなしで勝利すると「色塗りマスター」、使用後は「色塗りひよこ」マークが勝利カードに表示されます。'
                 : language === 'en'
-                    ? 'Win without Paint Assist to earn the Paint Master badge on your victory card. Win after using it and your card will show the Paint Rookie badge. Use Paint Assist?'
+                    ? 'Win without Paint Assist for Paint Master. Using it marks the victory card as Paint Rookie.'
                     : language === 'zh'
-                        ? '不使用助手获胜时，胜利卡会显示“上色高手”徽章；使用助手后获胜则显示“上色新芽”徽章。仍要使用吗？'
-                        : '색칠 도움받기 없이 승리하면 승리 카드에 「색칠고수」 마크가, 색칠 도움받기 사용 후 게임 승리 시 「색칠새싹」 마크가 표시됩니다. 그래도 괜찮은가요?';
+                        ? '不使用助手获胜会显示“上色高手”，使用后获胜会显示“上色新芽”。'
+                        : '도움 없이 승리하면 「색칠고수」, 도움 사용 후 승리하면 「색칠새싹」 마크가 승리 카드에 표시됩니다.';
+
         const noLabel =
             language === 'ja'
                 ? 'いいえ'
@@ -11491,6 +11492,7 @@ const ribbon =
                     : language === 'zh'
                         ? '否'
                         : '아니오';
+
         const yesLabel =
             language === 'ja'
                 ? 'はい、手伝って！'
@@ -11500,53 +11502,59 @@ const ribbon =
                         ? '好，帮我上色！'
                         : '예, 도와주세요';
 
+        const levelLabels =
+            language === 'ja'
+                ? ['ほんの少し', '少し', 'ほどほど', 'たくさん', '全部お願い 🐣']
+                : language === 'en'
+                    ? ['Tiny', 'A little', 'Medium', 'A lot', 'Do it all 🐣']
+                    : language === 'zh'
+                        ? ['一点点', '少一点', '适中', '很多', '全部帮我 🐣']
+                        : ['아주 조금만', '조금만', '적당히', '많이', '다 해줘 🐣'];
+
         overlay.innerHTML = `
             <style>
-                .colorhunt-paint-assist-overlay{position:fixed;inset:0;z-index:2147483100;display:grid;place-items:center;padding:18px;background:rgba(8,12,18,.72);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
-                .colorhunt-paint-assist-card{width:min(92vw,520px);box-sizing:border-box;padding:24px;border:2px solid rgba(255,218,91,.82);border-radius:24px;background:linear-gradient(180deg,#fff9d9,#fff4b6);box-shadow:0 28px 80px rgba(0,0,0,.34);color:#3f3413;font-family:Inter,Pretendard,Arial,sans-serif}
-                .colorhunt-paint-assist-card h2{margin:0 0 12px;font-size:25px;line-height:1.15;font-weight:950}.colorhunt-paint-assist-card p{margin:0;font-size:14px;line-height:1.55;font-weight:750}.colorhunt-paint-assist-warning{margin-top:14px!important;padding:13px 14px;border-radius:15px;background:rgba(255,255,255,.72);border:1px solid rgba(151,110,16,.22)}
-                .colorhunt-paint-assist-badges{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}.colorhunt-paint-assist-badges span{padding:7px 10px;border-radius:999px;background:#fff;border:1px solid rgba(108,76,8,.18);font-size:12px;font-weight:950}
-                .colorhunt-paint-assist-level{margin:16px 0 8px;padding:12px;border-radius:16px;background:rgba(255,255,255,.78)}
-                .colorhunt-paint-assist-level strong{display:block;text-align:center;font-size:15px;margin-bottom:8px}
-                .colorhunt-paint-assist-level input{width:100%;accent-color:#d59d16;touch-action:pan-x}
-                .colorhunt-paint-assist-level-labels{display:grid;grid-template-columns:repeat(5,1fr);gap:3px;margin-top:5px;font-size:10px;font-weight:900;text-align:center}
-                .colorhunt-paint-assist-level-labels span{overflow-wrap:anywhere}
-                .colorhunt-paint-assist-actions{display:grid;grid-template-columns:1fr 1.35fr;gap:9px;margin-top:18px}.colorhunt-paint-assist-actions button{min-height:46px;border:0;border-radius:14px;font:900 14px Arial,sans-serif;cursor:pointer}.colorhunt-paint-assist-actions [data-assist-no]{background:#fff;color:#665f50}.colorhunt-paint-assist-actions [data-assist-yes]{background:#e0ad25;color:#352600;box-shadow:0 8px 18px rgba(120,82,0,.20)}
-                /*
-                 * V1010475_MOBILE_PAINT_UX_POLISH / COMPACT_MOBILE_ASSIST
-                 * Keep the ENTIRE dialog, including actions, visible at once.
-                 */
-                @media (pointer:coarse), (max-height:720px), (max-width:820px){
-                    .colorhunt-paint-assist-overlay{padding:6px!important;place-items:center!important}
-                    .colorhunt-paint-assist-card{
-                        width:min(96vw,520px)!important;
-                        max-height:96dvh!important;
-                        padding:12px 14px!important;
-                        border-radius:17px!important;
-                        overflow:hidden!important;
-                    }
-                    .colorhunt-paint-assist-card h2{margin:0 0 6px!important;font-size:19px!important;line-height:1.05!important}
-                    .colorhunt-paint-assist-card p{font-size:11px!important;line-height:1.28!important}
-                    .colorhunt-paint-assist-level{margin:8px 0 5px!important;padding:7px 9px!important;border-radius:11px!important}
-                    .colorhunt-paint-assist-level strong{font-size:12px!important;margin-bottom:3px!important;line-height:1.1!important}
-                    .colorhunt-paint-assist-level input{height:18px!important;margin:0!important}
-                    .colorhunt-paint-assist-level-labels{margin-top:1px!important;font-size:8px!important;line-height:1.05!important}
-                    .colorhunt-paint-assist-badges{margin:6px 0!important;gap:5px!important}
-                    .colorhunt-paint-assist-badges span{padding:4px 7px!important;font-size:9px!important}
-                    .colorhunt-paint-assist-warning{margin-top:5px!important;padding:7px 8px!important;font-size:9px!important;line-height:1.25!important}
-                    .colorhunt-paint-assist-actions{margin-top:7px!important;gap:6px!important}
-                    .colorhunt-paint-assist-actions button{min-height:36px!important;font-size:11px!important;border-radius:10px!important}
+                .colorhunt-paint-assist-overlay{position:fixed;inset:0;z-index:2147483100;display:grid;place-items:center;padding:8px;background:rgba(8,12,18,.72);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+                .colorhunt-paint-assist-card{width:min(92vw,520px);max-height:calc(100dvh - 16px);overflow:auto;box-sizing:border-box;padding:16px 18px;border:2px solid rgba(255,218,91,.82);border-radius:20px;background:linear-gradient(180deg,#fff9d9,#fff4b6);box-shadow:0 24px 70px rgba(0,0,0,.34);color:#3f3413;font-family:Inter,Pretendard,Arial,sans-serif}
+                .colorhunt-paint-assist-card h2{margin:0 0 7px;font-size:21px;line-height:1.1;font-weight:950}
+                .colorhunt-paint-assist-card p{margin:0;font-size:12px;line-height:1.35;font-weight:750}
+                .colorhunt-paint-assist-level{margin:10px 0 4px;padding:9px 10px;border-radius:14px;background:rgba(255,255,255,.78)}
+                .colorhunt-paint-assist-level strong{display:block;text-align:center;font-size:14px;margin-bottom:5px}
+                .colorhunt-paint-assist-level input{display:block;width:100%;margin:0;accent-color:#d5a32d}
+                .colorhunt-paint-assist-level-labels{display:grid;grid-template-columns:repeat(5,1fr);gap:3px;margin-top:4px;font-size:9px;font-weight:900;text-align:center}
+                .colorhunt-paint-assist-badges{display:flex;gap:6px;flex-wrap:wrap;margin:7px 0}
+                .colorhunt-paint-assist-badges span{padding:5px 8px;border-radius:999px;background:#fff;border:1px solid rgba(108,76,8,.18);font-size:10px;font-weight:950}
+                .colorhunt-paint-assist-warning{margin-top:6px!important;padding:7px 9px;border-radius:12px;background:rgba(255,255,255,.72);border:1px solid rgba(151,110,16,.22);font-size:10px!important;line-height:1.25!important}
+                .colorhunt-paint-assist-actions{display:grid;grid-template-columns:1fr 1.35fr;gap:7px;margin-top:8px}
+                .colorhunt-paint-assist-actions button{min-height:38px;border:0;border-radius:12px;font:900 12px Arial,sans-serif;cursor:pointer}
+                .colorhunt-paint-assist-actions [data-assist-no]{background:#fff;color:#665f50}
+                .colorhunt-paint-assist-actions [data-assist-yes]{background:#e0ad25;color:#352600;box-shadow:0 6px 14px rgba(120,82,0,.20)}
+                @media (max-height:600px),(max-width:760px){
+                    .colorhunt-paint-assist-overlay{padding:4px}
+                    .colorhunt-paint-assist-card{width:min(96vw,500px);max-height:calc(100dvh - 8px);padding:10px 12px;border-radius:15px}
+                    .colorhunt-paint-assist-card h2{font-size:17px;margin-bottom:4px}
+                    .colorhunt-paint-assist-card p{font-size:10px;line-height:1.2}
+                    .colorhunt-paint-assist-level{margin:5px 0 2px;padding:5px 7px}
+                    .colorhunt-paint-assist-level strong{font-size:12px;margin-bottom:2px}
+                    .colorhunt-paint-assist-level-labels{font-size:7.5px;margin-top:1px}
+                    .colorhunt-paint-assist-badges{margin:4px 0}
+                    .colorhunt-paint-assist-badges span{padding:3px 6px;font-size:8.5px}
+                    .colorhunt-paint-assist-warning{margin-top:4px!important;padding:5px 7px;font-size:8.5px!important}
+                    .colorhunt-paint-assist-actions{margin-top:5px}
+                    .colorhunt-paint-assist-actions button{min-height:32px;font-size:10px}
                 }
             </style>
             <div class="colorhunt-paint-assist-card">
                 <h2>${title}</h2>
                 <p>${description}</p>
                 <div class="colorhunt-paint-assist-level">
-                    <strong data-assist-level-current>${assistLevelLabels[this.paintAssistLevel]}</strong>
-                    <input type="range" min="0" max="4" step="1" value="${this.paintAssistLevel}" data-assist-level aria-label="Paint assist level">
-                    <div class="colorhunt-paint-assist-level-labels">${assistLevelLabels.map((label) => `<span>${label}</span>`).join('')}</div>
+                    <strong data-assist-level-title>${levelLabels[this.paintAssistLevel]}</strong>
+                    <input data-assist-level type="range" min="0" max="4" step="1" value="${this.paintAssistLevel}">
+                    <div class="colorhunt-paint-assist-level-labels">${levelLabels.map((label) => `<span>${label}</span>`).join('')}</div>
                 </div>
-                <div class="colorhunt-paint-assist-badges"><span>🏅 ${language === 'ko' ? '색칠고수' : language === 'ja' ? '色塗りマスター' : language === 'zh' ? '上色高手' : 'Paint Master'}</span><span>🐣 ${language === 'ko' ? '색칠새싹' : language === 'ja' ? '色塗りひよこ' : language === 'zh' ? '上色新芽' : 'Paint Rookie'}</span></div>
+                <div class="colorhunt-paint-assist-badges">
+                    <span>🏅 ${language === 'ko' ? '색칠고수' : language === 'ja' ? '色塗りマスター' : language === 'zh' ? '上色高手' : 'Paint Master'}</span>
+                    <span>🐣 ${language === 'ko' ? '색칠새싹' : language === 'ja' ? '色塗りひよこ' : language === 'zh' ? '上色新芽' : 'Paint Rookie'}</span>
+                </div>
                 <p class="colorhunt-paint-assist-warning">${warning}</p>
                 <div class="colorhunt-paint-assist-actions">
                     <button type="button" data-assist-no>${noLabel}</button>
@@ -11555,31 +11563,33 @@ const ribbon =
             </div>
         `;
 
-        const levelInput =
+        const slider =
             overlay.querySelector<HTMLInputElement>(
                 '[data-assist-level]',
             );
-        const levelCurrent =
+
+        const sliderTitle =
             overlay.querySelector<HTMLElement>(
-                '[data-assist-level-current]',
+                '[data-assist-level-title]',
             );
 
-        levelInput?.addEventListener(
+        slider?.addEventListener(
             'input',
             () => {
-                const nextLevel =
+                this.paintAssistLevel =
                     Phaser.Math.Clamp(
-                        Number(levelInput.value),
+                        Number(
+                            slider.value,
+                        ) || 0,
                         0,
                         4,
                     ) as 0 | 1 | 2 | 3 | 4;
 
-                this.paintAssistLevel =
-                    nextLevel;
-
-                if (levelCurrent) {
-                    levelCurrent.textContent =
-                        assistLevelLabels[nextLevel];
+                if (sliderTitle) {
+                    sliderTitle.textContent =
+                        levelLabels[
+                            this.paintAssistLevel
+                        ];
                 }
             },
         );
@@ -11587,32 +11597,41 @@ const ribbon =
         const close =
             (): void => {
                 overlay.remove();
-                if (this.paintAssistModal === overlay) {
+
+                if (
+                    this.paintAssistModal ===
+                    overlay
+                ) {
                     this.paintAssistModal =
                         undefined;
                 }
             };
 
-        overlay.querySelector(
-            '[data-assist-no]',
-        )?.addEventListener(
-            'click',
-            close,
-        );
+        overlay
+            .querySelector(
+                '[data-assist-no]',
+            )
+            ?.addEventListener(
+                'click',
+                close,
+            );
 
-        overlay.querySelector(
-            '[data-assist-yes]',
-        )?.addEventListener(
-            'click',
-            () => {
-                close();
-                this.applyPaintAssist();
-            },
-        );
+        overlay
+            .querySelector(
+                '[data-assist-yes]',
+            )
+            ?.addEventListener(
+                'click',
+                () => {
+                    close();
+                    this.applyPaintAssist();
+                },
+            );
 
         document.body.appendChild(
             overlay,
         );
+
         this.paintAssistModal =
             overlay;
     }
@@ -11785,6 +11804,13 @@ const ribbon =
          * A coarser 5 px sampling lattice gives us more breathing room than
          * v450e's regular 4 px matrix. Jitter below hides the lattice itself.
          */
+        const fullAssist =
+            this.paintAssistLevel ===
+                4;
+/*
+         * FULL remains dot-based, but uses an overlapping 2px lattice.
+         * 3px circles overlap diagonally, so no pinholes remain.
+         */
         const dotStep = 2;
         const edgeProbe = 2;
 
@@ -11885,20 +11911,27 @@ const ribbon =
                                 ? 35
                                 : 26;
 
-                const assistDensityScale =
-                    [0.34, 0.62, 1, 1.55, 4][
+                const levelDensityScale =
+                    [
+                        0.28,
+                        0.52,
+                        1,
+                        1.55,
+                        1,
+                    ][
                         this.paintAssistLevel
-                    ];
+                    ] ?? 1;
 
                 const keepPercent =
-                    this.paintAssistLevel === 4
+                    fullAssist
                         ? 100
-                        : Math.min(
-                            96,
+                        : Phaser.Math.Clamp(
                             Math.round(
                                 baseKeepPercent *
-                                assistDensityScale,
+                                    levelDensityScale,
                             ),
+                            6,
+                            92,
                         );
 
                 /*
@@ -11987,6 +12020,7 @@ const ribbon =
                         detailKeepPercent;
 
                 if (
+                    !fullAssist &&
                     !keepCoherentPatch &&
                     !keepFineDetail
                 ) {
@@ -12031,7 +12065,10 @@ const ribbon =
                  * recognizable shapes are not swallowed.
                  */
                 const size =
-                    edgeStrength >= 150
+                    fullAssist
+                        ? 3
+                        : (
+                            edgeStrength >= 150
                         ? 3 +
                             (
                                 (detailHash >>> 9) %
@@ -12047,7 +12084,8 @@ const ribbon =
                                 (
                                     (detailHash >>> 9) %
                                     3
-                                );
+                                )
+                        );
 
                 /*
                  * No random positional jitter in detailed regions. Moving a
@@ -12055,7 +12093,7 @@ const ribbon =
                  * Flat regions may wobble by one pixel to avoid a sterile grid.
                  */
                 const jitterX =
-                    edgeStrength >= 95
+                    fullAssist || edgeStrength >= 95
                         ? 0
                         : (
                             (detailHash >>> 13) %
@@ -12063,7 +12101,7 @@ const ribbon =
                         ) -
                             1;
                 const jitterY =
-                    edgeStrength >= 95
+                    fullAssist || edgeStrength >= 95
                         ? 0
                         : (
                             (detailHash >>> 17) %
@@ -12191,13 +12229,25 @@ const ribbon =
         }
 
         this.showStatus(
-            getLanguage() === 'ja'
-                ? '✨ 隠れた背景を大小のドットでまばらに投影しました。あとは自分で仕上げてみよう！'
-                : getLanguage() === 'en'
-                    ? '✨ Projected the hidden background as sparse mixed-size dots. Finish the rest yourself!'
-                    : getLanguage() === 'zh'
-                        ? '✨ 已把被遮住的背景用大小不一的稀疏圆点投影出来，剩下的自己完成吧！'
-                        : '✨ 가려진 뒷배경을 크고 작은 듬성듬성 도트로 투영했어요. 나머지는 직접 완성해보세요!',
+            fullAssist
+                ? (
+                    getLanguage() === 'ja'
+                        ? '✨ 背景ドットで隙間なく仕上げました！'
+                        : getLanguage() === 'en'
+                            ? '✨ Filled the camouflage completely with overlapping background dots!'
+                            : getLanguage() === 'zh'
+                                ? '✨ 已用重叠背景圆点完整填满伪装！'
+                                : '✨ 배경 도트로 빈틈없이 전부 채웠어요!'
+                )
+                : (
+                    getLanguage() === 'ja'
+                        ? '✨ 背景を参考に選んだ量だけ塗りました。あとは自由に仕上げよう！'
+                        : getLanguage() === 'en'
+                            ? '✨ Added the selected amount of background camouflage. Finish it your way!'
+                            : getLanguage() === 'zh'
+                                ? '✨ 已按选择的程度加入背景伪装，剩下的自由完成吧！'
+                                : '✨ 선택한 정도만큼 배경 위장을 도와줬어요. 나머지는 자유롭게 마무리해보세요!'
+                ),
         );
     }
 
@@ -25035,7 +25085,7 @@ this.networkUnsubscribers.push(
                 padding: '6px 9px',
                 border: '2px solid #5c8f66',
                 borderRadius: '11px',
-                background: 'rgba(223,247,230,.66)',
+                background: '#dff7e6',
                 color: '#26352b',
                 fontWeight: '900',
                 fontSize: '12px',
@@ -31428,7 +31478,139 @@ this.networkUnsubscribers.push(
             );
         }
 
-}
+
+        /*
+         * V1010479B_ROBUST_LOBBY_ASSIST_SNIPER / FINAL_TRANSLATED_HEADER_FIT
+         * Last writer wins over legacy desktop header experiments.
+         */
+        if (
+            !window.matchMedia(
+                '(pointer: coarse)',
+            ).matches
+        ) {
+            const row =
+                root.querySelector<HTMLElement>(
+                    '.ch-lobby-actions-title-row',
+                );
+
+            const title =
+                row?.querySelector<HTMLElement>(
+                    'h2',
+                ) ?? null;
+
+            const translatedLong =
+                getLanguage() === 'ja' ||
+                getLanguage() === 'en';
+
+            if (row) {
+                row.style.setProperty(
+                    'display',
+                    'grid',
+                    'important',
+                );
+                row.style.setProperty(
+                    'grid-template-columns',
+                    'minmax(0,1fr) 68px 68px',
+                    'important',
+                );
+                row.style.setProperty(
+                    'column-gap',
+                    '5px',
+                    'important',
+                );
+                row.style.setProperty(
+                    'align-items',
+                    'center',
+                    'important',
+                );
+
+                Array.from(
+                    row.children,
+                ).forEach(
+                    (
+                        child,
+                        index,
+                    ) => {
+                        if (
+                            !(child instanceof HTMLElement) ||
+                            index === 0
+                        ) {
+                            return;
+                        }
+
+                        child.style.setProperty(
+                            'width',
+                            '68px',
+                            'important',
+                        );
+                        child.style.setProperty(
+                            'min-width',
+                            '68px',
+                            'important',
+                        );
+                        child.style.setProperty(
+                            'max-width',
+                            '68px',
+                            'important',
+                        );
+                        child.style.setProperty(
+                            'padding-left',
+                            '5px',
+                            'important',
+                        );
+                        child.style.setProperty(
+                            'padding-right',
+                            '5px',
+                            'important',
+                        );
+                    },
+                );
+            }
+
+            if (title) {
+                title.style.setProperty(
+                    'font-size',
+                    translatedLong
+                        ? '14px'
+                        : '16px',
+                    'important',
+                );
+                title.style.setProperty(
+                    'min-width',
+                    '0',
+                    'important',
+                );
+                title.style.setProperty(
+                    'max-width',
+                    '100%',
+                    'important',
+                );
+                title.style.setProperty(
+                    'white-space',
+                    'nowrap',
+                    'important',
+                );
+                title.style.setProperty(
+                    'overflow',
+                    'hidden',
+                    'important',
+                );
+                title.style.setProperty(
+                    'text-overflow',
+                    'clip',
+                    'important',
+                );
+                title.style.setProperty(
+                    'letter-spacing',
+                    translatedLong
+                        ? '-0.45px'
+                        : '-0.2px',
+                    'important',
+                );
+            }
+        }
+
+    }
 
     private createMainLobbyDom(): void {
         this.destroyMainLobbyDom();
@@ -56627,14 +56809,9 @@ const roomPlayers =
         if (this.sniperButton) return;
 
         const buttonWidth =
-            this.mobileControlsEnabled
-                ? 190
-                : 180;
-
+            176;
         const buttonHeight =
-            this.mobileControlsEnabled
-                ? 48
-                : 44;
+            44;
 
         const bg =
             this.add.rectangle(
@@ -56646,35 +56823,21 @@ const roomPlayers =
                 0.98,
             )
                 .setStrokeStyle(
-                    3,
+                    2,
                     0xa7f3d0,
-                    1,
+                    0.96,
                 );
-
-        const language =
-            getLanguage();
-
-        const buttonLabel =
-            language === 'ja'
-                ? '🎯 狙撃モード切替'
-                : language === 'en'
-                    ? '🎯 SNIPER MODE'
-                    : language === 'zh'
-                        ? '🎯 狙击模式'
-                        : '🎯 저격 모드 전환';
 
         const label =
             this.add.text(
                 0,
                 0,
-                buttonLabel,
+                '🎯 저격 모드 전환',
                 {
                     fontFamily:
                         'Arial, sans-serif',
                     fontSize:
-                        this.mobileControlsEnabled
-                            ? '15px'
-                            : '14px',
+                        '15px',
                     fontStyle:
                         'bold',
                     color:
@@ -56683,8 +56846,6 @@ const roomPlayers =
                         '#07120d',
                     strokeThickness:
                         2,
-                    align:
-                        'center',
                 },
             )
                 .setOrigin(0.5);
@@ -56692,7 +56853,7 @@ const roomPlayers =
         const button =
             this.add.container(
                 this.gameWidth / 2,
-                this.gameHeight / 2 + 68,
+                this.gameHeight / 2 + 64,
                 [
                     bg,
                     label,
@@ -56717,7 +56878,6 @@ const roomPlayers =
             ) => {
                 pointer.event
                     ?.preventDefault?.();
-
                 pointer.event
                     ?.stopPropagation?.();
 
@@ -56729,9 +56889,10 @@ const roomPlayers =
                 }
 
                 this.unlockGameAudio();
-
                 multiplayerClient
-                    .sendSniperToggle(true);
+                    .sendSniperToggle(
+                        true,
+                    );
             },
         );
 
@@ -56748,7 +56909,7 @@ const roomPlayers =
                 x:
                     this.gameWidth / 2,
                 y:
-                    this.gameHeight / 2 + 68,
+                    this.gameHeight / 2 + 64,
                 scaleX:
                     1,
                 scaleY:
@@ -56757,22 +56918,40 @@ const roomPlayers =
         );
 
         /*
-         * V1010478D_SNIPER_CLEAN_TEXT_SOFT_PULSE
-         * Countdown returns to a clean text-only look.
-         * No panel/background box.
+         * TRUE micro-pulse:
+         * container scale stays exactly 1.
+         * Only the background rectangle grows 176x44 -> 178x46.
+         */
+        this.tweens.add({
+            targets:
+                bg,
+            width:
+                178,
+            height:
+                46,
+            duration:
+                900,
+            yoyo:
+                true,
+            repeat:
+                -1,
+            ease:
+                'Sine.easeInOut',
+        });
+
+        /*
+         * Countdown: text only. No panel/background.
          */
         this.sniperRadioText =
             this.add.text(
                 this.gameWidth / 2,
-                this.gameHeight / 2 + 64,
+                this.gameHeight / 2 + 60,
                 '',
                 {
                     fontFamily:
                         'Arial, sans-serif',
                     fontSize:
-                        this.mobileControlsEnabled
-                            ? '16px'
-                            : '15px',
+                        '15px',
                     fontStyle:
                         'bold',
                     color:
@@ -56796,7 +56975,7 @@ const roomPlayers =
                 x:
                     this.gameWidth / 2,
                 y:
-                    this.gameHeight / 2 + 64,
+                    this.gameHeight / 2 + 60,
                 scaleX:
                     1,
                 scaleY:
@@ -56822,27 +57001,6 @@ const roomPlayers =
                 .setScrollFactor(0)
                 .setVisible(false);
 
-        /*
-         * Subtle heartbeat only.
-         * 1.00 -> 1.02 -> 1.00
-         */
-        this.tweens.add({
-            targets:
-                button,
-            scaleX:
-                1.02,
-            scaleY:
-                1.02,
-            duration:
-                760,
-            yoyo:
-                true,
-            repeat:
-                -1,
-            ease:
-                'Sine.easeInOut',
-        });
-
         this.input.on(
             Phaser.Input.Events.POINTER_MOVE,
             (
@@ -56851,12 +57009,7 @@ const roomPlayers =
             ) => {
                 if (
                     !this.sniperActive ||
-                    this.phase !== 'hunt'
-                ) {
-                    return;
-                }
-
-                if (
+                    this.phase !== 'hunt' ||
                     this.mobileControlsEnabled
                 ) {
                     return;
@@ -56882,12 +57035,7 @@ const roomPlayers =
             ) => {
                 if (
                     !this.sniperActive ||
-                    this.phase !== 'hunt'
-                ) {
-                    return;
-                }
-
-                if (
+                    this.phase !== 'hunt' ||
                     this.mobileControlsEnabled
                 ) {
                     return;
@@ -56906,7 +57054,6 @@ const roomPlayers =
 
                 pointer.event
                     ?.preventDefault?.();
-
                 pointer.event
                     ?.stopPropagation?.();
 
@@ -59973,6 +60120,7 @@ const roomPlayers =
             3,
         );
     }
+        /* V1010479B_ROBUST_LOBBY_ASSIST_SNIPER scope-alpha-confirmed */
 
     private showSniperImpact(shot: NetworkSniperFired): void {
         const ring = this.add.circle(shot.x, shot.y, shot.hitId ? 18 : 12)
@@ -60462,14 +60610,11 @@ const roomPlayers =
             hunter &&
             remainingMs <= 30000;
 
-        /*
-         * Compute one shared "under my Hunter" anchor.
-         */
         let hudX =
             this.gameWidth / 2;
 
         let hudY =
-            this.gameHeight / 2 + 64;
+            this.gameHeight / 2 + 58;
 
         const localPosition =
             this.networkPlayerManager
@@ -60545,25 +60690,26 @@ const roomPlayers =
                     );
             }
 
-            const textHalfWidth =
+            const halfText =
                 Math.max(
                     70,
-                    this.sniperRadioText.width / 2,
+                    this.sniperRadioText
+                        .width / 2,
                 );
 
             this.sniperRadioText
                 .setPosition(
                     Phaser.Math.Clamp(
                         hudX,
-                        textHalfWidth + 8,
+                        halfText + 8,
                         this.gameWidth -
-                            textHalfWidth -
+                            halfText -
                             8,
                     ),
                     Phaser.Math.Clamp(
                         hudY,
-                        22,
-                        this.gameHeight - 22,
+                        20,
+                        this.gameHeight - 20,
                     ),
                 )
                 .setVisible(true);
@@ -60584,27 +60730,10 @@ const roomPlayers =
             this.sniperButton
                 .setVisible(false);
         } else {
-            const buttonWidth =
-                this.sniperButton.width ||
-                (
-                    this.mobileControlsEnabled
-                        ? 190
-                        : 180
-                );
-
-            const buttonHeight =
-                this.sniperButton.height ||
-                (
-                    this.mobileControlsEnabled
-                        ? 48
-                        : 44
-                );
-
             const halfW =
-                buttonWidth / 2;
-
+                176 / 2;
             const halfH =
-                buttonHeight / 2;
+                44 / 2;
 
             this.sniperButton
                 .setPosition(
@@ -60616,7 +60745,7 @@ const roomPlayers =
                             10,
                     ),
                     Phaser.Math.Clamp(
-                        hudY + 3,
+                        hudY + 2,
                         halfH + 10,
                         this.gameHeight -
                             halfH -
@@ -60642,11 +60771,6 @@ const roomPlayers =
                 .setFillStyle(
                     0x183428,
                     0.98,
-                )
-                .setStrokeStyle(
-                    3,
-                    0xa7f3d0,
-                    1,
                 );
 
             this.sniperButton
