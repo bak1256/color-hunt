@@ -1,3 +1,4 @@
+/* V1010486_FIX_PRE_RACK_CLEAR_HOLE_ONLY: suppress ONLY the stale sharp blur-hole before the physical sniper scope enters the canvas. */
 /* V1010485_HIDE_NORMAL_HUNTER_VISION_DURING_SNIPER_INTRO: hide only the old Hunter vision spotlight while sniper mode/intro is active. */
 /* V1010480B_ASSIST_PINHOLE_OPAQUE_MICROPULSE_CLEAN_SCOPE: organic FULL dab overlap, opaque Paint Help, true micro heartbeat, clean PC sniper transition. */
 /* V1010479D_RESTORE_ORGANIC_ASSIST_DENSITY_ONLY: remove FULL grid geometry; preserve original organic dots and change density only. */
@@ -57845,6 +57846,28 @@ const roomPlayers =
         /* V1010463_VICTORY_CAMERA_LOCK_SNIPER_INTRO_CHAT_FIX: rack-in owns the only visible scope until tween completion. */
         this.sniperScopeInteractive =
             false;
+
+        /*
+         * V1010486_RACK_PREP
+         *
+         * IMPORTANT: remove any stale CSS blur-hole BEFORE rack-in starts.
+         * The scope/zoom/blur implementation itself is untouched.
+         */
+        if (this.sniperScopeBlurDom) {
+            this.sniperScopeBlurDom.style.maskImage =
+                'none';
+            this.sniperScopeBlurDom.style.webkitMaskImage =
+                'none';
+        }
+
+        this.sniperScopeScreenX =
+            this.gameWidth / 2;
+
+        this.sniperScopeScreenY =
+            this.gameHeight +
+            this.sniperScopeRadius +
+            86;
+
         this.sniperScopeRackInRunning =
             true;
 
@@ -59628,6 +59651,57 @@ const roomPlayers =
         }
 
         if (blurLayer) {
+            /*
+             * V1010486_VISIBLE_OPTIC_HOLE_GATE
+             *
+             * The clear blur-hole must never exist before the optic itself
+             * is physically on-screen. During the first rack-in frames the
+             * scope center is below the game canvas; a stale centered CSS
+             * mask could otherwise flash as a sharp circle.
+             */
+            const visibleOpticRadius =
+                this.getActiveSniperScopeRadius();
+
+            const opticHasEnteredCanvas =
+                !this.sniperScopeRackInRunning ||
+                (
+                    this.sniperScopeScreenY -
+                        visibleOpticRadius <
+                    this.gameHeight
+                );
+
+            if (!opticHasEnteredCanvas) {
+                blurLayer.style.maskImage =
+                    'none';
+
+                blurLayer.style.webkitMaskImage =
+                    'none';
+
+                blurLayer.style.maskComposite =
+                    '';
+
+                blurLayer.style.webkitMaskComposite =
+                    '';
+
+                blurLayer.style.maskSize =
+                    '100% 100%';
+
+                blurLayer.style.webkitMaskSize =
+                    '100% 100%';
+
+                blurLayer.style.maskPosition =
+                    '0 0';
+
+                blurLayer.style.webkitMaskPosition =
+                    '0 0';
+
+                /*
+                 * Keep the outside blur itself active.
+                 * Only the transparent circular hole is suppressed.
+                 */
+                return;
+            }
+
             const holeX =
                 this.sniperScopeScreenX *
                 sx;
