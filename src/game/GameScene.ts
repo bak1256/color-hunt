@@ -909,6 +909,15 @@ export class GameScene extends Phaser.Scene {
     private sniperAimWorldY = 270;
     private sniperSavedCameraZoom = 1.65;
 
+    /* V1010455_SNIPER_CINEMATIC_POLISH */
+    private sniperScopeInteractive = false;
+    private sniperScopeScreenX = 480;
+    private sniperScopeScreenY = 270;
+    private sniperScopeRadius = 112;
+    private sniperLastAimBroadcastAt = 0;
+    private sniperScopeIntroTween?: Phaser.Tweens.Tween;
+    private sniperScopeCornerMask?: Phaser.GameObjects.Graphics;
+
     private timerText!: Phaser.GameObjects.Text;
     private guideText!: Phaser.GameObjects.Text;
     private statusText!: Phaser.GameObjects.Text;
@@ -38715,12 +38724,14 @@ const ribbon =
                     1000
                 );
 
+            /*
+             * V1010455_SNIPER_CINEMATIC_POLISH
+             * Hide-point counter removed from live Hunt HUD.
+             * The tension should come from the Hunter approaching, not a rising number.
+             */
             this.hidePointText
-                .setText(
-                    `HIDE ${Math.floor(
-                        this.hidePoints,
-                    )} ▲`,
-                );
+                .setVisible(false)
+                .setText('');
         }
     }
 
@@ -55016,7 +55027,7 @@ const roomPlayers =
             color: '#ffffff',
         }).setOrigin(0.5);
 
-        const button = this.add.container(this.gameWidth / 2, 116, [bg, label])
+        const button = this.add.container(this.gameWidth / 2, this.gameHeight / 2 + 82, [bg, label])
             .setDepth(25020)
             .setScrollFactor(0)
             .setSize(176, 44)
@@ -55037,14 +55048,14 @@ const roomPlayers =
 
         this.fixedHudBaseTransforms.set(button, {
             x: this.gameWidth / 2,
-            y: 116,
+            y: this.gameHeight / 2 + 82,
             scaleX: 1,
             scaleY: 1,
         });
 
         this.sniperRadioText = this.add.text(
             this.gameWidth / 2,
-            106,
+            this.gameHeight / 2 + 82,
             '',
             {
                 fontFamily: 'monospace',
@@ -55065,7 +55076,7 @@ const roomPlayers =
 
         this.fixedHudBaseTransforms.set(this.sniperRadioText, {
             x: this.gameWidth / 2,
-            y: 106,
+            y: this.gameHeight / 2 + 82,
             scaleX: 1,
             scaleY: 1,
         });
@@ -55085,13 +55096,50 @@ const roomPlayers =
             .setScrollFactor(0)
             .setVisible(false);
 
-        this.input.on(Phaser.Input.Events.POINTER_MOVE, (pointer: Phaser.Input.Pointer) => {
-            if (!this.sniperActive || this.phase !== 'hunt') return;
-            if (this.mobileControlsEnabled) return;
+        this.input.on(
+            Phaser.Input.Events.POINTER_MOVE,
+            (
+                pointer:
+                    Phaser.Input.Pointer,
+            ) => {
+                if (
+                    !this.sniperActive ||
+                    !this.sniperScopeInteractive ||
+                    this.phase !== 'hunt' ||
+                    this.mobileControlsEnabled
+                ) {
+                    return;
+                }
 
-            const world = pointer.positionToCamera(this.cameras.main) as Phaser.Math.Vector2;
-            this.setSniperAimWorld(world.x, world.y);
-        });
+                this.sniperScopeScreenX =
+                    Phaser.Math.Clamp(
+                        pointer.x,
+                        this.sniperScopeRadius + 8,
+                        this.gameWidth -
+                            this.sniperScopeRadius -
+                            8,
+                    );
+
+                this.sniperScopeScreenY =
+                    Phaser.Math.Clamp(
+                        pointer.y,
+                        this.sniperScopeRadius + 8,
+                        this.gameHeight -
+                            this.sniperScopeRadius -
+                            24,
+                    );
+
+                const world =
+                    pointer.positionToCamera(
+                        this.cameras.main,
+                    ) as Phaser.Math.Vector2;
+
+                this.setSniperAimWorld(
+                    world.x,
+                    world.y,
+                );
+            },
+        );
 
         this.input.on(Phaser.Input.Events.POINTER_DOWN, (pointer: Phaser.Input.Pointer) => {
             if (!this.sniperActive || this.phase !== 'hunt') return;
@@ -55105,15 +55153,19 @@ const roomPlayers =
     }
 
     private getSniperRadioMessage(seconds: number): string {
-        const messages = [
-            '지원 요청 바람...',
-            '저격 지원 대기 중...',
-            '지원팀 접근 중...',
-        ];
-        if (seconds >= 4) return '지원 요청 가능까지 5초...';
-        if (seconds === 3) return messages[0];
-        if (seconds === 2) return messages[1];
-        return messages[2];
+        /*
+         * V1010455_SNIPER_CINEMATIC_POLISH
+         * One calm tactical sentence; only the number counts down.
+         */
+        return '저격 지원 요청 가능까지 ' +
+            String(
+                Phaser.Math.Clamp(
+                    seconds,
+                    1,
+                    5,
+                ),
+            ) +
+            '초...';
     }
 
     private setSniperAimWorld(x: number, y: number): void {
@@ -55124,6 +55176,10 @@ const roomPlayers =
     }
 
     private fireSniperAtCurrentAim(): void {
+        if (!this.sniperScopeInteractive) {
+            return;
+        }
+
         const now = Date.now();
         if (now < this.sniperReadyAt) return;
 
@@ -55133,14 +55189,48 @@ const roomPlayers =
         );
         this.sniperReadyAt = now + 2000;
 
-        this.cameras.main.shake(95, 0.006);
-        this.sniperScopeCamera?.shake(110, 0.012);
+        this.playProceduralSniperShot();
+
+        this.cameras.main.shake(
+            155,
+            0.010,
+        );
+
+        this.sniperScopeCamera
+            ?.shake(
+                180,
+                0.020,
+            );
+
+        if (this.sniperScope) {
+            this.tweens.killTweensOf(
+                this.sniperScope,
+            );
+
+            this.tweens.add({
+                targets:
+                    this.sniperScope,
+                y: -14,
+                angle:
+                    Phaser.Math.Between(
+                        -2,
+                        2,
+                    ),
+                scaleX: 1.045,
+                scaleY: 1.045,
+                duration: 65,
+                yoyo: true,
+                ease: 'Quad.easeOut',
+            });
+        }
+
         this.refreshSniperSupportUi();
     }
 
     private enterSniperCinematic(): void {
         if (this.sniperCinematicActive || this.phase !== 'hunt') return;
         this.sniperCinematicActive = true;
+        this.sniperScopeInteractive = false;
 
         this.sniperSavedCameraZoom = this.cameras.main.zoom;
         this.sniperButton?.setVisible(false);
@@ -55216,10 +55306,96 @@ const roomPlayers =
             onUpdate: () => this.applyFixedHudForZoom(camera.zoom),
             onComplete: () => {
                 camera.stopFollow();
-                camera.centerOn(this.gameWidth / 2, this.gameHeight / 2);
-                this.applyFixedHudForZoom(camera.zoom);
+                camera.centerOn(
+                    this.gameWidth / 2,
+                    this.gameHeight / 2,
+                );
+                this.applyFixedHudForZoom(
+                    camera.zoom,
+                );
+
+                this.sniperScopeScreenX =
+                    this.gameWidth / 2;
+
+                this.sniperScopeScreenY =
+                    this.gameHeight +
+                    this.sniperScopeRadius +
+                    24;
+
                 this.createSniperScopeCamera();
-                this.drawLocalSniperScope(this.sniperAimWorldX, this.sniperAimWorldY);
+
+                this.playProceduralSniperRack();
+
+                this.sniperScopeIntroTween =
+                    this.tweens.add({
+                        targets:
+                            this as unknown as {
+                                sniperScopeScreenY:
+                                    number;
+                            },
+                        sniperScopeScreenY:
+                            this.gameHeight /
+                                2,
+                        duration: 420,
+                        ease:
+                            'Back.easeOut',
+                        onUpdate: () => {
+                            this.drawLocalSniperScope(
+                                this.sniperAimWorldX,
+                                this.sniperAimWorldY,
+                            );
+                        },
+                        onComplete: () => {
+                            this.sniperScopeInteractive =
+                                true;
+
+                            const pointer =
+                                this.input
+                                    .activePointer;
+
+                            if (
+                                pointer &&
+                                !this.mobileControlsEnabled
+                            ) {
+                                this.sniperScopeScreenX =
+                                    Phaser.Math.Clamp(
+                                        pointer.x,
+                                        this.sniperScopeRadius +
+                                            8,
+                                        this.gameWidth -
+                                            this.sniperScopeRadius -
+                                            8,
+                                    );
+
+                                this.sniperScopeScreenY =
+                                    Phaser.Math.Clamp(
+                                        pointer.y,
+                                        this.sniperScopeRadius +
+                                            8,
+                                        this.gameHeight -
+                                            this.sniperScopeRadius -
+                                            24,
+                                    );
+
+                                const world =
+                                    pointer
+                                        .positionToCamera(
+                                            this.cameras
+                                                .main,
+                                        ) as Phaser.Math.Vector2;
+
+                                this.setSniperAimWorld(
+                                    world.x,
+                                    world.y,
+                                );
+                            } else {
+                                this.drawLocalSniperScope(
+                                    this.sniperAimWorldX,
+                                    this.sniperAimWorldY,
+                                );
+                            }
+                        },
+                    });
             },
         });
     }
@@ -55227,6 +55403,10 @@ const roomPlayers =
     private exitSniperCinematic(): void {
         if (!this.sniperCinematicActive) return;
         this.sniperCinematicActive = false;
+        this.sniperScopeInteractive = false;
+
+        this.sniperScopeIntroTween?.stop();
+        this.sniperScopeIntroTween = undefined;
 
         this.sniperHelicopterRotorTween?.stop();
         this.sniperHelicopterRotorTween = undefined;
@@ -55240,6 +55420,7 @@ const roomPlayers =
         this.sniperScope?.clear().setVisible(false);
         this.sniperScopeShade?.clear().setVisible(false);
         this.sniperReloadGraphics?.clear().setVisible(false);
+        this.sniperScopeCornerMask?.clear().setVisible(false);
 
         if (this.sniperScopeCamera) {
             this.cameras.remove(this.sniperScopeCamera);
@@ -55258,6 +55439,180 @@ const roomPlayers =
                 ease: 'Sine.easeInOut',
                 onUpdate: () => this.applyFixedHudForZoom(camera.zoom),
             });
+        }
+    }
+
+    private playProceduralSniperShot(): void {
+        try {
+            const manager =
+                this.sound as unknown as {
+                    context?: AudioContext;
+                };
+
+            const context =
+                manager.context;
+
+            if (!context) return;
+
+            const now =
+                context.currentTime;
+
+            const master =
+                context.createGain();
+
+            master.gain.setValueAtTime(
+                0.0001,
+                now,
+            );
+            master.gain.exponentialRampToValueAtTime(
+                0.82,
+                now + 0.004,
+            );
+            master.gain.exponentialRampToValueAtTime(
+                0.0001,
+                now + 0.42,
+            );
+            master.connect(
+                context.destination,
+            );
+
+            const crack =
+                context.createOscillator();
+
+            crack.type =
+                'sawtooth';
+            crack.frequency.setValueAtTime(
+                165,
+                now,
+            );
+            crack.frequency.exponentialRampToValueAtTime(
+                58,
+                now + 0.16,
+            );
+            crack.connect(
+                master,
+            );
+            crack.start(
+                now,
+            );
+            crack.stop(
+                now + 0.23,
+            );
+
+            const buffer =
+                context.createBuffer(
+                    1,
+                    Math.floor(
+                        context.sampleRate *
+                            0.16,
+                    ),
+                    context.sampleRate,
+                );
+
+            const data =
+                buffer.getChannelData(
+                    0,
+                );
+
+            for (
+                let i = 0;
+                i < data.length;
+                i += 1
+            ) {
+                const decay =
+                    1 -
+                    i /
+                        data.length;
+
+                data[i] =
+                    (
+                        Math.random() *
+                            2 -
+                        1
+                    ) *
+                    decay *
+                    decay;
+            }
+
+            const noise =
+                context.createBufferSource();
+
+            noise.buffer =
+                buffer;
+            noise.connect(
+                master,
+            );
+            noise.start(
+                now,
+            );
+        } catch {
+            // Procedural punch is optional; gameplay must continue.
+        }
+    }
+
+    private playProceduralSniperRack(): void {
+        try {
+            const manager =
+                this.sound as unknown as {
+                    context?: AudioContext;
+                };
+
+            const context =
+                manager.context;
+
+            if (!context) return;
+
+            const now =
+                context.currentTime;
+
+            const gain =
+                context.createGain();
+
+            gain.gain.setValueAtTime(
+                0.0001,
+                now,
+            );
+            gain.gain.exponentialRampToValueAtTime(
+                0.34,
+                now + 0.006,
+            );
+            gain.gain.exponentialRampToValueAtTime(
+                0.0001,
+                now + 0.16,
+            );
+            gain.connect(
+                context.destination,
+            );
+
+            const osc =
+                context.createOscillator();
+
+            osc.type =
+                'square';
+
+            osc.frequency.setValueAtTime(
+                520,
+                now,
+            );
+
+            osc.frequency.exponentialRampToValueAtTime(
+                150,
+                now + 0.10,
+            );
+
+            osc.connect(
+                gain,
+            );
+
+            osc.start(
+                now,
+            );
+
+            osc.stop(
+                now + 0.14,
+            );
+        } catch {
+            // Optional mechanical rack SFX.
         }
     }
 
@@ -55297,30 +55652,45 @@ const roomPlayers =
     private createSniperScopeCamera(): void {
         if (this.sniperScopeCamera) return;
 
-        const radius = this.mobileControlsEnabled ? 92 : 112;
-        const cx = this.gameWidth / 2;
-        const cy = this.gameHeight / 2;
+        const radius =
+            this.mobileControlsEnabled
+                ? 92
+                : 112;
 
-        const camera = this.cameras.add(
-            cx - radius,
-            cy - radius,
-            radius * 2,
-            radius * 2,
-            false,
-            'sniper-scope-camera',
-        );
+        this.sniperScopeRadius = radius;
+
+        const camera =
+            this.cameras.add(
+                this.sniperScopeScreenX - radius,
+                this.sniperScopeScreenY - radius,
+                radius * 2,
+                radius * 2,
+                false,
+                'sniper-scope-camera',
+            );
+
         camera.setZoom(2.55);
-        camera.centerOn(this.sniperAimWorldX, this.sniperAimWorldY);
-        camera.setBackgroundColor('rgba(0,0,0,0)');
+        camera.centerOn(
+            this.sniperAimWorldX,
+            this.sniperAimWorldY,
+        );
+        camera.setBackgroundColor(
+            'rgba(0,0,0,0)',
+        );
 
-        const maskGraphics = this.make.graphics({ x: 0, y: 0 }, false);
-        maskGraphics.fillStyle(0xffffff, 1);
-        maskGraphics.fillCircle(cx, cy, radius - 3);
-        const mask = maskGraphics.createGeometryMask();
-        camera.setMask(mask);
-
+        /*
+         * V1010455_SNIPER_CINEMATIC_POLISH
+         * Phaser 4 WebGL does not support Camera.setMask().
+         * Keep the secondary camera square internally, then cover the square
+         * corners above it with scanline geometry so the visible lens is truly circular.
+         */
         this.sniperScopeCamera = camera;
-        this.sniperScopeMaskGraphics = maskGraphics;
+
+        this.sniperScopeCornerMask =
+            this.add.graphics()
+                .setDepth(25031)
+                .setScrollFactor(0)
+                .setVisible(true);
 
         [
             this.sniperButton,
@@ -55328,6 +55698,7 @@ const roomPlayers =
             this.sniperScope,
             this.sniperScopeShade,
             this.sniperReloadGraphics,
+            this.sniperScopeCornerMask,
             this.sniperHelicopter,
             this.timerText,
             this.phaseText,
@@ -55343,46 +55714,267 @@ const roomPlayers =
             this.mobileAimLabel,
             this.mobileFireButton,
             this.mobileFireLabel,
-        ].forEach((object) => {
-            if (object) camera.ignore(object);
-        });
+        ].forEach(
+            (object) => {
+                if (object) {
+                    camera.ignore(object);
+                }
+            },
+        );
     }
 
-    private drawLocalSniperScope(x: number, y: number): void {
-        if (!this.sniperActive) return;
-
-        const radius = this.mobileControlsEnabled ? 92 : 112;
-        const cx = this.gameWidth / 2;
-        const cy = this.gameHeight / 2;
-
-        this.sniperScopeCamera?.centerOn(x, y);
-
-        const shade = this.sniperScopeShade;
-        if (shade) {
-            shade.clear().setVisible(true);
-            shade.fillStyle(0x02070b, 0.42);
-            shade.fillRect(0, 0, this.gameWidth, cy - radius);
-            shade.fillRect(0, cy + radius, this.gameWidth, this.gameHeight - cy - radius);
-            shade.fillRect(0, cy - radius, cx - radius, radius * 2);
-            shade.fillRect(cx + radius, cy - radius, this.gameWidth - cx - radius, radius * 2);
+    private drawLocalSniperScope(
+        x: number,
+        y: number,
+    ): void {
+        if (
+            !this.sniperActive ||
+            !this.sniperScopeInteractive
+        ) {
+            return;
         }
 
-        const g = this.sniperScope;
-        if (!g) return;
-        g.clear().setVisible(true);
-        g.lineStyle(4, 0x101820, 0.96);
-        g.strokeCircle(cx, cy, radius);
-        g.lineStyle(1.5, 0xe7f7ff, 0.92);
-        g.lineBetween(cx - radius + 12, cy, cx - 10, cy);
-        g.lineBetween(cx + 10, cy, cx + radius - 12, cy);
-        g.lineBetween(cx, cy - radius + 12, cx, cy - 10);
-        g.lineBetween(cx, cy + 10, cx, cy + radius - 12);
-        g.fillStyle(0xffe9b0, 0.95);
-        g.fillCircle(cx, cy, 2.5);
+        const radius =
+            this.sniperScopeRadius;
 
-        for (let tick = 28; tick < radius - 12; tick += 22) {
-            g.lineBetween(cx - 4, cy + tick, cx + 4, cy + tick);
-            g.lineBetween(cx - 4, cy - tick, cx + 4, cy - tick);
+        const cx =
+            this.sniperScopeScreenX;
+        const cy =
+            this.sniperScopeScreenY;
+
+        /*
+         * Mouse screen position owns BOTH:
+         * 1) visible scope location
+         * 2) zoom-camera world center
+         *
+         * Therefore what the player points at is exactly what is magnified.
+         */
+        this.sniperScopeCamera
+            ?.setViewport(
+                cx - radius,
+                cy - radius,
+                radius * 2,
+                radius * 2,
+            );
+
+        this.sniperScopeCamera
+            ?.centerOn(
+                x,
+                y,
+            );
+
+        const shade =
+            this.sniperScopeShade;
+
+        if (shade) {
+            shade
+                .clear()
+                .setVisible(true);
+
+            shade.fillStyle(
+                0x02070b,
+                0.30,
+            );
+
+            shade.fillRect(
+                0,
+                0,
+                this.gameWidth,
+                Math.max(
+                    0,
+                    cy - radius,
+                ),
+            );
+
+            shade.fillRect(
+                0,
+                Math.min(
+                    this.gameHeight,
+                    cy + radius,
+                ),
+                this.gameWidth,
+                Math.max(
+                    0,
+                    this.gameHeight -
+                        (
+                            cy +
+                            radius
+                        ),
+                ),
+            );
+
+            shade.fillRect(
+                0,
+                cy - radius,
+                Math.max(
+                    0,
+                    cx - radius,
+                ),
+                radius * 2,
+            );
+
+            shade.fillRect(
+                cx + radius,
+                cy - radius,
+                Math.max(
+                    0,
+                    this.gameWidth -
+                        (
+                            cx +
+                            radius
+                        ),
+                ),
+                radius * 2,
+            );
+        }
+
+        /*
+         * Circular cutout without Camera.setMask:
+         * paint only the square corners OUTSIDE the circle.
+         */
+        const cornerMask =
+            this.sniperScopeCornerMask;
+
+        if (cornerMask) {
+            cornerMask
+                .clear()
+                .setVisible(true);
+
+            cornerMask.fillStyle(
+                0x02070b,
+                0.96,
+            );
+
+            const step = 4;
+
+            for (
+                let oy = -radius;
+                oy < radius;
+                oy += step
+            ) {
+                const yy =
+                    oy +
+                    step / 2;
+
+                const insideHalfWidth =
+                    Math.sqrt(
+                        Math.max(
+                            0,
+                            radius *
+                                radius -
+                                yy *
+                                yy,
+                        ),
+                    );
+
+                const leftWidth =
+                    Math.max(
+                        0,
+                        radius -
+                            insideHalfWidth,
+                    );
+
+                if (
+                    leftWidth >
+                    0
+                ) {
+                    cornerMask.fillRect(
+                        cx - radius,
+                        cy + oy,
+                        leftWidth,
+                        step + 1,
+                    );
+
+                    cornerMask.fillRect(
+                        cx +
+                            insideHalfWidth,
+                        cy + oy,
+                        leftWidth,
+                        step + 1,
+                    );
+                }
+            }
+        }
+
+        const g =
+            this.sniperScope;
+
+        if (!g) return;
+
+        g
+            .clear()
+            .setVisible(true);
+
+        g.lineStyle(
+            5,
+            0x081014,
+            1,
+        );
+        g.strokeCircle(
+            cx,
+            cy,
+            radius,
+        );
+
+        g.lineStyle(
+            1.5,
+            0xe7f7ff,
+            0.94,
+        );
+
+        g.lineBetween(
+            cx - radius + 12,
+            cy,
+            cx - 10,
+            cy,
+        );
+        g.lineBetween(
+            cx + 10,
+            cy,
+            cx + radius - 12,
+            cy,
+        );
+        g.lineBetween(
+            cx,
+            cy - radius + 12,
+            cx,
+            cy - 10,
+        );
+        g.lineBetween(
+            cx,
+            cy + 10,
+            cx,
+            cy + radius - 12,
+        );
+
+        g.fillStyle(
+            0xffe6a2,
+            1,
+        );
+        g.fillCircle(
+            cx,
+            cy,
+            2.5,
+        );
+
+        for (
+            let tick = 28;
+            tick < radius - 12;
+            tick += 22
+        ) {
+            g.lineBetween(
+                cx - 4,
+                cy + tick,
+                cx + 4,
+                cy + tick,
+            );
+
+            g.lineBetween(
+                cx - 4,
+                cy - tick,
+                cx + 4,
+                cy - tick,
+            );
         }
 
         this.drawSniperReloadGauge();
@@ -55434,11 +56026,106 @@ const roomPlayers =
         this.sniperImpactFx.add(ring);
         this.sniperImpactFx.add(flash);
 
+        const shards =
+            Array.from(
+                {
+                    length:
+                        shot.hitId
+                            ? 10
+                            : 7,
+                },
+                (
+                    _,
+                    index,
+                ) => {
+                    const angle =
+                        (
+                            Math.PI *
+                            2 *
+                            index
+                        ) /
+                        (
+                            shot.hitId
+                                ? 10
+                                : 7
+                        );
+
+                    const shard =
+                        this.add.circle(
+                            shot.x,
+                            shot.y,
+                            shot.hitId
+                                ? 3
+                                : 2,
+                            shot.hitId
+                                ? 0xffd36c
+                                : 0xf8ead5,
+                            0.96,
+                        )
+                            .setDepth(
+                                4922,
+                            );
+
+                    this.sniperImpactFx
+                        .add(
+                            shard,
+                        );
+
+                    this.tweens.add({
+                        targets:
+                            shard,
+                        x:
+                            shot.x +
+                            Math.cos(
+                                angle,
+                            ) *
+                                (
+                                    shot.hitId
+                                        ? 42
+                                        : 30
+                                ),
+                        y:
+                            shot.y +
+                            Math.sin(
+                                angle,
+                            ) *
+                                (
+                                    shot.hitId
+                                        ? 42
+                                        : 30
+                                ),
+                        scale:
+                            0.2,
+                        alpha:
+                            0,
+                        duration:
+                            420,
+                        ease:
+                            'Quad.easeOut',
+                        onComplete:
+                            () => {
+                                this.sniperImpactFx
+                                    .delete(
+                                        shard,
+                                    );
+                                shard.destroy();
+                            },
+                    });
+
+                    return shard;
+                },
+            );
+
+        void shards;
+
         this.tweens.add({
             targets: [ring, flash],
-            scale: shot.hitId ? 3.1 : 2.5,
+            scale:
+                shot.hitId
+                    ? 4.1
+                    : 3.25,
             alpha: 0,
-            duration: 520,
+            duration: 460,
             ease: 'Quad.easeOut',
             onComplete: () => {
                 this.sniperImpactFx.delete(ring);
@@ -55447,6 +56134,15 @@ const roomPlayers =
                 flash.destroy();
             },
         });
+
+        this.cameras.main.shake(
+            shot.hitId
+                ? 125
+                : 70,
+            shot.hitId
+                ? 0.006
+                : 0.003,
+        );
     }
 
     private updateSniperCinematicFrame(): void {
@@ -55472,8 +56168,75 @@ const roomPlayers =
             );
             this.drawLocalSniperScope(this.sniperAimWorldX, this.sniperAimWorldY);
             multiplayerClient.sendSniperAim(this.sniperAimWorldX, this.sniperAimWorldY);
-        } else {
-            this.drawLocalSniperScope(this.sniperAimWorldX, this.sniperAimWorldY);
+        } else if (
+            this.sniperScopeInteractive
+        ) {
+            const pointer =
+                this.input.activePointer;
+
+            if (
+                pointer &&
+                !this.mobileControlsEnabled
+            ) {
+                this.sniperScopeScreenX =
+                    Phaser.Math.Clamp(
+                        pointer.x,
+                        this.sniperScopeRadius +
+                            8,
+                        this.gameWidth -
+                            this.sniperScopeRadius -
+                            8,
+                    );
+
+                this.sniperScopeScreenY =
+                    Phaser.Math.Clamp(
+                        pointer.y,
+                        this.sniperScopeRadius +
+                            8,
+                        this.gameHeight -
+                            this.sniperScopeRadius -
+                            24,
+                    );
+
+                const world =
+                    pointer.positionToCamera(
+                        this.cameras.main,
+                    ) as Phaser.Math.Vector2;
+
+                this.sniperAimWorldX =
+                    Phaser.Math.Clamp(
+                        world.x,
+                        0,
+                        this.gameWidth,
+                    );
+
+                this.sniperAimWorldY =
+                    Phaser.Math.Clamp(
+                        world.y,
+                        0,
+                        this.gameHeight,
+                    );
+
+                if (
+                    this.time.now -
+                        this.sniperLastAimBroadcastAt >=
+                    66
+                ) {
+                    this.sniperLastAimBroadcastAt =
+                        this.time.now;
+
+                    multiplayerClient
+                        .sendSniperAim(
+                            this.sniperAimWorldX,
+                            this.sniperAimWorldY,
+                        );
+                }
+
+                this.drawLocalSniperScope(
+                    this.sniperAimWorldX,
+                    this.sniperAimWorldY,
+                );
+            }
         }
 
         this.drawSniperReloadGauge();
@@ -55491,6 +56254,68 @@ const roomPlayers =
             (localRole === 'hunter' || managerLocalRole === 'hunter');
 
         const remainingMs = Math.max(0, this.phaseEndTime - this.time.now);
+
+        if (
+            hunter &&
+            !this.sniperActive
+        ) {
+            const localPosition =
+                this.networkPlayerManager
+                    .getLocalPlayerPosition();
+
+            if (localPosition) {
+                const camera =
+                    this.cameras.main;
+
+                const screenX =
+                    (
+                        localPosition.x -
+                        camera.worldView.x
+                    ) *
+                    camera.zoom;
+
+                const screenY =
+                    (
+                        localPosition.y -
+                        camera.worldView.y
+                    ) *
+                    camera.zoom +
+                    72;
+
+                this.setFixedHudScreenPosition(
+                    this.sniperRadioText,
+                    Phaser.Math.Clamp(
+                        screenX,
+                        150,
+                        this.gameWidth -
+                            150,
+                    ),
+                    Phaser.Math.Clamp(
+                        screenY,
+                        90,
+                        this.gameHeight -
+                            70,
+                    ),
+                );
+
+                this.setFixedHudScreenPosition(
+                    this.sniperButton,
+                    Phaser.Math.Clamp(
+                        screenX,
+                        110,
+                        this.gameWidth -
+                            110,
+                    ),
+                    Phaser.Math.Clamp(
+                        screenY,
+                        90,
+                        this.gameHeight -
+                            70,
+                    ),
+                );
+            }
+        }
+
         this.sniperAvailable = hunter && remainingMs <= 30000;
 
         const warning = hunter && remainingMs <= 35000 && remainingMs > 30000;
