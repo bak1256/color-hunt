@@ -1,3 +1,4 @@
+/* V1010485_HIDE_NORMAL_HUNTER_VISION_DURING_SNIPER_INTRO: hide only the old Hunter vision spotlight while sniper mode/intro is active. */
 /* V1010480B_ASSIST_PINHOLE_OPAQUE_MICROPULSE_CLEAN_SCOPE: organic FULL dab overlap, opaque Paint Help, true micro heartbeat, clean PC sniper transition. */
 /* V1010479D_RESTORE_ORGANIC_ASSIST_DENSITY_ONLY: remove FULL grid geometry; preserve original organic dots and change density only. */
 /* V1010479C_FIX_ASSIST_DENSITY_BUILD: canonicalize Paint Assist density block after 479b duplicate declaration. */
@@ -39421,6 +39422,25 @@ this.networkUnsubscribers.push(
             if (
                 this.sniperActive
             ) {
+
+        /* V1010485_HIDE_NORMAL_HUNTER_VISION_DURING_SNIPER_INTRO */
+        if (
+            this.sniperActive ||
+            this.sniperCinematicActive
+        ) {
+            this.hiderVisionGraphics
+                ?.clear()
+                .setVisible(false);
+
+            this.hiderVisionOverlays
+                .forEach(
+                    (overlay) =>
+                        overlay.setVisible(false),
+                );
+
+            return;
+        }
+
                 this.hiderVisionGraphics
                     ?.clear()
                     .setVisible(false);
