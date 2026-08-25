@@ -40579,6 +40579,41 @@ const ribbon =
             },
         );
 
+        /*
+         * V1010453E_SNIPER_2S_LOBBY_CLEANUP
+         * Sniper is Hunt-only. Never carry local/remote scope graphics,
+         * reload state, movement lock or the support button into Lobby.
+         */
+        this.sniperActive = false;
+        this.sniperAvailable = false;
+        this.sniperReadyAt = 0;
+
+        this.sniperScope
+            ?.clear()
+            .setVisible(false);
+
+        this.sniperButton
+            ?.setVisible(false);
+
+        this.remoteSniperScopes.forEach(
+            (scope) => {
+                scope.destroy();
+            },
+        );
+        this.remoteSniperScopes.clear();
+
+        this.sniperImpactFx.forEach(
+            (object) => {
+                object.destroy();
+            },
+        );
+        this.sniperImpactFx.clear();
+
+        this.networkPlayerManager
+            ?.setLocalHunterSpeedMultiplier(
+                1,
+            );
+
         this.phase = 'lobby';
 
         /*
@@ -54973,7 +55008,7 @@ const roomPlayers =
             const x = Phaser.Math.Clamp(world.x, 0, this.gameWidth);
             const y = Phaser.Math.Clamp(world.y, 0, this.gameHeight);
             multiplayerClient.sendSniperFire(x, y);
-            this.sniperReadyAt = now + 3000;
+            this.sniperReadyAt = now + 2000;
             this.refreshSniperSupportUi();
         });
     }
