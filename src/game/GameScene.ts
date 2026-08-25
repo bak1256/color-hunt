@@ -6586,6 +6586,9 @@ private timerText!: Phaser.GameObjects.Text;
     private victoryCaptureCameraLockY = 0;
     private victoryCaptureCameraLockZoom = 4.9;
 
+    /* V1010464_UNLIMITED_AMMO_HUD_VICTORY_CAMERA_FIX */
+    private hiderVictoryCaptureCamera?: Phaser.Cameras.Scene2D.Camera;
+
     private roundReturnLobbyButton?: Phaser.GameObjects.Text;
     private lastPhaseRecoveryAt = 0;
     private phaseExpiredSince = 0;
@@ -6698,8 +6701,6 @@ private timerText!: Phaser.GameObjects.Text;
     /*
      * Hunter precision / limited reserve
      */
-    private hunterReserve = 12;
-    private hunterMaxReserve = 12;
 
     /*
      * Mobile controls
@@ -6870,8 +6871,6 @@ private timerText!: Phaser.GameObjects.Text;
      * max reserve 12 / heat +34 / cool 0.025 per ms /
      * overheat 2500ms / shot cooldown already 450ms in GameScene.
      */
-    private readonly practiceHunterMaxReserve =
-        12;
     private readonly practiceHeatPerShot =
         34;
     private readonly practiceHeatCooldownPerMs =
@@ -14273,10 +14272,6 @@ const ribbon =
                     this.weaponOverheatedUntil =
                         state.overheatedUntil;
 
-                    this.hunterReserve =
-                        state.reserve;
-                    this.hunterMaxReserve =
-                        state.maxReserve;
                     this.updateWeaponHeatHud();
                 },
             ),
@@ -14475,8 +14470,6 @@ const ribbon =
                     this.weaponHeatUpdatedAt =
                         Date.now();
                     this.weaponOverheatedUntil = 0;
-                    this.hunterReserve = 12;
-                    this.hunterMaxReserve = 12;
                     this.fartGauge = 0;
                     this.lastFartUseAt = 0;
                     this.localPoopUntil = 0;
@@ -14613,20 +14606,19 @@ const ribbon =
             ),
         );
 
+        /*
+         * V1010464_UNLIMITED_AMMO_HUD_VICTORY_CAMERA_FIX
+         * Ammo-depletion victory is disabled; keep old protocol listener as no-op.
+         */
         this.networkUnsubscribers.push(
             multiplayerClient.onHuntersOutOfAmmo(
                 (_message: string) => {
-                    this.statusText
-                        .setText(
-                            tr('탄약 소진! HIDER 승리!'),
-                        )
-                        .setVisible(true)
-                        .setAlpha(1);
+                    // intentionally ignored
                 },
             ),
         );
 
-        this.networkUnsubscribers.push(
+this.networkUnsubscribers.push(
             multiplayerClient.onPlayerDisconnected(
                 (
                     payload: {
@@ -19820,10 +19812,6 @@ const ribbon =
         this.huntDuration =
             this.practiceHuntDuration;
 
-        this.hunterReserve =
-            this.practiceHunterMaxReserve;
-        this.hunterMaxReserve =
-            this.practiceHunterMaxReserve;
         this.weaponHeat =
             0;
         this.weaponHeatUpdatedAt =
@@ -19874,10 +19862,6 @@ const ribbon =
                     1000,
             );
 
-        this.hunterReserve =
-            this.practiceHunterMaxReserve;
-        this.hunterMaxReserve =
-            this.practiceHunterMaxReserve;
         this.weaponHeat =
             0;
         this.weaponHeatUpdatedAt =
@@ -37054,6 +37038,9 @@ const ribbon =
             );
     }
 
+    /* V1010464C_REMOVE_UNUSED_HUNTER_RESERVE_FIELDS_SAFE: obsolete finite-ammo class fields removed; HEAT remains authoritative. */
+    /* V1010464D_REMOVE_OBSOLETE_RESERVE_ASSIGNMENTS: all obsolete GameScene finite-ammo writes removed. */
+    /* V1010464E_REMOVE_UNUSED_PRACTICE_MAX_RESERVE: obsolete practice finite-ammo constant removed. */
     private updateWeaponHeatHud(): void {
         const localRole =
             multiplayerClient
@@ -37073,6 +37060,7 @@ const ribbon =
                     'hunter'
             ) &&
             this.phase === 'hunt' &&
+            !this.sniperActive &&
             (
                 localIsHunter ||
                 this.practiceMode ===
@@ -37131,110 +37119,12 @@ const ribbon =
             this.weaponOverheatedUntil;
 
         /*
-         * AMMO
-         * 숫자와 SHELLS 텍스트 대신 shotgun shell 모양 자체를 개수로 표시.
-         * 남은 탄 = 컬러 shell
-         * 사용한 탄 = 흐린 outline shell
+         * V1010464_UNLIMITED_AMMO_HUD_VICTORY_CAMERA_FIX
+         * Shell icons removed. Unlimited ammo; only HEAT is shown.
          */
-        this.hunterAmmoGraphics.clear();
-
-        const iconWidth = 9;
-        const iconHeight = 16;
-        const iconGap = 5;
-        const startX = 2;
-        const startY = 2;
-
-        for (
-            let index = 0;
-            index <
-                this.hunterMaxReserve;
-            index += 1
-        ) {
-            const x =
-                startX +
-                index *
-                    (
-                        iconWidth +
-                        iconGap
-                    );
-
-            const loaded =
-                index <
-                this.hunterReserve;
-
-            if (loaded) {
-                /*
-                 * Shotgun shell:
-                 * 둥근 빨간 탄두 + 붉은 몸통 + 황동색 바닥.
-                 */
-                this.hunterAmmoGraphics
-                    .fillStyle(
-                        0xd94b3d,
-                        1,
-                    )
-                    .fillRoundedRect(
-                        x + 1,
-                        startY,
-                        iconWidth - 2,
-                        iconHeight - 4,
-                        3,
-                    )
-                    .fillStyle(
-                        0xe0ad37,
-                        1,
-                    )
-                    .fillRect(
-                        x,
-                        startY +
-                            iconHeight -
-                            5,
-                        iconWidth,
-                        5,
-                    )
-                    .lineStyle(
-                        1,
-                        0x59483b,
-                        1,
-                    )
-                    .strokeRoundedRect(
-                        x + 1,
-                        startY,
-                        iconWidth - 2,
-                        iconHeight - 4,
-                        3,
-                    )
-                    .strokeRect(
-                        x,
-                        startY +
-                            iconHeight -
-                            5,
-                        iconWidth,
-                        5,
-                    );
-            } else {
-                this.hunterAmmoGraphics
-                    .lineStyle(
-                        1,
-                        0x897f72,
-                        0.55,
-                    )
-                    .strokeRoundedRect(
-                        x + 1,
-                        startY,
-                        iconWidth - 2,
-                        iconHeight - 4,
-                        3,
-                    )
-                    .strokeRect(
-                        x,
-                        startY +
-                            iconHeight -
-                            5,
-                        iconWidth,
-                        5,
-                    );
-            }
-        }
+        this.hunterAmmoGraphics
+            .clear()
+            .setVisible(false);
 
         /*
          * HEAT BAR
@@ -37248,7 +37138,7 @@ const ribbon =
          * makes "gun won't fire" clearly distinguishable from input failure.
          */
         const barX = 42;
-        const barY = 27;
+        const barY = 9;
         const barWidth = 174;
         const barHeight = 18;
 
@@ -42161,6 +42051,23 @@ const ribbon =
                 },
             );
 
+        const savedRemoteSniperScopeVisibility =
+            [...this.remoteSniperScopes.values()]
+                .map(
+                    (scope) => ({
+                        scope,
+                        visible:
+                            scope.visible,
+                    }),
+                );
+
+        this.remoteSniperScopes
+            .forEach(
+                (scope) => {
+                    scope.setVisible(false);
+                },
+            );
+
         const savedSingleSniperCameraVisible =
             this.sniperScopeCamera
                 ?.visible;
@@ -42184,6 +42091,9 @@ const ribbon =
 
         const camera =
             this.cameras.main;
+
+        const savedMainCameraVisible =
+            camera.visible;
 
         const savedZoom =
             camera.zoom;
@@ -42535,20 +42445,70 @@ const ribbon =
                     this.victoryCaptureCameraLockZoom =
                         4.9;
 
-                    camera
-                        .stopFollow()
-                        .removeBounds()
-                        .setSize(
+                    if (
+                        !this.hiderVictoryCaptureCamera
+                    ) {
+                        this.hiderVictoryCaptureCamera =
+                            this.cameras.add(
+                                0,
+                                0,
+                                this.gameWidth,
+                                this.gameHeight,
+                                false,
+                                'hider-victory-capture-camera',
+                            );
+                    }
+
+                    const victoryCamera =
+                        this.hiderVictoryCaptureCamera;
+
+                    victoryCamera
+                        .setVisible(true)
+                        .setViewport(
+                            0,
+                            0,
                             this.gameWidth,
                             this.gameHeight,
                         )
-                        .setZoom(
-                            4.9,
-                        )
+                        .setZoom(4.9)
                         .centerOn(
                             centerX,
                             centerY,
                         );
+
+                    [
+                        this.aimLine,
+                        this.crosshair,
+                        this.gun,
+                        this.hiderVisionGraphics,
+                        this.heartbeatDangerOverlay,
+                        this.hunterWeaponHudContainer,
+                        this.fartHudContainer,
+                        this.phaseText,
+                        this.timerText,
+                        this.guideText,
+                        this.statusText,
+                        this.sniperScope,
+                        this.sniperScopeShade,
+                        this.sniperReloadGraphics,
+                        this.sniperScopeCornerMask,
+                        this.sniperHelicopter,
+                        ...this.heartbeatBorders,
+                        ...this.remoteSniperScopes.values(),
+                    ].forEach(
+                        (object) => {
+                            if (object) {
+                                victoryCamera.ignore(object);
+                            }
+                        },
+                    );
+
+                    /*
+                     * Snapshot sees ONLY the dedicated Hider camera.
+                     * This makes the 4.9 framing independent of active sniper cameras.
+                     */
+                    camera.visible =
+                        false;
 
                     /*
                      * Capture-only UI/vision must stay out of the PC reference
@@ -42602,6 +42562,20 @@ const ribbon =
             this.victoryCaptureCameraLockActive =
                 false;
 
+            if (
+                this.hiderVictoryCaptureCamera
+            ) {
+                this.cameras.remove(
+                    this.hiderVictoryCaptureCamera,
+                    true,
+                );
+                this.hiderVictoryCaptureCamera =
+                    undefined;
+            }
+
+            camera.visible =
+                savedMainCameraVisible;
+
             savedSniperCameraVisibility
                 .forEach(
                     (entry) => {
@@ -42618,6 +42592,16 @@ const ribbon =
                 this.sniperScopeCamera.visible =
                     savedSingleSniperCameraVisible;
             }
+
+            savedRemoteSniperScopeVisibility
+                .forEach(
+                    (entry) => {
+                        entry.scope
+                            .setVisible(
+                                entry.visible,
+                            );
+                    },
+                );
 
             this.victoryShowcaseCleanCaptureActive =
                 previousCleanCaptureActive;
@@ -55435,7 +55419,7 @@ const roomPlayers =
                         1,
                     );
                     button.setScale(
-                        1.035,
+                        1,
                     );
                 }
             },
@@ -58352,22 +58336,7 @@ const roomPlayers =
             return;
         }
 
-        if (
-            (
-                this.isMultiplayerSession() ||
-                this.practiceMode ===
-                    'hunter'
-            ) &&
-            this.hunterReserve <=
-                0
-        ) {
-            this.showStatus(
-                tr('탄약 소진 · 남은 시간 동안 수색하세요'),
-            );
-            return;
-        }
-
-        if (
+if (
             multiplayerClient.isConnected() ||
             this.practiceMode ===
                 'hunter'
@@ -58402,14 +58371,10 @@ const roomPlayers =
                         100,
                     );
 
-                this.hunterReserve =
-                    Math.max(
-                        0,
-                        this.hunterReserve -
-                            1,
-                    );
-
-                this.weaponHeat =
+                /*
+                 * V1010464_UNLIMITED_AMMO_HUD_VICTORY_CAMERA_FIX: unlimited shells; HEAT remains the shotgun limiter.
+                 */
+this.weaponHeat =
                     Math.min(
                         100,
                         cooledHeat +
@@ -58568,24 +58533,7 @@ const roomPlayers =
                 return;
             }
 
-            if (
-                this.practiceMode ===
-                    'hunter' &&
-                this.hunterReserve <=
-                    0
-            ) {
-                /*
-                 * v0.10.10.189:
-                 * Practice teaches the same finite-ammo rule as multiplayer.
-                 * Once the final shell has actually been fired, end practice
-                 * immediately with an explicit ammo-depletion reason.
-                 */
-                this.revealPracticeBotsBeforeResult(
-                    'ammo',
-                );
-                return;
-            }
-        }
+}
 
         this.cameras.main.shake(
             90,
@@ -58635,8 +58583,6 @@ const roomPlayers =
              * Precision 숫자 표시는 직관적이지 않아 UI에서 제거했습니다.
              * 서버가 지급한 reserve 보상만 반영합니다.
              */
-            this.hunterReserve =
-                shot.reserve;
         }
 
         if (
@@ -59548,7 +59494,7 @@ const roomPlayers =
         this.hunterHeatLabel =
             this.add.text(
                 0,
-                35,
+                18,
                 tr('HEAT'),
                 {
                     fontFamily:
@@ -59565,7 +59511,7 @@ const roomPlayers =
         this.hunterOverheatLabel =
             this.add.text(
                 220,
-                35,
+                18,
                 '',
                 {
                     fontFamily:
@@ -59582,9 +59528,9 @@ const roomPlayers =
         const weaponHudBackground =
             this.add.rectangle(
                 110,
-                25,
+                17,
                 230,
-                66,
+                42,
                 0xfff8e8,
                 0.985,
             )
@@ -59648,7 +59594,7 @@ const roomPlayers =
                 0xffffff,
                 1,
             );
-        this.fartHudContainer = this.add.container(18, 88, [
+        this.fartHudContainer = this.add.container(18, 68, [
             fartBg, this.fartGaugeGraphics, this.fartGaugeLabel,
         ]).setDepth(25001).setScrollFactor(0).setVisible(false);
         this.updateFartHud();
@@ -59776,6 +59722,7 @@ const roomPlayers =
         const visible =
             this.practiceMode !== 'hider' &&
             this.phase === 'hunt' &&
+            !this.sniperActive &&
             (
                 this.practiceMode ===
                     'hunter' ||
@@ -62551,8 +62498,6 @@ const roomPlayers =
             this.huntDuration * 1000;
 
         this.ammo = this.maxAmmo;
-        this.hunterReserve = 12;
-        this.hunterMaxReserve = 12;
         this.canShoot = true;
         this.isReloading = false;
         this.isPainting = false;
