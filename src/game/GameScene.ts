@@ -6577,6 +6577,15 @@ private timerText!: Phaser.GameObjects.Text;
     /* V1010451M4E_VICTORY_CLEAN_CAPTURE_UI_LOCK_ROBUST: clean-capture flag now locks HUD update loops. */
     private victoryShowcaseCleanCaptureActive = false;
 
+    /* V1010463_VICTORY_CAMERA_LOCK_SNIPER_INTRO_CHAT_FIX
+     * During Hider victory capture the main camera must remain at the exact
+     * hero framing on EVERY settle frame, regardless of Finished/post-pass code.
+     */
+    private victoryCaptureCameraLockActive = false;
+    private victoryCaptureCameraLockX = 0;
+    private victoryCaptureCameraLockY = 0;
+    private victoryCaptureCameraLockZoom = 4.9;
+
     private roundReturnLobbyButton?: Phaser.GameObjects.Text;
     private lastPhaseRecoveryAt = 0;
     private phaseExpiredSince = 0;
@@ -8464,6 +8473,25 @@ private timerText!: Phaser.GameObjects.Text;
     }
 
     update(_: number, delta: number): void {
+        if (
+            this.victoryCaptureCameraLockActive
+        ) {
+            this.cameras.main
+                .stopFollow()
+                .removeBounds()
+                .setSize(
+                    this.gameWidth,
+                    this.gameHeight,
+                )
+                .setZoom(
+                    this.victoryCaptureCameraLockZoom,
+                )
+                .centerOn(
+                    this.victoryCaptureCameraLockX,
+                    this.victoryCaptureCameraLockY,
+                );
+        }
+
         /*
          * 서버에는 입장했는데 참가자 화면이 Main Menu에 남는 경우를
          * 매 프레임 자동 복구합니다.
@@ -42110,31 +42138,36 @@ const ribbon =
             result.winner === 'hiders';
 
         /*
-         * V1010462_SNIPER_SCOPE_POLISH_VICTORY_SCALE_RESTORE
-         * Victory capture must be completely isolated from Overwatch cameras.
-         * The Hider card's original canonical framing is zoom=4.9 on the local
-         * Hider. Any surviving sniper strip camera can corrupt the framebuffer.
+         * V1010463_VICTORY_CAMERA_LOCK_SNIPER_INTRO_CHAT_FIX
+         * Do NOT remove Overwatch cameras from Phaser during Victory capture.
+         * Removing them can disturb camera ordering/framebuffer state.
+         * Just make every sniper-only camera invisible until capture finishes.
          */
+        const savedSniperCameraVisibility =
+            this.sniperScopeStripCameras.map(
+                (scopeCamera) => ({
+                    camera:
+                        scopeCamera,
+                    visible:
+                        scopeCamera.visible,
+                }),
+            );
+
         this.sniperScopeStripCameras
             .forEach(
                 (scopeCamera) => {
-                    this.cameras.remove(
-                        scopeCamera,
-                        true,
-                    );
+                    scopeCamera.visible =
+                        false;
                 },
             );
 
-        this.sniperScopeStripCameras =
-            [];
+        const savedSingleSniperCameraVisible =
+            this.sniperScopeCamera
+                ?.visible;
 
         if (this.sniperScopeCamera) {
-            this.cameras.remove(
-                this.sniperScopeCamera,
-                true,
-            );
-            this.sniperScopeCamera =
-                undefined;
+            this.sniperScopeCamera.visible =
+                false;
         }
 
         this.sniperScopeCornerMask
@@ -42347,18 +42380,43 @@ const ribbon =
                     const visualBounds =
                         localTarget.getBounds();
 
-                    camera.centerOn(
+                    const captureCenterX =
                         Number.isFinite(
                             visualBounds.centerX,
                         )
                             ? visualBounds.centerX
-                            : localTarget.x,
+                            : localTarget.x;
+
+                    const captureCenterY =
                         Number.isFinite(
                             visualBounds.centerY,
                         )
                             ? visualBounds.centerY
-                            : localTarget.y,
-                    );
+                            : localTarget.y;
+
+                    this.victoryCaptureCameraLockActive =
+                        true;
+                    this.victoryCaptureCameraLockX =
+                        captureCenterX;
+                    this.victoryCaptureCameraLockY =
+                        captureCenterY;
+                    this.victoryCaptureCameraLockZoom =
+                        4.9;
+
+                    camera
+                        .stopFollow()
+                        .removeBounds()
+                        .setSize(
+                            this.gameWidth,
+                            this.gameHeight,
+                        )
+                        .setZoom(
+                            4.9,
+                        )
+                        .centerOn(
+                            captureCenterX,
+                            captureCenterY,
+                        );
                 }
             }
 
@@ -42409,22 +42467,21 @@ const ribbon =
                     }
 
                     /*
-                     * V1010462_SNIPER_SCOPE_POLISH_VICTORY_SCALE_RESTORE
-                     * Re-assert original Hider poster authority immediately before
-                     * every framebuffer snapshot.
+                     * V1010463_VICTORY_CAMERA_LOCK_SNIPER_INTRO_CHAT_FIX
+                     * Keep Overwatch cameras registered but invisible.
                      */
                     this.sniperScopeStripCameras
                         .forEach(
                             (scopeCamera) => {
-                                this.cameras.remove(
-                                    scopeCamera,
-                                    true,
-                                );
+                                scopeCamera.visible =
+                                    false;
                             },
                         );
 
-                    this.sniperScopeStripCameras =
-                        [];
+                    if (this.sniperScopeCamera) {
+                        this.sniperScopeCamera.visible =
+                            false;
+                    }
 
                     if (this.sniperScopeDom) {
                         this.sniperScopeDom.style.display =
@@ -42433,17 +42490,6 @@ const ribbon =
 
                     this.paintWorldZoom =
                         4.9;
-
-                    camera
-                        .stopFollow()
-                        .removeBounds()
-                        .setSize(
-                            this.gameWidth,
-                            this.gameHeight,
-                        )
-                        .setZoom(
-                            4.9,
-                        );
 
                     this.networkPlayerManager
                         .showOnlyLocalPlayer();
@@ -42477,10 +42523,32 @@ const ribbon =
                             ? visualBounds.centerY
                             : localTarget.y;
 
-                    camera.centerOn(
-                        centerX,
-                        centerY,
-                    );
+                    this.victoryCaptureCameraLockActive =
+                        true;
+
+                    this.victoryCaptureCameraLockX =
+                        centerX;
+
+                    this.victoryCaptureCameraLockY =
+                        centerY;
+
+                    this.victoryCaptureCameraLockZoom =
+                        4.9;
+
+                    camera
+                        .stopFollow()
+                        .removeBounds()
+                        .setSize(
+                            this.gameWidth,
+                            this.gameHeight,
+                        )
+                        .setZoom(
+                            4.9,
+                        )
+                        .centerOn(
+                            centerX,
+                            centerY,
+                        );
 
                     /*
                      * Capture-only UI/vision must stay out of the PC reference
@@ -42530,6 +42598,26 @@ const ribbon =
 
             this.networkPlayerManager
                 .clearHunterAimLines();
+
+            this.victoryCaptureCameraLockActive =
+                false;
+
+            savedSniperCameraVisibility
+                .forEach(
+                    (entry) => {
+                        entry.camera.visible =
+                            entry.visible;
+                    },
+                );
+
+            if (
+                this.sniperScopeCamera &&
+                savedSingleSniperCameraVisible !==
+                    undefined
+            ) {
+                this.sniperScopeCamera.visible =
+                    savedSingleSniperCameraVisible;
+            }
 
             this.victoryShowcaseCleanCaptureActive =
                 previousCleanCaptureActive;
@@ -55527,7 +55615,9 @@ const roomPlayers =
             ) => {
                 if (
                     !this.sniperActive ||
+                    !this.sniperCinematicActive ||
                     !this.sniperScopeInteractive ||
+                    this.sniperScopeIntroTween?.isPlaying() ||
                     this.phase !==
                         'hunt' ||
                     this.mobileControlsEnabled
@@ -55595,33 +55685,15 @@ const roomPlayers =
         this.sniperScopeScreenX =
             Phaser.Math.Clamp(
                 pointer.x,
-                Math.min(
-                    this.sniperScopeRadius *
-                        0.72,
-                    180,
-                ),
-                this.gameWidth -
-                    Math.min(
-                        this.sniperScopeRadius *
-                            0.72,
-                        180,
-                    ),
+                0,
+                this.gameWidth,
             );
 
         this.sniperScopeScreenY =
             Phaser.Math.Clamp(
                 pointer.y,
-                Math.min(
-                    this.sniperScopeRadius *
-                        0.64,
-                    160,
-                ),
-                this.gameHeight -
-                    Math.min(
-                        this.sniperScopeRadius *
-                            0.64,
-                        160,
-                    ),
+                0,
+                this.gameHeight,
             );
 
         const world =
@@ -55868,10 +55940,41 @@ const roomPlayers =
         if (this.chatRoot) {
             this.chatRoot.style.pointerEvents =
                 'none';
+            this.chatRoot.style.cursor =
+                'default';
+            this.chatRoot.style.userSelect =
+                'none';
         }
 
-        this.chatInput
-            ?.blur();
+        if (this.chatLog) {
+            this.chatLog.style.pointerEvents =
+                'none';
+            this.chatLog.style.cursor =
+                'default';
+            this.chatLog.style.userSelect =
+                'none';
+        }
+
+        if (this.chatInput) {
+            this.chatInput.blur();
+            this.chatInput.style.pointerEvents =
+                'none';
+            this.chatInput.style.cursor =
+                'default';
+            this.chatInput.style.userSelect =
+                'none';
+            this.chatInput.tabIndex =
+                -1;
+        }
+
+        if (this.chatSendButton) {
+            this.chatSendButton.style.pointerEvents =
+                'none';
+            this.chatSendButton.style.cursor =
+                'default';
+            this.chatSendButton.tabIndex =
+                -1;
+        }
 
         const localPosition =
             this.networkPlayerManager
@@ -56164,6 +56267,28 @@ const roomPlayers =
     }
 
     private startSniperScopeRackIn(): void {
+        /* V1010463_VICTORY_CAMERA_LOCK_SNIPER_INTRO_CHAT_FIX: rack-in owns the only visible scope until tween completion. */
+        this.sniperScopeInteractive =
+            false;
+
+        this.sniperScopeStripCameras
+            .forEach(
+                (scopeCamera) => {
+                    this.cameras.remove(
+                        scopeCamera,
+                        true,
+                    );
+                },
+            );
+
+        this.sniperScopeStripCameras =
+            [];
+
+        if (this.sniperScopeDom) {
+            this.sniperScopeDom.style.display =
+                'none';
+        }
+
         this.sniperScopeRadius =
             this.mobileControlsEnabled
                 ? 188
@@ -56247,6 +56372,39 @@ const roomPlayers =
         if (this.chatRoot) {
             this.chatRoot.style.pointerEvents =
                 '';
+            this.chatRoot.style.cursor =
+                '';
+            this.chatRoot.style.userSelect =
+                '';
+        }
+
+        if (this.chatLog) {
+            this.chatLog.style.pointerEvents =
+                '';
+            this.chatLog.style.cursor =
+                '';
+            this.chatLog.style.userSelect =
+                '';
+        }
+
+        if (this.chatInput) {
+            this.chatInput.style.pointerEvents =
+                '';
+            this.chatInput.style.cursor =
+                '';
+            this.chatInput.style.userSelect =
+                '';
+            this.chatInput.tabIndex =
+                0;
+        }
+
+        if (this.chatSendButton) {
+            this.chatSendButton.style.pointerEvents =
+                '';
+            this.chatSendButton.style.cursor =
+                '';
+            this.chatSendButton.tabIndex =
+                0;
         }
 
         this.sniperScopeStripCameras
@@ -57950,7 +58108,8 @@ const roomPlayers =
             (
                 !this.sniperButton ||
                 !this.sniperButtonText ||
-                !this.sniperButtonBg
+                !this.sniperButtonBg ||
+                !this.sniperRadioText
             )
         ) {
             this.ensureSniperSupportUi();
@@ -57959,7 +58118,8 @@ const roomPlayers =
         if (
             !this.sniperButton ||
             !this.sniperButtonText ||
-            !this.sniperButtonBg
+            !this.sniperButtonBg ||
+            !this.sniperRadioText
         ) {
             return;
         }
@@ -58002,8 +58162,10 @@ const roomPlayers =
             !hunter ||
             remainingMs > 30_000
         ) {
-            this.sniperSupportAvailableSince = 0;
-            this.sniperSupportExpired = false;
+            this.sniperSupportAvailableSince =
+                0;
+            this.sniperSupportExpired =
+                false;
         }
 
         if (
@@ -58028,17 +58190,13 @@ const roomPlayers =
         ) {
             const age =
                 this.time.now -
-                this.sniperSupportAvailableSince;
+                    this.sniperSupportAvailableSince;
 
-            /*
-             * 0~10s: steady
-             * 10~15s: tactical blink
-             * 15s+: permanently unavailable for this round.
-             */
             if (age >= 15_000) {
                 this.sniperSupportExpired =
                     true;
-                available = false;
+                available =
+                    false;
             } else if (age >= 10_000) {
                 blinkVisible =
                     Math.floor(
@@ -58052,20 +58210,6 @@ const roomPlayers =
 
         this.sniperAvailable =
             available;
-
-        const show =
-            !this.sniperActive &&
-            (
-                warning ||
-                (
-                    available &&
-                    blinkVisible
-                )
-            );
-
-        this.sniperButton
-            .setDepth(25002)
-            .setVisible(show);
 
         if (warning) {
             const seconds =
@@ -58081,21 +58225,32 @@ const roomPlayers =
                     5,
                 );
 
-            this.sniperButtonText
+            this.sniperButton
+                .setVisible(false);
+
+            this.sniperRadioText
+                .setVisible(true)
+                .setAlpha(1)
+                .setScale(1)
                 .setText(
                     '저격 지원 요청 가능까지 ' +
                     String(seconds) +
                     '초...',
                 );
 
-            this.sniperButtonBg
-                .setFillStyle(
-                    0x17201e,
-                    0.92,
-                );
-
             return;
         }
+
+        this.sniperRadioText
+            .setVisible(false);
+
+        this.sniperButton
+            .setDepth(25002)
+            .setVisible(
+                !this.sniperActive &&
+                available &&
+                blinkVisible,
+            );
 
         if (!available) {
             return;
