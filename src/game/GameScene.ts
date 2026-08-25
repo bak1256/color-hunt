@@ -56204,21 +56204,20 @@ const roomPlayers =
                     return;
                 }
 
-                if (
-                    this.sniperButton
-                        ?.getBounds()
-                        .contains(
-                            pointer.x,
-                            pointer.y,
-                        )
-                ) {
-                    return;
-                }
-
+                /*
+                 * V1010455O_PC_SNIPER_FIRE_LOW_MID_TACTICAL_BGM
+                 * Never let the hidden support-button bounds eat a PC sniper shot.
+                 * The active optic owns pointer-down completely.
+                 */
                 pointer.event
                     ?.preventDefault?.();
                 pointer.event
                     ?.stopPropagation?.();
+
+                this.syncSniperScopeToPointer(
+                    pointer,
+                    true,
+                );
 
                 this.fireSniperAtCurrentAim();
             },
