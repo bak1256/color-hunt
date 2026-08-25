@@ -1,3 +1,4 @@
+/* V1010465_MOBILE_SNIPER_RECONNECT_INPUT_RECOVERY: full-screen mobile sniper tap/drag ownership + authoritative fresh-session input rebinding after app resume. */
 /* V1010451J_ASSIST_READY_FINAL_PARITY: assisted Hider publishes one complete final paint raster before READY=true, guaranteeing Hunter/Hider Hunt parity. */
 /* V1010451I_HUNTER_CARD_DIRECT_FULL_MAP_ASSET: Hunter card background uses the direct full round-map texture, never a live Hunt screenshot. */
 /* V1010451H2_AUTHORITATIVE_FOUND_PAINT_ROBUST: robustly prefer exact server hit-time paint snapshot for Hunter FOUND avatars. */
@@ -4808,6 +4809,52 @@ private timerText!: Phaser.GameObjects.Text;
                 }
 
                 /*
+                 * V1010465_MOBILE_SNIPER_RECONNECT_INPUT_RECOVERY
+                 *
+                 * While mobile sniper owns the screen, EVERY fresh world touch
+                 * belongs to the optic. Do this before legacy FART/FIRE/AIM/MOVE
+                 * hit tests so invisible joystick geometry can never create a
+                 * dead zone inside the scope.
+                 */
+                if (
+                    this.mobileControlsEnabled &&
+                    this.sniperActive &&
+                    this.sniperScopeInteractive
+                ) {
+                    this.mobileSniperTouchPointerId =
+                        pointer.id;
+                    this.mobileSniperTouchStartX =
+                        pointer.x;
+                    this.mobileSniperTouchStartY =
+                        pointer.y;
+                    this.mobileSniperTouchLastX =
+                        pointer.x;
+                    this.mobileSniperTouchLastY =
+                        pointer.y;
+                    this.mobileSniperTouchTravel =
+                        0;
+
+                    this.mobilePinchDistance = 0;
+                    this.mobilePinchActive = false;
+
+                    if (
+                        this.isNativeTouchPointer(
+                            pointer,
+                        )
+                    ) {
+                        this.mobileTouchPoints.set(
+                            pointer.id,
+                            new Phaser.Math.Vector2(
+                                pointer.x,
+                                pointer.y,
+                            ),
+                        );
+                    }
+
+                    return;
+                }
+
+                /*
                  * v0.10.10.95:
                  * FIRE and AIM touch areas used to overlap. A press on the
                  * left side of FIRE could first enter the AIM branch, rotate
@@ -4852,48 +4899,6 @@ private timerText!: Phaser.GameObjects.Text;
                         pointer.id;
 
                     this.mobilePinchDistance = 0;
-                    return;
-                }
-
-                /*
-                 * V1010391_MOBILE_SNIPER_TOUCH_CONTROLS_VISIBILITY: empty game area = drag aim / tap fire.
-                 * Existing AIM/FIRE circles retain priority.
-                 */
-                const sniperAimDistance =
-                    Phaser.Math.Distance.Between(
-                        pointer.x,
-                        pointer.y,
-                        aimX,
-                        aimY,
-                    );
-
-                if (
-                    this.mobileControlsEnabled &&
-                    this.sniperActive &&
-                    this.sniperScopeInteractive &&
-                    fireDistance > 54 &&
-                    sniperAimDistance >
-                        this.mobileJoystickRadius *
-                            1.65
-                ) {
-                    this.mobileSniperTouchPointerId =
-                        pointer.id;
-
-                    this.mobileSniperTouchLastX =
-                        pointer.x;
-
-                    this.mobileSniperTouchLastY =
-                        pointer.y;
-
-                    this.mobileSniperTouchTravel =
-                        0;
-
-                    this.mobilePinchDistance =
-                        0;
-
-                    this.mobilePinchActive =
-                        false;
-
                     return;
                 }
 
@@ -5078,7 +5083,9 @@ private timerText!: Phaser.GameObjects.Text;
                     pointer.id !==
                         this.mobileFirePointerId &&
                     pointer.id !==
-                        this.mobileFartPointerId
+                        this.mobileFartPointerId &&
+                    pointer.id !==
+                        this.mobileSniperTouchPointerId
                 ) {
                     return;
                 }
@@ -5267,12 +5274,26 @@ private timerText!: Phaser.GameObjects.Text;
                     pointer.id ===
                     this.mobileSniperTouchPointerId
                 ) {
+                    /*
+                     * Use start-to-end displacement instead of cumulative travel.
+                     * Mobile WebViews often emit tiny noisy move events while the
+                     * finger is visually stationary; cumulative travel could turn
+                     * a real tap into a false drag and silently suppress firing.
+                     */
+                    const sniperTapDisplacement =
+                        Phaser.Math.Distance.Between(
+                            this.mobileSniperTouchStartX,
+                            this.mobileSniperTouchStartY,
+                            pointer.x,
+                            pointer.y,
+                        );
+
                     const shouldTapFire =
                         this.mobileControlsEnabled &&
                         this.sniperActive &&
                         this.sniperScopeInteractive &&
-                        this.mobileSniperTouchTravel <
-                            12;
+                        sniperTapDisplacement <=
+                            18;
 
                     this.mobileSniperTouchPointerId =
                         -1;
@@ -5638,9 +5659,27 @@ private timerText!: Phaser.GameObjects.Text;
                         -1;
                     this.mobileFartPointerId =
                         -1;
+                    this.mobileSniperTouchPointerId =
+                        -1;
                     this.mobileTouchPoints
                         .clear();
+                    return;
                 }
+
+                /*
+                 * App foreground is a new touch epoch. Do not preserve pointer
+                 * ownership from the suspended page; Phaser can otherwise see
+                 * the new joystick finger as a continuation of a dead gesture.
+                 */
+                this.input.enabled = true;
+                this.resetMobileMoveControl();
+                this.mobileAimPointerId = -1;
+                this.mobileFirePointerId = -1;
+                this.mobileFartPointerId = -1;
+                this.mobileSniperTouchPointerId = -1;
+                this.mobileTouchPoints.clear();
+                this.mobilePinchDistance = 0;
+                this.mobilePinchActive = false;
             };
 
         window.addEventListener(
@@ -7078,6 +7117,8 @@ private timerText!: Phaser.GameObjects.Text;
 
     /* V1010391_MOBILE_SNIPER_TOUCH_CONTROLS_VISIBILITY */
     private mobileSniperTouchPointerId = -1;
+    private mobileSniperTouchStartX = 0;
+    private mobileSniperTouchStartY = 0;
     private mobileSniperTouchLastX = 0;
     private mobileSniperTouchLastY = 0;
     private mobileSniperTouchTravel = 0;
@@ -13703,13 +13744,23 @@ const ribbon =
         this.networkPlayerManager
             .syncPlayersFromCurrentRoom();
 
+        /*
+         * V1010465_MOBILE_SNIPER_RECONNECT_INPUT_RECOVERY
+         * A fresh rejoin may replace room.sessionId before the Schema onAdd
+         * callback has rebuilt the local NetworkPlayerView. Recreate that view
+         * from the authoritative local-player/snapshot fallback immediately.
+         */
+        const localViewReady =
+            this.ensureLocalNetworkPlayer(
+                room,
+            );
+
         const localPlayer =
             multiplayerClient.getLocalPlayer();
 
         const localReady =
             Boolean(localPlayer) &&
-            this.networkPlayerManager
-                .hasPlayer(room.sessionId);
+            localViewReady;
 
         if (!localReady) {
             if (attempt < 20) {
@@ -23199,17 +23250,29 @@ this.networkUnsubscribers.push(
             return false;
         }
 
+        /*
+         * Do not wait forever for an onAdd callback that may have been missed
+         * while the mobile browser was suspended. Rebind the replacement
+         * sessionId before deciding that gameplay must remain locked.
+         */
+        this.networkPlayerManager
+            .syncPlayersFromCurrentRoom();
+
+        const localViewReady =
+            this.ensureLocalNetworkPlayer(
+                room,
+            );
+
         const localPlayer =
             multiplayerClient
                 .getLocalPlayer();
 
         if (
             !localPlayer ||
-            !this.networkPlayerManager
-                .hasPlayer(
-                    room.sessionId,
-                )
+            !localViewReady
         ) {
+            multiplayerClient
+                .requestLobbySnapshot();
             return false;
         }
 
@@ -23220,6 +23283,13 @@ this.networkUnsubscribers.push(
          */
         this.networkPlayerManager
             .resetLocalPredictionAfterRecovery();
+
+        /*
+         * Mobile Safari/Chrome/WebView can return from app switching with the
+         * Phaser InputPlugin still disabled/stale even though the Room recovered.
+         * Recovery owns a clean new gesture epoch.
+         */
+        this.input.enabled = true;
 
         if (this.input.keyboard) {
             this.input.keyboard
