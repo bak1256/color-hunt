@@ -54994,11 +54994,50 @@ const roomPlayers =
     }
 
     private refreshSniperSupportUi(): void {
-        if (!this.sniperButton || !this.sniperButtonText || !this.sniperButtonBg) return;
+        /* V1010453A_SNIPER_UI_AUTHORITY_FIX
+         * Hunt authority can arrive before getLocalPlayer() Schema settles.
+         * Lazily build the UI and use NetworkPlayerManager as the same role
+         * fallback already used by the rest of Hunt.
+         */
+        if (
+            this.phase === 'hunt' &&
+            (
+                !this.sniperButton ||
+                !this.sniperButtonText ||
+                !this.sniperButtonBg
+            )
+        ) {
+            this.ensureSniperSupportUi();
+        }
 
-        const localRole = multiplayerClient.getLocalPlayer()?.role;
-        const remainingMs = Math.max(0, this.phaseEndTime - this.time.now);
-        const hunter = this.phase === 'hunt' && localRole === 'hunter';
+        if (
+            !this.sniperButton ||
+            !this.sniperButtonText ||
+            !this.sniperButtonBg
+        ) {
+            return;
+        }
+
+        const localRole =
+            multiplayerClient
+                .getLocalPlayer()
+                ?.role;
+
+        const localIsHunter =
+            localRole === 'hunter' ||
+            this.networkPlayerManager
+                ?.isLocalHunter?.() === true;
+
+        const remainingMs =
+            Math.max(
+                0,
+                this.phaseEndTime -
+                    this.time.now,
+            );
+
+        const hunter =
+            this.phase === 'hunt' &&
+            localIsHunter;
 
         this.sniperAvailable = hunter && remainingMs <= 30_000;
         const warning = hunter && remainingMs <= 35_000 && remainingMs > 30_000;
