@@ -42109,6 +42109,46 @@ const ribbon =
         const isHider =
             result.winner === 'hiders';
 
+        /*
+         * V1010462_SNIPER_SCOPE_POLISH_VICTORY_SCALE_RESTORE
+         * Victory capture must be completely isolated from Overwatch cameras.
+         * The Hider card's original canonical framing is zoom=4.9 on the local
+         * Hider. Any surviving sniper strip camera can corrupt the framebuffer.
+         */
+        this.sniperScopeStripCameras
+            .forEach(
+                (scopeCamera) => {
+                    this.cameras.remove(
+                        scopeCamera,
+                        true,
+                    );
+                },
+            );
+
+        this.sniperScopeStripCameras =
+            [];
+
+        if (this.sniperScopeCamera) {
+            this.cameras.remove(
+                this.sniperScopeCamera,
+                true,
+            );
+            this.sniperScopeCamera =
+                undefined;
+        }
+
+        this.sniperScopeCornerMask
+            ?.clear()
+            .setVisible(false);
+
+        if (this.sniperScopeDom) {
+            this.sniperScopeDom.style.display =
+                'none';
+        }
+
+        this.sniperScopeInteractive =
+            false;
+
         const camera =
             this.cameras.main;
 
@@ -42366,6 +42406,29 @@ const ribbon =
                 (): void => {
                     if (!isHider) {
                         return;
+                    }
+
+                    /*
+                     * V1010462_SNIPER_SCOPE_POLISH_VICTORY_SCALE_RESTORE
+                     * Re-assert original Hider poster authority immediately before
+                     * every framebuffer snapshot.
+                     */
+                    this.sniperScopeStripCameras
+                        .forEach(
+                            (scopeCamera) => {
+                                this.cameras.remove(
+                                    scopeCamera,
+                                    true,
+                                );
+                            },
+                        );
+
+                    this.sniperScopeStripCameras =
+                        [];
+
+                    if (this.sniperScopeDom) {
+                        this.sniperScopeDom.style.display =
+                            'none';
                     }
 
                     this.paintWorldZoom =
@@ -55797,6 +55860,19 @@ const roomPlayers =
         this.hunterWeaponHudContainer
             ?.setVisible(false);
 
+        /*
+         * V1010462_SNIPER_SCOPE_POLISH_VICTORY_SCALE_RESTORE
+         * Chat stays visually present, but it stops participating in hit testing
+         * for the whole Overwatch session. Set this once to avoid hover jank.
+         */
+        if (this.chatRoot) {
+            this.chatRoot.style.pointerEvents =
+                'none';
+        }
+
+        this.chatInput
+            ?.blur();
+
         const localPosition =
             this.networkPlayerManager
                 .getLocalPlayerPosition();
@@ -57150,9 +57226,16 @@ const roomPlayers =
                 boxSizing:
                     'border-box',
                 border:
-                    '6px solid rgba(5,10,12,.98)',
+                    '10px solid rgba(4,8,10,.99)',
                 boxShadow:
-                    '0 0 0 2px rgba(190,220,205,.60), inset 0 0 20px rgba(0,0,0,.48)',
+                    [
+                        '0 0 0 3px rgba(126,151,139,.92)',
+                        '0 0 0 7px rgba(8,14,16,.98)',
+                        '0 0 0 9px rgba(180,204,192,.42)',
+                        'inset 0 0 0 2px rgba(187,213,200,.35)',
+                        'inset 0 0 34px rgba(0,0,0,.62)',
+                        '0 10px 28px rgba(0,0,0,.42)',
+                    ].join(', '),
                 background:
                     'transparent',
             },
@@ -57204,6 +57287,68 @@ const roomPlayers =
             },
         );
 
+        /*
+         * V1010462_SNIPER_SCOPE_POLISH_VICTORY_SCALE_RESTORE
+         * Four chunky optic index marks make this read as a weapon scope,
+         * rather than a generic circular magnifier.
+         */
+        [
+            {
+                left: '50%',
+                top: '-15px',
+                width: '6px',
+                height: '20px',
+                transform: 'translateX(-50%)',
+            },
+            {
+                left: '50%',
+                bottom: '-15px',
+                width: '6px',
+                height: '20px',
+                transform: 'translateX(-50%)',
+            },
+            {
+                left: '-15px',
+                top: '50%',
+                width: '20px',
+                height: '6px',
+                transform: 'translateY(-50%)',
+            },
+            {
+                right: '-15px',
+                top: '50%',
+                width: '20px',
+                height: '6px',
+                transform: 'translateY(-50%)',
+            },
+        ].forEach(
+            (spec) => {
+                const notch =
+                    document.createElement(
+                        'div',
+                    );
+
+                Object.assign(
+                    notch.style,
+                    {
+                        position:
+                            'absolute',
+                        borderRadius:
+                            '2px',
+                        background:
+                            'rgba(9,16,18,.99)',
+                        boxShadow:
+                            '0 0 0 2px rgba(157,184,170,.62)',
+                        ...spec,
+                    },
+                );
+
+                scope.appendChild(
+                    notch,
+                );
+            },
+        );
+
         const reloadTrack =
             document.createElement(
                 'div',
@@ -57214,22 +57359,24 @@ const roomPlayers =
             {
                 position:
                     'absolute',
-                left:
-                    '23%',
                 right:
-                    '23%',
-                bottom:
-                    '16px',
+                    '-38px',
+                top:
+                    '25%',
+                width:
+                    '17px',
                 height:
-                    '9px',
+                    '50%',
                 borderRadius:
-                    '5px',
+                    '9px',
                 overflow:
                     'hidden',
                 border:
-                    '1px solid rgba(255,255,255,.62)',
+                    '3px solid rgba(7,13,15,.98)',
+                boxShadow:
+                    '0 0 0 2px rgba(184,207,195,.52), 0 3px 10px rgba(0,0,0,.48)',
                 background:
-                    'rgba(4,10,14,.88)',
+                    'rgba(6,12,14,.94)',
             },
         );
 
@@ -57246,11 +57393,11 @@ const roomPlayers =
                 height:
                     '100%',
                 transformOrigin:
-                    'left center',
+                    'center bottom',
                 transform:
-                    'scaleX(1)',
+                    'scaleY(1)',
                 background:
-                    'linear-gradient(90deg,#d89a36,#ffe19c)',
+                    'linear-gradient(0deg,#d17a2f 0%,#ffbb55 48%,#ffe6a7 100%)',
             },
         );
 
@@ -57386,7 +57533,7 @@ const roomPlayers =
         ) {
             this.sniperScopeReloadDom
                 .style.transform =
-                'scaleX(' +
+                'scaleY(' +
                 String(
                     ready,
                 ) +
@@ -57690,20 +57837,6 @@ const roomPlayers =
         this.gun
             .setVisible(false);
 
-        if (this.chatRoot) {
-            this.chatRoot.style.pointerEvents =
-                'none';
-        }
-
-        if (
-            this.chatInput &&
-            document.activeElement ===
-                this.chatInput
-        ) {
-            this.chatInput.blur();
-        }
-
-
         const localPosition =
             this.networkPlayerManager
                 .getLocalPlayerPosition();
@@ -57735,20 +57868,23 @@ const roomPlayers =
             const pointer =
                 this.input.activePointer;
 
+            /*
+             * V1010462_SNIPER_SCOPE_POLISH_VICTORY_SCALE_RESTORE
+             * The scope center follows the pointer all the way to the canvas edge.
+             * The circle may naturally clip off-screen; it must never stop early.
+             */
             this.sniperScopeScreenX =
                 Phaser.Math.Clamp(
                     pointer.x,
-                    70,
-                    this.gameWidth -
-                        70,
+                    0,
+                    this.gameWidth,
                 );
 
             this.sniperScopeScreenY =
                 Phaser.Math.Clamp(
                     pointer.y,
-                    70,
-                    this.gameHeight -
-                        70,
+                    0,
+                    this.gameHeight,
                 );
 
             const world =
