@@ -14530,6 +14530,21 @@ const ribbon =
                 (
                     aim: NetworkHunterAim,
                 ) => {
+                    /*
+                     * V1010461_VICTORY_NO_AIM_LINES
+                     * Ignore late network aim packets once the round is no longer
+                     * in live Hunt or while the clean Victory frame owns rendering.
+                     */
+                    if (
+                        this.victoryShowcaseCleanCaptureActive ||
+                        this.phase !== 'hunt'
+                    ) {
+                        this.networkPlayerManager
+                            .clearHunterAimLines();
+
+                        return;
+                    }
+
                     this.networkPlayerManager
                         .updateHunterAim(
                             aim.sessionId,
@@ -42214,6 +42229,19 @@ const ribbon =
         this.victoryShowcaseCleanCaptureActive =
             true;
 
+        /*
+         * V1010461_VICTORY_NO_AIM_LINES
+         * Clear after the flag is ON, so any same-frame update/message also sees
+         * the capture barrier and cannot resurrect Hunter aiming visuals.
+         */
+        this.clearAllAimingVisuals();
+
+        this.networkPlayerManager
+            .clearHunterAimLines();
+
+        this.gun
+            .setVisible(false);
+
         try {
             this.networkPlayerManager
                 .setNamesVisible(false);
@@ -42435,6 +42463,11 @@ const ribbon =
                     : undefined,
             );
         } finally {
+            this.clearAllAimingVisuals();
+
+            this.networkPlayerManager
+                .clearHunterAimLines();
+
             this.victoryShowcaseCleanCaptureActive =
                 previousCleanCaptureActive;
 
@@ -54583,6 +54616,31 @@ const roomPlayers =
     }
 
     private updateAim(): void {
+        /*
+         * V1010461_VICTORY_NO_AIM_LINES
+         * Victory/social-card capture is an absolute aim-render barrier.
+         */
+        if (
+            this.victoryShowcaseCleanCaptureActive ||
+            this.phase !== 'hunt'
+        ) {
+            this.aimLine
+                .clear()
+                .setVisible(false);
+
+            this.crosshair
+                .clear()
+                .setVisible(false);
+
+            this.gun
+                .setVisible(false);
+
+            this.networkPlayerManager
+                ?.clearHunterAimLines();
+
+            return;
+        }
+
         /*
          * V1010460_SNIPER_OVERWATCH_UI_SCOPE_INPUT_TIMEOUT
          * Overwatch is NOT Hunter shotgun aim.
