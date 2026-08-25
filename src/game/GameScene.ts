@@ -1,3 +1,4 @@
+/* V1010475_MOBILE_PAINT_UX_POLISH: compact mobile Paint Assist modal, exact finger pipette touch/preview/sample alignment, vivid Paint Help, no Precision Brush hint cards. */
 /* V1010474B_STANDALONE_MOBILE_PAINT_UX: standalone cumulative patch: Paint READY debounce, chat STOP, solid paint controls, 5-level Paint Assist, synchronized finger eyedropper, instant/middle-grip Precision Brush, Hunt cleanup. */
 /* V1010472_MAIN_LOBBY_RECONNECT_OVERLAY_CLEANUP: public-main-lobby/Scene shutdown hard-cleans orphan reconnect DOM without changing reconnect transport behavior. */
 /* V1010469_RECONNECT_OVERLAY_COMPLETION: reconnect notice closes from the actual gameplay movement-readiness gate instead of waiting on a lagging local-player cache. */
@@ -11502,6 +11503,31 @@ const ribbon =
                 .colorhunt-paint-assist-level-labels{display:grid;grid-template-columns:repeat(5,1fr);gap:3px;margin-top:5px;font-size:10px;font-weight:900;text-align:center}
                 .colorhunt-paint-assist-level-labels span{overflow-wrap:anywhere}
                 .colorhunt-paint-assist-actions{display:grid;grid-template-columns:1fr 1.35fr;gap:9px;margin-top:18px}.colorhunt-paint-assist-actions button{min-height:46px;border:0;border-radius:14px;font:900 14px Arial,sans-serif;cursor:pointer}.colorhunt-paint-assist-actions [data-assist-no]{background:#fff;color:#665f50}.colorhunt-paint-assist-actions [data-assist-yes]{background:#e0ad25;color:#352600;box-shadow:0 8px 18px rgba(120,82,0,.20)}
+                /*
+                 * V1010475_MOBILE_PAINT_UX_POLISH / COMPACT_MOBILE_ASSIST
+                 * Keep the ENTIRE dialog, including actions, visible at once.
+                 */
+                @media (pointer:coarse), (max-height:720px), (max-width:820px){
+                    .colorhunt-paint-assist-overlay{padding:6px!important;place-items:center!important}
+                    .colorhunt-paint-assist-card{
+                        width:min(96vw,520px)!important;
+                        max-height:96dvh!important;
+                        padding:12px 14px!important;
+                        border-radius:17px!important;
+                        overflow:hidden!important;
+                    }
+                    .colorhunt-paint-assist-card h2{margin:0 0 6px!important;font-size:19px!important;line-height:1.05!important}
+                    .colorhunt-paint-assist-card p{font-size:11px!important;line-height:1.28!important}
+                    .colorhunt-paint-assist-level{margin:8px 0 5px!important;padding:7px 9px!important;border-radius:11px!important}
+                    .colorhunt-paint-assist-level strong{font-size:12px!important;margin-bottom:3px!important;line-height:1.1!important}
+                    .colorhunt-paint-assist-level input{height:18px!important;margin:0!important}
+                    .colorhunt-paint-assist-level-labels{margin-top:1px!important;font-size:8px!important;line-height:1.05!important}
+                    .colorhunt-paint-assist-badges{margin:6px 0!important;gap:5px!important}
+                    .colorhunt-paint-assist-badges span{padding:4px 7px!important;font-size:9px!important}
+                    .colorhunt-paint-assist-warning{margin-top:5px!important;padding:7px 8px!important;font-size:9px!important;line-height:1.25!important}
+                    .colorhunt-paint-assist-actions{margin-top:7px!important;gap:6px!important}
+                    .colorhunt-paint-assist-actions button{min-height:36px!important;font-size:11px!important;border-radius:10px!important}
+                }
             </style>
             <div class="colorhunt-paint-assist-card">
                 <h2>${title}</h2>
@@ -12148,8 +12174,11 @@ const ribbon =
                 this.getPaintAssistUsedLabel();
             this.paintAssistButton.disabled =
                 true;
-            this.paintAssistButton.style.opacity =
-                '0.66';
+            this.paintAssistButton.style.setProperty(
+                'opacity',
+                '0.82',
+                'important',
+            );
         }
 
         this.showStatus(
@@ -12306,10 +12335,13 @@ const ribbon =
                 padding: '7px 12px',
                 border: '2px solid #c79b27',
                 borderRadius: '13px',
-                background: '#ffdb58',
-                color: '#4d3a08',
+                background:
+                    'linear-gradient(180deg,#ffe773 0%,#ffc928 100%)',
+                color: '#3f2d00',
+                opacity: '1',
+                filter: 'none',
                 boxShadow:
-                    '0 4px 14px rgba(97,72,10,.22)',
+                    '0 4px 0 #b88412,0 7px 16px rgba(97,72,10,.32)',
                 fontFamily:
                     'Arial, sans-serif',
                 fontWeight: '900',
@@ -12343,53 +12375,12 @@ const ribbon =
                 undefined;
         }
 
-        const precisionHint =
-            document.createElement(
-                'div',
-            );
-
-        precisionHint.className =
-            'colorhunt-precision-brush-hint';
-
-        Object.assign(
-            precisionHint.style,
-            {
-                position: 'fixed',
-                zIndex: '2138',
-                padding: '7px 11px',
-                border:
-                    '1.5px solid rgba(92,143,102,.78)',
-                borderRadius: '11px',
-                background:
-                    'rgba(248,255,240,.60)',
-                color: '#26352b',
-                boxShadow:
-                    '0 3px 10px rgba(35,59,42,.12)',
-                fontFamily:
-                    'Arial, sans-serif',
-                fontWeight: '900',
-                fontSize: '12px',
-                lineHeight: '1.35',
-                whiteSpace: 'pre-line',
-                textAlign: 'left',
-                pointerEvents: 'none',
-                backdropFilter:
-                    'blur(2px)',
-                WebkitBackdropFilter:
-                    'blur(2px)',
-            },
-        );
-
-        precisionHint.hidden = true;
-        precisionHint.style.display =
-            'none';
-
-        document.body.appendChild(
-            precisionHint,
-        );
-
+        /*
+         * V1010475_MOBILE_PAINT_UX_POLISH / NO_PRECISION_HINT_BOX
+         * Precision mode is immediate now; the old instruction card is noise.
+         */
         this.mobilePrecisionBrushHint =
-            precisionHint;
+            undefined;
 
         const colors =
             document.createElement(
@@ -12871,10 +12862,22 @@ const ribbon =
                     : this.getPaintAssistButtonLabel();
             this.paintAssistButton.disabled =
                 this.paintAssistUsedThisRound;
-            this.paintAssistButton.style.opacity =
+            /*
+             * V1010475_MOBILE_PAINT_UX_POLISH: unused Paint Help must never look disabled/translucent.
+             * After use, disabled state may dim slightly but stays readable.
+             */
+            this.paintAssistButton.style.setProperty(
+                'opacity',
                 this.paintAssistUsedThisRound
-                    ? '0.66'
-                    : '1';
+                    ? '0.82'
+                    : '1',
+                'important',
+            );
+            this.paintAssistButton.style.setProperty(
+                'filter',
+                'none',
+                'important',
+            );
         }
 
         if (!visible) {
@@ -28132,28 +28135,19 @@ this.networkUnsubscribers.push(
         const avatarPrecisionHint =
             document.createElement('div');
 
+        /*
+         * V1010475_MOBILE_PAINT_UX_POLISH: no Precision Brush instructional card in avatar editor.
+         */
+        avatarPrecisionHint.hidden = true;
+        avatarPrecisionHint.style.display =
+            'none';
+
         const syncAvatarPrecisionHint =
             (): void => {
-                const language =
-                    getLanguage();
-
-                avatarPrecisionHint.innerHTML =
-                    language === 'ja'
-                        ? '指先でブラシを動かしてそのまま描けます'
-                        : language === 'en'
-                            ? 'Move with your fingertip and paint instantly'
-                            : language === 'zh'
-                                ? '用指尖移动画笔即可立即上色'
-                                : '손끝으로 붓을 움직여 바로 칠할 수 있어요';
-
+                avatarPrecisionHint.hidden =
+                    true;
                 avatarPrecisionHint.style.display =
-                    (
-                        this.mobileControlsEnabled &&
-                        avatarPaintInputMode ===
-                            'brush'
-                    )
-                        ? 'block'
-                        : 'none';
+                    'none';
             };
 
         Object.assign(
@@ -28247,7 +28241,6 @@ this.networkUnsubscribers.push(
 
             mobileAvatarInputRail.append(
                 avatarModeButton,
-                avatarPrecisionHint,
             );
         }
 
@@ -53916,10 +53909,15 @@ const roomPlayers =
             this.mobilePaintInputMode ===
                 'finger'
         ) {
+            /*
+             * V1010475_MOBILE_PAINT_UX_POLISH / EXACT_FINGER_CENTER
+             * The square is centered exactly where the finger touched.
+             * That same target is also the sampling coordinate.
+             */
             const previewX =
-                grip.x + 40 / zoom;
+                target.x;
             const previewY =
-                grip.y - 94 / zoom;
+                target.y;
             const outerSize =
                 64 / zoom;
             const innerSize =
@@ -54211,11 +54209,11 @@ const roomPlayers =
          */
         const targetScreenX =
             this.mobilePaintInputMode === 'finger'
-                ? screenX + 40
+                ? screenX
                 : screenX - 46;
         const targetScreenY =
             this.mobilePaintInputMode === 'finger'
-                ? screenY - 94
+                ? screenY
                 : screenY - 54;
 
         this.cameras.main.getWorldPoint(
