@@ -923,6 +923,11 @@ export class GameScene extends Phaser.Scene {
     private sniperScopeDom?: HTMLDivElement;
     private sniperScopeReloadDom?: HTMLDivElement;
 
+    /* V1010457_SNIPER_FINAL_FLOW_REWORK */
+    private sniperScopeCanvas?: HTMLCanvasElement;
+    private sniperScopeCanvasContext?: CanvasRenderingContext2D;
+    private sniperButtonPressBlockUntil = 0;
+
     private timerText!: Phaser.GameObjects.Text;
     private guideText!: Phaser.GameObjects.Text;
     private statusText!: Phaser.GameObjects.Text;
@@ -55037,8 +55042,8 @@ const roomPlayers =
             this.add.rectangle(
                 0,
                 0,
-                214,
-                50,
+                148,
+                36,
                 0x0b1715,
                 0.96,
             )
@@ -55058,9 +55063,9 @@ const roomPlayers =
                 0.92,
             );
 
-        const w = 107;
-        const h = 25;
-        const c = 13;
+        const w = 74;
+        const h = 18;
+        const c = 9;
 
         tacticalCorners.lineBetween(-w, -h, -w + c, -h);
         tacticalCorners.lineBetween(-w, -h, -w, -h + c);
@@ -55080,7 +55085,7 @@ const roomPlayers =
                     fontFamily:
                         '"Arial Black", "Noto Sans KR", Arial, sans-serif',
                     fontSize:
-                        '17px',
+                        '13px',
                     fontStyle:
                         'bold',
                     color:
@@ -55116,8 +55121,8 @@ const roomPlayers =
                 .setDepth(25020)
                 .setScrollFactor(0)
                 .setSize(
-                    214,
-                    50,
+                    148,
+                    36,
                 )
                 .setInteractive({
                     useHandCursor:
@@ -55175,6 +55180,27 @@ const roomPlayers =
                 }
 
                 this.unlockGameAudio();
+
+                /*
+                 * V1010457_SNIPER_FINAL_FLOW_REWORK
+                 * Consume the support-button click completely.
+                 * Local movement locks NOW instead of waiting for network RTT.
+                 */
+                this.sniperButtonPressBlockUntil =
+                    Date.now() +
+                    650;
+
+                this.networkPlayerManager
+                    .setLocalHunterSpeedMultiplier(
+                        0,
+                    );
+
+                this.mobileMoveBase
+                    ?.setVisible(false);
+                this.mobileMoveKnob
+                    ?.setVisible(false);
+                this.mobileMoveLabel
+                    ?.setVisible(false);
 
                 multiplayerClient
                     .sendSniperToggle(
@@ -55504,8 +55530,8 @@ const roomPlayers =
             );
 
         this.cameras.main.shake(
-            155,
-            0.010,
+            210,
+            0.016,
         );
 
         this.sniperScopeCamera
@@ -55569,6 +55595,32 @@ const roomPlayers =
         this.mobileMoveKnob
             ?.setVisible(false);
         this.mobileMoveLabel
+            ?.setVisible(false);
+
+        /*
+         * Old shotgun aiming belongs to the running Hunter mode.
+         * Once support is accepted it disappears before the helicopter enters.
+         */
+        this.aimLine
+            ?.setVisible(false);
+        this.crosshair
+            ?.clear()
+            .setVisible(false);
+        this.gun
+            ?.setVisible(false);
+
+        this.mobileAimBase
+            ?.setVisible(false);
+        this.mobileAimKnob
+            ?.setVisible(false);
+        this.mobileAimLabel
+            ?.setVisible(false);
+        this.mobileFireButton
+            ?.setVisible(false);
+        this.mobileFireLabel
+            ?.setVisible(false);
+
+        this.hunterWeaponHudContainer
             ?.setVisible(false);
 
         const localPosition =
@@ -55734,58 +55786,60 @@ const roomPlayers =
             camera,
         );
 
-        this.tweens.add({
-            targets:
-                camera,
-            zoom:
-                1,
-            scrollX:
-                0,
-            scrollY:
-                0,
-            duration:
-                900,
-            ease:
-                'Sine.easeInOut',
-            onUpdate:
-                () => {
-                    this.applyFixedHudForZoom(
-                        camera.zoom,
-                    );
-                },
-            onComplete:
-                () => {
-                    if (
-                        !this.sniperActive ||
-                        this.phase !==
-                            'hunt'
-                    ) {
-                        return;
-                    }
+        /*
+         * V1010457_SNIPER_FINAL_FLOW_REWORK
+         * Move the VIEW CENTER to exact map X/Y center while zooming out.
+         * This avoids the old "zoomed out but still offset" result.
+         */
+        camera.pan(
+            this.gameWidth / 2,
+            this.gameHeight / 2,
+            920,
+            'Sine.easeInOut',
+            true,
+        );
 
-                    camera
-                        .setZoom(
-                            1,
-                        )
-                        .setScroll(
-                            0,
-                            0,
-                        );
+        camera.zoomTo(
+            1,
+            920,
+            'Sine.easeInOut',
+            true,
+        );
 
-                    this.applyFixedHudForZoom(
+        this.time.delayedCall(
+            940,
+            () => {
+                if (
+                    !this.sniperActive ||
+                    this.phase !==
+                        'hunt'
+                ) {
+                    return;
+                }
+
+                camera
+                    .setZoom(
                         1,
+                    )
+                    .centerOn(
+                        this.gameWidth / 2,
+                        this.gameHeight / 2,
                     );
 
-                    this.startSniperScopeRackIn();
-                },
-        });
+                this.applyFixedHudForZoom(
+                    1,
+                );
+
+                this.startSniperScopeRackIn();
+            },
+        );
     }
 
     private startSniperScopeRackIn(): void {
         this.sniperScopeRadius =
             this.mobileControlsEnabled
-                ? 104
-                : 130;
+                ? 112
+                : 142;
 
         this.sniperScopeScreenX =
             this.gameWidth /
@@ -55794,7 +55848,7 @@ const roomPlayers =
         this.sniperScopeScreenY =
             this.gameHeight +
             this.sniperScopeRadius +
-            30;
+            54;
 
         this.createSniperScopeCamera();
         this.ensureSniperScopeDom();
@@ -55815,7 +55869,7 @@ const roomPlayers =
                     this.gameHeight /
                     2,
                 duration:
-                    450,
+                    520,
                 ease:
                     'Back.easeOut',
                 onUpdate:
@@ -55905,6 +55959,27 @@ const roomPlayers =
     }
 
     private playProceduralSniperShot(): void {
+        /*
+         * V1010457_SNIPER_FINAL_FLOW_REWORK
+         * Layer the recorded shotgun transient at a low rate underneath the
+         * synthesized crack/boom. It reads much heavier than the normal shotgun.
+         */
+        try {
+            this.sound.play(
+                'shotgun-blast',
+                {
+                    volume:
+                        0.98,
+                    rate:
+                        0.58,
+                    detune:
+                        -180,
+                },
+            );
+        } catch {
+            // Recorded layer is optional.
+        }
+
         try {
             const manager =
                 this.sound as unknown as {
@@ -56163,86 +56238,181 @@ const roomPlayers =
     }
 
     private createSniperHelicopter(): void {
-        if (this.sniperHelicopter) {
+        if (
+            this.sniperHelicopter
+        ) {
             return;
         }
 
         const shadow =
             0x020609;
 
-        const body =
+        /*
+         * V1010457_SNIPER_FINAL_FLOW_REWORK
+         * Top-down silhouette: nose at top, fuselage/tail vertical,
+         * landing stubs and a large spinning rotor cross.
+         */
+        const fuselage =
             this.add.ellipse(
                 0,
+                -4,
+                38,
+                82,
+                shadow,
+                0.50,
+            );
+
+        const cockpit =
+            this.add.ellipse(
                 0,
-                92,
-                34,
+                -28,
+                29,
+                31,
+                shadow,
+                0.60,
+            );
+
+        const tailBoom =
+            this.add.rectangle(
+                0,
+                54,
+                12,
+                67,
                 shadow,
                 0.46,
             );
 
-        const tail =
-            this.add.rectangle(
-                58,
-                0,
-                64,
-                11,
-                shadow,
-                0.40,
-            );
-
-        const tailFin =
+        const tailFinLeft =
             this.add.triangle(
-                90,
-                -2,
+                -1,
+                83,
                 0,
                 0,
-                20,
-                -22,
-                22,
-                7,
+                -24,
+                17,
+                -3,
+                19,
                 shadow,
-                0.40,
+                0.48,
             );
 
-        const rotor =
+        const tailFinRight =
+            this.add.triangle(
+                1,
+                83,
+                0,
+                0,
+                24,
+                17,
+                3,
+                19,
+                shadow,
+                0.48,
+            );
+
+        const skidLeft =
+            this.add.rectangle(
+                -25,
+                6,
+                6,
+                61,
+                shadow,
+                0.36,
+            );
+
+        const skidRight =
+            this.add.rectangle(
+                25,
+                6,
+                6,
+                61,
+                shadow,
+                0.36,
+            );
+
+        const rotorHorizontal =
             this.add.rectangle(
                 0,
                 0,
-                148,
+                150,
                 5,
                 shadow,
                 0.44,
             );
 
-        const tailRotor =
-            this.add.circle(
-                91,
+        const rotorVertical =
+            this.add.rectangle(
                 0,
-                14,
+                0,
+                5,
+                150,
                 shadow,
-                0.28,
-            )
-                .setStrokeStyle(
-                    3,
-                    shadow,
-                    0.44,
-                );
+                0.34,
+            );
+
+        const rotorHub =
+            this.add.circle(
+                0,
+                0,
+                8,
+                shadow,
+                0.58,
+            );
+
+        const rotorGroup =
+            this.add.container(
+                0,
+                -8,
+                [
+                    rotorHorizontal,
+                    rotorVertical,
+                    rotorHub,
+                ],
+            );
+
+        const tailRotor =
+            this.add.container(
+                0,
+                88,
+                [
+                    this.add.rectangle(
+                        0,
+                        0,
+                        34,
+                        3,
+                        shadow,
+                        0.42,
+                    ),
+                    this.add.rectangle(
+                        0,
+                        0,
+                        3,
+                        34,
+                        shadow,
+                        0.32,
+                    ),
+                ],
+            );
 
         const heli =
             this.add.container(
                 0,
                 0,
                 [
-                    tail,
-                    tailFin,
-                    body,
-                    rotor,
+                    tailBoom,
+                    tailFinLeft,
+                    tailFinRight,
+                    skidLeft,
+                    skidRight,
+                    fuselage,
+                    cockpit,
+                    rotorGroup,
                     tailRotor,
                 ],
             )
                 .setDepth(1200)
-                .setAlpha(0.68)
-                .setScale(1.08);
+                .setAlpha(0.72)
+                .setScale(0.92);
 
         this.sniperHelicopter =
             heli;
@@ -56250,11 +56420,11 @@ const roomPlayers =
         this.sniperHelicopterRotorTween =
             this.tweens.add({
                 targets:
-                    rotor,
+                    rotorGroup,
                 angle:
                     360,
                 duration:
-                    165,
+                    170,
                 repeat:
                     -1,
             });
@@ -56265,95 +56435,38 @@ const roomPlayers =
             angle:
                 -360,
             duration:
-                120,
+                105,
             repeat:
                 -1,
         });
     }
 
     private createSniperScopeCamera(): void {
-        if (this.sniperScopeCamera) return;
-
-        const radius =
-            this.sniperScopeRadius > 0
-                ? this.sniperScopeRadius
-                : (
-                    this.mobileControlsEnabled
-                        ? 104
-                        : 130
-                );
-
-        this.sniperScopeRadius =
-            radius;
-
-        const camera =
-            this.cameras.add(
-                this.sniperScopeScreenX - radius,
-                this.sniperScopeScreenY - radius,
-                radius * 2,
-                radius * 2,
-                false,
-                'sniper-scope-camera',
-            );
-
-        camera.setZoom(2.85);
-        camera.centerOn(
-            this.sniperAimWorldX,
-            this.sniperAimWorldY,
-        );
-        camera.setBackgroundColor(
-            'rgba(0,0,0,0)',
-        );
-
         /*
-         * V1010455_SNIPER_CINEMATIC_POLISH
-         * Phaser 4 WebGL does not support Camera.setMask().
-         * Keep the secondary camera square internally, then cover the square
-         * corners above it with scanline geometry so the visible lens is truly circular.
+         * V1010457_SNIPER_FINAL_FLOW_REWORK
+         * Do NOT render a Phaser secondary-camera rectangle.
+         * The circular HTML canvas below samples the already-rendered full-map
+         * canvas and magnifies only the area inside the circle.
          */
-        this.sniperScopeCamera = camera;
+        if (
+            this.sniperScopeCamera
+        ) {
+            this.cameras.remove(
+                this.sniperScopeCamera,
+            );
+            this.sniperScopeCamera =
+                undefined;
+        }
 
-        this.sniperScopeCornerMask =
-            this.add.graphics()
-                .setDepth(25031)
-                .setScrollFactor(0)
-                .setVisible(true);
-
-        [
-            this.sniperButton,
-            this.sniperRadioText,
-            this.sniperScope,
-            this.sniperScopeShade,
-            this.sniperReloadGraphics,
-            this.sniperScopeCornerMask,
-            this.sniperHelicopter,
-            this.timerText,
-            this.phaseText,
-            this.guideText,
-            this.statusText,
-            this.hunterWeaponHudContainer,
-            this.fartHudContainer,
-            this.mobileMoveBase,
-            this.mobileMoveKnob,
-            this.mobileMoveLabel,
-            this.mobileAimBase,
-            this.mobileAimKnob,
-            this.mobileAimLabel,
-            this.mobileFireButton,
-            this.mobileFireLabel,
-        ].forEach(
-            (object) => {
-                if (object) {
-                    camera.ignore(object);
-                }
-            },
-        );
+        this.ensureSniperScopeDom();
     }
 
     private ensureSniperScopeDom(): void {
         if (
             this.sniperScopeDom &&
-            this.sniperScopeReloadDom
+            this.sniperScopeReloadDom &&
+            this.sniperScopeCanvas &&
+            this.sniperScopeCanvasContext
         ) {
             return;
         }
@@ -56388,16 +56501,89 @@ const roomPlayers =
                     '50%',
                 boxSizing:
                     'border-box',
-                border:
-                    '5px solid rgba(5,11,14,.98)',
-                boxShadow:
-                    '0 0 0 9999px rgba(2,7,11,.46), inset 0 0 24px rgba(0,0,0,.48), 0 4px 18px rgba(0,0,0,.48)',
-                background:
-                    'linear-gradient(to right, transparent calc(50% - 1px), rgba(235,249,255,.90) calc(50% - 1px), rgba(235,249,255,.90) calc(50% + 1px), transparent calc(50% + 1px)), linear-gradient(to bottom, transparent calc(50% - 1px), rgba(235,249,255,.90) calc(50% - 1px), rgba(235,249,255,.90) calc(50% + 1px), transparent calc(50% + 1px))',
                 overflow:
-                    'visible',
+                    'hidden',
+                border:
+                    '7px solid rgba(5,10,12,.99)',
+                boxShadow:
+                    '0 0 0 2px rgba(192,218,203,.58), 0 0 0 9999px rgba(2,7,11,.44), inset 0 0 28px rgba(0,0,0,.70), 0 5px 20px rgba(0,0,0,.55)',
+                background:
+                    '#05090b',
                 transformOrigin:
                     '50% 50%',
+            },
+        );
+
+        const magnifier =
+            document.createElement(
+                'canvas',
+            );
+
+        Object.assign(
+            magnifier.style,
+            {
+                position:
+                    'absolute',
+                inset:
+                    '0',
+                width:
+                    '100%',
+                height:
+                    '100%',
+                borderRadius:
+                    '50%',
+                display:
+                    'block',
+            },
+        );
+
+        const crossV =
+            document.createElement(
+                'div',
+            );
+
+        Object.assign(
+            crossV.style,
+            {
+                position:
+                    'absolute',
+                left:
+                    'calc(50% - 1px)',
+                top:
+                    '8%',
+                width:
+                    '2px',
+                height:
+                    '84%',
+                background:
+                    'rgba(235,249,255,.88)',
+                boxShadow:
+                    '0 0 2px #000',
+            },
+        );
+
+        const crossH =
+            document.createElement(
+                'div',
+            );
+
+        Object.assign(
+            crossH.style,
+            {
+                position:
+                    'absolute',
+                left:
+                    '8%',
+                top:
+                    'calc(50% - 1px)',
+                width:
+                    '84%',
+                height:
+                    '2px',
+                background:
+                    'rgba(235,249,255,.88)',
+                boxShadow:
+                    '0 0 2px #000',
             },
         );
 
@@ -56412,9 +56598,9 @@ const roomPlayers =
                 position:
                     'absolute',
                 width:
-                    '6px',
+                    '7px',
                 height:
-                    '6px',
+                    '7px',
                 left:
                     '50%',
                 top:
@@ -56424,9 +56610,9 @@ const roomPlayers =
                 borderRadius:
                     '50%',
                 background:
-                    '#ffe3a1',
+                    '#ffe2a0',
                 boxShadow:
-                    '0 0 7px rgba(255,225,150,.95)',
+                    '0 0 8px rgba(255,226,160,.95)',
             },
         );
 
@@ -56445,17 +56631,19 @@ const roomPlayers =
                 right:
                     '18%',
                 bottom:
-                    '-24px',
+                    '12px',
                 height:
-                    '10px',
+                    '9px',
                 borderRadius:
-                    '6px',
+                    '5px',
                 overflow:
                     'hidden',
                 border:
                     '1px solid rgba(255,255,255,.62)',
                 background:
                     'rgba(4,10,14,.88)',
+                boxShadow:
+                    '0 1px 4px rgba(0,0,0,.65)',
             },
         );
 
@@ -56485,6 +56673,15 @@ const roomPlayers =
         );
 
         scope.appendChild(
+            magnifier,
+        );
+        scope.appendChild(
+            crossV,
+        );
+        scope.appendChild(
+            crossH,
+        );
+        scope.appendChild(
             centerDot,
         );
         scope.appendChild(
@@ -56495,10 +56692,24 @@ const roomPlayers =
             scope,
         );
 
+        const context =
+            magnifier.getContext(
+                '2d',
+                {
+                    alpha:
+                        false,
+                },
+            );
+
         this.sniperScopeDom =
             scope;
         this.sniperScopeReloadDom =
             reload;
+        this.sniperScopeCanvas =
+            magnifier;
+        this.sniperScopeCanvasContext =
+            context ??
+            undefined;
 
         this.events.once(
             Phaser.Scenes.Events.SHUTDOWN,
@@ -56510,6 +56721,10 @@ const roomPlayers =
                     undefined;
                 this.sniperScopeReloadDom =
                     undefined;
+                this.sniperScopeCanvas =
+                    undefined;
+                this.sniperScopeCanvasContext =
+                    undefined;
             },
         );
     }
@@ -56518,8 +56733,16 @@ const roomPlayers =
         const scope =
             this.sniperScopeDom;
 
+        const magnifier =
+            this.sniperScopeCanvas;
+
+        const context =
+            this.sniperScopeCanvasContext;
+
         if (
             !scope ||
+            !magnifier ||
+            !context ||
             !this.sniperCinematicActive
         ) {
             return;
@@ -56537,9 +56760,27 @@ const roomPlayers =
             rect.height /
             this.gameHeight;
 
-        const diameter =
+        const diameterLogical =
             this.sniperScopeRadius *
             2;
+
+        const cssWidth =
+            Math.max(
+                1,
+                Math.round(
+                    diameterLogical *
+                    sx,
+                ),
+            );
+
+        const cssHeight =
+            Math.max(
+                1,
+                Math.round(
+                    diameterLogical *
+                    sy,
+                ),
+            );
 
         scope.style.display =
             '';
@@ -56572,21 +56813,155 @@ const roomPlayers =
 
         scope.style.width =
             String(
-                Math.round(
-                    diameter *
-                    sx,
-                ),
+                cssWidth,
             ) +
             'px';
 
         scope.style.height =
             String(
-                Math.round(
-                    diameter *
-                    sy,
-                ),
+                cssHeight,
             ) +
             'px';
+
+        /*
+         * Magnify the exact world point under the mouse.
+         * At sniper stage main camera is zoom=1 and centered on full map, so
+         * world x/y map 1:1 to the logical game canvas.
+         */
+        const backing =
+            this.game.canvas;
+
+        const backingScaleX =
+            backing.width /
+            this.gameWidth;
+
+        const backingScaleY =
+            backing.height /
+            this.gameHeight;
+
+        const magnification =
+            2.85;
+
+        const sourceHalfW =
+            this.sniperScopeRadius /
+            magnification;
+
+        const sourceHalfH =
+            this.sniperScopeRadius /
+            magnification;
+
+        const sourceX =
+            Phaser.Math.Clamp(
+                this.sniperAimWorldX -
+                    sourceHalfW,
+                0,
+                Math.max(
+                    0,
+                    this.gameWidth -
+                        sourceHalfW *
+                            2,
+                ),
+            );
+
+        const sourceY =
+            Phaser.Math.Clamp(
+                this.sniperAimWorldY -
+                    sourceHalfH,
+                0,
+                Math.max(
+                    0,
+                    this.gameHeight -
+                        sourceHalfH *
+                            2,
+                ),
+            );
+
+        const pixelRatio =
+            Math.max(
+                1,
+                Math.min(
+                    2,
+                    window.devicePixelRatio ||
+                        1,
+                ),
+            );
+
+        const targetW =
+            Math.max(
+                1,
+                Math.round(
+                    cssWidth *
+                    pixelRatio,
+                ),
+            );
+
+        const targetH =
+            Math.max(
+                1,
+                Math.round(
+                    cssHeight *
+                    pixelRatio,
+                ),
+            );
+
+        if (
+            magnifier.width !==
+                targetW ||
+            magnifier.height !==
+                targetH
+        ) {
+            magnifier.width =
+                targetW;
+            magnifier.height =
+                targetH;
+        }
+
+        context.save();
+
+        context.clearRect(
+            0,
+            0,
+            targetW,
+            targetH,
+        );
+
+        context.beginPath();
+        context.arc(
+            targetW / 2,
+            targetH / 2,
+            Math.min(
+                targetW,
+                targetH,
+            ) /
+                2,
+            0,
+            Math.PI *
+                2,
+        );
+        context.clip();
+
+        context.imageSmoothingEnabled =
+            false;
+
+        context.drawImage(
+            backing,
+            sourceX *
+                backingScaleX,
+            sourceY *
+                backingScaleY,
+            sourceHalfW *
+                2 *
+                backingScaleX,
+            sourceHalfH *
+                2 *
+                backingScaleY,
+            0,
+            0,
+            targetW,
+            targetH,
+        );
+
+        context.restore();
 
         const remain =
             Math.max(
@@ -56634,24 +57009,8 @@ const roomPlayers =
             return;
         }
 
-        const radius =
-            this.sniperScopeRadius;
-
-        this.sniperScopeCamera
-            ?.setViewport(
-                this.sniperScopeScreenX -
-                    radius,
-                this.sniperScopeScreenY -
-                    radius,
-                radius * 2,
-                radius * 2,
-            );
-
-        this.sniperScopeCamera
-            ?.centerOn(
-                x,
-                y,
-            );
+        void x;
+        void y;
 
         /*
          * DOM bezel is above the WebGL canvas and therefore really masks the
@@ -56939,6 +57298,12 @@ const roomPlayers =
         }
 
         this.drawSniperReloadGauge();
+
+        if (
+            this.sniperScopeInteractive
+        ) {
+            this.syncSniperScopeDom();
+        }
     }
 
     private refreshSniperSupportUi(): void {
@@ -56981,17 +57346,17 @@ const roomPlayers =
                     camera.zoom +
                     (
                         this.mobileControlsEnabled
-                            ? 54
-                            : 58
+                            ? 76
+                            : 82
                     );
 
                 this.setFixedHudScreenPosition(
                     this.sniperRadioText,
                     Phaser.Math.Clamp(
                         screenX,
-                        150,
+                        118,
                         this.gameWidth -
-                            150,
+                            118,
                     ),
                     Phaser.Math.Clamp(
                         screenY,
@@ -57024,17 +57389,26 @@ const roomPlayers =
         const warning = hunter && remainingMs <= 35000 && remainingMs > 30000;
         if (warning) {
             const seconds = Math.max(1, Math.ceil((remainingMs - 30000) / 1000));
-            if (seconds !== this.sniperRadioLastSecond) {
-                this.sniperRadioLastSecond = seconds;
-                this.sniperRadioText.setText(this.getSniperRadioMessage(seconds));
-                this.tweens.killTweensOf(this.sniperRadioText);
-                this.sniperRadioText.setScale(0.96).setAlpha(0.2);
-                this.tweens.add({
-                    targets: this.sniperRadioText,
-                    scale: 1,
-                    alpha: 1,
-                    duration: 150,
-                });
+            if (
+                seconds !==
+                this.sniperRadioLastSecond
+            ) {
+                this.sniperRadioLastSecond =
+                    seconds;
+
+                /*
+                 * V1010457_SNIPER_FINAL_FLOW_REWORK
+                 * Do not fade/scale the whole sentence each second.
+                 * The object stays perfectly still; only the numeral changes.
+                 */
+                this.sniperRadioText
+                    .setScale(1)
+                    .setAlpha(1)
+                    .setText(
+                        this.getSniperRadioMessage(
+                            seconds,
+                        ),
+                    );
             }
             this.sniperRadioText.setVisible(true);
             this.sniperButton.setVisible(false);
@@ -57067,6 +57441,18 @@ const roomPlayers =
         explicitMobileFire =
             false,
     ): void {
+        /*
+         * V1010457_SNIPER_FINAL_FLOW_REWORK
+         * Phaser may deliver the same pointerdown to world shooting after a UI
+         * Container handler. A support-button press may NEVER cost shotgun ammo.
+         */
+        if (
+            Date.now() <
+            this.sniperButtonPressBlockUntil
+        ) {
+            return;
+        }
+
         if (this.sniperActive) {
             if (explicitMobileFire) {
                 this.fireSniperAtCurrentAim();
