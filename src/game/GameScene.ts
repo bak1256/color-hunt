@@ -1,3 +1,4 @@
+/* V1010480B_ASSIST_PINHOLE_OPAQUE_MICROPULSE_CLEAN_SCOPE: organic FULL dab overlap, opaque Paint Help, true micro heartbeat, clean PC sniper transition. */
 /* V1010479D_RESTORE_ORGANIC_ASSIST_DENSITY_ONLY: remove FULL grid geometry; preserve original organic dots and change density only. */
 /* V1010479C_FIX_ASSIST_DENSITY_BUILD: canonicalize Paint Assist density block after 479b duplicate declaration. */
 /* V1010479B_ROBUST_LOBBY_ASSIST_SNIPER: robust modal replacement, gapless FULL assist, translated lobby fit, true 2px sniper pulse. */
@@ -12067,7 +12068,7 @@ const ribbon =
                  * version. Detailed regions stay smaller than flat regions so
                  * recognizable shapes are not swallowed.
                  */
-                const size =
+                const baseOrganicSize =
                     edgeStrength >= 150
                         ? 3 +
                             (
@@ -12085,6 +12086,28 @@ const ribbon =
                                     (detailHash >>> 9) %
                                     3
                                 );
+
+                /*
+                 * V1010480B_FULL_ORGANIC_DAB_OVERLAP
+                 *
+                 * IMPORTANT:
+                 * Keep original sampled position / jitter / mixed dot logic.
+                 * FULL merely presses the SAME round dabs slightly wider.
+                 * This closes tiny pinholes without making a visible lattice.
+                 */
+                const size =
+                    Phaser.Math.Clamp(
+                        baseOrganicSize +
+                            (
+                                this.paintAssistLevel === 4
+                                    ? 2
+                                    : this.paintAssistLevel === 3
+                                        ? 1
+                                        : 0
+                            ),
+                        2,
+                        8,
+                    );
 
                 /*
                  * No random positional jitter in detailed regions. Moving a
@@ -12398,6 +12421,27 @@ const ribbon =
                 cursor: 'pointer',
                 touchAction: 'manipulation',
             },
+        );
+
+        
+        /*
+         * V1010480B_PAINT_ASSIST_OPAQUE
+         * Paint Help is a real action button, never a translucent HUD decoration.
+         */
+        assistButton.style.setProperty(
+            'opacity',
+            '1',
+            'important',
+        );
+        assistButton.style.setProperty(
+            'filter',
+            'none',
+            'important',
+        );
+        assistButton.style.setProperty(
+            'background',
+            '#ffdb58',
+            'important',
         );
 
         assistButton.addEventListener(
@@ -56232,6 +56276,28 @@ const roomPlayers =
 
     private updateAim(): void {
         /*
+         * V1010480B_SNIPER_TRANSITION_AIM_SEAL
+         *
+         * PC's normal shotgun crosshair includes a small center circle at the
+         * mouse world point. During sniper transition it looked like a strange
+         * clear/bright circle under the incoming scope.
+         */
+        if (
+            this.sniperCinematicActive ||
+            this.sniperActive
+        ) {
+            this.aimLine
+                ?.clear()
+                .setVisible(false);
+
+            this.crosshair
+                ?.clear()
+                .setVisible(false);
+
+            return;
+        }
+
+        /*
          * V1010461_VICTORY_NO_AIM_LINES
          * Victory/social-card capture is an absolute aim-render barrier.
          */
@@ -56909,15 +56975,24 @@ const roomPlayers =
          * container scale stays exactly 1.
          * Only the background rectangle grows 176x44 -> 178x46.
          */
+        /*
+         * V1010480B_SNIPER_TRUE_MICRO_HEARTBEAT
+         *
+         * Never scale the whole HUD container.
+         * Scale only its background:
+         *   176x44 -> visually about 178x46 -> 176x44.
+         */
+        bg.setScale(1);
+
         this.tweens.add({
             targets:
                 bg,
-            width:
-                178,
-            height:
-                46,
+            scaleX:
+                178 / 176,
+            scaleY:
+                46 / 44,
             duration:
-                900,
+                820,
             yoyo:
                 true,
             repeat:
@@ -57288,6 +57363,18 @@ const roomPlayers =
     }
 
     private enterSniperCinematic(): void {
+        /*
+         * V1010480B_ENTER_SNIPER_CLEAR_NORMAL_AIM
+         * Clear the desktop shotgun cursor BEFORE sniper transition visuals.
+         */
+        this.aimLine
+            ?.clear()
+            .setVisible(false);
+
+        this.crosshair
+            ?.clear()
+            .setVisible(false);
+
         if (
             this.sniperCinematicActive ||
             this.phase !==
