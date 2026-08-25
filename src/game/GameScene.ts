@@ -1,3 +1,4 @@
+/* V1010474B_STANDALONE_MOBILE_PAINT_UX: standalone cumulative patch: Paint READY debounce, chat STOP, solid paint controls, 5-level Paint Assist, synchronized finger eyedropper, instant/middle-grip Precision Brush, Hunt cleanup. */
 /* V1010472_MAIN_LOBBY_RECONNECT_OVERLAY_CLEANUP: public-main-lobby/Scene shutdown hard-cleans orphan reconnect DOM without changing reconnect transport behavior. */
 /* V1010469_RECONNECT_OVERLAY_COMPLETION: reconnect notice closes from the actual gameplay movement-readiness gate instead of waiting on a lagging local-player cache. */
 /* V1010467_MOBILE_RECONNECT_WAIT_OVERLAY: persistent mobile app-switch reconnect notice stays visible until transport + local player + gameplay input are actually ready. */
@@ -2038,6 +2039,10 @@ private timerText!: Phaser.GameObjects.Text;
     private knownAliveState =
         new Map<string, boolean>();
 
+    /* V1010474B_STANDALONE_MOBILE_PAINT_UX: mobile paint UX state. */
+    private paintReadyInputLockedUntil = 0;
+    private paintAssistLevel: 0 | 1 | 2 | 3 | 4 = 2;
+
     private paintColorText!: Phaser.GameObjects.Text;
     private brushSizeText!: Phaser.GameObjects.Text;
     private paletteObjects: Phaser.GameObjects.GameObject[] = [];
@@ -2072,6 +2077,22 @@ private timerText!: Phaser.GameObjects.Text;
             );
 
         if (role === 'hider') {
+            const paintReadyTapNow = Date.now();
+
+            if (
+                paintReadyTapNow <
+                this.paintReadyInputLockedUntil
+            ) {
+                return;
+            }
+
+            /*
+             * A deliberate READY -> CANCEL remains possible, but a human
+             * double-tap cannot enqueue opposite intents fast enough to flash.
+             */
+            this.paintReadyInputLockedUntil =
+                paintReadyTapNow + 550;
+
             /*
              * v0.10.10.240 READY INTENT LOCK:
              * Capture the user's tap as an immutable intent. During reconnect,
@@ -9593,6 +9614,16 @@ private timerText!: Phaser.GameObjects.Text;
                 }
 
                 this.chatFocusArmed = false;
+
+                /*
+                 * V1010474B_STANDALONE_MOBILE_PAINT_UX / CHAT_STOP
+                 * Pointer-up/key-up can be swallowed while focus moves to DOM.
+                 * Clear both mobile vector and Phaser keyboard state first.
+                 */
+                this.resetMobileMoveControl();
+                this.mobileTouchPoints.clear();
+                this.input.keyboard?.resetKeys();
+
                 this.lockGameCanvasForMobileChat();
 
                 root.classList.add(
@@ -11419,12 +11450,21 @@ const ribbon =
                         : '✨ 색칠 도움받기';
         const description =
             language === 'ja'
-                ? '今いる場所の背景色を参考に、キャラクターのおよそ40%をドット風に自動で塗ります。完璧な迷彩にはせず、遊びやすいスタートを作ります。'
+                ? '今いる場所の背景を参考に自動で塗ります。下のスライダーで手伝う量を選べます。'
                 : language === 'en'
-                    ? 'Using the background at your current position, about 40% of your character will be painted automatically with rough pixel-like dabs. It gives you a head start, not perfect camouflage.'
+                    ? 'Paint Assist samples the background at your current position. Choose how much help you want below.'
                     : language === 'zh'
-                        ? '根据你当前位置的背景颜色，自动用像素点笔触填涂角色约40%。它只提供轻松的起步，不会生成完美伪装。'
-                        : '현재 위치의 배경색을 참고해 캐릭터의 약 40%를 도트처럼 자동 채색합니다. 완벽한 위장이 아니라, 누구나 쉽게 시작할 수 있게 도와주는 정도예요.';
+                        ? '上色助手会参考当前位置的背景。请用下面的滑块选择帮助程度。'
+                        : '현재 위치의 배경을 참고해 자동으로 칠해줘요. 아래 슬라이더에서 도움받을 정도를 골라주세요.';
+
+        const assistLevelLabels =
+            language === 'ja'
+                ? ['ほんの少し', '少し', 'ほどほど', 'たくさん', '全部お願い 🐣']
+                : language === 'en'
+                    ? ['Tiny bit', 'A little', 'Medium', 'A lot', 'Do it all 🐣']
+                    : language === 'zh'
+                        ? ['一点点', '少量', '适中', '很多', '全部帮我 🐣']
+                        : ['아주 조금만', '조금만', '적당히', '많이', '다 해줘 🐣'];
         const warning =
             language === 'ja'
                 ? 'サポートなしで勝利すると勝利カードに「色塗りマスター」マーク、サポートを使って勝利すると「色塗りひよこ」マークが表示されます。それでも使いますか？'
@@ -11456,11 +11496,21 @@ const ribbon =
                 .colorhunt-paint-assist-card{width:min(92vw,520px);box-sizing:border-box;padding:24px;border:2px solid rgba(255,218,91,.82);border-radius:24px;background:linear-gradient(180deg,#fff9d9,#fff4b6);box-shadow:0 28px 80px rgba(0,0,0,.34);color:#3f3413;font-family:Inter,Pretendard,Arial,sans-serif}
                 .colorhunt-paint-assist-card h2{margin:0 0 12px;font-size:25px;line-height:1.15;font-weight:950}.colorhunt-paint-assist-card p{margin:0;font-size:14px;line-height:1.55;font-weight:750}.colorhunt-paint-assist-warning{margin-top:14px!important;padding:13px 14px;border-radius:15px;background:rgba(255,255,255,.72);border:1px solid rgba(151,110,16,.22)}
                 .colorhunt-paint-assist-badges{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}.colorhunt-paint-assist-badges span{padding:7px 10px;border-radius:999px;background:#fff;border:1px solid rgba(108,76,8,.18);font-size:12px;font-weight:950}
+                .colorhunt-paint-assist-level{margin:16px 0 8px;padding:12px;border-radius:16px;background:rgba(255,255,255,.78)}
+                .colorhunt-paint-assist-level strong{display:block;text-align:center;font-size:15px;margin-bottom:8px}
+                .colorhunt-paint-assist-level input{width:100%;accent-color:#d59d16;touch-action:pan-x}
+                .colorhunt-paint-assist-level-labels{display:grid;grid-template-columns:repeat(5,1fr);gap:3px;margin-top:5px;font-size:10px;font-weight:900;text-align:center}
+                .colorhunt-paint-assist-level-labels span{overflow-wrap:anywhere}
                 .colorhunt-paint-assist-actions{display:grid;grid-template-columns:1fr 1.35fr;gap:9px;margin-top:18px}.colorhunt-paint-assist-actions button{min-height:46px;border:0;border-radius:14px;font:900 14px Arial,sans-serif;cursor:pointer}.colorhunt-paint-assist-actions [data-assist-no]{background:#fff;color:#665f50}.colorhunt-paint-assist-actions [data-assist-yes]{background:#e0ad25;color:#352600;box-shadow:0 8px 18px rgba(120,82,0,.20)}
             </style>
             <div class="colorhunt-paint-assist-card">
                 <h2>${title}</h2>
                 <p>${description}</p>
+                <div class="colorhunt-paint-assist-level">
+                    <strong data-assist-level-current>${assistLevelLabels[this.paintAssistLevel]}</strong>
+                    <input type="range" min="0" max="4" step="1" value="${this.paintAssistLevel}" data-assist-level aria-label="Paint assist level">
+                    <div class="colorhunt-paint-assist-level-labels">${assistLevelLabels.map((label) => `<span>${label}</span>`).join('')}</div>
+                </div>
                 <div class="colorhunt-paint-assist-badges"><span>🏅 ${language === 'ko' ? '색칠고수' : language === 'ja' ? '色塗りマスター' : language === 'zh' ? '上色高手' : 'Paint Master'}</span><span>🐣 ${language === 'ko' ? '색칠새싹' : language === 'ja' ? '色塗りひよこ' : language === 'zh' ? '上色新芽' : 'Paint Rookie'}</span></div>
                 <p class="colorhunt-paint-assist-warning">${warning}</p>
                 <div class="colorhunt-paint-assist-actions">
@@ -11469,6 +11519,35 @@ const ribbon =
                 </div>
             </div>
         `;
+
+        const levelInput =
+            overlay.querySelector<HTMLInputElement>(
+                '[data-assist-level]',
+            );
+        const levelCurrent =
+            overlay.querySelector<HTMLElement>(
+                '[data-assist-level-current]',
+            );
+
+        levelInput?.addEventListener(
+            'input',
+            () => {
+                const nextLevel =
+                    Phaser.Math.Clamp(
+                        Number(levelInput.value),
+                        0,
+                        4,
+                    ) as 0 | 1 | 2 | 3 | 4;
+
+                this.paintAssistLevel =
+                    nextLevel;
+
+                if (levelCurrent) {
+                    levelCurrent.textContent =
+                        assistLevelLabels[nextLevel];
+                }
+            },
+        );
 
         const close =
             (): void => {
@@ -11762,7 +11841,7 @@ const ribbon =
                  * This prevents complex maps from turning into noisy camouflage
                  * while still leaving recognizable pieces of the true backdrop.
                  */
-                const keepPercent =
+                const baseKeepPercent =
                     edgeStrength >= 150
                         ? 52
                         : edgeStrength >= 95
@@ -11770,6 +11849,22 @@ const ribbon =
                             : edgeStrength >= 55
                                 ? 35
                                 : 26;
+
+                const assistDensityScale =
+                    [0.34, 0.62, 1, 1.55, 4][
+                        this.paintAssistLevel
+                    ];
+
+                const keepPercent =
+                    this.paintAssistLevel === 4
+                        ? 100
+                        : Math.min(
+                            96,
+                            Math.round(
+                                baseKeepPercent *
+                                assistDensityScale,
+                            ),
+                        );
 
                 /*
                  * V1010450L_COHERENT_BACKGROUND_PATCHES
@@ -11836,12 +11931,25 @@ const ribbon =
                         100 <
                     keepPercent;
 
+                const detailKeepPercent =
+                    this.paintAssistLevel === 4
+                        ? 100
+                        : Math.min(
+                            92,
+                            Math.round(
+                                36 *
+                                [0.34, 0.62, 1, 1.55, 4][
+                                    this.paintAssistLevel
+                                ],
+                            ),
+                        );
+
                 const keepFineDetail =
                     edgeStrength >=
                         95 &&
                     detailHash %
                         100 <
-                        36;
+                        detailKeepPercent;
 
                 if (
                     !keepCoherentPatch &&
@@ -12106,7 +12214,7 @@ const ribbon =
                 padding: '7px 12px',
                 border: '2px solid #5c8f66',
                 borderRadius: '13px',
-                background: 'rgba(223,247,230,.66)',
+                background: '#dff7e6',
                 color: '#26352b',
                 boxShadow:
                     '0 4px 14px rgba(35,59,42,.22)',
@@ -12198,7 +12306,7 @@ const ribbon =
                 padding: '7px 12px',
                 border: '2px solid #c79b27',
                 borderRadius: '13px',
-                background: 'rgba(255,219,88,.72)',
+                background: '#ffdb58',
                 color: '#4d3a08',
                 boxShadow:
                     '0 4px 14px rgba(97,72,10,.22)',
@@ -12844,8 +12952,8 @@ const ribbon =
             .style.background =
             this.mobilePaintInputMode ===
                 'finger'
-                ? 'rgba(223,247,230,.66)'
-                : 'rgba(255,244,214,.66)';
+                ? '#dff7e6'
+                : '#fff4d6';
 
         if (
             this.mobilePrecisionBrushHint
@@ -12853,12 +12961,12 @@ const ribbon =
             this.mobilePrecisionBrushHint
                 .textContent =
                 language === 'ja'
-                    ? 'ドラッグ：ブラシ移動\n長押し：色塗り開始'
+                    ? '指先でブラシを動かして、そのまま描けます'
                     : language === 'en'
-                        ? 'Drag: Move brush\nHold: Start painting'
+                        ? 'Move the brush with your fingertip and paint instantly'
                         : language === 'zh'
-                            ? '拖动：移动画笔\n长按：开始上色'
-                            : '드래그: 붓 이동\n꾹 누르기: 색칠 시작';
+                            ? '用指尖移动画笔，触碰即可立即上色'
+                            : '손끝으로 붓을 움직여 바로 칠할 수 있어요';
 
             const visible =
                 this.mobileControlsEnabled &&
@@ -25065,10 +25173,13 @@ this.networkUnsubscribers.push(
          * These offsets make the logical paint/sample point equal the VISIBLE tip.
          */
         const avatarMobileToolScale = 0.75;
+        /*
+         * V1010474B_STANDALONE_MOBILE_PAINT_UX: grip the brush nearer its middle, matching gameplay.
+         */
         const avatarMobileToolTipOffsetX =
-            (80 - 7) * avatarMobileToolScale;
+            (62 - 7) * avatarMobileToolScale;
         const avatarMobileToolTipOffsetY =
-            (90 - 7) * avatarMobileToolScale;
+            (72 - 7) * avatarMobileToolScale;
 
         const getAvatarToolTipClient =
             (
@@ -26909,12 +27020,12 @@ this.networkUnsubscribers.push(
                 ];
 
                 clearAvatarBrushHold();
-                avatarBrushHoldReady =
-                    avatarPaintInputMode !==
-                        'brush' ||
-                    !this.mobileControlsEnabled;
-
+                /*
+                 * V1010474B_STANDALONE_MOBILE_PAINT_UX: avatar Precision Brush paints immediately too.
+                 */
+                avatarBrushHoldReady = true;
                 if (
+                    false &&
                     this.mobileControlsEnabled &&
                     avatarPaintInputMode ===
                         'brush'
@@ -27041,6 +27152,7 @@ this.networkUnsubscribers.push(
                      * move freely first, hold at the desired location, then draw.
                      */
                     if (
+                        false &&
                         this.mobileControlsEnabled &&
                         avatarPaintInputMode ===
                             'brush' &&
@@ -28027,12 +28139,12 @@ this.networkUnsubscribers.push(
 
                 avatarPrecisionHint.innerHTML =
                     language === 'ja'
-                        ? 'ドラッグ: ブラシ移動<br>長押し: 塗り開始'
+                        ? '指先でブラシを動かしてそのまま描けます'
                         : language === 'en'
-                            ? 'Drag: move brush<br>Hold: start painting'
+                            ? 'Move with your fingertip and paint instantly'
                             : language === 'zh'
-                                ? '拖动: 移动画笔<br>长按: 开始涂色'
-                                : '드래그: 붓이동<br>꾹누르기: 색칠시작';
+                                ? '用指尖移动画笔即可立即上色'
+                                : '손끝으로 붓을 움직여 바로 칠할 수 있어요';
 
                 avatarPrecisionHint.style.display =
                     (
@@ -49944,8 +50056,8 @@ const roomPlayers =
             new Phaser.Math.Vector2();
 
         this.cameras.main.getWorldPoint(
-            pointer.x - 72,
-            pointer.y - 82,
+            pointer.x - 46,
+            pointer.y - 54,
             result,
         );
 
@@ -50906,11 +51018,10 @@ const roomPlayers =
         this.mobilePaintHoldDotEvent =
             this.time.delayedCall(
                 /*
-                 * V1010403C_MOBILE_PAINT_SURGICAL_RECOVERY / HOLD_520
-                 * Drag repositions the precision brush. Staying still for
-                 * 520ms begins painting.
+                 * V1010474B_STANDALONE_MOBILE_PAINT_UX: Precision Brush begins immediately.
+                 * No hold-to-arm delay.
                  */
-                520,
+                0,
                 () => {
                     if (
                         !this.isMobileHunterCustomizationPaint() ||
@@ -50958,7 +51069,7 @@ const roomPlayers =
 
         const holdToPaintDelay =
             this.mobilePaintInputMode === 'brush'
-                ? 520
+                ? 0
                 : 120;
 
         this.mobilePaintHoldDotEvent =
@@ -54091,9 +54202,25 @@ const roomPlayers =
         const grip =
             new Phaser.Math.Vector2();
 
+        /*
+         * V1010474B_STANDALONE_MOBILE_PAINT_UX / FINGER_PIPETTE_SYNC
+         *
+         * Finger mode's visible square preview is centered at
+         * (fingerX + 40, fingerY - 94). Sample THAT exact center.
+         * Precision mode keeps the visible pipette-tip offset.
+         */
+        const targetScreenX =
+            this.mobilePaintInputMode === 'finger'
+                ? screenX + 40
+                : screenX - 46;
+        const targetScreenY =
+            this.mobilePaintInputMode === 'finger'
+                ? screenY - 94
+                : screenY - 54;
+
         this.cameras.main.getWorldPoint(
-            screenX - 72,
-            screenY - 82,
+            targetScreenX,
+            targetScreenY,
             target,
         );
 
@@ -54317,9 +54444,13 @@ const roomPlayers =
                         this.eyedropperPointerId =
                             -1;
 
-                        this.updateEyedropperButtonUi();
-                        this.hideMobilePaintPrecisionGuide();
-                        this.showMobileIdleEyedropperGuide();
+                        /*
+                         * V1010474B_STANDALONE_MOBILE_PAINT_UX: sample is complete; return to the last
+                         * Circle/Square brush instead of leaving pipette armed.
+                         */
+                        this.activateMobileBrushTool(
+                            this.mobileBrushShapeBeforeEyedropper,
+                        );
 
                         this.isPainting = false;
                         this.finishActivePaintStroke();
@@ -54518,9 +54649,13 @@ const roomPlayers =
                     this.eyedropperPointerId =
                         -1;
 
-                    this.updateEyedropperButtonUi();
-                    this.hideMobilePaintPrecisionGuide();
-                    this.showMobileIdleEyedropperGuide();
+                    /*
+                     * V1010474B_STANDALONE_MOBILE_PAINT_UX: sample is complete; return to the last
+                     * Circle/Square brush instead of leaving pipette armed.
+                     */
+                    this.activateMobileBrushTool(
+                        this.mobileBrushShapeBeforeEyedropper,
+                    );
 
                     this.isPainting = false;
                     this.finishActivePaintStroke();
@@ -64471,6 +64606,21 @@ this.weaponHeat =
 
         this.phase = 'hunt';
         this.syncPhaseMusic();
+
+        /*
+         * V1010474B_STANDALONE_MOBILE_PAINT_UX / HUNT_PIPETTE_CLEANUP
+         * Paint-only pipette state must not survive onto the map.
+         */
+        this.stopMobileNativeEyedropperDrag();
+        this.hideEyedropperMagnifier();
+        this.eyedropperArmed = false;
+        this.eyedropperPointerId = -1;
+        this.mobilePendingPaintPointerId = -1;
+        this.mobilePendingPaintStartScreen = undefined;
+        this.mobilePendingPaintStartWorld = undefined;
+        this.paintPreview?.setVisible(false);
+        this.hideMobilePaintPrecisionGuide();
+        this.updateEyedropperButtonUi();
 
         this.sniperActive = false;
         this.sniperAvailable = false;
