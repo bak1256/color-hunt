@@ -69,6 +69,27 @@ export type ShotFiredHandler = (
   shot: NetworkShotFired,
 ) => void;
 
+/* V1010453_SNIPER_SUPPORT_MODE */
+export type NetworkSniperState = {
+  sessionId: string;
+  active: boolean;
+  available: boolean;
+  remainingMs: number;
+  serverNow: number;
+};
+export type NetworkSniperAim = { sessionId: string; x: number; y: number };
+export type NetworkSniperFired = {
+  shooterId: string;
+  x: number;
+  y: number;
+  hitId: string;
+  readyAt: number;
+  serverNow: number;
+};
+export type SniperStateHandler = (state: NetworkSniperState) => void;
+export type SniperAimHandler = (aim: NetworkSniperAim) => void;
+export type SniperFiredHandler = (shot: NetworkSniperFired) => void;
+
 export type NetworkHunterAim = {
   sessionId: string;
   angle: number;
@@ -524,6 +545,12 @@ this.phaseChangedHandlers.forEach(
 
   private readonly hunterAimHandlers =
     new Set<HunterAimHandler>();
+
+  private readonly sniperStateHandlers = new Set<SniperStateHandler>();
+  private readonly sniperAimHandlers = new Set<SniperAimHandler>();
+  private readonly sniperFiredHandlers = new Set<SniperFiredHandler>();
+
+
 
   private readonly weaponStateHandlers =
     new Set<WeaponStateHandler>();
@@ -3137,6 +3164,35 @@ this.room = room;
       },
     );
 
+    room.onMessage<NetworkSniperState>(
+      "sniper_state",
+      (state) => this.sniperStateHandlers.forEach((handler) => handler(state)),
+    );
+
+    room.onMessage<NetworkSniperAim>(
+      "sniper_aim",
+      (aim) => this.sniperAimHandlers.forEach((handler) => handler(aim)),
+    );
+
+    room.onMessage<NetworkSniperFired>(
+      "sniper_fired",
+      (shot) => this.sniperFiredHandlers.forEach((handler) => handler(shot)),
+    );
+
+    room.onMessage<{ readyAt: number; serverNow: number }>(
+      "sniper_reload",
+      (payload) => {
+        this.sniperFiredHandlers.forEach((handler) => handler({
+          shooterId: room.sessionId,
+          x: Number.NaN,
+          y: Number.NaN,
+          hitId: "",
+          readyAt: Number(payload?.readyAt ?? 0),
+          serverNow: Number(payload?.serverNow ?? Date.now()),
+        }));
+      },
+    );
+
     room.onMessage<
       NetworkHunterAim
     >(
@@ -3685,6 +3741,21 @@ this.room = room;
         volunteer,
       },
     );
+  }
+
+  sendSniperToggle(active: boolean): void {
+    if (!this.isGameplayTransportStable()) return;
+    this.room?.send("sniper_toggle", { active });
+  }
+
+  sendSniperAim(x: number, y: number): void {
+    if (!this.isGameplayTransportStable()) return;
+    this.room?.send("sniper_aim", { x, y });
+  }
+
+  sendSniperFire(x: number, y: number): void {
+    if (!this.isGameplayTransportStable()) return;
+    this.room?.send("sniper_fire", { x, y });
   }
 
   sendHunterAim(
@@ -4447,6 +4518,21 @@ this.room = room;
         handler,
       );
     };
+  }
+
+  onSniperState(handler: SniperStateHandler): () => void {
+    this.sniperStateHandlers.add(handler);
+    return () => this.sniperStateHandlers.delete(handler);
+  }
+
+  onSniperAim(handler: SniperAimHandler): () => void {
+    this.sniperAimHandlers.add(handler);
+    return () => this.sniperAimHandlers.delete(handler);
+  }
+
+  onSniperFired(handler: SniperFiredHandler): () => void {
+    this.sniperFiredHandlers.add(handler);
+    return () => this.sniperFiredHandlers.delete(handler);
   }
 
   onHunterAim(
