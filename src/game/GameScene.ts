@@ -1,3 +1,4 @@
+/* V1010479D_RESTORE_ORGANIC_ASSIST_DENSITY_ONLY: remove FULL grid geometry; preserve original organic dots and change density only. */
 /* V1010479C_FIX_ASSIST_DENSITY_BUILD: canonicalize Paint Assist density block after 479b duplicate declaration. */
 /* V1010479B_ROBUST_LOBBY_ASSIST_SNIPER: robust modal replacement, gapless FULL assist, translated lobby fit, true 2px sniper pulse. */
 /* V1010478D_SNIPER_CLEAN_TEXT_SOFT_PULSE: countdown is clean text under Hunter; activation button uses only a subtle heartbeat pulse. */
@@ -11804,9 +11805,6 @@ const ribbon =
          * A coarser 5 px sampling lattice gives us more breathing room than
          * v450e's regular 4 px matrix. Jitter below hides the lattice itself.
          */
-        const fullAssist =
-            this.paintAssistLevel ===
-                4;
 /*
          * FULL remains dot-based, but uses an overlapping 2px lattice.
          * 3px circles overlap diagonally, so no pinholes remain.
@@ -11911,28 +11909,34 @@ const ribbon =
                                 ? 35
                                 : 26;
 
+                /*
+                 * V1010479D_RESTORE_ORGANIC_ASSIST_DENSITY_ONLY
+                 * DO NOT change dot geometry.
+                 * Only increase/decrease how many of the ORIGINAL organic
+                 * samples survive.
+                 */
                 const levelDensityScale =
                     [
                         0.28,
                         0.52,
-                        1,
+                        1.00,
                         1.55,
-                        1,
+                        3.20,
                     ][
                         this.paintAssistLevel
                     ] ?? 1;
 
                 const keepPercent =
-                    fullAssist
-                        ? 100
-                        : Phaser.Math.Clamp(
-                            Math.round(
-                                baseKeepPercent *
-                                    levelDensityScale,
-                            ),
-                            6,
-                            92,
-                        );
+                    Phaser.Math.Clamp(
+                        Math.round(
+                            baseKeepPercent *
+                                levelDensityScale,
+                        ),
+                        6,
+                        this.paintAssistLevel === 4
+                            ? 98
+                            : 92,
+                    );
 
                 /*
                  * V1010450L_COHERENT_BACKGROUND_PATCHES
@@ -12020,7 +12024,6 @@ const ribbon =
                         detailKeepPercent;
 
                 if (
-                    !fullAssist &&
                     !keepCoherentPatch &&
                     !keepFineDetail
                 ) {
@@ -12065,10 +12068,7 @@ const ribbon =
                  * recognizable shapes are not swallowed.
                  */
                 const size =
-                    fullAssist
-                        ? 3
-                        : (
-                            edgeStrength >= 150
+                    edgeStrength >= 150
                         ? 3 +
                             (
                                 (detailHash >>> 9) %
@@ -12084,8 +12084,7 @@ const ribbon =
                                 (
                                     (detailHash >>> 9) %
                                     3
-                                )
-                        );
+                                );
 
                 /*
                  * No random positional jitter in detailed regions. Moving a
@@ -12093,7 +12092,7 @@ const ribbon =
                  * Flat regions may wobble by one pixel to avoid a sterile grid.
                  */
                 const jitterX =
-                    fullAssist || edgeStrength >= 95
+                    edgeStrength >= 95
                         ? 0
                         : (
                             (detailHash >>> 13) %
@@ -12101,7 +12100,7 @@ const ribbon =
                         ) -
                             1;
                 const jitterY =
-                    fullAssist || edgeStrength >= 95
+                    edgeStrength >= 95
                         ? 0
                         : (
                             (detailHash >>> 17) %
@@ -12229,25 +12228,13 @@ const ribbon =
         }
 
         this.showStatus(
-            fullAssist
-                ? (
-                    getLanguage() === 'ja'
-                        ? '✨ 背景ドットで隙間なく仕上げました！'
-                        : getLanguage() === 'en'
-                            ? '✨ Filled the camouflage completely with overlapping background dots!'
-                            : getLanguage() === 'zh'
-                                ? '✨ 已用重叠背景圆点完整填满伪装！'
-                                : '✨ 배경 도트로 빈틈없이 전부 채웠어요!'
-                )
-                : (
-                    getLanguage() === 'ja'
-                        ? '✨ 背景を参考に選んだ量だけ塗りました。あとは自由に仕上げよう！'
-                        : getLanguage() === 'en'
-                            ? '✨ Added the selected amount of background camouflage. Finish it your way!'
-                            : getLanguage() === 'zh'
-                                ? '✨ 已按选择的程度加入背景伪装，剩下的自由完成吧！'
-                                : '✨ 선택한 정도만큼 배경 위장을 도와줬어요. 나머지는 자유롭게 마무리해보세요!'
-                ),
+            getLanguage() === 'ja'
+                ? '✨ 選んだ量だけ、元の自然なドット迷彩で手伝いました！'
+                : getLanguage() === 'en'
+                    ? '✨ Added the selected amount using the original organic dot camouflage!'
+                    : getLanguage() === 'zh'
+                        ? '✨ 已按选择的程度，用原来的自然圆点迷彩完成辅助！'
+                        : '✨ 선택한 정도만큼 기존의 자연스러운 도트 위장으로 도와줬어요!',
         );
     }
 
