@@ -1,3 +1,5 @@
+/* V1010468D_REPAIR_RESUME_FUNCTIONS: restores lifecycle function declarations accidentally removed by 468c while preserving v468 fast reconnect behavior. */
+/* V1010468_FAST_MOBILE_FOREGROUND_RECONNECT: Lobby now probes immediately on mobile foreground; confirmed onDrop gets an 850ms same-session grace then bounded stable-clientKey handoff; post-leave retries/convergence are faster. */
 /* V1010452_SKILL_SYSTEM_FOUNDATION: client skill selection/state API. */
 /* V1010451E2_TERMINAL_REJOIN_AND_FOUND_POSITIONS_ROBUST: robust terminal fresh-rejoin rejection handling. */
 /* V1010450ZG_READY_AND_SNAPSHOT_STABILITY */
@@ -1709,7 +1711,12 @@ private async attemptFreshRejoin(
         this.requestPaintReadyState();
         globalThis.setTimeout(
           finishWhenAuthoritative,
-          Math.min(700,100+authorityAttempts*70),
+          Math.min(
+            320,
+            70 +
+              authorityAttempts *
+                35,
+          ),
         );
       };
       globalThis.setTimeout(finishWhenAuthoritative,60);
@@ -2116,12 +2123,12 @@ this.room = room;
         }
       };
 
-    const isActiveRound = (): boolean =>
-      this.lastStablePhase === "countdown" ||
-      this.lastStablePhase === "paint" ||
-      this.lastStablePhase === "hunt" ||
-      this.lastStablePhase === "finished";
-
+    /*
+     * V1010468D_REPAIR_RESUME_FUNCTIONS
+     * 468c removed these two lifecycle function declarations while trying to
+     * remove the now-unused isActiveRound helper. Restore only the declarations
+     * and v468 Lobby-inclusive foreground policy.
+     */
     const markAppBackground =
       (): void => {
         const now = Date.now();
@@ -2137,34 +2144,20 @@ this.room = room;
         this.lastAppForegroundAt = now;
         this.lastDocumentVisibleAt = now;
 
-        if (this.room !== room || !isActiveRound()) {
+        /*
+         * V1010468_FAST_MOBILE_FOREGROUND_RECONNECT / LOBBY_FOREGROUND_PROBE
+         * Lobby is also a connected Room. Only reject callbacks belonging to
+         * an obsolete Room; do not require an active round here.
+         */
+        if (this.room !== room) {
           return;
         }
 
         /*
-         * V1010341_CLIENT_GAMEPLAY_STABILITY_SAFE / FOREGROUND_WATCHDOG_RESET
-         * Hidden duration must not become instant ping silence on resume.
+         * Hidden duration must never become immediate foreground ping silence.
          */
         this.lastRoomPingAt = now;
 
-        /*
-         * V1010339C_CRITICAL_ROUND_STABILITY_CLIENT / BACKGROUND_FALSE_WARNING_GUARD
-         * Hidden-tab time must not count as immediate connection silence.
-         */
-        this.lastRoomPingAt = now;
-
-        /*
-         * v0.10.10.221 CONNECTION STABILITY:
-         * Do NOT reconnect merely because the browser regained focus.
-         * Alt-tab, Home, lock-screen and app switching are normal user
-         * actions, and many browsers keep the existing websocket alive.
-         * Forcing token reconnect + fresh rejoin in parallel here caused
-         * healthy sessions to replace themselves and was a major source of
-         * "random kicks while painting".
-         *
-         * First probe the current room. Only a probe that does not answer
-         * within a generous foreground window escalates to recovery.
-         */
         const generation = ++this.resumeProbeGeneration;
         let answered = false;
 
@@ -2191,14 +2184,83 @@ this.room = room;
         try {
           room.ping(markHealthy);
         } catch {
-          // Closed/half-open transport: the timeout below escalates recovery.
+          // Closed/half-open transport: the bounded handoff below owns recovery.
+        }
+
+        /*
+         * V1010468_FAST_MOBILE_FOREGROUND_RECONNECT / FAST_CONFIRMED_DROP_HANDOFF
+         *
+         * Focus/visibility alone is NOT reconnect evidence. However, once
+         * Room.onDrop has already proven that the transport died, waiting for
+         * the SDK's full 18-attempt backoff makes a 5-second app switch feel
+         * broken. Give same-session recovery a short head start; if it still
+         * has not recovered, let the server's stable-clientKey replacement
+         * path supersede the stale socket.
+         *
+         * Multiple browser resume signals are harmless: resumeProbeGeneration
+         * makes only the newest foreground epoch authoritative, while
+         * freshRejoinInFlight serializes the actual handoff.
+         */
+        const confirmedDropAtResume =
+          this.lastConfirmedTransportDropAt;
+
+        if (
+          confirmedDropAtResume > 0 &&
+          now -
+            confirmedDropAtResume <
+              30_000
+        ) {
+          const fastHandoffDelays =
+            [
+              850,
+              1700,
+              2800,
+            ];
+
+          fastHandoffDelays.forEach(
+            (delay) => {
+              globalThis.setTimeout(
+                () => {
+                  if (
+                    answered ||
+                    generation !==
+                      this.resumeProbeGeneration ||
+                    this.room !== room ||
+                    this.lastConfirmedTransportDropAt <= 0 ||
+                    Date.now() -
+                      this.lastConfirmedTransportDropAt >=
+                        30_000 ||
+                    !this.connectionIssueNotified ||
+                    this.freshRejoinInFlight ||
+                    this.manualReconnectInFlight ||
+                    (
+                      typeof document !==
+                        "undefined" &&
+                      document.hidden
+                    ) ||
+                    (
+                      typeof navigator !==
+                        "undefined" &&
+                      !navigator.onLine
+                    )
+                  ) {
+                    return;
+                  }
+
+                  void this.attemptFreshRejoin(
+                    room,
+                  );
+                },
+                delay,
+              );
+            },
+          );
         }
 
         /*
          * V1010425_TRANSPORT_EVENT_ONLY_RECONNECT / FOREGROUND_PROBE_ONLY
-         * A missed lifecycle ping does NOT imply transport loss.
-         * Do not notify/freeze/reconnect here. A real Room.onDrop() or
-         * terminal 524 is the only reconnect authority.
+         * A missed lifecycle ping alone does NOT imply transport loss.
+         * Fast handoff above still requires a REAL prior Room.onDrop().
          */
       };
 
@@ -3581,9 +3643,14 @@ this.room = room;
            * reservation is no longer the recovery owner. Fresh handoff is now
            * safe, but keep retries sparse to avoid connection storms.
            */
+          /*
+           * V1010468_FAST_MOBILE_FOREGROUND_RECONNECT / FASTER_POST_LEAVE_RETRIES
+           * The first fresh handoff above is immediate. If radio/DNS is still
+           * waking, retry quickly during the first few seconds, then back off.
+           */
           const retryDelays = backgroundTabRecovery
-            ? [1000, 3000, 7000, 15000, 30000, 60000]
-            : [1200, 3500, 8000, 15000];
+            ? [350, 1000, 2200, 4500, 9000, 18000, 30000]
+            : [500, 1400, 3200, 7000, 15000];
 
           retryDelays.forEach((delay) => {
             globalThis.setTimeout(() => {
