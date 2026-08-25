@@ -55347,12 +55347,13 @@ const roomPlayers =
     private ensureSniperSupportUi(): void {
         if (this.sniperButton) return;
 
+        /* V1010388B_COMPACT_SNIPER_SUPPORT_BUTTON: compact support button. */
         const bg =
             this.add.rectangle(
                 0,
                 0,
-                148,
-                36,
+                112,
+                28,
                 0x0b1715,
                 0.96,
             )
@@ -55372,9 +55373,9 @@ const roomPlayers =
                 0.92,
             );
 
-        const w = 74;
-        const h = 18;
-        const c = 9;
+        const w = 56;
+        const h = 14;
+        const c = 7;
 
         tacticalCorners.lineBetween(-w, -h, -w + c, -h);
         tacticalCorners.lineBetween(-w, -h, -w, -h + c);
@@ -55394,7 +55395,7 @@ const roomPlayers =
                     fontFamily:
                         '"Arial Black", "Noto Sans KR", Arial, sans-serif',
                     fontSize:
-                        '13px',
+                        '11px',
                     fontStyle:
                         'bold',
                     color:
@@ -55420,7 +55421,7 @@ const roomPlayers =
         const button =
             this.add.container(
                 this.gameWidth / 2,
-                this.gameHeight / 2 + 60,
+                this.gameHeight / 2 + 94,
                 [
                     bg,
                     tacticalCorners,
@@ -55430,8 +55431,8 @@ const roomPlayers =
                 .setDepth(25020)
                 .setScrollFactor(0)
                 .setSize(
-                    148,
-                    36,
+                    112,
+                    28,
                 )
                 .setInteractive({
                     useHandCursor:
@@ -55443,7 +55444,6 @@ const roomPlayers =
             'pointerover',
             () => {
                 this.tweens.killTweensOf(button);
-                button.setScale(1);
 
                 if (
                     this.sniperAvailable &&
@@ -55465,7 +55465,6 @@ const roomPlayers =
                     0x0b1715,
                     0.96,
                 );
-                button.setScale(1);
             },
         );
 
@@ -55538,7 +55537,7 @@ const roomPlayers =
                 y:
                     this.gameHeight /
                         2 +
-                    60,
+                    94,
                 scaleX:
                     1,
                 scaleY:
@@ -55596,7 +55595,7 @@ const roomPlayers =
                 y:
                     this.gameHeight /
                         2 +
-                    60,
+                    94,
                 scaleX:
                     1,
                 scaleY:
@@ -58610,7 +58609,6 @@ const roomPlayers =
         );
 
         this.sniperButton
-            .setScale(1)
             .setDepth(25002)
             .setVisible(
                 !this.sniperActive &&
