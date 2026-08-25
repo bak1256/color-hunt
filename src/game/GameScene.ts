@@ -942,6 +942,7 @@ export class GameScene extends Phaser.Scene {
     private sniperScopeClipDom?: HTMLDivElement;
     private sniperScopeBlurDom?: HTMLDivElement;
     private sniperScopeLensShieldDom?: HTMLDivElement;
+    private sniperScopeRackInBlackoutDom?: HTMLDivElement;
     /* V1010388_SNIPER_UI_PASS_THROUGH_PRIORITY_TIMER_FIXED_BUTTON */
     private sniperPriorityTimerDom?: HTMLDivElement;
 
@@ -56795,6 +56796,14 @@ const roomPlayers =
         this.sniperScopeRackInRunning =
             true;
 
+        if (
+            this.sniperScopeRackInBlackoutDom
+        ) {
+            this.sniperScopeRackInBlackoutDom
+                .style.display =
+                '';
+        }
+
         /*
          * V1010455C_SNIPER_MOBILE_CONTROLS_PC_HELI_FLICKER_FIRE_PERF
          * Arrival shadow must never remain behind transparent scope-strip seams.
@@ -56894,6 +56903,14 @@ const roomPlayers =
                             false;
 
                         if (
+                            this.sniperScopeRackInBlackoutDom
+                        ) {
+                            this.sniperScopeRackInBlackoutDom
+                                .style.display =
+                                'none';
+                        }
+
+                        if (
                             this.mobileControlsEnabled
                         ) {
                             this.sniperMobileHintHideAt =
@@ -56925,6 +56942,14 @@ const roomPlayers =
         this.sniperScopeInteractive = false;
         this.sniperHelicopterArrived = false;
         this.sniperScopeRackInRunning = false;
+
+        if (
+            this.sniperScopeRackInBlackoutDom
+        ) {
+            this.sniperScopeRackInBlackoutDom
+                .style.display =
+                'none';
+        }
 
         this.mobileSniperAimX = 0;
         this.mobileSniperAimY = 0;
@@ -58004,6 +58029,29 @@ const roomPlayers =
             },
         );
 
+        /*
+         * V1010455J_BLACKOUT_SCOPE_DURING_RACK_IN
+         * While the optic racks in, never expose magnified world pixels.
+         * Hiders must not be revealed before the scope is actually usable.
+         */
+        const rackInBlackout =
+            document.createElement(
+                'div',
+            );
+
+        Object.assign(
+            rackInBlackout.style,
+            {
+                position: 'absolute',
+                inset: '0',
+                zIndex: '1',
+                display: 'none',
+                pointerEvents: 'none',
+                borderRadius: '50%',
+                background: '#000000',
+            },
+        );
+
         const crossV =
             document.createElement(
                 'div',
@@ -58169,6 +58217,10 @@ const roomPlayers =
         );
 
         scope.appendChild(
+            rackInBlackout,
+        );
+
+        scope.appendChild(
             crossV,
         );
         scope.appendChild(
@@ -58282,6 +58334,9 @@ const roomPlayers =
         this.sniperScopeLensShieldDom =
             lensShield;
 
+        this.sniperScopeRackInBlackoutDom =
+            rackInBlackout;
+
         this.sniperPriorityTimerDom =
             priorityTimer;
 
@@ -58307,6 +58362,9 @@ const roomPlayers =
                     undefined;
 
                 this.sniperScopeLensShieldDom =
+                    undefined;
+
+                this.sniperScopeRackInBlackoutDom =
                     undefined;
 
                 this.sniperPriorityTimerDom =
@@ -58409,6 +58467,19 @@ const roomPlayers =
 
         scope.style.display =
             '';
+
+        if (
+            this.sniperScopeRackInBlackoutDom
+        ) {
+            this.sniperScopeRackInBlackoutDom
+                .style.display =
+                (
+                    this.sniperScopeRackInRunning ||
+                    !this.sniperScopeInteractive
+                )
+                    ? ''
+                    : 'none';
+        }
 
         /*
          * Scope is now positioned RELATIVE to the clipped canvas root.
