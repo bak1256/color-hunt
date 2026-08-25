@@ -36828,6 +36828,80 @@ this.networkUnsubscribers.push(
         const isRoundEnd =
             this.phase === 'finished';
 
+        /*
+         * V1010465_HIDE_SNIPER_SCOPE_ON_FINISHED
+         *
+         * The sniper Overwatch presentation belongs only to LIVE Hunt.
+         * As soon as the server enters Finished, HIDER/HUNTER victory + GAME OVER
+         * must be shown on the clean map without any local/remote sniper scope.
+         *
+         * IMPORTANT:
+         * Do not remove Phaser cameras here. Visibility-only shutdown avoids
+         * changing Victory-card capture scale/camera ordering.
+         */
+        if (isRoundEnd) {
+            this.sniperScopeInteractive =
+                false;
+
+            this.sniperScopeIntroTween
+                ?.stop();
+
+            this.sniperScopeIntroTween =
+                undefined;
+
+            this.sniperScopeStripCameras
+                .forEach(
+                    (scopeCamera) => {
+                        scopeCamera.visible =
+                            false;
+                    },
+                );
+
+            if (this.sniperScopeCamera) {
+                this.sniperScopeCamera.visible =
+                    false;
+            }
+
+            this.sniperScope
+                ?.clear()
+                .setVisible(false);
+
+            this.sniperScopeShade
+                ?.clear()
+                .setVisible(false);
+
+            this.sniperScopeCornerMask
+                ?.clear()
+                .setVisible(false);
+
+            this.sniperReloadGraphics
+                ?.clear()
+                .setVisible(false);
+
+            this.remoteSniperScopes
+                .forEach(
+                    (scope) => {
+                        scope
+                            .clear()
+                            .setVisible(false);
+                    },
+                );
+
+            if (this.sniperScopeDom) {
+                this.sniperScopeDom.style.display =
+                    'none';
+            }
+
+            this.sniperHelicopter
+                ?.setVisible(false);
+
+            this.sniperButton
+                ?.setVisible(false);
+
+            this.sniperRadioText
+                ?.setVisible(false);
+        }
+
         const visible =
             isStartCountdown ||
             isRoundEnd;
