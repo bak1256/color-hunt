@@ -8408,8 +8408,9 @@ private timerText!: Phaser.GameObjects.Text;
                     /*
                      * V1010455N_HIGH_INTENSITY_TACTICAL_BGM
                      * V1010455P_ORCHESTRAL_FPS_BATTLE_BGM: orchestral FPS battle mix.
+                     * V1010455Q_OVERKILL_TACTICAL_ULTIMATE_BGM: ultimate-support mix, immediate attack.
                      */
-                    volume: 0.86,
+                    volume: 0.90,
                     loop: true,
                 },
             );
