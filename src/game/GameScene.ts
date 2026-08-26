@@ -1,3 +1,5 @@
+/* V1010498C_FIX_SNIPER_DISCOVERY_BRACE: close refreshSniperSupportUi branch broken by v498b; behavior otherwise unchanged. */
+/* V1010498B_DISCOVERY_TIMING_POSITION: sniper bubble spacing + paint bubble timing + sniper button auto-expire */
 /* V1010498_FEATURE_DISCOVERY_BUBBLES: larger desktop fart hint + transient sniper/paint-assist discovery bubbles; mechanics untouched. */
 /* V1010497D_REMOVE_UNUSED_VISIBLE_CANVAS_LEFT: compile-only cleanup; v497 behavior unchanged. */
 /* V1010497C_REMOVE_UNUSED_X_BY_MARKER: compile-only cleanup; v497 behavior unchanged. */
@@ -12768,7 +12770,11 @@ const ribbon =
                 this.paintAssistDiscoveryBubbleShown = true;
                 window.setTimeout(
                     () => {
+                        const tutorialOpen =
+                            !!document.querySelector('[data-paint-tutorial],[data-confirm-modal],.paint-confirm-modal');
+
                         if (
+                            !tutorialOpen &&
                             this.phase === 'paint' &&
                             this.paintAssistButton &&
                             !this.paintAssistButton.hidden &&
@@ -12777,7 +12783,7 @@ const ribbon =
                             this.showFeatureDiscoveryBubble('paintAssist');
                         }
                     },
-                    700,
+                    1400,
                 );
             }
         } else {
@@ -57572,7 +57578,8 @@ const roomPlayers =
             let left=target.left+target.width/2-bw/2;
             left=Math.max(canvas.left+6,Math.min(left,canvas.right-bw-6));
             // Requested: directly UNDER the button, never over the character/button.
-            let top=target.bottom+10;
+            /* V1010498B_DISCOVERY_TIMING_POSITION: keep discovery bubble away from sniper button */
+            let top=target.bottom+22;
             if(top+bubble.offsetHeight>canvas.bottom-6){
                 top=Math.max(canvas.top+6,target.top-bubble.offsetHeight-10);
                 tail.style.top='auto';
@@ -61909,12 +61916,29 @@ const holeX =
                 .setDepth(25020)
                 .setVisible(true);
 
-            if (
-                wasHidden &&
-                !this.sniperDiscoveryBubbleShown
-            ) {
-                this.sniperDiscoveryBubbleShown = true;
-                this.showFeatureDiscoveryBubble('sniper');
+            if (wasHidden) {
+                window.setTimeout(() => {
+                    if (!this.sniperButton?.visible) return;
+
+                    let blink = 0;
+                    const timer = window.setInterval(() => {
+                        if (!this.sniperButton?.visible || blink >= 8) {
+                            window.clearInterval(timer);
+                            this.sniperButton?.setVisible(false);
+                            return;
+                        }
+
+                        this.sniperButton.setAlpha(
+                            blink % 2 === 0 ? 0.25 : 1
+                        );
+                        blink++;
+                    },150);
+                },10000);
+
+                if (!this.sniperDiscoveryBubbleShown) {
+                    this.sniperDiscoveryBubbleShown = true;
+                    this.showFeatureDiscoveryBubble('sniper');
+                }
             }
         }
 
