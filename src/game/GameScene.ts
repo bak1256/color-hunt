@@ -1,3 +1,4 @@
+/* V1010496B_RESET_SCREEN_SIZE_FIX: keep mobile Hider Paint RESET visually compact by inverse-scaling against Paint camera zoom; palette/joystick untouched. */
 /* V1010496_PAINT_ASSIST_FULLY_OPAQUE_ONLY: Paint Help background and disabled state stay 100% opaque; no camera/palette changes. */
 /* V1010495B_COMPACT_CAMERA_RESET_BUTTON: compact Hider mobile Paint camera RESET button only; palette/joystick behavior untouched. */
 /* V1010495_HIDER_PAINT_CAMERA_STICK_POSITION_ONLY: Hider mobile Paint camera joystick moved to far-right; reset directly below; palette untouched. */
@@ -4422,7 +4423,7 @@ private timerText!: Phaser.GameObjects.Text;
                     align:
                         'center',
                     fixedWidth:
-                        68,
+                        72,
                     fixedHeight:
                         28,
                     padding: {
@@ -6998,6 +6999,26 @@ private timerText!: Phaser.GameObjects.Text;
                 aimControlX,
                 this.getMobilePaintCameraResetScreenY(),
             );
+        
+
+            /*
+             * V1010496B_RESET_INVERSE_CAMERA_SCALE
+             *
+             * Phaser fixed-scroll objects still inherit camera zoom.
+             * Counter only the RESET button so it stays compact on screen.
+             */
+            const resetScreenScale =
+                1 /
+                Math.max(
+                    0.01,
+                    this.cameras.main.zoom,
+                );
+
+            this.mobilePaintCameraResetButton
+                .setScale(
+                    resetScreenScale,
+                )
+                .setAlpha(1);
         }
 
         if (!canMove) {
