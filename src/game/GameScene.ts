@@ -1,3 +1,4 @@
+/* V1010493_FINGER_EYEDROPPER_PREVIEW_3X: enlarge mobile finger eyedropper preview only; sample coordinate unchanged. */
 /* V1010492C_PRACTICE_FART_WALLCLOCK_DRAIN_FIX: Practice Hunter only — immutable 5s poop deadline; GAS 100->0 and debuff always terminate. */
 /* V1010492B_FART_DRAIN_EYEDROPPER_PRACTICE_SNIPER_ROBUST: 5s GAS 100->0 drain + larger finger swatch + local Hunter Practice sniper; 491 scope path untouched. */
 /* V1010491_REAL_PRE_SCOPE_CAMERA_LEAK_BLUR_FLICKER_FIX: video-confirmed 32-strip pre-rack magnification leak fix; stable radial blur lifecycle. */
@@ -54241,10 +54242,16 @@ const roomPlayers =
              * V1010492B_LARGER_FINGER_SWATCH
              * Same center, same sampled pixel. Bigger visual only.
              */
+            /*
+             * V1010493_FINGER_PREVIEW_3X
+             *
+             * Sampling coordinate stays EXACTLY at the finger / preview center.
+             * Only the visible color chip becomes ~3x larger.
+             */
             const outerSize =
-                88 / zoom;
+                264 / zoom;
             const innerSize =
-                68 / zoom;
+                204 / zoom;
 
             guide
                 .clear()
