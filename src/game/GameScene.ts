@@ -1,5 +1,3 @@
-/* V1010501F5_FIX_WEBKIT_MASK_IMAGE_CASE: TypeScript CSSStyleDeclaration uses webkitMaskImage (lowercase w). */
-/* V1010501F4_ROBUST_COUNTDOWN_YELLOW_SNIPER_OUTSIDE_FOCUS: robust countdown style + local sniper outside blur restoration. */
 /* V1010501E_NEXT_ROUND_SNIPER_SPECTATOR_HARD_RESET: hard-isolate remote sniper spectator state per Hunt/round and ignore late previous-round sniper packets. */
 /* V1010501D_SNIPER_SPECTATOR_PHASE_CLEANUP: remote sniper spectator DOM/scope/state is hard-cleared whenever authoritative phase is not Hunt. */
 /* V1010501C_REMOVE_UNUSED_PAINT_ASSIST_DISCOVERY_ASSIGNMENT: remove leftover assignment after v501b removed obsolete Paint Assist discovery flag. */
@@ -38748,29 +38746,9 @@ this.networkUnsubscribers.push(
             }
         }
 
-        /*
-         * V1010501F4_ROBUST_COUNTDOWN_YELLOW_SNIPER_OUTSIDE_FOCUS / START_COUNTDOWN_STYLE_RESET
-         */
         this.countdownText
-            .setBackgroundColor('rgba(0,0,0,0)')
-            .setPadding(0)
-            .setFontFamily(
-                '"Arial Black","Noto Sans KR","Noto Sans JP",Arial,sans-serif',
-            )
             .setFontSize(110)
-            .setFontStyle('bold')
-            .setColor('#ffd84d')
-            .setStroke('#111111', 9)
-            .setShadow(
-                0,
-                4,
-                'rgba(0,0,0,.55)',
-                3,
-                true,
-                true,
-            )
-            .setScale(1)
-            .setAlpha(1)
+            .setColor('#1f2937')
             .setText(
                 remaining > 0
                     ? String(
@@ -47296,14 +47274,6 @@ const roomPlayers =
         phaseEndsAt: number,
     ): void {
         this.phaseExpiredSince = 0;
-
-        /*
-         * V1010501F4_ROBUST_COUNTDOWN_YELLOW_SNIPER_OUTSIDE_FOCUS / NON_HUNT_LOCAL_SNIPER_FOCUS_CLEANUP
-         */
-        if (phase !== 'hunt') {
-            this.removeLocalSniperOutsideFocus();
-        }
-
 
         /*
          * V1010501D_SNIPER_SPECTATOR_PHASE_CLEANUP
@@ -59522,8 +59492,6 @@ const roomPlayers =
     }
 
     private exitSniperCinematic(): void {
-        this.removeLocalSniperOutsideFocus();
-
         /*
          * V1010491_BLUR_OPACITY_RESET
          */
@@ -61485,122 +61453,10 @@ const holeX =
         }
     }
 
-
-    /*
-     * V1010501F4_ROBUST_COUNTDOWN_YELLOW_SNIPER_OUTSIDE_FOCUS / LOCAL_SNIPER_OUTSIDE_FOCUS
-     * Keep the known-good scope/camera/fire implementation untouched.
-     * This DOM layer affects only the area OUTSIDE the circular optic.
-     */
-    private removeLocalSniperOutsideFocus(): void {
-        document
-            .querySelectorAll(
-                '.colorhunt-local-sniper-outside-focus',
-            )
-            .forEach(
-                (node) => node.remove(),
-            );
-    }
-
-    private syncLocalSniperOutsideFocus(): void {
-        if (
-            this.phase !== 'hunt' ||
-            !this.sniperActive
-        ) {
-            this.removeLocalSniperOutsideFocus();
-            return;
-        }
-
-        let overlay =
-            document.querySelector(
-                '.colorhunt-local-sniper-outside-focus',
-            ) as HTMLDivElement | null;
-
-        if (!overlay) {
-            overlay = document.createElement('div');
-            overlay.className =
-                'colorhunt-local-sniper-outside-focus';
-
-            Object.assign(
-                overlay.style,
-                {
-                    position: 'fixed',
-                    zIndex: '2147482300',
-                    pointerEvents: 'none',
-                    overflow: 'hidden',
-                    margin: '0',
-                    padding: '0',
-                    border: '0',
-                    background: 'rgba(2,7,11,.34)',
-                    backdropFilter:
-                        'blur(5px) brightness(.66) saturate(.82)',
-                    WebkitBackdropFilter:
-                        'blur(5px) brightness(.66) saturate(.82)',
-                    maskRepeat: 'no-repeat',
-                    WebkitMaskRepeat: 'no-repeat',
-                    contain: 'paint',
-                },
-            );
-
-            document.body.appendChild(overlay);
-        }
-
-        const rect =
-            this.game.canvas.getBoundingClientRect();
-
-        if (
-            rect.width <= 0 ||
-            rect.height <= 0
-        ) {
-            return;
-        }
-
-        overlay.style.left =
-            String(Math.round(rect.left)) + 'px';
-        overlay.style.top =
-            String(Math.round(rect.top)) + 'px';
-        overlay.style.width =
-            String(Math.round(rect.width)) + 'px';
-        overlay.style.height =
-            String(Math.round(rect.height)) + 'px';
-
-        const sx = rect.width / this.gameWidth;
-        const sy = rect.height / this.gameHeight;
-
-        const logicalRadius =
-            this.mobileControlsEnabled ? 92 : 112;
-
-        const holeRadius =
-            logicalRadius * Math.min(sx, sy) + 7;
-
-        const holeX = rect.width / 2;
-        const holeY = rect.height / 2;
-
-        const mask =
-            'radial-gradient(circle at ' +
-            String(Math.round(holeX)) +
-            'px ' +
-            String(Math.round(holeY)) +
-            'px, transparent 0 ' +
-            String(Math.round(holeRadius)) +
-            'px, #000 ' +
-            String(Math.round(holeRadius + 2)) +
-            'px 100%)';
-
-        overlay.style.maskImage = mask;
-        overlay.style.webkitMaskImage = mask;
-    }
-
     private drawLocalSniperScope(
         x: number,
         y: number,
     ): void {
-        if (!this.sniperActive) {
-            this.removeLocalSniperOutsideFocus();
-            return;
-        }
-
-        this.syncLocalSniperOutsideFocus();
-
         if (
             !this.sniperActive ||
             !this.sniperCinematicActive
