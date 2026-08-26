@@ -1,3 +1,5 @@
+/* V1010501G3_FIX_SNIPER_CAMERA_VISIBLE_TYPE: explicit Phaser Camera cast for g2 prehide; runtime behavior unchanged. */
+/* V1010501G2_SCOPE_PREHIDE_REVEAL_LAST_STRUCTURAL: structural prehide/reveal-last regression fix; current blur and scope geometry untouched. */
 /* V1010501E_NEXT_ROUND_SNIPER_SPECTATOR_HARD_RESET: hard-isolate remote sniper spectator state per Hunt/round and ignore late previous-round sniper packets. */
 /* V1010501D_SNIPER_SPECTATOR_PHASE_CLEANUP: remote sniper spectator DOM/scope/state is hard-cleared whenever authoritative phase is not Hunt. */
 /* V1010501C_REMOVE_UNUSED_PAINT_ASSIST_DISCOVERY_ASSIGNMENT: remove leftover assignment after v501b removed obsolete Paint Assist discovery flag. */
@@ -58839,6 +58841,34 @@ const roomPlayers =
 
     /* RESTORE_SNIPER_EXACT_E43DCB5_LOCAL_SUBSYSTEM: exact local sniper subsystem restored from git e43dcb5. */
     private enterSniperCinematic(): void {
+
+        /*
+         * V1010501G2_CLEAN_SCOPE_START
+         * Transition-order fix only. No blur/mask/zoom geometry changes.
+         */
+        this.aimLine
+            ?.clear()
+            .setVisible(false);
+
+        this.crosshair
+            ?.clear()
+            .setVisible(false);
+
+        this.sniperScope
+            ?.clear()
+            .setVisible(false);
+
+        this.sniperScopeShade
+            ?.clear()
+            .setVisible(false);
+
+        this.sniperReloadGraphics
+            ?.clear()
+            .setVisible(false);
+
+        this.sniperScopeCamera
+            ?.setVisible(false);
+
         /*
          * V1010480B_ENTER_SNIPER_CLEAR_NORMAL_AIM
          * Clear the desktop shotgun cursor BEFORE sniper transition visuals.
@@ -60378,7 +60408,19 @@ const roomPlayers =
         this.sniperScopeCornerMask
             ?.clear()
             .setVisible(false);
-    }
+    
+
+        /*
+         * V1010501G2_SCOPE_CAMERA_PREHIDE
+         * Keep the magnified camera hidden until drawLocalSniperScope()
+         * has finished drawing the outside treatment + reticle.
+         */
+        (
+            this.sniperScopeCamera as
+                Phaser.Cameras.Scene2D.Camera | undefined
+        )
+            ?.setVisible(false);
+}
 
     private ensureSniperScopeDom(): void {
         if (
@@ -61486,7 +61528,16 @@ const roomPlayers =
             .setVisible(false);
 
         this.syncSniperScopeDom();
-    }
+    
+
+        /*
+         * V1010501G2_SCOPE_REVEAL_LAST
+         * Reveal only after this entire scope draw method has completed
+         * its blur/shade/frame/reticle work.
+         */
+        this.sniperScopeCamera
+            ?.setVisible(true);
+}
 
     private drawSniperReloadGauge(): void {
         this.sniperReloadGraphics
