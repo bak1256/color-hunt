@@ -1,3 +1,4 @@
+/* V1010501E_NEXT_ROUND_SNIPER_SPECTATOR_HARD_RESET: hard-isolate remote sniper spectator state per Hunt/round and ignore late previous-round sniper packets. */
 /* V1010501D_SNIPER_SPECTATOR_PHASE_CLEANUP: remote sniper spectator DOM/scope/state is hard-cleared whenever authoritative phase is not Hunt. */
 /* V1010501C_REMOVE_UNUSED_PAINT_ASSIST_DISCOVERY_ASSIGNMENT: remove leftover assignment after v501b removed obsolete Paint Assist discovery flag. */
 /* V1010501B_REMOVE_UNUSED_PAINT_ASSIST_DISCOVERY_FLAG: remove obsolete Paint Help discovery flag after v501 dedicated READY-style bubble migration. */
@@ -15620,11 +15621,26 @@ const ribbon =
                     if (
                         state.sessionId !== localId
                     ) {
-                        if (state.active) {
+                        if (
+                            this.phase === 'hunt' &&
+                            state.active
+                        ) {
                             this.remoteSniperActiveSessionIds
                                 .add(state.sessionId);
                         } else {
+                            /*
+                             * V1010501E_NEXT_ROUND_SNIPER_SPECTATOR_HARD_RESET / LATE_SNIPER_STATE_PACKET_GUARD
+                             * Any non-Hunt sniper_state, even active=true,
+                             * is stale for spectator purposes.
+                             */
                             this.remoteSniperActiveSessionIds
+                                .delete(state.sessionId);
+                            this.remoteSniperAimBySessionId
+                                .delete(state.sessionId);
+                            this.remoteSniperScopes
+                                .get(state.sessionId)
+                                ?.destroy();
+                            this.remoteSniperScopes
                                 .delete(state.sessionId);
                         }
                     }
@@ -43598,6 +43614,8 @@ this.networkUnsubscribers.push(
 
         if (!remoteSniperAim) {
             existingSniperSpectatorDom?.remove();
+            this.sniperSpectatorStatusText
+                ?.setVisible(false);
         }
 
         if (remoteSniperAim) {
@@ -47267,28 +47285,23 @@ const roomPlayers =
          * Hard-clean at every non-Hunt authoritative phase boundary:
          * finished -> lobby, direct lobby recovery, countdown/paint reconnect.
          */
-        if (phase !== 'hunt') {
-            document
-                .querySelector(
-                    '.colorhunt-sniper-spectator-status',
-                )
-                ?.remove();
-
-            this.sniperSpectatorStatusText
-                ?.setVisible(false);
-
-            this.remoteSniperScopes
-                .forEach(
-                    (scope) => {
-                        scope.destroy();
-                    },
-                );
-            this.remoteSniperScopes.clear();
-
-            this.remoteSniperActiveSessionIds
-                .clear();
-            this.remoteSniperAimBySessionId
-                .clear();
+        /*
+         * V1010501E_NEXT_ROUND_SNIPER_SPECTATOR_HARD_RESET / ROUND_BOUNDARY_HARD_RESET
+         *
+         * 1) Every non-Hunt phase clears remote sniper state.
+         * 2) Entering Hunt from Paint/Countdown/Lobby clears it AGAIN.
+         *
+         * The second reset is intentional: a late previous-round packet may
+         * arrive after the non-Hunt cleanup but before next Hunt starts.
+         */
+        if (
+            phase !== 'hunt' ||
+            (
+                phase === 'hunt' &&
+                this.phase !== 'hunt'
+            )
+        ) {
+            this.resetRemoteSniperSpectatorState();
         }
 
         const remainingMs =
@@ -61608,9 +61621,51 @@ const holeX =
         this.syncSniperScopeDom();
     }
 
+    /*
+     * V1010501E_NEXT_ROUND_SNIPER_SPECTATOR_HARD_RESET / REMOTE_SNIPER_SPECTATOR_RESET
+     *
+     * Remote sniper state is strictly ROUND/HUNT scoped.
+     * One helper clears BOTH Phaser and DOM state so stale previous-round
+     * sniper data can never leak into the next Hunt.
+     */
+    private resetRemoteSniperSpectatorState(): void {
+        document
+            .querySelector(
+                '.colorhunt-sniper-spectator-status',
+            )
+            ?.remove();
+
+        this.sniperSpectatorStatusText
+            ?.setVisible(false);
+
+        this.remoteSniperScopes
+            .forEach(
+                (scope) => {
+                    scope.destroy();
+                },
+            );
+        this.remoteSniperScopes.clear();
+
+        this.remoteSniperActiveSessionIds
+            .clear();
+
+        this.remoteSniperAimBySessionId
+            .clear();
+    }
+
     private drawRemoteSniperScope(
         aim: NetworkSniperAim,
     ): void {
+        /*
+         * V1010501E_NEXT_ROUND_SNIPER_SPECTATOR_HARD_RESET / LATE_SNIPER_AIM_PACKET_GUARD
+         *
+         * A delayed sniper_aim from the just-finished round may arrive while
+         * Lobby/Paint/Countdown is already active. Ignore it completely.
+         */
+        if (this.phase !== 'hunt') {
+            return;
+        }
+
         /*
          * V1010500_PAINT_BUBBLE_VICTORY_FONT_SNIPER_SPECTATE / REMOTE_SCOPE_CAMERA_TARGET
          * The same authoritative sniper_aim that draws the reticle also drives
