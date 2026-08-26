@@ -1,3 +1,4 @@
+/* V1010495_HIDER_PAINT_CAMERA_STICK_POSITION_ONLY: Hider mobile Paint camera joystick moved to far-right; reset directly below; palette untouched. */
 /* V1010494E_PAINT_CAMERA_PAN_CONTROLS_I18N: Paint camera pan — mobile right joystick + reset, desktop arrows, KO/JA/EN/ZH. */
 /* V1010493B_FINGER_EYEDROPPER_PREVIEW_2X: reduce mobile finger eyedropper preview from 3x to 2x. */
 /* V1010493_FINGER_EYEDROPPER_PREVIEW_3X: enlarge mobile finger eyedropper preview only; sample coordinate unchanged. */
@@ -4395,8 +4396,8 @@ private timerText!: Phaser.GameObjects.Text;
 
         this.mobilePaintCameraResetButton =
             this.add.text(
-                aimX,
-                aimY + 78,
+                this.gameWidth - 72,
+                this.getMobilePaintCameraResetScreenY(),
                 tr('카메라 리셋'),
                 {
                     fontFamily: 'Arial, sans-serif',
@@ -5128,8 +5129,8 @@ private timerText!: Phaser.GameObjects.Text;
                         Phaser.Math.Distance.Between(
                             pointer.x,
                             pointer.y,
-                            aimX,
-                            aimY,
+                            this.getMobileAimControlScreenX(),
+                            this.getMobileAimControlScreenY(),
                         );
 
                     if (
@@ -5878,8 +5879,8 @@ private timerText!: Phaser.GameObjects.Text;
             Phaser.Math.Distance.Between(
                 screenX,
                 screenY,
-                this.gameWidth - 170,
-                this.gameHeight - 190,
+                this.getMobileAimControlScreenX(),
+                this.getMobileAimControlScreenY(),
             );
 
         if (
@@ -6271,7 +6272,8 @@ private timerText!: Phaser.GameObjects.Text;
         const baseX =
             kind === 'move'
                 ? 82
-                : this.gameWidth - 170;
+                : this.getMobileAimControlScreenX();
+
         const baseY =
             kind === 'move'
                 ? (
@@ -6279,7 +6281,7 @@ private timerText!: Phaser.GameObjects.Text;
                         ? 350
                         : 275
                 )
-                : this.gameHeight - 190;
+                : this.getMobileAimControlScreenY();
 
         const deltaX =
             screenX - baseX;
@@ -6804,9 +6806,7 @@ private timerText!: Phaser.GameObjects.Text;
 
         const showPaintCameraControl =
             canMove &&
-            this.phase === 'paint' &&
-            !this.networkPlayerManager
-                .isLocalCustomizationMode();
+            this.isMobileHiderPaintCameraControl();
 
         this.mobileMoveBase
             ?.setVisible(canMove);
@@ -6915,6 +6915,60 @@ private timerText!: Phaser.GameObjects.Text;
             );
         }
 
+        /*
+         * V1010495_HIDER_PAINT_CAMERA_STICK_POSITION_ONLY
+         * Position ONLY the shared AIM/CAMERA controls.
+         * Bottom paint palette/tool dock is completely untouched.
+         */
+        const aimControlX =
+            this.getMobileAimControlScreenX();
+
+        const aimControlY =
+            this.getMobileAimControlScreenY();
+
+        if (
+            showHunterCombat ||
+            showPaintCameraControl
+        ) {
+            if (this.mobileAimBase) {
+                this.setFixedHudScreenPosition(
+                    this.mobileAimBase,
+                    aimControlX,
+                    aimControlY,
+                );
+            }
+
+            if (
+                this.mobileAimPointerId < 0 &&
+                this.mobileAimKnob
+            ) {
+                this.setFixedHudScreenPosition(
+                    this.mobileAimKnob,
+                    aimControlX,
+                    aimControlY,
+                );
+            }
+
+            if (this.mobileAimLabel) {
+                this.setFixedHudScreenPosition(
+                    this.mobileAimLabel,
+                    aimControlX,
+                    aimControlY - 82,
+                );
+            }
+        }
+
+        if (
+            showPaintCameraControl &&
+            this.mobilePaintCameraResetButton
+        ) {
+            this.setFixedHudScreenPosition(
+                this.mobilePaintCameraResetButton,
+                aimControlX,
+                this.getMobilePaintCameraResetScreenY(),
+            );
+        }
+
         if (!canMove) {
             this.resetMobileMoveControl();
         }
@@ -6929,10 +6983,10 @@ private timerText!: Phaser.GameObjects.Text;
             this.mobileAimKnob
                 ?.setPosition(
                     this.getFixedHudCompensatedX(
-                        this.gameWidth - 170,
+                        this.getMobileAimControlScreenX(),
                     ),
                     this.getFixedHudCompensatedY(
-                        this.gameHeight - 190,
+                        this.getMobileAimControlScreenY(),
                     ),
                 );
         }
@@ -7267,6 +7321,55 @@ private timerText!: Phaser.GameObjects.Text;
     private mobileAimBase?: Phaser.GameObjects.Arc;
     private mobileAimKnob?: Phaser.GameObjects.Arc;
     private mobileAimLabel?: Phaser.GameObjects.Text;
+
+    /*
+     * V1010495_HIDER_PAINT_CAMERA_STICK_POSITION_ONLY
+     * Hider Paint only.
+     * The palette/tool dock is intentionally NOT referenced or modified.
+     */
+    private isMobileHiderPaintCameraControl(): boolean {
+        if (
+            !this.mobileControlsEnabled ||
+            this.phase !== 'paint'
+        ) {
+            return false;
+        }
+
+        if (
+            this.networkPlayerManager
+                .isLocalCustomizationMode()
+        ) {
+            return false;
+        }
+
+        const localRole =
+            multiplayerClient
+                .getLocalPlayer()
+                ?.role;
+
+        return (
+            this.practiceMode === 'hider' ||
+            localRole === 'hider' ||
+            this.networkPlayerManager
+                .isLocalHider()
+        );
+    }
+
+    private getMobileAimControlScreenX(): number {
+        return this.isMobileHiderPaintCameraControl()
+            ? this.gameWidth - 72
+            : this.gameWidth - 170;
+    }
+
+    private getMobileAimControlScreenY(): number {
+        return this.isMobileHiderPaintCameraControl()
+            ? 286
+            : this.gameHeight - 190;
+    }
+
+    private getMobilePaintCameraResetScreenY(): number {
+        return 382;
+    }
     private mobileFireButton?: Phaser.GameObjects.Arc;
     private mobileFireLabel?: Phaser.GameObjects.Text;
 
