@@ -1,3 +1,4 @@
+/* V1010501G4_HIDE_CLEAR_CIRCLE_UNTIL_SCOPE_INTERACTIVE: magnified scope camera stays hidden through rack-in; reveal only after existing scope-interactive gate. */
 /* V1010501G3_FIX_SNIPER_CAMERA_VISIBLE_TYPE: explicit Phaser Camera cast for g2 prehide; runtime behavior unchanged. */
 /* V1010501G2_SCOPE_PREHIDE_REVEAL_LAST_STRUCTURAL: structural prehide/reveal-last regression fix; current blur and scope geometry untouched. */
 /* V1010501E_NEXT_ROUND_SNIPER_SPECTATOR_HARD_RESET: hard-isolate remote sniper spectator state per Hunt/round and ignore late previous-round sniper packets. */
@@ -61428,6 +61429,17 @@ const roomPlayers =
         x: number,
         y: number,
     ): void {
+        /*
+         * V1010501G4_HIDE_CLEAR_CIRCLE_UNTIL_SCOPE_INTERACTIVE / PRE_SCOPE_CLEAR_CIRCLE_KILL
+         */
+        if (!this.sniperScopeInteractive) {
+            (
+                this.sniperScopeCamera as
+                    Phaser.Cameras.Scene2D.Camera | undefined
+            )
+                ?.setVisible(false);
+        }
+
         if (
             !this.sniperActive ||
             !this.sniperCinematicActive
@@ -61535,8 +61547,16 @@ const roomPlayers =
          * Reveal only after this entire scope draw method has completed
          * its blur/shade/frame/reticle work.
          */
+        /*
+         * V1010501G4_HIDE_CLEAR_CIRCLE_UNTIL_SCOPE_INTERACTIVE
+         * DO NOT reveal the magnified circular camera during rack-in.
+         * It may appear only when the physical scope has finished arriving
+         * and the existing sniperScopeInteractive gate is true.
+         */
         this.sniperScopeCamera
-            ?.setVisible(true);
+            ?.setVisible(
+                this.sniperScopeInteractive,
+            );
 }
 
     private drawSniperReloadGauge(): void {
