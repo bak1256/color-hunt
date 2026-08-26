@@ -1,3 +1,4 @@
+/* V1010503B_ROBUST_INTRO_COUNTDOWN_BLUR_SCOPE_LOCKED: robust Hunt intro/countdown + CSS-strength-only sniper outside blur. Physical scope subsystem LOCKED. */
 /* V1010502_PAINT_HELP_BUBBLE_CLEAN_SPECTATOR_UI_RESULT_FX: Paint Help persistent READY-style bubble + remove spectator status clutter + stronger WIN/LOSE mood. [LOCKED] local sniper scope subsystem untouched. */
 /* V1010501H_RESTORE_EXACT_491_PRE_RACK_STRIP_GATE: restore only the proven v491 pre-rack 32-strip lifecycle gate; all working sniper visuals/mechanics unchanged. */
 /* V1010501G4_HIDE_CLEAR_CIRCLE_UNTIL_SCOPE_INTERACTIVE: magnified scope camera stays hidden through rack-in; reveal only after existing scope-interactive gate. */
@@ -21313,9 +21314,7 @@ this.networkUnsubscribers.push(
                 transform:
                     'translateX(-50%) translateY(-4px)',
                 color:
-                    localIsHunter
-                        ? '#ffd85a'
-                        : '#ffffff',
+                    '#ffd85a',
                 fontFamily:
                     '"Arial Black", "Noto Sans KR", Arial, sans-serif',
                 fontSize:
@@ -21371,8 +21370,8 @@ this.networkUnsubscribers.push(
                                 rect.height *
                                     (
                                         this.mobileControlsEnabled
-                                            ? 0.105
-                                            : 0.115
+                                            ? 0.225
+                                            : 0.235
                                     ),
                             ),
                     )}px`;
@@ -38372,9 +38371,11 @@ this.networkUnsubscribers.push(
                     fontFamily: 'monospace',
                     fontSize: '110px',
                     fontStyle: 'bold',
-                    color: '#1f2937',
+                    color: '#ffd85a',
+                    stroke: '#111111',
+                    strokeThickness: 8,
                     backgroundColor:
-                        'rgba(255, 244, 214, 0.68)',
+                        'rgba(0,0,0,0)',
                     padding: {
                         x: 30,
                         y: 20,
@@ -38819,8 +38820,37 @@ this.networkUnsubscribers.push(
         }
 
         this.countdownText
-            .setFontSize(110)
-            .setColor('#1f2937')
+            /*
+             * V1010503B_ROBUST_INTRO_COUNTDOWN_BLUR_SCOPE_LOCKED / COUNTDOWN_HIGH_CONTRAST
+             */
+            .setBackgroundColor('rgba(0,0,0,0)')
+            .setPadding(0)
+            .setFontFamily(
+                '"Arial Black", "Noto Sans KR", "Noto Sans JP", Arial, sans-serif',
+            )
+            .setFontStyle('bold')
+            .setFontSize(
+                this.mobileControlsEnabled
+                    ? 92
+                    : 110,
+            )
+            .setColor('#ffd85a')
+            .setStroke('#111111', 8)
+            .setShadow(
+                0,
+                4,
+                'rgba(0,0,0,.62)',
+                6,
+                true,
+                true,
+            )
+            .setScale(1)
+            .setAngle(0)
+            .setPosition(
+                this.gameWidth / 2,
+                this.gameHeight / 2,
+            )
+            .setAlpha(1)
             .setText(
                 remaining > 0
                     ? String(
@@ -60582,12 +60612,12 @@ const roomPlayers =
                  */
                 backdropFilter:
                     this.mobileControlsEnabled
-                        ? 'blur(2px) brightness(0.74) saturate(0.84)'
-                        : 'blur(5px) brightness(0.76) saturate(0.82)',
+                        ? 'blur(3px) brightness(0.70) saturate(0.80)'
+                        : 'blur(7px) brightness(0.70) saturate(0.78)',
                 webkitBackdropFilter:
                     this.mobileControlsEnabled
-                        ? 'blur(2px) brightness(0.74) saturate(0.84)'
-                        : 'blur(5px) brightness(0.76) saturate(0.82)',
+                        ? 'blur(3px) brightness(0.70) saturate(0.80)'
+                        : 'blur(7px) brightness(0.70) saturate(0.78)',
                 background:
                     this.mobileControlsEnabled
                         ? 'rgba(2,8,10,0.07)'
