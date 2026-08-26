@@ -1,3 +1,4 @@
+/* V1010496_PAINT_ASSIST_FULLY_OPAQUE_ONLY: Paint Help background and disabled state stay 100% opaque; no camera/palette changes. */
 /* V1010495B_COMPACT_CAMERA_RESET_BUTTON: compact Hider mobile Paint camera RESET button only; palette/joystick behavior untouched. */
 /* V1010495_HIDER_PAINT_CAMERA_STICK_POSITION_ONLY: Hider mobile Paint camera joystick moved to far-right; reset directly below; palette untouched. */
 /* V1010494E_PAINT_CAMERA_PAN_CONTROLS_I18N: Paint camera pan — mobile right joystick + reset, desktop arrows, KO/JA/EN/ZH. */
@@ -1301,8 +1302,15 @@ private timerText!: Phaser.GameObjects.Text;
             '2px solid #c79b27';
         button.style.borderRadius =
             '13px';
+        /*
+         * V1010496_PAINT_ASSIST_FULLY_OPAQUE_ONLY
+         * Paint Help must always read as a strong, clickable button.
+         * No background transparency.
+         */
         button.style.background =
-            'rgba(255,219,88,.72)';
+            'rgb(255,219,88)';
+        button.style.opacity =
+            '1';
         button.style.color =
             '#4d3a08';
         button.style.boxShadow =
