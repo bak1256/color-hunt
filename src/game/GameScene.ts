@@ -1,3 +1,5 @@
+/* V1010504C_FIX_DUPLICATE_PAINT_BUBBLE_WIDTH: remove only duplicate width property introduced by 504b; sniper subsystem untouched. */
+/* V1010504B_BUBBLE_2LINES_DESKTOP_BLUR_MASK_ROBUST: Paint Help forced to 2 explicit lines; desktop outside-blur mask opaque color made alpha/luminance-safe. Physical sniper subsystem LOCKED. */
 /* V1010503B_ROBUST_INTRO_COUNTDOWN_BLUR_SCOPE_LOCKED: robust Hunt intro/countdown + CSS-strength-only sniper outside blur. Physical scope subsystem LOCKED. */
 /* V1010502_PAINT_HELP_BUBBLE_CLEAN_SPECTATOR_UI_RESULT_FX: Paint Help persistent READY-style bubble + remove spectator status clutter + stronger WIN/LOSE mood. [LOCKED] local sniper scope subsystem untouched. */
 /* V1010501H_RESTORE_EXACT_491_PRE_RACK_STRIP_GATE: restore only the proven v491 pre-rack 32-strip lifecycle gate; all working sniper visuals/mechanics unchanged. */
@@ -12015,8 +12017,8 @@ const ribbon =
                 position:'fixed',
                 zIndex:'2147483005',
                 pointerEvents:'none',
-                maxWidth:this.mobileControlsEnabled?'185px':'235px',
                 width:'max-content',
+                maxWidth:'calc(100vw - 20px)',
                 padding:this.mobileControlsEnabled?'8px 11px':'9px 13px',
                 border:'2px solid rgba(35,45,39,.88)',
                 borderRadius:'15px',
@@ -12024,11 +12026,11 @@ const ribbon =
                 color:'#24382d',
                 boxShadow:'0 5px 14px rgba(0,0,0,.16)',
                 fontFamily:'"Arial Black","Noto Sans KR","Noto Sans JP",Arial,sans-serif',
-                fontSize:this.mobileControlsEnabled?'12px':'14px',
+                fontSize:this.mobileControlsEnabled?'11px':'14px',
                 fontWeight:'900',
                 lineHeight:'1.25',
                 textAlign:'center',
-                whiteSpace:'pre-line',
+                whiteSpace:'pre',
                 boxSizing:'border-box',
             });
 
@@ -61369,7 +61371,7 @@ const roomPlayers =
                                 1,
                         ),
                     ) +
-                    'px, #000 ' +
+                    'px, #fff ' +
                     String(
                         Math.round(
                             safeHoleRadius +
