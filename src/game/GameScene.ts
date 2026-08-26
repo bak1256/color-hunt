@@ -58837,6 +58837,7 @@ const roomPlayers =
         this.refreshSniperSupportUi();
     }
 
+    /* RESTORE_SNIPER_EXACT_E43DCB5_LOCAL_SUBSYSTEM: exact local sniper subsystem restored from git e43dcb5. */
     private enterSniperCinematic(): void {
         /*
          * V1010480B_ENTER_SNIPER_CLEAR_NORMAL_AIM
@@ -58998,21 +58999,9 @@ const roomPlayers =
             this.controlsHelpButton.tabIndex = -1;
         }
 
-        /*
-         * V1010492B_PRACTICE_POSITION_FALLBACK
-         */
         const localPosition =
             this.networkPlayerManager
-                .getLocalPlayerPosition() ??
-            (
-                this.practiceMode ===
-                    'hunter'
-                    ? new Phaser.Math.Vector2(
-                        this.player.x,
-                        this.player.y,
-                    )
-                    : undefined
-            );
+                .getLocalPlayerPosition();
 
         if (!localPosition) {
             this.sniperActive =
@@ -59380,42 +59369,6 @@ const roomPlayers =
         this.createSniperScopeCamera();
         this.ensureSniperScopeDom();
 
-        /*
-         * V1010491_SMOOTH_BLUR_START
-         *
-         * The radial hole is already positioned BELOW the canvas because
-         * sniperScopeScreenY is below the canvas at this point.
-         *
-         * Fade in the SAME compositor layer instead of changing mask modes.
-         */
-        if (this.sniperScopeBlurDom) {
-            const blurLayer =
-                this.sniperScopeBlurDom;
-
-            blurLayer.style.transition =
-                'none';
-
-            blurLayer.style.opacity =
-                '0';
-
-            requestAnimationFrame(
-                () => {
-                    if (
-                        !this.sniperActive ||
-                        !this.sniperCinematicActive
-                    ) {
-                        return;
-                    }
-
-                    blurLayer.style.transition =
-                        'opacity 160ms ease-out';
-
-                    blurLayer.style.opacity =
-                        '1';
-                },
-            );
-        }
-
         this.playProceduralSniperRack();
 
         this.sniperScopeIntroTween
@@ -59492,17 +59445,6 @@ const roomPlayers =
     }
 
     private exitSniperCinematic(): void {
-        /*
-         * V1010491_BLUR_OPACITY_RESET
-         */
-        if (this.sniperScopeBlurDom) {
-            this.sniperScopeBlurDom.style.transition =
-                'none';
-
-            this.sniperScopeBlurDom.style.opacity =
-                '1';
-        }
-
         if (!this.sniperCinematicActive) return;
         this.sniperCinematicActive = false;
         this.sniperScopeInteractive = false;
@@ -60967,20 +60909,6 @@ const roomPlayers =
             return;
         }
 
-        /*
-         * V1010491_PRE_RACK_DOM_LIFECYCLE
-         * Never show optical DOM before the physical rack-in begins.
-         */
-        if (
-            !this.sniperScopeRackInRunning &&
-            !this.sniperScopeInteractive
-        ) {
-            scope.style.display =
-                'none';
-
-            return;
-        }
-
         if (
             this.sniperActive &&
             !this.sniperScopeInteractive &&
@@ -61015,6 +60943,7 @@ const roomPlayers =
 
         const blurLayer =
             this.sniperScopeBlurDom;
+
         if (clipRoot) {
             clipRoot.style.display =
                 '';
@@ -61155,7 +61084,7 @@ const roomPlayers =
         }
 
         if (blurLayer) {
-const holeX =
+            const holeX =
                 this.sniperScopeScreenX *
                 sx;
 
@@ -61464,67 +61393,13 @@ const holeX =
             return;
         }
 
-        /*
-         * V1010491_PRE_RACK_CAMERA_LIFECYCLE
-         *
-         * Video-confirmed bug:
-         * the borderless moving patch is the magnification strip cameras
-         * rendering before startSniperScopeRackIn().
-         *
-         * Pre-rack:
-         *   rackInRunning = false
-         *   interactive   = false
-         *
-         * Actual rack-in:
-         *   rackInRunning = true
-         *
-         * Finished scope:
-         *   interactive   = true
-         */
-        const opticRendererAllowed =
-            this.sniperScopeRackInRunning ||
-            this.sniperScopeInteractive;
-
-        if (!opticRendererAllowed) {
-            this.sniperScopeStripCameras
-                .forEach(
-                    (scopeCamera) => {
-                        scopeCamera.visible =
-                            false;
-                    },
-                );
-
-            this.sniperScope
-                ?.clear()
-                .setVisible(false);
-
-            this.sniperScopeShade
-                ?.clear()
-                .setVisible(false);
-
-            this.sniperReloadGraphics
-                ?.clear()
-                .setVisible(false);
-
-            if (this.sniperScopeDom) {
-                this.sniperScopeDom.style.display =
-                    'none';
-            }
-
-            /*
-             * DO NOT hide clipRoot here.
-             * Before rack-in it normally does not exist; once rack-in begins,
-             * the blur compositor is allowed to fade naturally.
-             */
-            return;
-        }
-
         if (
             this.sniperScopeStripCameras.length ===
             0
         ) {
             this.createSniperScopeCamera();
         }
+
         const radius =
             this.getActiveSniperScopeRadius();
 
