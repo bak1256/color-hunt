@@ -1,3 +1,4 @@
+/* V1010502_PAINT_HELP_BUBBLE_CLEAN_SPECTATOR_UI_RESULT_FX: Paint Help persistent READY-style bubble + remove spectator status clutter + stronger WIN/LOSE mood. [LOCKED] local sniper scope subsystem untouched. */
 /* V1010501H_RESTORE_EXACT_491_PRE_RACK_STRIP_GATE: restore only the proven v491 pre-rack 32-strip lifecycle gate; all working sniper visuals/mechanics unchanged. */
 /* V1010501G4_HIDE_CLEAR_CIRCLE_UNTIL_SCOPE_INTERACTIVE: magnified scope camera stays hidden through rack-in; reveal only after existing scope-interactive gate. */
 /* V1010501G3_FIX_SNIPER_CAMERA_VISIBLE_TYPE: explicit Phaser Camera cast for g2 prehide; runtime behavior unchanged. */
@@ -12003,10 +12004,10 @@ const ribbon =
             const language = getLanguage();
             text.textContent =
                 ({
-                    ko: '색칠이 어렵다면 도움을 받아보세요!\n배경을 참고해 위장색을 도와줘요.',
-                    ja: '色塗りが難しいときはお手伝い！\n背景を参考に擬態色を塗ります。',
-                    en: 'Need help painting?\nGet camouflage help from the background.',
-                    zh: '上色困难时可以使用辅助！\n会参考背景帮助完成伪装色。',
+                    ko: '색칠이 어렵다면 도움받아 보세요!\n배경에 어울리는 위장색을 도와줘요.',
+                    ja: '色塗りが難しいときはお手伝い！\n背景になじむ擬態色をサポートします。',
+                    en: 'Need help painting?\nGet camouflage colors that match the background.',
+                    zh: '上色困难时可以使用辅助！\n帮助搭配适合背景的伪装色。',
                 } as const)[language];
 
             Object.assign(bubble.style,{
@@ -12889,7 +12890,11 @@ const ribbon =
                 assistButton;
 
             this.hideFeatureDiscoveryBubble('paintAssist');
-            this.showPaintAssistReadyStyleBubble(assistButton);
+            /*
+             * V1010502_PAINT_HELP_BUBBLE_CLEAN_SPECTATOR_UI_RESULT_FX / PAINT_HELP_NO_ONE_SHOT_CREATION
+             * Bubble visibility is synchronized AFTER the real button receives
+             * its authoritative Paint visibility + screen position.
+             */
         } else {
             this.hidePaintAssistReadyStyleBubble();
             this.paintAssistButton =
@@ -13399,6 +13404,29 @@ const ribbon =
                 'none',
                 'important',
             );
+
+            /*
+             * V1010502_PAINT_HELP_BUBBLE_CLEAN_SPECTATOR_UI_RESULT_FX / PAINT_HELP_READY_STYLE_LIFECYCLE
+             * Same principle as READY: current phase/role/button visibility is
+             * authoritative. No "shown once" flag and no transient timer.
+             */
+            if (
+                canAssist &&
+                !this.paintAssistUsedThisRound
+            ) {
+                requestAnimationFrame(
+                    () => {
+                        const button =
+                            this.paintAssistButton;
+                        if (button) {
+                            this.updateMobilePaintDockPosition();
+                            this.showPaintAssistReadyStyleBubble(button);
+                        }
+                    },
+                );
+            } else {
+                this.hidePaintAssistReadyStyleBubble();
+            }
         }
 
         if (!visible) {
@@ -13885,6 +13913,23 @@ const ribbon =
                 `${Math.round(rect.top + rect.height * 0.42)}px`;
             this.paintAssistButton.style.transform =
                 'translateY(-50%)';
+        }
+
+        /*
+         * V1010502_PAINT_HELP_BUBBLE_CLEAN_SPECTATOR_UI_RESULT_FX / PAINT_HELP_POSITION_FINAL_SYNC
+         * The button now has its FINAL screen coordinates. Anchor the speech
+         * bubble here, above the button, exactly like the READY bubble.
+         */
+        if (
+            this.paintAssistButton &&
+            this.phase === 'paint' &&
+            !this.paintAssistUsedThisRound &&
+            !this.paintAssistButton.hidden &&
+            this.paintAssistButton.style.display !== 'none'
+        ) {
+            this.showPaintAssistReadyStyleBubble(
+                this.paintAssistButton,
+            );
         }
     }
 
@@ -38686,7 +38731,7 @@ this.networkUnsubscribers.push(
                     localWonFinishedRound
                         ? 'rgba(255,196,55,.72)'
                         : 'rgba(0,0,0,.72)',
-                    localWonFinishedRound ? 8 : 2,
+                    localWonFinishedRound ? 14 : 4,
                     true,
                     true,
                 )
@@ -38695,15 +38740,38 @@ this.networkUnsubscribers.push(
                         ? `✦  ${victoryText}  ✦`
                         : victoryText,
                 )
+                /*
+                 * V1010502_PAINT_HELP_BUBBLE_CLEAN_SPECTATOR_UI_RESULT_FX / STRONGER_LOCAL_RESULT_MOOD
+                 * WIN = celebratory bounce/glow.
+                 * LOSE = heavier, lower-energy thud.
+                 */
                 .setScale(
                     localWonFinishedRound
-                        ? 1 + Math.sin(this.time.now / 145) * 0.035
-                        : 0.985 + Math.sin(this.time.now / 360) * 0.012,
+                        ? 1.055 +
+                            Math.sin(this.time.now / 105) * 0.065
+                        : 0.955 +
+                            Math.sin(this.time.now / 430) * 0.010,
+                )
+                .setAngle(
+                    localWonFinishedRound
+                        ? Math.sin(this.time.now / 180) * 1.1
+                        : Math.sin(this.time.now / 520) * 0.45,
+                )
+                .setY(
+                    this.gameHeight / 2 +
+                    (
+                        localWonFinishedRound
+                            ? Math.sin(this.time.now / 125) * 7
+                            : 12 +
+                                Math.abs(
+                                    Math.sin(this.time.now / 390),
+                                ) * 3
+                    ),
                 )
                 .setAlpha(
                     localWonFinishedRound
                         ? 1
-                        : 0.86,
+                        : 0.72,
                 )
                 .setVisible(
                     !this.victoryShowcaseCleanCaptureActive,
@@ -43658,6 +43726,8 @@ this.networkUnsubscribers.push(
                 sniperSpectatorDom = document.createElement('div');
                 sniperSpectatorDom.className =
                     'colorhunt-sniper-spectator-status';
+                sniperSpectatorDom.style.display =
+                    'none';
                 sniperSpectatorDom.textContent =
                     ({
                         ko:'🎯 저격 모드 중...',
@@ -43738,7 +43808,7 @@ this.networkUnsubscribers.push(
                     this.gameHeight - 72,
                 )
                 .setDepth(50000)
-                .setVisible(true);
+                .setVisible(false);
 
             return;
         }
