@@ -1,3 +1,4 @@
+/* V1010498_FEATURE_DISCOVERY_BUBBLES: larger desktop fart hint + transient sniper/paint-assist discovery bubbles; mechanics untouched. */
 /* V1010497D_REMOVE_UNUSED_VISIBLE_CANVAS_LEFT: compile-only cleanup; v497 behavior unchanged. */
 /* V1010497C_REMOVE_UNUSED_X_BY_MARKER: compile-only cleanup; v497 behavior unchanged. */
 /* V1010497_DESKTOP_ASSIST_POSITION_LOCAL_HIDER_HUNT_PAINT_FIX: PC Paint Help safe-right position + owner-only Hider camouflage restore after final Hunt normalization. */
@@ -7593,6 +7594,12 @@ private timerText!: Phaser.GameObjects.Text;
     private hunterFartHintBubble?: HTMLDivElement;
     private hunterFartHintTimer?: Phaser.Time.TimerEvent;
 
+    /* V1010498_FEATURE_DISCOVERY_BUBBLES: discoverability only; gameplay mechanics are untouched. */
+    private sniperDiscoveryBubble?: HTMLDivElement;
+    private sniperDiscoveryBubbleShown = false;
+    private paintAssistDiscoveryBubble?: HTMLDivElement;
+    private paintAssistDiscoveryBubbleShown = false;
+
     private practiceRevealConfirmButton?: HTMLButtonElement;
     private practiceRevealMarkers: Phaser.GameObjects.GameObject[] = [];
     private practiceRevealTweens: Phaser.Tweens.Tween[] = [];
@@ -12744,6 +12751,7 @@ const ribbon =
             (event) => {
                 event.preventDefault();
                 event.stopPropagation();
+                this.hideFeatureDiscoveryBubble('paintAssist');
                 this.openPaintAssistConfirmModal();
             },
         );
@@ -12755,6 +12763,23 @@ const ribbon =
 
             this.paintAssistButton =
                 assistButton;
+
+            if (!this.paintAssistDiscoveryBubbleShown) {
+                this.paintAssistDiscoveryBubbleShown = true;
+                window.setTimeout(
+                    () => {
+                        if (
+                            this.phase === 'paint' &&
+                            this.paintAssistButton &&
+                            !this.paintAssistButton.hidden &&
+                            this.paintAssistButton.style.display !== 'none'
+                        ) {
+                            this.showFeatureDiscoveryBubble('paintAssist');
+                        }
+                    },
+                    700,
+                );
+            }
         } else {
             this.paintAssistButton =
                 undefined;
@@ -13753,6 +13778,8 @@ const ribbon =
     }
 
     private destroyMobilePaintDock(): void {
+        this.hideFeatureDiscoveryBubble('paintAssist');
+
         this.mobilePaintDock
             ?.remove();
 
@@ -20348,8 +20375,8 @@ this.networkUnsubscribers.push(
         const fartHintDesktopWidth =
             fartHintLanguage === 'ja' ||
             fartHintLanguage === 'en'
-                ? '390px'
-                : '360px';
+                ? '460px'
+                : '430px';
 
         const fartHintFontSize =
             mobile
@@ -20362,8 +20389,8 @@ this.networkUnsubscribers.push(
                 : (
                     fartHintLanguage === 'ja' ||
                     fartHintLanguage === 'en'
-                        ? '15px'
-                        : '16px'
+                        ? '21px'
+                        : '23px'
                 );
 
         Object.assign(
@@ -20381,7 +20408,7 @@ this.networkUnsubscribers.push(
                     : fartHintDesktopWidth,
                 padding: mobile
                     ? '9px 10px'
-                    : '11px 12px',
+                    : '15px 18px',
                 borderRadius: '18px',
                 border:
                     '2px solid rgba(255,255,255,.78)',
@@ -57452,6 +57479,147 @@ const roomPlayers =
         });
     }
 
+    /* V1010498_FEATURE_DISCOVERY_BUBBLES: short "띠용" discovery bubble anchored to a real button. */
+    private showFeatureDiscoveryBubble(
+        kind: 'sniper' | 'paintAssist',
+    ): void {
+        const existing =
+            kind === 'sniper'
+                ? this.sniperDiscoveryBubble
+                : this.paintAssistDiscoveryBubble;
+
+        existing?.remove();
+
+        const language = getLanguage();
+        const copy =
+            kind === 'sniper'
+                ? ({
+                    ko: '필살기! 눌러보세요!',
+                    ja: '必殺技！押してみよう！',
+                    en: 'ULTIMATE! Try it!',
+                    zh: '必杀技！试试看！',
+                } as const)[language]
+                : ({
+                    ko: '색칠이 서툴면 도움받으세요!',
+                    ja: '色塗りが苦手ならお手伝い！',
+                    en: 'Need help painting? Try this!',
+                    zh: '不擅长上色？试试辅助！',
+                } as const)[language];
+
+        const bubble = document.createElement('div');
+        bubble.textContent = copy;
+
+        Object.assign(bubble.style,{
+            position:'fixed',
+            zIndex:'2147483001',
+            pointerEvents:'none',
+            boxSizing:'border-box',
+            padding:this.mobileControlsEnabled ? '7px 10px' : '9px 13px',
+            borderRadius:'13px',
+            border:'2px solid rgba(255,255,255,.92)',
+            background:'rgba(25,32,43,.96)',
+            color:'#fff7c7',
+            fontFamily:'"Arial Black","Noto Sans KR",Arial,sans-serif',
+            fontSize:this.mobileControlsEnabled ? '12px' : '15px',
+            fontWeight:'900',
+            lineHeight:'1.15',
+            whiteSpace:'nowrap',
+            textAlign:'center',
+            textShadow:'0 2px 2px rgba(0,0,0,.75)',
+            boxShadow:'0 8px 22px rgba(0,0,0,.32)',
+            opacity:'0',
+            transform:'translateY(-8px) scale(.92)',
+            transition:'opacity 150ms ease, transform 180ms cubic-bezier(.2,1.5,.4,1)',
+        });
+
+        const tail=document.createElement('span');
+        Object.assign(tail.style,{
+            position:'absolute',
+            left:'50%',
+            top:'-10px',
+            transform:'translateX(-50%)',
+            width:'0',
+            height:'0',
+            borderLeft:'9px solid transparent',
+            borderRight:'9px solid transparent',
+            borderBottom:'10px solid rgba(25,32,43,.96)',
+        });
+        bubble.appendChild(tail);
+        document.body.appendChild(bubble);
+
+        if(kind==='sniper') this.sniperDiscoveryBubble=bubble;
+        else this.paintAssistDiscoveryBubble=bubble;
+
+        const place=():void=>{
+            if(!document.body.contains(bubble))return;
+            const canvas=this.game.canvas.getBoundingClientRect();
+            let target:DOMRect|undefined;
+
+            if(kind==='paintAssist'){
+                target=this.paintAssistButton?.getBoundingClientRect();
+            }else if(this.sniperButton?.visible){
+                const scaleX=canvas.width/this.gameWidth;
+                const scaleY=canvas.height/this.gameHeight;
+                const cx=canvas.left+this.sniperButton.x*scaleX;
+                const cy=canvas.top+this.sniperButton.y*scaleY;
+                const w=176*scaleX;
+                const h=44*scaleY;
+                target=new DOMRect(cx-w/2,cy-h/2,w,h);
+            }
+
+            if(!target)return;
+            const bw=bubble.offsetWidth;
+            let left=target.left+target.width/2-bw/2;
+            left=Math.max(canvas.left+6,Math.min(left,canvas.right-bw-6));
+            // Requested: directly UNDER the button, never over the character/button.
+            let top=target.bottom+10;
+            if(top+bubble.offsetHeight>canvas.bottom-6){
+                top=Math.max(canvas.top+6,target.top-bubble.offsetHeight-10);
+                tail.style.top='auto';
+                tail.style.bottom='-10px';
+                tail.style.borderBottom='0 solid transparent';
+                tail.style.borderTop='10px solid rgba(25,32,43,.96)';
+            }
+            bubble.style.left=`${Math.round(left)}px`;
+            bubble.style.top=`${Math.round(top)}px`;
+        };
+
+        place();
+        requestAnimationFrame(()=>{
+            place();
+            if(document.body.contains(bubble)){
+                bubble.style.opacity='1';
+                bubble.style.transform='translateY(0) scale(1)';
+            }
+        });
+        window.setTimeout(place,100);
+
+        window.setTimeout(()=>{
+            if(!document.body.contains(bubble))return;
+            bubble.style.opacity='0';
+            bubble.style.transform='translateY(-4px) scale(.96)';
+            window.setTimeout(()=>{
+                bubble.remove();
+                if(kind==='sniper'&&this.sniperDiscoveryBubble===bubble)
+                    this.sniperDiscoveryBubble=undefined;
+                if(kind==='paintAssist'&&this.paintAssistDiscoveryBubble===bubble)
+                    this.paintAssistDiscoveryBubble=undefined;
+            },220);
+        },4200);
+    }
+
+    private hideFeatureDiscoveryBubble(
+        kind: 'sniper' | 'paintAssist',
+    ): void {
+        const bubble =
+            kind === 'sniper'
+                ? this.sniperDiscoveryBubble
+                : this.paintAssistDiscoveryBubble;
+        bubble?.remove();
+        if(kind==='sniper') this.sniperDiscoveryBubble=undefined;
+        else this.paintAssistDiscoveryBubble=undefined;
+    }
+
     /* V1010456_SNIPER_SEQUENCE_SCOPE_REWORK */
     private ensureSniperSupportUi(): void {
         if (this.sniperButton) return;
@@ -57542,6 +57710,8 @@ const roomPlayers =
                  * Local visual state must switch on the SAME frame as the click.
                  * Do not wait for server RTT to set sniperActive.
                  */
+                this.hideFeatureDiscoveryBubble('sniper');
+
                 this.sniperButtonPressBlockUntil =
                     Date.now() +
                     2_500;
@@ -61732,9 +61902,20 @@ const holeX =
                 });
             }
 
+            const wasHidden =
+                !this.sniperButton.visible;
+
             this.sniperButton
                 .setDepth(25020)
                 .setVisible(true);
+
+            if (
+                wasHidden &&
+                !this.sniperDiscoveryBubbleShown
+            ) {
+                this.sniperDiscoveryBubbleShown = true;
+                this.showFeatureDiscoveryBubble('sniper');
+            }
         }
 
         this.sniperScope
@@ -66099,8 +66280,11 @@ this.weaponHeat =
         }
 
         if (localIsHunter) {
+            this.sniperDiscoveryBubbleShown = false;
+            this.hideFeatureDiscoveryBubble('sniper');
             this.scheduleHunterFartHintBubble();
         } else {
+            this.hideFeatureDiscoveryBubble('sniper');
             this.destroyHunterFartHintBubble();
         }
 
