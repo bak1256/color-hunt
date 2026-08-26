@@ -1,3 +1,4 @@
+/* V1010494E_PAINT_CAMERA_PAN_CONTROLS_I18N: Paint camera pan — mobile right joystick + reset, desktop arrows, KO/JA/EN/ZH. */
 /* V1010493B_FINGER_EYEDROPPER_PREVIEW_2X: reduce mobile finger eyedropper preview from 3x to 2x. */
 /* V1010493_FINGER_EYEDROPPER_PREVIEW_3X: enlarge mobile finger eyedropper preview only; sample coordinate unchanged. */
 /* V1010492C_PRACTICE_FART_WALLCLOCK_DRAIN_FIX: Practice Hunter only — immutable 5s poop deadline; GAS 100->0 and debuff always terminate. */
@@ -4392,6 +4393,42 @@ private timerText!: Phaser.GameObjects.Text;
                 tr('조준'),
             );
 
+        this.mobilePaintCameraResetButton =
+            this.add.text(
+                aimX,
+                aimY + 78,
+                tr('카메라 리셋'),
+                {
+                    fontFamily: 'Arial, sans-serif',
+                    fontSize: '13px',
+                    fontStyle: 'bold',
+                    color: '#ffffff',
+                    backgroundColor: 'rgba(25, 70, 78, 0.86)',
+                    stroke: '#0b3035',
+                    strokeThickness: 3,
+                    fixedWidth: 108,
+                    fixedHeight: 34,
+                    align: 'center',
+                    padding: { top: 7 },
+                },
+            )
+                .setOrigin(0.5)
+                .setScrollFactor(0)
+                .setDepth(6003)
+                .setVisible(false)
+                .setInteractive({ useHandCursor: true })
+                .on(
+                    'pointerdown',
+                    (
+                        pointer:
+                            Phaser.Input.Pointer,
+                    ) => {
+                        pointer.event?.preventDefault?.();
+                        pointer.event?.stopPropagation?.();
+                        this.resetPaintCameraPan();
+                    },
+                );
+
         this.mobileFireButton =
             this.add.circle(
                 fireX,
@@ -5048,17 +5085,24 @@ private timerText!: Phaser.GameObjects.Text;
                 }
 
                 const localCanUseAimControl =
-                    this.phase === 'hunt' &&
                     (
-                        this.practiceMode === 'hunter' ||
-                        multiplayerClient
-                            .getLocalPlayer()
-                            ?.role === 'hunter' ||
-                        multiplayerClient
-                            .getLocalPlayer()
-                            ?.role === 'hider' ||
-                        this.networkPlayerManager
-                            .isLocalHider()
+                        this.phase === 'paint' &&
+                        !this.networkPlayerManager
+                            .isLocalCustomizationMode()
+                    ) ||
+                    (
+                        this.phase === 'hunt' &&
+                        (
+                            this.practiceMode === 'hunter' ||
+                            multiplayerClient
+                                .getLocalPlayer()
+                                ?.role === 'hunter' ||
+                            multiplayerClient
+                                .getLocalPlayer()
+                                ?.role === 'hider' ||
+                            this.networkPlayerManager
+                                .isLocalHider()
+                        )
                     );
 
                 if (
@@ -5412,6 +5456,8 @@ private timerText!: Phaser.GameObjects.Text;
 
                     this.mobileSniperAimX = 0;
                     this.mobileSniperAimY = 0;
+                    this.mobilePaintCameraPanX = 0;
+                    this.mobilePaintCameraPanY = 0;
 
                     this.mobileAimKnob
                         ?.setPosition(
@@ -6357,6 +6403,51 @@ private timerText!: Phaser.GameObjects.Text;
             );
 
         if (
+            this.phase === 'paint' &&
+            !this.networkPlayerManager
+                .isLocalCustomizationMode()
+        ) {
+            const strength =
+                Phaser.Math.Clamp(
+                    length /
+                        this.mobileJoystickRadius,
+                    0,
+                    1,
+                );
+
+            const deadZone = 0.18;
+
+            if (strength <= deadZone) {
+                this.mobilePaintCameraPanX = 0;
+                this.mobilePaintCameraPanY = 0;
+            } else {
+                const liveStrength =
+                    Phaser.Math.Clamp(
+                        (
+                            strength -
+                            deadZone
+                        ) /
+                            (
+                                1 -
+                                deadZone
+                            ),
+                        0,
+                        1,
+                    );
+
+                this.mobilePaintCameraPanX =
+                    normalizedX *
+                    liveStrength;
+
+                this.mobilePaintCameraPanY =
+                    normalizedY *
+                    liveStrength;
+            }
+
+            return;
+        }
+
+        if (
             this.sniperActive &&
             this.sniperCinematicActive
         ) {
@@ -6711,6 +6802,12 @@ private timerText!: Phaser.GameObjects.Text;
             showHunterCombat ||
             localHiderSkillCombat;
 
+        const showPaintCameraControl =
+            canMove &&
+            this.phase === 'paint' &&
+            !this.networkPlayerManager
+                .isLocalCustomizationMode();
+
         this.mobileMoveBase
             ?.setVisible(canMove);
         this.mobileMoveKnob
@@ -6723,15 +6820,31 @@ private timerText!: Phaser.GameObjects.Text;
             .setVisible(canMove);
 
         this.mobileAimBase
-            ?.setVisible(showAimFireCombat);
+            ?.setVisible(
+                showAimFireCombat ||
+                showPaintCameraControl,
+            );
         this.mobileAimKnob
-            ?.setVisible(showHunterCombat);
+            ?.setVisible(
+                showHunterCombat ||
+                showPaintCameraControl,
+            );
 
         this.mobileAimLabel
             ?.setText(
-                tr('조준'),
+                showPaintCameraControl
+                    ? tr('카메라')
+                    : tr('조준'),
             )
-            .setVisible(showHunterCombat);
+            .setVisible(
+                showHunterCombat ||
+                showPaintCameraControl,
+            );
+
+        this.mobilePaintCameraResetButton
+            ?.setVisible(
+                showPaintCameraControl,
+            );
 
         if (showHunterCombat) {
             this.updateFartHud();
@@ -6806,8 +6919,13 @@ private timerText!: Phaser.GameObjects.Text;
             this.resetMobileMoveControl();
         }
 
-        if (!showAimFireCombat) {
+        if (
+            !showAimFireCombat &&
+            !showPaintCameraControl
+        ) {
             this.mobileAimPointerId = -1;
+            this.mobilePaintCameraPanX = 0;
+            this.mobilePaintCameraPanY = 0;
             this.mobileAimKnob
                 ?.setPosition(
                     this.getFixedHudCompensatedX(
@@ -7177,6 +7295,12 @@ private timerText!: Phaser.GameObjects.Text;
     private mobileMoveY = 0;
     private mobileAimAngle = 0;
     private mobileAimHasDirection = false;
+    /* V1010494E_PAINT_CAMERA_PAN_CONTROLS_I18N: Paint camera pan state. */
+    private paintCameraOffsetScreenX = 0;
+    private paintCameraOffsetScreenY = 0;
+    private mobilePaintCameraPanX = 0;
+    private mobilePaintCameraPanY = 0;
+    private mobilePaintCameraResetButton?: Phaser.GameObjects.Text;
 
     /* V1010389_MOBILE_SNIPER_PERFORMANCE_CONTROLS */
     private mobileSniperAimX = 0;
@@ -9155,6 +9279,7 @@ private timerText!: Phaser.GameObjects.Text;
             !this.networkPlayerManager
                 .isLocalCustomizationMode()
         ) {
+            this.updatePaintCameraPan(delta);
             this.centerPaintCameraOnLocalPlayer();
         }
 
@@ -10420,11 +10545,11 @@ private timerText!: Phaser.GameObjects.Text;
                 title: '조작방법',
                 subtitle: '한 번 누르면 열리고, 다시 누르면 닫힙니다',
                 lobby: '대기실 · 마우스로 선택 · Enter 채팅',
-                paint: '색칠 · 드래그 칠하기 · 우클릭 스포이드 · 휠 줌 · Ctrl+휠 붓 크기',
+                paint: '색칠 · 드래그 · 우클릭 스포이드 · 휠 줌 · ←↑↓→ 카메라 이동',
                 straight: '직선 · Shift를 누른 채 드래그하면 직선으로 칠해집니다',
                 hunt: '사냥 · WASD 이동 · 마우스 조준 · 좌클릭 발사 · SPACE 방구 탐지',
                 mobileLobby: '대기실 · 버튼 터치 · 채팅칸 터치',
-                mobilePaint: '색칠 · 손가락으로 칠하기 · 핀치 확대/축소 · 아래 도구로 붓 변경',
+                mobilePaint: '색칠 · 손가락 칠하기 · 핀치 줌 · 오른쪽 카메라 조이스틱 · 리셋',
                 mobileStraight: '직선 · 아래 도구의 직선 버튼을 선택한 뒤 드래그하세요',
                 mobileHunt: '사냥 · 왼쪽 이동 · 오른쪽 조준 · FIRE 발사',
             },
@@ -10433,11 +10558,11 @@ private timerText!: Phaser.GameObjects.Text;
                 title: '操作方法',
                 subtitle: '一度押すと開き、もう一度押すと閉じます',
                 lobby: 'ロビー · マウス選択 · Enterでチャット',
-                paint: 'ペイント · ドラッグ塗り · 右クリックでスポイト · ホイールズーム · Ctrl+ホイールでブラシ',
+                paint: 'ペイント · ドラッグ · 右クリックでスポイト · ホイールズーム · ←↑↓→ カメラ移動',
                 straight: '直線 · Shiftを押しながらドラッグすると直線で塗れます',
                 hunt: 'ハント · WASD移動 · マウス照準 · 左クリック射撃 · SPACEでおなら探知',
                 mobileLobby: 'ロビー · ボタン操作 · 入力欄タップでチャット',
-                mobilePaint: 'ペイント · 指で塗る · ピンチズーム · 下のツールでブラシ変更',
+                mobilePaint: 'ペイント · 指塗り · ピンチズーム · 右カメラジョイスティック · リセット',
                 mobileStraight: '直線 · 下の直線ツールを選んでドラッグしてください',
                 mobileHunt: 'ハント · 左で移動 · 右で照準 · FIREで射撃',
             },
@@ -10446,11 +10571,11 @@ private timerText!: Phaser.GameObjects.Text;
                 title: 'Controls',
                 subtitle: 'Tap once to open, tap again to close',
                 lobby: 'Lobby · Click UI · Enter to chat',
-                paint: 'Paint · Drag · Right-click eyedropper · Wheel zoom · Ctrl+wheel brush size',
+                paint: 'Paint · Drag · Right-click eyedropper · Wheel zoom · Arrow keys pan camera',
                 straight: 'Straight line · Hold Shift while dragging to paint a straight line',
                 hunt: 'Hunt · WASD move · Mouse aim · Left click fire · SPACE fart detector',
                 mobileLobby: 'Lobby · Tap buttons · Tap chat field to type',
-                mobilePaint: 'Paint · Paint with one finger · Pinch to zoom · Bottom tools change brush',
+                mobilePaint: 'Paint · Finger paint · Pinch zoom · Right camera stick · Reset',
                 mobileStraight: 'Straight line · Select the LINE tool below, then drag',
                 mobileHunt: 'Hunt · Left move · Right aim · FIRE shoots',
             },
@@ -10459,11 +10584,11 @@ private timerText!: Phaser.GameObjects.Text;
                 title: '操作说明',
                 subtitle: '点按一次打开，再次点按关闭',
                 lobby: '大厅：鼠标选择界面 · Enter 打开聊天',
-                paint: '涂色 · 拖动涂色 · 右键吸管 · 滚轮缩放 · Ctrl+滚轮调画笔',
+                paint: '涂色 · 拖动 · 右键吸管 · 滚轮缩放 · 方向键移动镜头',
                 straight: '直线 · 按住 Shift 拖动即可画直线',
                 hunt: '狩猎：WASD/方向键移动 · 鼠标瞄准 · 左键射击 · Space放屁探测',
                 mobileLobby: '大厅：点击屏幕按钮 · 点击聊天输入框聊天',
-                mobilePaint: '涂色 · 单指涂色 · 双指缩放 · 使用底部工具切换画笔',
+                mobilePaint: '涂色 · 单指涂色 · 双指缩放 · 右侧镜头摇杆 · 重置',
                 mobileStraight: '直线 · 选择下方直线工具后拖动绘制',
                 mobileHunt: '狩猎：左侧移动 · 右侧瞄准 · FIRE按钮射击',
             },
@@ -20735,7 +20860,39 @@ this.networkUnsubscribers.push(
                 : language === 'en' ? 'Paint your character to match the surroundings and hide.'
                     : language === 'zh' ? '把角色涂成和周围背景相似的颜色，隐藏起来吧！'
                         : '주변 배경과 비슷하게 캐릭터를 칠해 숨어보세요.';
-        this.showFirstPlayGuide(localIsHunter ? 'colorhunt-guide-role-hunter-v1' : 'colorhunt-guide-role-hider-v1', title, body);
+                let finalBody =
+            body;
+
+        if (!localIsHunter) {
+            finalBody +=
+                this.mobileControlsEnabled
+                    ? (
+                        language === 'ja'
+                            ? '\nズーム中：右カメラジョイスティックで移動・リセットで中央へ'
+                            : language === 'en'
+                                ? '\nZoomed: right camera stick pans · Reset recenters'
+                                : language === 'zh'
+                                    ? '\n放大时：右侧镜头摇杆移动 · 重置回中央'
+                                    : '\n확대 중: 오른쪽 카메라 조이스틱으로 이동 · 리셋으로 중앙 복귀'
+                    )
+                    : (
+                        language === 'ja'
+                            ? '\nズーム中：矢印キー（←↑↓→）でカメラ移動'
+                            : language === 'en'
+                                ? '\nZoomed: Arrow keys (←↑↓→) pan the camera'
+                                : language === 'zh'
+                                    ? '\n放大时：方向键（←↑↓→）移动镜头'
+                                    : '\n확대 중: 화살표키(←↑↓→)로 카메라 이동'
+                    );
+        }
+
+        this.showFirstPlayGuide(
+            localIsHunter
+                ? 'colorhunt-guide-role-hunter-v1'
+                : 'colorhunt-guide-role-hider-v2-camera',
+            title,
+            finalBody,
+        );
     }
 
     private showFirstHuntControlGuide(): void {
@@ -48082,7 +48239,153 @@ const roomPlayers =
             this.gameWidth / 2,
             132,
         );
+    }    private clampPaintCameraPan(): void {
+        const maxX =
+            this.gameWidth *
+            0.42;
+        const maxY =
+            this.gameHeight *
+            0.42;
+
+        this.paintCameraOffsetScreenX =
+            Phaser.Math.Clamp(
+                this.paintCameraOffsetScreenX,
+                -maxX,
+                maxX,
+            );
+
+        this.paintCameraOffsetScreenY =
+            Phaser.Math.Clamp(
+                this.paintCameraOffsetScreenY,
+                -maxY,
+                maxY,
+            );
     }
+
+    private applyPaintCameraPosition(): void {
+        if (this.phase !== 'paint') {
+            return;
+        }
+
+        const target =
+            this.networkPlayerManager
+                .getLocalPlayerContainer();
+
+        if (!target) {
+            return;
+        }
+
+        const zoom =
+            Math.max(
+                0.01,
+                this.cameras.main.zoom,
+            );
+
+        const screenLiftPx =
+            this.mobileControlsEnabled
+                ? 22
+                : 16;
+
+        const worldYOffset =
+            screenLiftPx /
+            zoom;
+
+        this.cameras.main
+            .stopFollow()
+            .removeBounds()
+            .centerOn(
+                target.x +
+                    this.paintCameraOffsetScreenX /
+                        zoom,
+                target.y +
+                    worldYOffset +
+                    this.paintCameraOffsetScreenY /
+                        zoom,
+            );
+    }
+
+    private resetPaintCameraPan(): void {
+        this.paintCameraOffsetScreenX = 0;
+        this.paintCameraOffsetScreenY = 0;
+        this.mobilePaintCameraPanX = 0;
+        this.mobilePaintCameraPanY = 0;
+        this.applyPaintCameraPosition();
+
+        if (this.mobileAimKnob) {
+            this.setFixedHudScreenPosition(
+                this.mobileAimKnob,
+                this.gameWidth - 170,
+                this.gameHeight - 190,
+            );
+        }
+    }
+
+    private updatePaintCameraPan(
+        delta: number,
+    ): void {
+        if (
+            this.phase !== 'paint' ||
+            this.networkPlayerManager
+                .isLocalCustomizationMode()
+        ) {
+            return;
+        }
+
+        let x = 0;
+        let y = 0;
+
+        if (this.mobileControlsEnabled) {
+            x =
+                this.mobilePaintCameraPanX;
+            y =
+                this.mobilePaintCameraPanY;
+        } else {
+            if (this.cursors.left.isDown) x -= 1;
+            if (this.cursors.right.isDown) x += 1;
+            if (this.cursors.up.isDown) y -= 1;
+            if (this.cursors.down.isDown) y += 1;
+
+            if (x !== 0 || y !== 0) {
+                const direction =
+                    new Phaser.Math.Vector2(
+                        x,
+                        y,
+                    ).normalize();
+
+                x = direction.x;
+                y = direction.y;
+            }
+        }
+
+        if (
+            Math.abs(x) < 0.001 &&
+            Math.abs(y) < 0.001
+        ) {
+            return;
+        }
+
+        const speed =
+            this.mobileControlsEnabled
+                ? 230
+                : 260;
+
+        this.paintCameraOffsetScreenX +=
+            x *
+            speed *
+            delta /
+            1000;
+
+        this.paintCameraOffsetScreenY +=
+            y *
+            speed *
+            delta /
+            1000;
+
+        this.clampPaintCameraPan();
+        this.applyPaintCameraPosition();
+    }
+
+
 
     private centerPaintCameraOnLocalPlayer(): void {
         if (
@@ -48093,6 +48396,14 @@ const roomPlayers =
                     'hider'
             )
         ) {
+            return;
+        }
+
+        if (
+            this.paintCameraOffsetScreenX !== 0 ||
+            this.paintCameraOffsetScreenY !== 0
+        ) {
+            this.applyPaintCameraPosition();
             return;
         }
 
@@ -48199,13 +48510,19 @@ const roomPlayers =
                 nextZoom,
             );
 
-        this.centerPaintCameraOnLocalPlayer();
+        this.applyPaintCameraPosition();
 
         return nextZoom;
     }
 
     private resetPaintWorldZoom(): void {
         this.paintWorldZoom = 1;
+        this.paintCameraOffsetScreenX = 0;
+        this.paintCameraOffsetScreenY = 0;
+        this.mobilePaintCameraPanX = 0;
+        this.mobilePaintCameraPanY = 0;
+        this.mobilePaintCameraResetButton
+            ?.setVisible(false);
         this.mobilePinchDistance = 0;
         this.mobilePinchActive = false;
         this.mobileTouchPoints.clear();
@@ -65134,6 +65451,10 @@ this.weaponHeat =
             false;
         this.clearStraightLinePreview();
         this.phase = 'paint';
+        this.paintCameraOffsetScreenX = 0;
+        this.paintCameraOffsetScreenY = 0;
+        this.mobilePaintCameraPanX = 0;
+        this.mobilePaintCameraPanY = 0;
 
         /*
          * V1010452I5_HIDER_SKILL_IMMEDIATE_CONTROLS
