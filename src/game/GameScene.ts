@@ -1,3 +1,6 @@
+/* V1010501C_REMOVE_UNUSED_PAINT_ASSIST_DISCOVERY_ASSIGNMENT: remove leftover assignment after v501b removed obsolete Paint Assist discovery flag. */
+/* V1010501B_REMOVE_UNUSED_PAINT_ASSIST_DISCOVERY_FLAG: remove obsolete Paint Help discovery flag after v501 dedicated READY-style bubble migration. */
+/* V1010501_PAINT_READY_BUBBLE_SNIPER_STATUS_WINLOSE: READY-style Paint Help bubble, no assist toast, lower sniper hint, DOM sniper status, local WIN/LOSE result mood. */
 /* V1010500B_FIX_TRANSPARENT_VICTORY_BACKGROUND: Phaser Text.setBackgroundColor() requires string; use fully transparent background instead of null. */
 /* V1010500_PAINT_BUBBLE_VICTORY_FONT_SNIPER_SPECTATE: Paint Help bubble retry, real sniper-hint gap, Hunt-intro victory typography, remote sniper-scope spectator camera. */
 /* V1010499B_UI_POLISH_SPECTATOR_VICTORY: persistent Paint Help bubble, spaced sniper hint, remote sniper spectator feedback, clean Finished winner title + Hider reveal circles. */
@@ -7619,7 +7622,6 @@ private timerText!: Phaser.GameObjects.Text;
     private sniperDiscoveryBubble?: HTMLDivElement;
     private sniperDiscoveryBubbleShown = false;
     private paintAssistDiscoveryBubble?: HTMLDivElement;
-    private paintAssistDiscoveryBubbleShown = false;
 
     private practiceRevealConfirmButton?: HTMLButtonElement;
     private practiceRevealMarkers: Phaser.GameObjects.GameObject[] = [];
@@ -11961,6 +11963,108 @@ const ribbon =
             overlay;
     }
 
+    /*
+     * V1010501_PAINT_READY_BUBBLE_SNIPER_STATUS_WINLOSE / PAINT_HELP_READY_STYLE_BUBBLE
+     */
+    private hidePaintAssistReadyStyleBubble(): void {
+        document.querySelector('.colorhunt-paint-assist-ready-bubble')?.remove();
+    }
+
+    private showPaintAssistReadyStyleBubble(
+        button: HTMLButtonElement,
+    ): void {
+        if (
+            this.phase !== 'paint' ||
+            this.paintAssistUsedThisRound ||
+            !document.body.contains(button) ||
+            button.hidden ||
+            button.style.display === 'none'
+        ) {
+            this.hidePaintAssistReadyStyleBubble();
+            return;
+        }
+
+        let bubble =
+            document.querySelector(
+                '.colorhunt-paint-assist-ready-bubble',
+            ) as HTMLDivElement | null;
+
+        if (!bubble) {
+            bubble = document.createElement('div');
+            bubble.className = 'colorhunt-paint-assist-ready-bubble';
+
+            const text = document.createElement('span');
+            const language = getLanguage();
+            text.textContent =
+                ({
+                    ko: '색칠이 어렵다면 도움을 받아보세요!\n배경을 참고해 위장색을 도와줘요.',
+                    ja: '色塗りが難しいときはお手伝い！\n背景を参考に擬態色を塗ります。',
+                    en: 'Need help painting?\nGet camouflage help from the background.',
+                    zh: '上色困难时可以使用辅助！\n会参考背景帮助完成伪装色。',
+                } as const)[language];
+
+            Object.assign(bubble.style,{
+                position:'fixed',
+                zIndex:'2147483005',
+                pointerEvents:'none',
+                maxWidth:this.mobileControlsEnabled?'185px':'235px',
+                width:'max-content',
+                padding:this.mobileControlsEnabled?'8px 11px':'9px 13px',
+                border:'2px solid rgba(35,45,39,.88)',
+                borderRadius:'15px',
+                background:'rgba(255,252,225,.96)',
+                color:'#24382d',
+                boxShadow:'0 5px 14px rgba(0,0,0,.16)',
+                fontFamily:'"Arial Black","Noto Sans KR","Noto Sans JP",Arial,sans-serif',
+                fontSize:this.mobileControlsEnabled?'12px':'14px',
+                fontWeight:'900',
+                lineHeight:'1.25',
+                textAlign:'center',
+                whiteSpace:'pre-line',
+                boxSizing:'border-box',
+            });
+
+            const tail=document.createElement('div');
+            Object.assign(tail.style,{
+                position:'absolute',
+                left:'50%',
+                bottom:'-9px',
+                width:'16px',
+                height:'16px',
+                transform:'translateX(-50%) rotate(45deg)',
+                background:'rgba(255,252,225,.96)',
+                borderRight:'2px solid rgba(35,45,39,.88)',
+                borderBottom:'2px solid rgba(35,45,39,.88)',
+            });
+
+            bubble.appendChild(text);
+            bubble.appendChild(tail);
+            document.body.appendChild(bubble);
+        }
+
+        const place=():void=>{
+            if (
+                !document.body.contains(bubble!) ||
+                !document.body.contains(button) ||
+                this.phase !== 'paint' ||
+                this.paintAssistUsedThisRound
+            ) {
+                this.hidePaintAssistReadyStyleBubble();
+                return;
+            }
+
+            const rect=button.getBoundingClientRect();
+            bubble!.style.left =
+                `${Math.round(rect.left+rect.width/2)}px`;
+            bubble!.style.top =
+                `${Math.max(10,Math.round(rect.top-bubble!.offsetHeight-14))}px`;
+            bubble!.style.transform='translateX(-50%)';
+            requestAnimationFrame(place);
+        };
+
+        place();
+    }
+
     private applyPaintAssist(): void {
         if (
             this.phase !== 'paint' ||
@@ -12573,15 +12677,7 @@ const ribbon =
             );
         }
 
-        this.showStatus(
-            getLanguage() === 'ja'
-                ? '✨ 選んだ量だけ、元の自然なドット迷彩で手伝いました！'
-                : getLanguage() === 'en'
-                    ? '✨ Added the selected amount using the original organic dot camouflage!'
-                    : getLanguage() === 'zh'
-                        ? '✨ 已按选择的程度，用原来的自然圆点迷彩完成辅助！'
-                        : '✨ 선택한 정도만큼 기존의 자연스러운 도트 위장으로 도와줬어요!',
-        );
+        this.hidePaintAssistReadyStyleBubble();
     }
 
     private createMobilePaintDock(): void {
@@ -12773,6 +12869,7 @@ const ribbon =
                 event.preventDefault();
                 event.stopPropagation();
                 this.hideFeatureDiscoveryBubble('paintAssist');
+                this.hidePaintAssistReadyStyleBubble();
                 this.openPaintAssistConfirmModal();
             },
         );
@@ -12785,65 +12882,10 @@ const ribbon =
             this.paintAssistButton =
                 assistButton;
 
-            if (!this.paintAssistDiscoveryBubbleShown) {
-                /*
-                 * V1010500_PAINT_BUBBLE_VICTORY_FONT_SNIPER_SPECTATE / PAINT_HELP_WAIT_UNTIL_VISIBLE
-                 *
-                 * Do not consume the one-shot flag while the first Paint
-                 * tutorial / confirmation layer is still covering the game.
-                 * PC + mobile both retry until the real Paint Help button is
-                 * visible, then the persistent speech bubble is attached above it.
-                 */
-                const tryShowPaintAssistBubble =
-                    (): void => {
-                        if (
-                            this.phase !== 'paint' ||
-                            !this.paintAssistButton
-                        ) {
-                            return;
-                        }
-
-                        if (
-                            this.paintAssistDiscoveryBubbleShown
-                        ) {
-                            return;
-                        }
-
-                        const tutorialOpen =
-                            !!document.querySelector(
-                                '[data-paint-tutorial],[data-confirm-modal],.paint-confirm-modal,.colorhunt-guide-overlay',
-                            );
-
-                        const buttonVisible =
-                            !this.paintAssistButton.hidden &&
-                            this.paintAssistButton.style.display !== 'none' &&
-                            this.paintAssistButton.getBoundingClientRect().width > 0 &&
-                            this.paintAssistButton.getBoundingClientRect().height > 0;
-
-                        if (
-                            tutorialOpen ||
-                            !buttonVisible
-                        ) {
-                            window.setTimeout(
-                                tryShowPaintAssistBubble,
-                                250,
-                            );
-                            return;
-                        }
-
-                        this.paintAssistDiscoveryBubbleShown =
-                            true;
-                        this.showFeatureDiscoveryBubble(
-                            'paintAssist',
-                        );
-                    };
-
-                window.setTimeout(
-                    tryShowPaintAssistBubble,
-                    350,
-                );
-            }
+            this.hideFeatureDiscoveryBubble('paintAssist');
+            this.showPaintAssistReadyStyleBubble(assistButton);
         } else {
+            this.hidePaintAssistReadyStyleBubble();
             this.paintAssistButton =
                 undefined;
         }
@@ -13842,6 +13884,7 @@ const ribbon =
 
     private destroyMobilePaintDock(): void {
         this.hideFeatureDiscoveryBubble('paintAssist');
+        this.hidePaintAssistReadyStyleBubble();
 
         this.mobilePaintDock
             ?.remove();
@@ -38527,19 +38570,60 @@ this.networkUnsubscribers.push(
              * The real match-ending presentation remains fully visible to the
              * player. Only the separate social-card capture suppresses it.
              */
-            const victoryText =
+            const localFinishedRole =
+                multiplayerClient.getLocalPlayer()?.role ??
+                (
+                    this.networkPlayerManager?.isLocalHunter()
+                        ? 'hunter'
+                        : this.networkPlayerManager?.isLocalHider()
+                            ? 'hider'
+                            : undefined
+                );
+
+            const localFinishedTeam =
+                localFinishedRole === 'hunter'
+                    ? 'hunters'
+                    : localFinishedRole === 'hider'
+                        ? 'hiders'
+                        : null;
+
+            const localWonFinishedRound =
+                Boolean(
+                    effectiveWinner &&
+                    localFinishedTeam === effectiveWinner,
+                );
+
+            const teamVictoryText =
                 effectiveWinner === 'hunters'
                     ? tr('HUNTER 승리!')
                     : effectiveWinner === 'hiders'
                         ? tr('HIDER 승리!')
                         : tr('ROUND OVER');
 
+            const victoryText =
+                localWonFinishedRound
+                    ? teamVictoryText
+                    : effectiveWinner
+                        ? 'LOSE...'
+                        : tr('ROUND OVER');
+
             this.countdownPanel
                 .setVisible(
                     !this.victoryShowcaseCleanCaptureActive,
                 )
-                .setFillStyle(0x000000, 0)
-                .setAlpha(0);
+                .setFillStyle(
+                    localWonFinishedRound
+                        ? 0xffd65a
+                        : 0x111318,
+                    localWonFinishedRound
+                        ? 0.025
+                        : 0.10,
+                )
+                .setAlpha(
+                    localWonFinishedRound
+                        ? 0.18
+                        : 0.28,
+                );
 
             /*
              * V1010499B_UI_POLISH_SPECTATOR_VICTORY / CLEAN_FINISHED_TITLE
@@ -38560,21 +38644,46 @@ this.networkUnsubscribers.push(
                 )
                 .setFontSize(
                     this.mobileControlsEnabled
-                        ? 48
+                        ? 54
                         : 66,
                 )
                 .setFontStyle('bold')
-                .setColor('#ffffff')
-                .setStroke('#111111', 6)
+                .setColor(
+                    localWonFinishedRound
+                        ? '#ffffff'
+                        : '#d8d8d8',
+                )
+                .setStroke(
+                    localWonFinishedRound
+                        ? '#111111'
+                        : '#252525',
+                    6,
+                )
                 .setShadow(
                     0,
-                    3,
-                    'rgba(0,0,0,.42)',
-                    0,
+                    localWonFinishedRound ? 3 : 5,
+                    localWonFinishedRound
+                        ? 'rgba(255,196,55,.72)'
+                        : 'rgba(0,0,0,.72)',
+                    localWonFinishedRound ? 8 : 2,
                     true,
                     true,
                 )
-                .setText(victoryText)
+                .setText(
+                    localWonFinishedRound
+                        ? `✦  ${victoryText}  ✦`
+                        : victoryText,
+                )
+                .setScale(
+                    localWonFinishedRound
+                        ? 1 + Math.sin(this.time.now / 145) * 0.035
+                        : 0.985 + Math.sin(this.time.now / 360) * 0.012,
+                )
+                .setAlpha(
+                    localWonFinishedRound
+                        ? 1
+                        : 0.86,
+                )
                 .setVisible(
                     !this.victoryShowcaseCleanCaptureActive,
                 );
@@ -43481,6 +43590,15 @@ this.networkUnsubscribers.push(
                     .get(this.spectatorSessionId)
                 : undefined;
 
+        const existingSniperSpectatorDom =
+            document.querySelector(
+                '.colorhunt-sniper-spectator-status',
+            ) as HTMLDivElement | null;
+
+        if (!remoteSniperAim) {
+            existingSniperSpectatorDom?.remove();
+        }
+
         if (remoteSniperAim) {
             const camera =
                 this.cameras.main;
@@ -43508,9 +43626,50 @@ this.networkUnsubscribers.push(
                 );
 
             /*
-             * Make the state impossible to miss, even if Hunt tension UI
-             * happened to run in a different order this frame.
+             * V1010501_PAINT_READY_BUBBLE_SNIPER_STATUS_WINLOSE / REMOTE_SNIPER_DOM_STATUS
              */
+            let sniperSpectatorDom =
+                existingSniperSpectatorDom;
+
+            if (!sniperSpectatorDom) {
+                sniperSpectatorDom = document.createElement('div');
+                sniperSpectatorDom.className =
+                    'colorhunt-sniper-spectator-status';
+                sniperSpectatorDom.textContent =
+                    ({
+                        ko:'🎯 저격 모드 중...',
+                        ja:'🎯 狙撃モード中...',
+                        en:'🎯 SNIPER MODE...',
+                        zh:'🎯 狙击模式中...',
+                    } as const)[getLanguage()];
+
+                Object.assign(sniperSpectatorDom.style,{
+                    position:'fixed',
+                    zIndex:'2147483600',
+                    pointerEvents:'none',
+                    padding:this.mobileControlsEnabled?'7px 12px':'9px 16px',
+                    borderRadius:'12px',
+                    border:'2px solid rgba(255,244,214,.92)',
+                    background:'rgba(16,20,24,.92)',
+                    color:'#fff7de',
+                    fontFamily:'"Arial Black","Noto Sans KR","Noto Sans JP",Arial,sans-serif',
+                    fontSize:this.mobileControlsEnabled?'15px':'19px',
+                    fontWeight:'900',
+                    whiteSpace:'nowrap',
+                    textShadow:'0 2px 2px rgba(0,0,0,.8)',
+                    boxShadow:'0 7px 18px rgba(0,0,0,.30)',
+                    transform:'translateX(-50%)',
+                });
+                document.body.appendChild(sniperSpectatorDom);
+            }
+
+            const sniperCanvasRect =
+                this.game.canvas.getBoundingClientRect();
+            sniperSpectatorDom.style.left =
+                `${Math.round(sniperCanvasRect.left+sniperCanvasRect.width/2)}px`;
+            sniperSpectatorDom.style.top =
+                `${Math.round(sniperCanvasRect.bottom-(this.mobileControlsEnabled?64:76))}px`;
+
             if (!this.sniperSpectatorStatusText) {
                 const language =
                     getLanguage();
@@ -57893,8 +58052,8 @@ const roomPlayers =
                  */
                 const sniperGap =
                     this.mobileControlsEnabled
-                        ? 40
-                        : 44;
+                        ? 60
+                        : 64;
                 top=target.bottom+sniperGap;
 
                 if(top+bubble.offsetHeight>canvas.bottom-6){
