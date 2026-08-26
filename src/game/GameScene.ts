@@ -1,3 +1,4 @@
+/* V1010492B_FART_DRAIN_EYEDROPPER_PRACTICE_SNIPER_ROBUST: 5s GAS 100->0 drain + larger finger swatch + local Hunter Practice sniper; 491 scope path untouched. */
 /* V1010491_REAL_PRE_SCOPE_CAMERA_LEAK_BLUR_FLICKER_FIX: video-confirmed 32-strip pre-rack magnification leak fix; stable radial blur lifecycle. */
 /* V1010490_FOCUS_GUARD_GHOST_BUTTON_FIRE_FIX: move sniper transition guard before Hunter focus draw; remove invisible support-button shooting dead zone. */
 /* V1010489_CURRENT_SOURCE_FOCUS_BRIDGE_ROLLBACK_486_487: exact-current rollback of 486/487 + click-to-server focus-vision suppression bridge. */
@@ -19187,22 +19188,22 @@ this.networkUnsubscribers.push(
 
         if (pooped) {
             /*
-             * The debuff countdown is delta-driven and cannot be accidentally
-             * reset by Date.now(), network maps or showPoopBurst().
+             * V1010492B_PRACTICE_GAS_DRAIN
+             * Third fart reaches 100. During the exact 5-second slowdown,
+             * GAS is the countdown itself: 100 -> 0 linearly.
              */
-            this.practicePoopRemainingMs =
-                Math.max(
+            this.fartGauge =
+                Phaser.Math.Clamp(
+                    (
+                        this.practicePoopRemainingMs /
+                        Math.max(
+                            1,
+                            this.practicePoopDurationMs,
+                        )
+                    ) * 100,
                     0,
-                    this.practicePoopRemainingMs -
-                        frameMs,
+                    100,
                 );
-
-            /*
-             * V1010386_CLIENT_SIMPLE_THREE_FART_CYCLE
-             * Third fart already triggered the accident.
-             * Keep GAS at 0 for the entire 5-second debuff.
-             */
-            this.fartGauge = 0;
 
             /*
              * Keep legacy/shared values mirrored only for HUD/comedy helpers.
@@ -19436,8 +19437,11 @@ this.networkUnsubscribers.push(
             this.localPoopUntil =
                 this.practicePoopUntil;
 
+            /*
+             * V1010492B_PRACTICE_GAS_START_100
+             */
             this.fartGauge =
-                0;
+                100;
 
             this.practiceLastPoopTrailAt =
                 0;
@@ -54206,10 +54210,14 @@ const roomPlayers =
                 target.x;
             const previewY =
                 target.y;
+            /*
+             * V1010492B_LARGER_FINGER_SWATCH
+             * Same center, same sampled pixel. Bigger visual only.
+             */
             const outerSize =
-                64 / zoom;
+                88 / zoom;
             const innerSize =
-                48 / zoom;
+                68 / zoom;
 
             guide
                 .clear()
@@ -57057,6 +57065,31 @@ const roomPlayers =
                     .disableInteractive()
                     .setVisible(false);
 
+                /*
+                 * V1010492B_PRACTICE_SNIPER_ACTIVATE
+                 */
+                if (
+                    this.practiceMode ===
+                    'hunter'
+                ) {
+                    this.sniperActive =
+                        true;
+                    this.sniperAvailable =
+                        true;
+                    this.sniperReadyAt =
+                        0;
+
+                    this.networkPlayerManager
+                        .setLocalMovementHardLocked(
+                            true,
+                        );
+
+                    this.startSniperTacticalBgm();
+                    this.enterSniperCinematic();
+                    this.refreshSniperSupportUi();
+                    return;
+                }
+
                 multiplayerClient
                     .sendSniperToggle(
                         true,
@@ -57377,11 +57410,52 @@ const roomPlayers =
         const now = Date.now();
         if (now < this.sniperReadyAt) return;
 
-        multiplayerClient.sendSniperFire(
-            this.sniperAimWorldX,
-            this.sniperAimWorldY,
-        );
-        this.sniperReadyAt = now + 2000;
+        if (
+            this.practiceMode ===
+            'hunter'
+        ) {
+            /*
+             * V1010492B_PRACTICE_SNIPER_FIRE
+             */
+            const hit =
+                this.hiders.find(
+                    (hider) =>
+                        hider.alive &&
+                        this.getAllPartObjects(
+                            hider,
+                        ).some(
+                            (part) =>
+                                Phaser.Geom.Rectangle.Contains(
+                                    part.getBounds(),
+                                    this.sniperAimWorldX,
+                                    this.sniperAimWorldY,
+                                ),
+                        ),
+                );
+
+            if (hit) {
+                this.hitHider(
+                    hit,
+                );
+
+                this.showHitMarker();
+
+                if (
+                    this.getAliveHiderCount() ===
+                    0
+                ) {
+                    this.showHunterVictory();
+                }
+            }
+        } else {
+            multiplayerClient.sendSniperFire(
+                this.sniperAimWorldX,
+                this.sniperAimWorldY,
+            );
+        }
+
+        this.sniperReadyAt =
+            now + 2000;
 
         this.playProceduralSniperShot();
 
@@ -57646,9 +57720,21 @@ const roomPlayers =
             this.controlsHelpButton.tabIndex = -1;
         }
 
+        /*
+         * V1010492B_PRACTICE_POSITION_FALLBACK
+         */
         const localPosition =
             this.networkPlayerManager
-                .getLocalPlayerPosition();
+                .getLocalPlayerPosition() ??
+            (
+                this.practiceMode ===
+                    'hunter'
+                    ? new Phaser.Math.Vector2(
+                        this.player.x,
+                        this.player.y,
+                    )
+                    : undefined
+            );
 
         if (!localPosition) {
             this.sniperActive =
@@ -60903,11 +60989,18 @@ const holeX =
             this.networkPlayerManager
                 ?.getLocalRole?.();
 
+        /*
+         * V1010492B_PRACTICE_SNIPER_ELIGIBLE
+         */
         const hunter =
             this.phase === 'hunt' &&
             (
-                localRole === 'hunter' ||
-                managerLocalRole === 'hunter'
+                this.practiceMode ===
+                    'hunter' ||
+                localRole ===
+                    'hunter' ||
+                managerLocalRole ===
+                    'hunter'
             );
 
         const remainingMs =
@@ -64531,8 +64624,19 @@ this.weaponHeat =
                 localPoopRemainingMs >
                 0
             ) {
-                /* V1010386_CLIENT_SIMPLE_THREE_FART_CYCLE: GAS stays at zero for the whole 5s debuff. */
-                this.fartGauge = 0;
+                /*
+                 * V1010492B_MULTIPLAYER_GAS_DRAIN
+                 * Display-only interpolation. Server still owns the debuff.
+                 */
+                this.fartGauge =
+                    Phaser.Math.Clamp(
+                        (
+                            localPoopRemainingMs /
+                            5_000
+                        ) * 100,
+                        0,
+                        100,
+                    );
 
                 this.updateFartHud();
             } else {
