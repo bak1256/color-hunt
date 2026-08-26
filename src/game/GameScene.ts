@@ -1,3 +1,4 @@
+/* V1010501H_RESTORE_EXACT_491_PRE_RACK_STRIP_GATE: restore only the proven v491 pre-rack 32-strip lifecycle gate; all working sniper visuals/mechanics unchanged. */
 /* V1010501G4_HIDE_CLEAR_CIRCLE_UNTIL_SCOPE_INTERACTIVE: magnified scope camera stays hidden through rack-in; reveal only after existing scope-interactive gate. */
 /* V1010501G3_FIX_SNIPER_CAMERA_VISIBLE_TYPE: explicit Phaser Camera cast for g2 prehide; runtime behavior unchanged. */
 /* V1010501G2_SCOPE_PREHIDE_REVEAL_LAST_STRUCTURAL: structural prehide/reveal-last regression fix; current blur and scope geometry untouched. */
@@ -61444,6 +61445,56 @@ const roomPlayers =
             !this.sniperActive ||
             !this.sniperCinematicActive
         ) {
+            return;
+        }
+
+        /*
+         * V1010501H_RESTORE_EXACT_491_PRE_RACK_STRIP_GATE
+         * Restore the previously working v491 lifecycle gate exactly:
+         *
+         * Before physical rack-in:
+         *   - DO NOT create/render magnification strip cameras
+         *   - hide stale strip cameras
+         *   - hide optical scope UI
+         *   - return
+         *
+         * During rack-in / once interactive:
+         *   - existing renderer continues unchanged
+         *
+         * This is the exact bug shown in the video:
+         * a borderless sharp circular/moving magnified patch appeared before
+         * the physical scope because the strip cameras rendered too early.
+         */
+        const opticRendererAllowed =
+            this.sniperScopeRackInRunning ||
+            this.sniperScopeInteractive;
+
+        if (!opticRendererAllowed) {
+            this.sniperScopeStripCameras
+                .forEach(
+                    (scopeCamera) => {
+                        scopeCamera.visible =
+                            false;
+                    },
+                );
+
+            this.sniperScope
+                ?.clear()
+                .setVisible(false);
+
+            this.sniperScopeShade
+                ?.clear()
+                .setVisible(false);
+
+            this.sniperReloadGraphics
+                ?.clear()
+                .setVisible(false);
+
+            if (this.sniperScopeDom) {
+                this.sniperScopeDom.style.display =
+                    'none';
+            }
+
             return;
         }
 
