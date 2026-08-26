@@ -1,3 +1,4 @@
+/* V1010505_SECOND_ROUND_SNIPER_BLUR_LIFECYCLE: re-show reused blur DOM on active scope sync; fixes first-round-only blur. Scope geometry/rack-in/cameras LOCKED. */
 /* V1010504C_FIX_DUPLICATE_PAINT_BUBBLE_WIDTH: remove only duplicate width property introduced by 504b; sniper subsystem untouched. */
 /* V1010504B_BUBBLE_2LINES_DESKTOP_BLUR_MASK_ROBUST: Paint Help forced to 2 explicit lines; desktop outside-blur mask opaque color made alpha/luminance-safe. Physical sniper subsystem LOCKED. */
 /* V1010503B_ROBUST_INTRO_COUNTDOWN_BLUR_SCOPE_LOCKED: robust Hunt intro/countdown + CSS-strength-only sniper outside blur. Physical scope subsystem LOCKED. */
@@ -61230,6 +61231,16 @@ const roomPlayers =
         }
 
         if (blurLayer) {
+            /*
+             * V1010505_SECOND_ROUND_SNIPER_BLUR_LIFECYCLE
+             * exitSniperCinematic() intentionally hides this reusable DOM node.
+             * Re-arm ONLY its visibility when the active scope sync resumes.
+             *
+             * No mask/radius/camera/rack-in behavior changes.
+             */
+            blurLayer.style.display =
+                '';
+
             const holeX =
                 this.sniperScopeScreenX *
                 sx;
