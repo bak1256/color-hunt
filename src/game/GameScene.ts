@@ -1,3 +1,4 @@
+/* V1010490_FOCUS_GUARD_GHOST_BUTTON_FIRE_FIX: move sniper transition guard before Hunter focus draw; remove invisible support-button shooting dead zone. */
 /* V1010489_CURRENT_SOURCE_FOCUS_BRIDGE_ROLLBACK_486_487: exact-current rollback of 486/487 + click-to-server focus-vision suppression bridge. */
 /* V1010485_HIDE_NORMAL_HUNTER_VISION_DURING_SNIPER_INTRO: hide only the old Hunter vision spotlight while sniper mode/intro is active. */
 /* V1010480B_ASSIST_PINHOLE_OPAQUE_MICROPULSE_CLEAN_SCOPE: organic FULL dab overlap, opaque Paint Help, true micro heartbeat, clean PC sniper transition. */
@@ -39420,44 +39421,62 @@ this.networkUnsubscribers.push(
                     .getLocalRole();
 
         if (localRole === 'hunter') {
+            /*
+             * V1010490_PRE_DRAW_HUNTER_FOCUS_GUARD
+             *
+             * IMPORTANT:
+             * This guard must live BEFORE drawHunterFocusVision().
+             *
+             * sniperButtonPressBlockUntil bridges the local click frame to
+             * authoritative sniperActive=true. The old 485 guard lived inside
+             * if (sniperActive), so it was structurally unable to cover RTT.
+             */
+            const sniperTransitionPending =
+                Date.now() <
+                this.sniperButtonPressBlockUntil;
+
             if (
-                this.sniperActive
+                sniperTransitionPending ||
+                this.sniperActive ||
+                this.sniperCinematicActive
             ) {
-
-        /* V1010485_HIDE_NORMAL_HUNTER_VISION_DURING_SNIPER_INTRO */
-        /*
-         * V1010489_NETWORK_RTT_FOCUS_GUARD
-         * Bridge pointerdown -> authoritative sniperActive.
-         */
-        if (
-            Date.now() <
-                this.sniperButtonPressBlockUntil ||
-            this.sniperActive ||
-            this.sniperCinematicActive
-        ) {
-            this.hiderVisionGraphics
-                ?.clear()
-                .setVisible(false);
-
-            this.hiderVisionOverlays
-                .forEach(
-                    (overlay) =>
-                        overlay.setVisible(false),
-                );
-
-            return;
-        }
-
                 this.hiderVisionGraphics
                     ?.clear()
                     .setVisible(false);
-                this.hunterMinimapPanel.setVisible(false);
-                this.hunterMinimapText.setVisible(false);
-                this.hunterMinimapMarker.setVisible(false);
-                this.heartbeatDangerOverlay.setVisible(false).setAlpha(0);
-                this.heartbeatBorders.forEach((border) => border.setVisible(false).setAlpha(0));
-                this.heartbeatText.setVisible(false);
-                this.hidePointText.setVisible(false);
+
+                this.hiderVisionOverlays
+                    .forEach(
+                        (overlay) =>
+                            overlay.setVisible(false),
+                    );
+
+                this.hunterMinimapPanel
+                    ?.setVisible(false);
+
+                this.hunterMinimapText
+                    ?.setVisible(false);
+
+                this.hunterMinimapMarker
+                    ?.setVisible(false);
+
+                this.heartbeatDangerOverlay
+                    ?.setVisible(false)
+                    .setAlpha(0);
+
+                this.heartbeatBorders
+                    .forEach(
+                        (border) =>
+                            border
+                                .setVisible(false)
+                                .setAlpha(0),
+                    );
+
+                this.heartbeatText
+                    ?.setVisible(false);
+
+                this.hidePointText
+                    ?.setVisible(false);
+
                 return;
             }
 
@@ -56976,7 +56995,7 @@ const roomPlayers =
                  */
                 this.sniperButtonPressBlockUntil =
                     Date.now() +
-                    1_200;
+                    2_500;
 
                 this.hiderVisionGraphics
                     ?.clear()
@@ -57029,6 +57048,14 @@ const roomPlayers =
                 button.setVisible(false);
 
                 this.unlockGameAudio();
+                /*
+                 * V1010490_DISABLE_SUPPORT_INPUT_ON_CLICK
+                 * Hidden Phaser UI must not retain an active hit area.
+                 */
+                button
+                    .disableInteractive()
+                    .setVisible(false);
+
                 multiplayerClient
                     .sendSniperToggle(
                         true,
@@ -57190,9 +57217,17 @@ const roomPlayers =
                     return;
                 }
 
+                /*
+                 * V1010490_GHOST_BUTTON_BOUNDS_FIX
+                 *
+                 * Invisible support-button bounds must NEVER create a dead
+                 * shooting zone in active sniper mode.
+                 */
                 if (
+                    this.sniperButton?.visible &&
+                    this.sniperButton.input?.enabled &&
                     this.sniperButton
-                        ?.getBounds()
+                        .getBounds()
                         .contains(
                             pointer.x,
                             pointer.y,
@@ -60925,6 +60960,7 @@ const roomPlayers =
                 .setVisible(true);
 
             this.sniperButton
+                .disableInteractive()
                 .setVisible(false);
 
             return;
@@ -60938,6 +60974,7 @@ const roomPlayers =
             this.sniperActive
         ) {
             this.sniperButton
+                .disableInteractive()
                 .setVisible(false);
         } else {
             const halfW =
@@ -60982,6 +61019,19 @@ const roomPlayers =
                     0x183428,
                     0.98,
                 );
+
+            /*
+             * V1010490_SUPPORT_INPUT_LIFECYCLE
+             */
+            if (this.sniperButton.input) {
+                this.sniperButton.input.enabled =
+                    true;
+            } else {
+                this.sniperButton.setInteractive({
+                    useHandCursor:
+                        true,
+                });
+            }
 
             this.sniperButton
                 .setDepth(25020)
