@@ -1,5 +1,4 @@
-/* V1010487_NO_PRE_RACK_RENDER_NO_FLICKER: hide magnification cameras + scope DOM until physical rack-in enters canvas; no blur-mask mutation. */
-/* V1010486_FIX_PRE_RACK_CLEAR_HOLE_ONLY: suppress ONLY the stale sharp blur-hole before the physical sniper scope enters the canvas. */
+/* V1010489_CURRENT_SOURCE_FOCUS_BRIDGE_ROLLBACK_486_487: exact-current rollback of 486/487 + click-to-server focus-vision suppression bridge. */
 /* V1010485_HIDE_NORMAL_HUNTER_VISION_DURING_SNIPER_INTRO: hide only the old Hunter vision spotlight while sniper mode/intro is active. */
 /* V1010480B_ASSIST_PINHOLE_OPAQUE_MICROPULSE_CLEAN_SCOPE: organic FULL dab overlap, opaque Paint Help, true micro heartbeat, clean PC sniper transition. */
 /* V1010479D_RESTORE_ORGANIC_ASSIST_DENSITY_ONLY: remove FULL grid geometry; preserve original organic dots and change density only. */
@@ -39426,7 +39425,13 @@ this.networkUnsubscribers.push(
             ) {
 
         /* V1010485_HIDE_NORMAL_HUNTER_VISION_DURING_SNIPER_INTRO */
+        /*
+         * V1010489_NETWORK_RTT_FOCUS_GUARD
+         * Bridge pointerdown -> authoritative sniperActive.
+         */
         if (
+            Date.now() <
+                this.sniperButtonPressBlockUntil ||
             this.sniperActive ||
             this.sniperCinematicActive
         ) {
@@ -56963,6 +56968,66 @@ const roomPlayers =
                     return;
                 }
 
+                /*
+                 * V1010489_POINTERDOWN_FOCUS_BRIDGE
+                 *
+                 * Local visual state must switch on the SAME frame as the click.
+                 * Do not wait for server RTT to set sniperActive.
+                 */
+                this.sniperButtonPressBlockUntil =
+                    Date.now() +
+                    1_200;
+
+                this.hiderVisionGraphics
+                    ?.clear()
+                    .setVisible(false);
+
+                this.hiderVisionOverlays
+                    .forEach(
+                        (overlay) =>
+                            overlay.setVisible(false),
+                    );
+
+                this.hunterMinimapPanel
+                    ?.setVisible(false);
+
+                this.hunterMinimapText
+                    ?.setVisible(false);
+
+                this.hunterMinimapMarker
+                    ?.setVisible(false);
+
+                this.heartbeatDangerOverlay
+                    ?.setVisible(false)
+                    .setAlpha(0);
+
+                this.heartbeatBorders
+                    .forEach(
+                        (border) =>
+                            border
+                                .setVisible(false)
+                                .setAlpha(0),
+                    );
+
+                this.heartbeatText
+                    ?.setVisible(false);
+
+                this.hidePointText
+                    ?.setVisible(false);
+
+                this.aimLine
+                    ?.clear()
+                    .setVisible(false);
+
+                this.crosshair
+                    ?.clear()
+                    .setVisible(false);
+
+                this.gun
+                    ?.setVisible(false);
+
+                button.setVisible(false);
+
                 this.unlockGameAudio();
                 multiplayerClient
                     .sendSniperToggle(
@@ -57847,28 +57912,6 @@ const roomPlayers =
         /* V1010463_VICTORY_CAMERA_LOCK_SNIPER_INTRO_CHAT_FIX: rack-in owns the only visible scope until tween completion. */
         this.sniperScopeInteractive =
             false;
-
-        /*
-         * V1010486_RACK_PREP
-         *
-         * IMPORTANT: remove any stale CSS blur-hole BEFORE rack-in starts.
-         * The scope/zoom/blur implementation itself is untouched.
-         */
-        if (this.sniperScopeBlurDom) {
-            this.sniperScopeBlurDom.style.maskImage =
-                'none';
-            this.sniperScopeBlurDom.style.webkitMaskImage =
-                'none';
-        }
-
-        this.sniperScopeScreenX =
-            this.gameWidth / 2;
-
-        this.sniperScopeScreenY =
-            this.gameHeight +
-            this.sniperScopeRadius +
-            86;
-
         this.sniperScopeRackInRunning =
             true;
 
@@ -57936,28 +57979,6 @@ const roomPlayers =
 
         this.createSniperScopeCamera();
         this.ensureSniperScopeDom();
-
-        /*
-         * V1010487_PRE_RACK_RENDER_SEAL
-         *
-         * The magnified Phaser strip cameras are real render passes.
-         * Keep them completely invisible while the optic is still below
-         * the canvas. This prevents the mysterious sharp circular patch.
-         *
-         * Do the same for the DOM root. We do NOT modify blur mask-image,
-         * backdrop-filter or rack tween values.
-         */
-        this.sniperScopeStripCameras
-            .forEach(
-                (scopeCamera) => {
-                    scopeCamera.setVisible(false);
-                },
-            );
-
-        if (this.sniperScopeClipDom) {
-            this.sniperScopeClipDom.style.display =
-                'none';
-        }
 
         this.playProceduralSniperRack();
 
@@ -59533,33 +59554,6 @@ const roomPlayers =
 
         const blurLayer =
             this.sniperScopeBlurDom;
-
-        /*
-         * V1010487_DOM_ENTRY_GATE
-         *
-         * Keep the entire optical DOM detached from rendering while the
-         * rack-in circle is physically outside the Phaser canvas.
-         * Existing mask/blur code below remains 100% unchanged.
-         */
-        if (this.sniperScopeRackInRunning) {
-            const rackRadius =
-                this.getActiveSniperScopeRadius();
-
-            const enteredCanvas =
-                this.sniperScopeScreenY -
-                    rackRadius <=
-                this.gameHeight;
-
-            if (!enteredCanvas) {
-                if (clipRoot) {
-                    clipRoot.style.display =
-                        'none';
-                }
-
-                return;
-            }
-        }
-
         if (clipRoot) {
             clipRoot.style.display =
                 '';
@@ -60066,50 +60060,6 @@ const roomPlayers =
         ) {
             this.createSniperScopeCamera();
         }
-
-        /*
-         * V1010487_OPTIC_ENTRY_GATE
-         *
-         * A scope that is still below the canvas must render NOTHING.
-         * Reveal the magnified cameras and optical DOM together only when
-         * the top edge of the real scope crosses into the canvas.
-         */
-        const activeRackRadius =
-            this.getActiveSniperScopeRadius();
-
-        const opticEnteredCanvas =
-            !this.sniperScopeRackInRunning ||
-            (
-                this.sniperScopeScreenY -
-                    activeRackRadius <=
-                this.gameHeight
-            );
-
-        this.sniperScopeStripCameras
-            .forEach(
-                (scopeCamera) => {
-                    scopeCamera.setVisible(
-                        opticEnteredCanvas,
-                    );
-                },
-            );
-
-        if (
-            this.sniperScopeRackInRunning &&
-            !opticEnteredCanvas
-        ) {
-            if (this.sniperScopeClipDom) {
-                this.sniperScopeClipDom.style.display =
-                    'none';
-            }
-
-            /*
-             * Cameras have already been hidden above.
-             * Nothing else needs to render until the physical optic arrives.
-             */
-            return;
-        }
-
         const radius =
             this.getActiveSniperScopeRadius();
 
