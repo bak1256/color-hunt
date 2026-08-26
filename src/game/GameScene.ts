@@ -1,3 +1,5 @@
+/* V1010500B_FIX_TRANSPARENT_VICTORY_BACKGROUND: Phaser Text.setBackgroundColor() requires string; use fully transparent background instead of null. */
+/* V1010500_PAINT_BUBBLE_VICTORY_FONT_SNIPER_SPECTATE: Paint Help bubble retry, real sniper-hint gap, Hunt-intro victory typography, remote sniper-scope spectator camera. */
 /* V1010499B_UI_POLISH_SPECTATOR_VICTORY: persistent Paint Help bubble, spaced sniper hint, remote sniper spectator feedback, clean Finished winner title + Hider reveal circles. */
 /* V1010498C_FIX_SNIPER_DISCOVERY_BRACE: close refreshSniperSupportUi branch broken by v498b; behavior otherwise unchanged. */
 /* V1010498B_DISCOVERY_TIMING_POSITION: sniper bubble spacing + paint bubble timing + sniper button auto-expire */
@@ -936,6 +938,17 @@ export class GameScene extends Phaser.Scene {
     /* V1010499B_UI_POLISH_SPECTATOR_VICTORY: Hider spectator can recognize a Hunter who is in sniper mode. */
     private readonly remoteSniperActiveSessionIds =
         new Set<string>();
+
+    /* V1010500_PAINT_BUBBLE_VICTORY_FONT_SNIPER_SPECTATE: latest server-authoritative remote sniper world aim. */
+    private readonly remoteSniperAimBySessionId =
+        new Map<
+            string,
+            {
+                x: number;
+                y: number;
+            }
+        >();
+
     private sniperSpectatorStatusText?: Phaser.GameObjects.Text;
     private sniperImpactFx = new Set<Phaser.GameObjects.GameObject>();
 
@@ -12773,23 +12786,61 @@ const ribbon =
                 assistButton;
 
             if (!this.paintAssistDiscoveryBubbleShown) {
-                this.paintAssistDiscoveryBubbleShown = true;
-                window.setTimeout(
-                    () => {
-                        const tutorialOpen =
-                            !!document.querySelector('[data-paint-tutorial],[data-confirm-modal],.paint-confirm-modal');
+                /*
+                 * V1010500_PAINT_BUBBLE_VICTORY_FONT_SNIPER_SPECTATE / PAINT_HELP_WAIT_UNTIL_VISIBLE
+                 *
+                 * Do not consume the one-shot flag while the first Paint
+                 * tutorial / confirmation layer is still covering the game.
+                 * PC + mobile both retry until the real Paint Help button is
+                 * visible, then the persistent speech bubble is attached above it.
+                 */
+                const tryShowPaintAssistBubble =
+                    (): void => {
+                        if (
+                            this.phase !== 'paint' ||
+                            !this.paintAssistButton
+                        ) {
+                            return;
+                        }
 
                         if (
-                            !tutorialOpen &&
-                            this.phase === 'paint' &&
-                            this.paintAssistButton &&
-                            !this.paintAssistButton.hidden &&
-                            this.paintAssistButton.style.display !== 'none'
+                            this.paintAssistDiscoveryBubbleShown
                         ) {
-                            this.showFeatureDiscoveryBubble('paintAssist');
+                            return;
                         }
-                    },
-                    1400,
+
+                        const tutorialOpen =
+                            !!document.querySelector(
+                                '[data-paint-tutorial],[data-confirm-modal],.paint-confirm-modal,.colorhunt-guide-overlay',
+                            );
+
+                        const buttonVisible =
+                            !this.paintAssistButton.hidden &&
+                            this.paintAssistButton.style.display !== 'none' &&
+                            this.paintAssistButton.getBoundingClientRect().width > 0 &&
+                            this.paintAssistButton.getBoundingClientRect().height > 0;
+
+                        if (
+                            tutorialOpen ||
+                            !buttonVisible
+                        ) {
+                            window.setTimeout(
+                                tryShowPaintAssistBubble,
+                                250,
+                            );
+                            return;
+                        }
+
+                        this.paintAssistDiscoveryBubbleShown =
+                            true;
+                        this.showFeatureDiscoveryBubble(
+                            'paintAssist',
+                        );
+                    };
+
+                window.setTimeout(
+                    tryShowPaintAssistBubble,
+                    350,
                 );
             }
         } else {
@@ -15537,6 +15588,8 @@ const ribbon =
                     if (!state.active) {
                         this.remoteSniperScopes.get(state.sessionId)?.destroy();
                         this.remoteSniperScopes.delete(state.sessionId);
+                        this.remoteSniperAimBySessionId
+                            .delete(state.sessionId);
                     }
                 },
             ),
@@ -38494,28 +38547,32 @@ this.networkUnsubscribers.push(
              * "GAME OVER + countdown" block is replaced by one clean winner title.
              */
             this.countdownText
+                /*
+                 * V1010500_PAINT_BUBBLE_VICTORY_FONT_SNIPER_SPECTATE / HUNT_INTRO_STYLE_WINNER
+                 * Same visual family as "하이더를 찾자!":
+                 * Arial Black + WHITE fill + BLACK outline + shadow.
+                 * Remove the legacy Text background/padding completely.
+                 */
+                .setBackgroundColor('rgba(0,0,0,0)')
+                .setPadding(0)
                 .setFontFamily(
-                    '"Arial Black","Noto Sans KR","Noto Sans JP",Arial,sans-serif',
+                    '"Arial Black", "Noto Sans KR", "Noto Sans JP", Arial, sans-serif',
                 )
                 .setFontSize(
                     this.mobileControlsEnabled
-                        ? 46
-                        : 64,
+                        ? 48
+                        : 66,
                 )
                 .setFontStyle('bold')
-                .setStroke('#fff8e8', 5)
+                .setColor('#ffffff')
+                .setStroke('#111111', 6)
                 .setShadow(
                     0,
-                    5,
-                    'rgba(0,0,0,.28)',
-                    7,
+                    3,
+                    'rgba(0,0,0,.42)',
+                    0,
                     true,
                     true,
-                )
-                .setColor(
-                    effectiveWinner === 'hunters'
-                        ? '#d94242'
-                        : '#285d48',
                 )
                 .setText(victoryText)
                 .setVisible(
@@ -40041,8 +40098,8 @@ this.networkUnsubscribers.push(
                                     '"Arial Black","Noto Sans KR","Noto Sans JP",Arial,sans-serif',
                                 fontSize:
                                     this.mobileControlsEnabled
-                                        ? '16px'
-                                        : '20px',
+                                        ? '17px'
+                                        : '22px',
                                 color: '#fff4dd',
                                 backgroundColor:
                                     'rgba(20,24,28,.88)',
@@ -40056,7 +40113,7 @@ this.networkUnsubscribers.push(
                         )
                             .setOrigin(0.5)
                             .setScrollFactor(0)
-                            .setDepth(26050);
+                            .setDepth(50000);
                 }
 
                 this.sniperSpectatorStatusText
@@ -43401,6 +43458,106 @@ this.networkUnsubscribers.push(
         if (
             !this.isMultiplayerSession()
         ) {
+            return;
+        }
+
+        /*
+         * V1010500_PAINT_BUBBLE_VICTORY_FONT_SNIPER_SPECTATE / HIDER_SPECTATES_REMOTE_SCOPE
+         *
+         * When a Hider TAB-spectates a Hunter in sniper mode, the Hunter body
+         * must NOT remain the camera target. Follow the server sniper_aim world
+         * point so the Hider literally watches where that scope is looking.
+         */
+        const spectatingRemoteSniper =
+            this.networkPlayerManager
+                .getLocalRole() === 'hider' &&
+            Boolean(this.spectatorSessionId) &&
+            this.remoteSniperActiveSessionIds
+                .has(this.spectatorSessionId);
+
+        const remoteSniperAim =
+            spectatingRemoteSniper
+                ? this.remoteSniperAimBySessionId
+                    .get(this.spectatorSessionId)
+                : undefined;
+
+        if (remoteSniperAim) {
+            const camera =
+                this.cameras.main;
+
+            if (
+                Math.abs(
+                    camera.zoom -
+                    this.gameplayCameraZoom
+                ) > 0.001
+            ) {
+                this.applyFixedHudForZoom(
+                    this.gameplayCameraZoom,
+                );
+                camera.setZoom(
+                    this.gameplayCameraZoom,
+                );
+            }
+
+            camera
+                .stopFollow()
+                .removeBounds()
+                .centerOn(
+                    remoteSniperAim.x,
+                    remoteSniperAim.y,
+                );
+
+            /*
+             * Make the state impossible to miss, even if Hunt tension UI
+             * happened to run in a different order this frame.
+             */
+            if (!this.sniperSpectatorStatusText) {
+                const language =
+                    getLanguage();
+                const copy =
+                    ({
+                        ko: '🎯 저격 모드 중...',
+                        ja: '🎯 狙撃モード中...',
+                        en: '🎯 SNIPER MODE...',
+                        zh: '🎯 狙击模式中...',
+                    } as const)[language];
+
+                this.sniperSpectatorStatusText =
+                    this.add.text(
+                        this.gameWidth / 2,
+                        this.gameHeight - 72,
+                        copy,
+                        {
+                            fontFamily:
+                                '"Arial Black","Noto Sans KR","Noto Sans JP",Arial,sans-serif',
+                            fontSize:
+                                this.mobileControlsEnabled
+                                    ? '17px'
+                                    : '22px',
+                            color: '#fff7de',
+                            backgroundColor:
+                                'rgba(16,20,24,.90)',
+                            padding: {
+                                x: 16,
+                                y: 9,
+                            },
+                            stroke: '#111111',
+                            strokeThickness: 3,
+                        },
+                    )
+                        .setOrigin(0.5)
+                        .setScrollFactor(0)
+                        .setDepth(50000);
+            }
+
+            this.sniperSpectatorStatusText
+                .setPosition(
+                    this.gameWidth / 2,
+                    this.gameHeight - 72,
+                )
+                .setDepth(50000)
+                .setVisible(true);
+
             return;
         }
 
@@ -57729,10 +57886,15 @@ const roomPlayers =
                  * Keep the sniper discovery bubble clearly separated from the
                  * sniper-mode button instead of visually covering it.
                  */
+                /*
+                 * V1010500_PAINT_BUBBLE_VICTORY_FONT_SNIPER_SPECTATE / SNIPER_HINT_REAL_GAP
+                 * Previous target rect/pulse could make 18~22px look almost
+                 * unchanged. Add another ~22px of real separation.
+                 */
                 const sniperGap =
                     this.mobileControlsEnabled
-                        ? 18
-                        : 22;
+                        ? 40
+                        : 44;
                 top=target.bottom+sniperGap;
 
                 if(top+bubble.offsetHeight>canvas.bottom-6){
@@ -57752,6 +57914,33 @@ const roomPlayers =
         };
 
         place();
+
+        /*
+         * V1010500_PAINT_BUBBLE_VICTORY_FONT_SNIPER_SPECTATE / DISCOVERY_BUBBLE_FOLLOWS_TARGET
+         * Phaser support buttons can move/pulse after the DOM bubble is created.
+         * Re-anchor for the whole visible lifetime instead of sampling only once.
+         */
+        let placementFrames = 0;
+        const followTarget =
+            (): void => {
+                if (
+                    !document.body.contains(bubble) ||
+                    placementFrames > 330
+                ) {
+                    return;
+                }
+
+                placementFrames += 1;
+                place();
+                requestAnimationFrame(
+                    followTarget,
+                );
+            };
+
+        requestAnimationFrame(
+            followTarget,
+        );
+
         requestAnimationFrame(()=>{
             place();
             if(document.body.contains(bubble)){
@@ -61228,6 +61417,25 @@ const holeX =
     private drawRemoteSniperScope(
         aim: NetworkSniperAim,
     ): void {
+        /*
+         * V1010500_PAINT_BUBBLE_VICTORY_FONT_SNIPER_SPECTATE / REMOTE_SCOPE_CAMERA_TARGET
+         * The same authoritative sniper_aim that draws the reticle also drives
+         * the Hider spectator camera.
+         */
+        if (
+            Number.isFinite(aim.x) &&
+            Number.isFinite(aim.y)
+        ) {
+            this.remoteSniperAimBySessionId
+                .set(
+                    aim.sessionId,
+                    {
+                        x: aim.x,
+                        y: aim.y,
+                    },
+                );
+        }
+
         let g =
             this.remoteSniperScopes
                 .get(
