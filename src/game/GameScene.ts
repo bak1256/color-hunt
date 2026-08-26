@@ -1,3 +1,4 @@
+/* V1010506_PC_SNIPER_BLUR_COMPOSITOR_STABILIZE: stabilize PC masked backdrop-filter compositor only; physical sniper scope LOCKED. */
 /* V1010505_SECOND_ROUND_SNIPER_BLUR_LIFECYCLE: re-show reused blur DOM on active scope sync; fixes first-round-only blur. Scope geometry/rack-in/cameras LOCKED. */
 /* V1010504C_FIX_DUPLICATE_PAINT_BUBBLE_WIDTH: remove only duplicate width property introduced by 504b; sniper subsystem untouched. */
 /* V1010504B_BUBBLE_2LINES_DESKTOP_BLUR_MASK_ROBUST: Paint Help forced to 2 explicit lines; desktop outside-blur mask opaque color made alpha/luminance-safe. Physical sniper subsystem LOCKED. */
@@ -60629,8 +60630,25 @@ const roomPlayers =
                     'no-repeat',
                 webkitMaskRepeat:
                     'no-repeat',
+                /*
+                 * V1010506_PC_SNIPER_BLUR_COMPOSITOR_STABILIZE
+                 * PC Chrome compositor stabilization:
+                 * keep the moving masked backdrop blur on a dedicated layer.
+                 *
+                 * This changes ONLY browser compositing hints.
+                 * No scope radius / X/Y / mask geometry / camera / rack-in /
+                 * aim / fire logic is touched.
+                 */
+                transform:
+                    'translate3d(0,0,0)',
+                transformOrigin:
+                    '0 0',
+                backfaceVisibility:
+                    'hidden',
+                webkitBackfaceVisibility:
+                    'hidden',
                 willChange:
-                    'mask-image, -webkit-mask-image',
+                    'backdrop-filter, -webkit-backdrop-filter, mask-image, -webkit-mask-image',
             },
         );
 
