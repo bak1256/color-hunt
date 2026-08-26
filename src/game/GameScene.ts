@@ -1,3 +1,4 @@
+/* V1010493B_FINGER_EYEDROPPER_PREVIEW_2X: reduce mobile finger eyedropper preview from 3x to 2x. */
 /* V1010493_FINGER_EYEDROPPER_PREVIEW_3X: enlarge mobile finger eyedropper preview only; sample coordinate unchanged. */
 /* V1010492C_PRACTICE_FART_WALLCLOCK_DRAIN_FIX: Practice Hunter only — immutable 5s poop deadline; GAS 100->0 and debuff always terminate. */
 /* V1010492B_FART_DRAIN_EYEDROPPER_PRACTICE_SNIPER_ROBUST: 5s GAS 100->0 drain + larger finger swatch + local Hunter Practice sniper; 491 scope path untouched. */
@@ -54249,9 +54250,9 @@ const roomPlayers =
              * Only the visible color chip becomes ~3x larger.
              */
             const outerSize =
-                264 / zoom;
+                176 / zoom;
             const innerSize =
-                204 / zoom;
+                136 / zoom;
 
             guide
                 .clear()
