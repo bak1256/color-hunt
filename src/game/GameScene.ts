@@ -1,3 +1,4 @@
+/* V1010495B_COMPACT_CAMERA_RESET_BUTTON: compact Hider mobile Paint camera RESET button only; palette/joystick behavior untouched. */
 /* V1010495_HIDER_PAINT_CAMERA_STICK_POSITION_ONLY: Hider mobile Paint camera joystick moved to far-right; reset directly below; palette untouched. */
 /* V1010494E_PAINT_CAMERA_PAN_CONTROLS_I18N: Paint camera pan — mobile right joystick + reset, desktop arrows, KO/JA/EN/ZH. */
 /* V1010493B_FINGER_EYEDROPPER_PREVIEW_2X: reduce mobile finger eyedropper preview from 3x to 2x. */
@@ -4396,28 +4397,50 @@ private timerText!: Phaser.GameObjects.Text;
 
         this.mobilePaintCameraResetButton =
             this.add.text(
-                this.gameWidth - 72,
+                this.getMobileAimControlScreenX(),
                 this.getMobilePaintCameraResetScreenY(),
-                tr('카메라 리셋'),
+                'RESET',
                 {
-                    fontFamily: 'Arial, sans-serif',
-                    fontSize: '13px',
-                    fontStyle: 'bold',
-                    color: '#ffffff',
-                    backgroundColor: 'rgba(25, 70, 78, 0.86)',
-                    stroke: '#0b3035',
-                    strokeThickness: 3,
-                    fixedWidth: 108,
-                    fixedHeight: 34,
-                    align: 'center',
-                    padding: { top: 7 },
+                    fontFamily:
+                        'Arial, sans-serif',
+                    fontSize:
+                        '12px',
+                    fontStyle:
+                        'bold',
+                    color:
+                        '#173d32',
+                    backgroundColor:
+                        '#f7f3dc',
+                    align:
+                        'center',
+                    fixedWidth:
+                        68,
+                    fixedHeight:
+                        28,
+                    padding: {
+                        top: 6,
+                    },
                 },
             )
                 .setOrigin(0.5)
                 .setScrollFactor(0)
                 .setDepth(6003)
                 .setVisible(false)
-                .setInteractive({ useHandCursor: true })
+                /*
+                 * Small tactile-button feel without changing its hit logic.
+                 */
+                .setShadow(
+                    0,
+                    2,
+                    '#23443b',
+                    2,
+                    false,
+                    true,
+                )
+                .setInteractive({
+                    useHandCursor:
+                        true,
+                })
                 .on(
                     'pointerdown',
                     (
@@ -7368,7 +7391,11 @@ private timerText!: Phaser.GameObjects.Text;
     }
 
     private getMobilePaintCameraResetScreenY(): number {
-        return 382;
+        /*
+         * V1010495B_COMPACT_CAMERA_RESET_BUTTON
+         * Compact RESET sits directly below the Hider Paint camera joystick.
+         */
+        return 363;
     }
     private mobileFireButton?: Phaser.GameObjects.Arc;
     private mobileFireLabel?: Phaser.GameObjects.Text;
