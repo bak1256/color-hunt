@@ -1,3 +1,4 @@
+/* V1010499B_UI_POLISH_SPECTATOR_VICTORY: persistent Paint Help bubble, spaced sniper hint, remote sniper spectator feedback, clean Finished winner title + Hider reveal circles. */
 /* V1010498C_FIX_SNIPER_DISCOVERY_BRACE: close refreshSniperSupportUi branch broken by v498b; behavior otherwise unchanged. */
 /* V1010498B_DISCOVERY_TIMING_POSITION: sniper bubble spacing + paint bubble timing + sniper button auto-expire */
 /* V1010498_FEATURE_DISCOVERY_BUBBLES: larger desktop fart hint + transient sniper/paint-assist discovery bubbles; mechanics untouched. */
@@ -931,6 +932,11 @@ export class GameScene extends Phaser.Scene {
     private sniperButtonText?: Phaser.GameObjects.Text;
     private sniperScope?: Phaser.GameObjects.Graphics;
     private readonly remoteSniperScopes = new Map<string, Phaser.GameObjects.Graphics>();
+
+    /* V1010499B_UI_POLISH_SPECTATOR_VICTORY: Hider spectator can recognize a Hunter who is in sniper mode. */
+    private readonly remoteSniperActiveSessionIds =
+        new Set<string>();
+    private sniperSpectatorStatusText?: Phaser.GameObjects.Text;
     private sniperImpactFx = new Set<Phaser.GameObjects.GameObject>();
 
     /* V1010454_SNIPER_CINEMATIC_CORE */
@@ -15516,6 +15522,18 @@ const ribbon =
 
                         this.refreshSniperSupportUi();
                     }
+                    if (
+                        state.sessionId !== localId
+                    ) {
+                        if (state.active) {
+                            this.remoteSniperActiveSessionIds
+                                .add(state.sessionId);
+                        } else {
+                            this.remoteSniperActiveSessionIds
+                                .delete(state.sessionId);
+                        }
+                    }
+
                     if (!state.active) {
                         this.remoteSniperScopes.get(state.sessionId)?.destroy();
                         this.remoteSniperScopes.delete(state.sessionId);
@@ -38470,20 +38488,36 @@ this.networkUnsubscribers.push(
                 .setFillStyle(0x000000, 0)
                 .setAlpha(0);
 
+            /*
+             * V1010499B_UI_POLISH_SPECTATOR_VICTORY / CLEAN_FINISHED_TITLE
+             * Keep the map and reveal circles readable. The old giant
+             * "GAME OVER + countdown" block is replaced by one clean winner title.
+             */
             this.countdownText
-                .setFontSize(48)
+                .setFontFamily(
+                    '"Arial Black","Noto Sans KR","Noto Sans JP",Arial,sans-serif',
+                )
+                .setFontSize(
+                    this.mobileControlsEnabled
+                        ? 46
+                        : 64,
+                )
+                .setFontStyle('bold')
+                .setStroke('#fff8e8', 5)
+                .setShadow(
+                    0,
+                    5,
+                    'rgba(0,0,0,.28)',
+                    7,
+                    true,
+                    true,
+                )
                 .setColor(
                     effectiveWinner === 'hunters'
-                        ? '#d32f2f'
-                        : '#1f2937',
+                        ? '#d94242'
+                        : '#285d48',
                 )
-                .setText(
-                    [
-                        victoryText,
-                        tr('게임 종료'),
-                        String(remaining),
-                    ].join('\n'),
-                )
+                .setText(victoryText)
                 .setVisible(
                     !this.victoryShowcaseCleanCaptureActive,
                 );
@@ -39800,6 +39834,12 @@ this.networkUnsubscribers.push(
                 : this.networkPlayerManager
                     .getLocalRole();
 
+        /*
+         * V1010499B_UI_POLISH_SPECTATOR_VICTORY: status is opt-in only while spectating a sniper Hunter.
+         */
+        this.sniperSpectatorStatusText
+            ?.setVisible(false);
+
         if (localRole === 'hunter') {
             /*
              * V1010490_PRE_DRAW_HUNTER_FOCUS_GUARD
@@ -39949,19 +39989,87 @@ this.networkUnsubscribers.push(
             spectatedPlayer?.role ===
             'hunter'
         ) {
+            const spectatedHunterSniping =
+                this.remoteSniperActiveSessionIds
+                    .has(
+                        spectatedPlayer.sessionId,
+                    );
+
             const hunterViewPosition =
                 new Phaser.Math.Vector2(
                     spectatedPlayer.x,
                     spectatedPlayer.y,
                 );
 
-            this.drawHunterFocusVision(
-                hunterViewPosition,
-                this.networkPlayerManager
-                    .getPlayerAimAngle(
-                        spectatedPlayer.sessionId,
-                    ),
-            );
+            if (spectatedHunterSniping) {
+                /*
+                 * V1010499B_UI_POLISH_SPECTATOR_VICTORY / HIDER_REMOTE_SNIPER_VIEW
+                 * Do NOT leave the Hider spectator stuck in the normal shotgun
+                 * cone. Remote sniper_aim already carries the Hunter's exact
+                 * world aim and drawRemoteSniperScope() renders that reticle.
+                 * Here we remove the normal cone/round vision restriction and
+                 * add an explicit state label.
+                 */
+                this.hiderVisionGraphics
+                    ?.clear()
+                    .setVisible(false);
+
+                this.hiderVisionOverlays
+                    .forEach(
+                        (overlay) =>
+                            overlay.setVisible(false),
+                    );
+
+                if (!this.sniperSpectatorStatusText) {
+                    const language =
+                        getLanguage();
+                    const copy =
+                        ({
+                            ko: '🎯 저격 모드 중...',
+                            ja: '🎯 狙撃モード中...',
+                            en: '🎯 SNIPER MODE...',
+                            zh: '🎯 狙击模式中...',
+                        } as const)[language];
+
+                    this.sniperSpectatorStatusText =
+                        this.add.text(
+                            this.gameWidth / 2,
+                            this.gameHeight - 74,
+                            copy,
+                            {
+                                fontFamily:
+                                    '"Arial Black","Noto Sans KR","Noto Sans JP",Arial,sans-serif',
+                                fontSize:
+                                    this.mobileControlsEnabled
+                                        ? '16px'
+                                        : '20px',
+                                color: '#fff4dd',
+                                backgroundColor:
+                                    'rgba(20,24,28,.88)',
+                                padding: {
+                                    x: 15,
+                                    y: 9,
+                                },
+                                stroke: '#171717',
+                                strokeThickness: 2,
+                            },
+                        )
+                            .setOrigin(0.5)
+                            .setScrollFactor(0)
+                            .setDepth(26050);
+                }
+
+                this.sniperSpectatorStatusText
+                    .setVisible(true);
+            } else {
+                this.drawHunterFocusVision(
+                    hunterViewPosition,
+                    this.networkPlayerManager
+                        .getPlayerAimAngle(
+                            spectatedPlayer.sessionId,
+                        ),
+                );
+            }
 
             this.hidePointText
                 .setVisible(false);
@@ -43444,6 +43552,13 @@ this.networkUnsubscribers.push(
                 .revealHiders(
                     result.revealedHiders,
                 );
+
+            /*
+             * V1010499B_UI_POLISH_SPECTATOR_VICTORY: Hider winners also get clear survivor circles so their
+             * final hiding positions remain readable behind the clean title.
+             */
+            this.networkPlayerManager
+                .showHiderRevealMarkers();
 
             this.phaseText
                 .setText('')
@@ -57515,6 +57630,9 @@ const roomPlayers =
         const bubble = document.createElement('div');
         bubble.textContent = copy;
 
+        const isPaintAssistBubble =
+            kind === 'paintAssist';
+
         Object.assign(bubble.style,{
             position:'fixed',
             zIndex:'2147483001',
@@ -57522,17 +57640,27 @@ const roomPlayers =
             boxSizing:'border-box',
             padding:this.mobileControlsEnabled ? '7px 10px' : '9px 13px',
             borderRadius:'13px',
-            border:'2px solid rgba(255,255,255,.92)',
-            background:'rgba(25,32,43,.96)',
-            color:'#fff7c7',
+            border:isPaintAssistBubble
+                ? '2px solid rgba(34,49,43,.96)'
+                : '2px solid rgba(255,255,255,.92)',
+            background:isPaintAssistBubble
+                ? 'rgba(255,248,218,.98)'
+                : 'rgba(25,32,43,.96)',
+            color:isPaintAssistBubble
+                ? '#26362f'
+                : '#fff7c7',
             fontFamily:'"Arial Black","Noto Sans KR",Arial,sans-serif',
             fontSize:this.mobileControlsEnabled ? '12px' : '15px',
             fontWeight:'900',
             lineHeight:'1.15',
             whiteSpace:'nowrap',
             textAlign:'center',
-            textShadow:'0 2px 2px rgba(0,0,0,.75)',
-            boxShadow:'0 8px 22px rgba(0,0,0,.32)',
+            textShadow:isPaintAssistBubble
+                ? '0 1px 0 rgba(255,255,255,.8)'
+                : '0 2px 2px rgba(0,0,0,.75)',
+            boxShadow:isPaintAssistBubble
+                ? '0 7px 18px rgba(34,49,43,.22)'
+                : '0 8px 22px rgba(0,0,0,.32)',
             opacity:'0',
             transform:'translateY(-8px) scale(.92)',
             transition:'opacity 150ms ease, transform 180ms cubic-bezier(.2,1.5,.4,1)',
@@ -57548,7 +57676,9 @@ const roomPlayers =
             height:'0',
             borderLeft:'9px solid transparent',
             borderRight:'9px solid transparent',
-            borderBottom:'10px solid rgba(25,32,43,.96)',
+            borderBottom:isPaintAssistBubble
+                ? '10px solid rgba(255,248,218,.98)'
+                : '10px solid rgba(25,32,43,.96)',
         });
         bubble.appendChild(tail);
         document.body.appendChild(bubble);
@@ -57578,15 +57708,45 @@ const roomPlayers =
             let left=target.left+target.width/2-bw/2;
             left=Math.max(canvas.left+6,Math.min(left,canvas.right-bw-6));
             // Requested: directly UNDER the button, never over the character/button.
-            /* V1010498B_DISCOVERY_TIMING_POSITION: keep discovery bubble away from sniper button */
-            let top=target.bottom+22;
-            if(top+bubble.offsetHeight>canvas.bottom-6){
-                top=Math.max(canvas.top+6,target.top-bubble.offsetHeight-10);
+            let top:number;
+
+            if(kind==='paintAssist'){
+                /*
+                 * V1010499B_UI_POLISH_SPECTATOR_VICTORY / PAINT_HELP_PERSISTENT_BUBBLE
+                 * Paint Help guidance belongs ABOVE the Paint Help button,
+                 * like the READY guidance bubble. It remains there until used.
+                 */
+                top=Math.max(
+                    canvas.top+6,
+                    target.top-bubble.offsetHeight-12,
+                );
                 tail.style.top='auto';
                 tail.style.bottom='-10px';
                 tail.style.borderBottom='0 solid transparent';
-                tail.style.borderTop='10px solid rgba(25,32,43,.96)';
+                tail.style.borderTop='10px solid rgba(255,248,218,.98)';
+            }else{
+                /*
+                 * Keep the sniper discovery bubble clearly separated from the
+                 * sniper-mode button instead of visually covering it.
+                 */
+                const sniperGap =
+                    this.mobileControlsEnabled
+                        ? 18
+                        : 22;
+                top=target.bottom+sniperGap;
+
+                if(top+bubble.offsetHeight>canvas.bottom-6){
+                    top=Math.max(
+                        canvas.top+6,
+                        target.top-bubble.offsetHeight-sniperGap,
+                    );
+                    tail.style.top='auto';
+                    tail.style.bottom='-10px';
+                    tail.style.borderBottom='0 solid transparent';
+                    tail.style.borderTop='10px solid rgba(25,32,43,.96)';
+                }
             }
+
             bubble.style.left=`${Math.round(left)}px`;
             bubble.style.top=`${Math.round(top)}px`;
         };
@@ -57601,18 +57761,23 @@ const roomPlayers =
         });
         window.setTimeout(place,100);
 
-        window.setTimeout(()=>{
-            if(!document.body.contains(bubble))return;
-            bubble.style.opacity='0';
-            bubble.style.transform='translateY(-4px) scale(.96)';
+        /*
+         * V1010499B_UI_POLISH_SPECTATOR_VICTORY: Paint Help hint is persistent until the player presses
+         * the Paint Help button (or Paint UI is destroyed). Sniper remains
+         * a short one-time discovery hint.
+         */
+        if(kind==='sniper'){
             window.setTimeout(()=>{
-                bubble.remove();
-                if(kind==='sniper'&&this.sniperDiscoveryBubble===bubble)
-                    this.sniperDiscoveryBubble=undefined;
-                if(kind==='paintAssist'&&this.paintAssistDiscoveryBubble===bubble)
-                    this.paintAssistDiscoveryBubble=undefined;
-            },220);
-        },4200);
+                if(!document.body.contains(bubble))return;
+                bubble.style.opacity='0';
+                bubble.style.transform='translateY(-4px) scale(.96)';
+                window.setTimeout(()=>{
+                    bubble.remove();
+                    if(this.sniperDiscoveryBubble===bubble)
+                        this.sniperDiscoveryBubble=undefined;
+                },220);
+            },4200);
+        }
     }
 
     private hideFeatureDiscoveryBubble(
