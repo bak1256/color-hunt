@@ -608,6 +608,14 @@ this.phaseChangedHandlers.forEach(
 
   private connectionIssueNotified = false;
 
+  /* V1010471_RECOVERY_NOTICE_EPOCH_DEDUPE
+   * Transport recovery itself is unchanged. This flag only deduplicates the
+   * public connectionRecovered pulse so one confirmed drop produces one
+   * recovered notification, even if ping/onReconnect/fresh-handoff convergence
+   * call clearConnectionIssue() more than once.
+   */
+  private connectionRecoveryNoticeArmed = false;
+
   /*
    * V1010373_RECONNECT_SINGLE_AUTHORITY_GAMEPLAY_LOCK / TRANSPORT_GATE
    * Gameplay traffic is legal only while ONE current Room owns a healthy
@@ -1956,6 +1964,13 @@ private async attemptFreshRejoin(
     }
 
     this.connectionIssueNotified = true;
+
+    /* V1010471_RECOVERY_NOTICE_EPOCH_DEDUPE / ARM_ON_REAL_ISSUE
+     * Arm exactly one recovered pulse for this connection-issue epoch.
+     * Reconnect ownership, watchdog timing and transport recovery are untouched.
+     */
+    this.connectionRecoveryNoticeArmed = true;
+
 this.connectionDropHandlers
       .forEach(
         (handler) => {
@@ -1967,6 +1982,18 @@ this.connectionDropHandlers
   private clearConnectionIssue(): void {
     this.connectionIssueNotified = false;
 this.lastRoomPingAt = Date.now();
+
+    /* V1010471_RECOVERY_NOTICE_EPOCH_DEDUPE / ONE_RECOVERED_PULSE
+     * IMPORTANT: do not gate transport recovery itself here. attachRoom(),
+     * SDK reconnect, manual reconnect and fresh clientKey handoff still run
+     * exactly as before. We only suppress duplicate recovered callbacks after
+     * the first successful clear belonging to the same issue epoch.
+     */
+    if (!this.connectionRecoveryNoticeArmed) {
+      return;
+    }
+
+    this.connectionRecoveryNoticeArmed = false;
 
     this.connectionRecoveredHandlers
       .forEach(
