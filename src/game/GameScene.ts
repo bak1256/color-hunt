@@ -1,3 +1,4 @@
+/* V1010492C_PRACTICE_FART_WALLCLOCK_DRAIN_FIX: Practice Hunter only — immutable 5s poop deadline; GAS 100->0 and debuff always terminate. */
 /* V1010492B_FART_DRAIN_EYEDROPPER_PRACTICE_SNIPER_ROBUST: 5s GAS 100->0 drain + larger finger swatch + local Hunter Practice sniper; 491 scope path untouched. */
 /* V1010491_REAL_PRE_SCOPE_CAMERA_LEAK_BLUR_FLICKER_FIX: video-confirmed 32-strip pre-rack magnification leak fix; stable radial blur lifecycle. */
 /* V1010490_FOCUS_GUARD_GHOST_BUTTON_FIRE_FIX: move sniper transition guard before Hunter focus draw; remove invisible support-button shooting dead zone. */
@@ -19182,36 +19183,35 @@ this.networkUnsubscribers.push(
                 100,
             );
 
+        /*
+         * V1010492C_PRACTICE_WALLCLOCK_AUTHORITY
+         *
+         * One immutable deadline owns the whole Practice accident.
+         * No delta-driven deadline rewriting:
+         *
+         *   accident start: practicePoopUntil = now + 5000
+         *   every frame:   remaining = deadline - now
+         *   at 0ms:        finishHunterPracticePoop()
+         *
+         * Therefore Practice can NEVER remain at GAS 100 / SPEED -60% forever.
+         */
+        const practicePoopRemaining =
+            this.practicePoopUntil >
+                0
+                ? Math.max(
+                    0,
+                    this.practicePoopUntil -
+                        Date.now(),
+                )
+                : 0;
+
         const pooped =
-            this.practicePoopRemainingMs >
+            practicePoopRemaining >
             0;
 
         if (pooped) {
-            /*
-             * V1010492B_PRACTICE_GAS_DRAIN
-             * Third fart reaches 100. During the exact 5-second slowdown,
-             * GAS is the countdown itself: 100 -> 0 linearly.
-             */
-            this.fartGauge =
-                Phaser.Math.Clamp(
-                    (
-                        this.practicePoopRemainingMs /
-                        Math.max(
-                            1,
-                            this.practicePoopDurationMs,
-                        )
-                    ) * 100,
-                    0,
-                    100,
-                );
-
-            /*
-             * Keep legacy/shared values mirrored only for HUD/comedy helpers.
-             * They are NOT authoritative.
-             */
-            this.practicePoopUntil =
-                Date.now() +
-                this.practicePoopRemainingMs;
+            this.practicePoopRemainingMs =
+                practicePoopRemaining;
 
             this.localPoopUntil =
                 this.practicePoopUntil;
@@ -19221,21 +19221,44 @@ this.networkUnsubscribers.push(
                 this.practicePoopUntil,
             );
 
-            this.updatePracticePoopVisualEffects();
+            /*
+             * Requested UX:
+             * GAS 100 at accident start -> 0 exactly when the 5s debuff ends.
+             */
+            this.fartGauge =
+                Phaser.Math.Clamp(
+                    (
+                        practicePoopRemaining /
+                        Math.max(
+                            1,
+                            this.practicePoopDurationMs,
+                        )
+                    ) *
+                        100,
+                    0,
+                    100,
+                );
 
+            this.updatePracticePoopVisualEffects();
             this.updateFartHud();
 
-            if (
-                this.practicePoopRemainingMs <=
-                0
-            ) {
-                this.finishHunterPracticePoop();
-            }
-
             /*
-             * HARD LOCK: absolutely no SPACE processing while pooped.
+             * HARD LOCK: no further fart input during the 5s accident.
              */
             return;
+        }
+
+        /*
+         * Deadline existed but has just expired.
+         * Finish ONCE and continue this frame in the safe state.
+         */
+        if (
+            this.practicePoopUntil >
+                0 ||
+            this.practicePoopRemainingMs >
+                0
+        ) {
+            this.finishHunterPracticePoop();
         }
 
         /*
@@ -19430,6 +19453,10 @@ this.networkUnsubscribers.push(
             this.practicePoopRemainingMs =
                 this.practicePoopDurationMs;
 
+            /*
+             * V1010492C_FIXED_5S_PRACTICE_DEADLINE
+             * Assign once. updateHunterPracticeFart() only READS this deadline.
+             */
             this.practicePoopUntil =
                 now +
                 this.practicePoopDurationMs;
