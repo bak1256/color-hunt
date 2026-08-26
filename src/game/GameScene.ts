@@ -1,3 +1,6 @@
+/* V1010497D_REMOVE_UNUSED_VISIBLE_CANVAS_LEFT: compile-only cleanup; v497 behavior unchanged. */
+/* V1010497C_REMOVE_UNUSED_X_BY_MARKER: compile-only cleanup; v497 behavior unchanged. */
+/* V1010497_DESKTOP_ASSIST_POSITION_LOCAL_HIDER_HUNT_PAINT_FIX: PC Paint Help safe-right position + owner-only Hider camouflage restore after final Hunt normalization. */
 /* V1010496B_RESET_SCREEN_SIZE_FIX: keep mobile Hider Paint RESET visually compact by inverse-scaling against Paint camera zoom; palette/joystick untouched. */
 /* V1010496_PAINT_ASSIST_FULLY_OPAQUE_ONLY: Paint Help background and disabled state stay 100% opaque; no camera/palette changes. */
 /* V1010495B_COMPACT_CAMERA_RESET_BUTTON: compact Hider mobile Paint camera RESET button only; palette/joystick behavior untouched. */
@@ -13706,45 +13709,39 @@ const ribbon =
             const buttonWidth =
                 this.paintAssistButton.offsetWidth ||
                 126;
-            const visibleCanvasLeft =
-                Math.max(
-                    8,
-                    rect.left,
-                );
-            const x =
+        /* V1010497D_REMOVE_UNUSED_VISIBLE_CANVAS_LEFT: v497 no longer uses the old visibleCanvasLeft calculation. */
+        /* V1010497C_REMOVE_UNUSED_X_BY_MARKER: removed the dead pre-v497 desktop Paint Help x calculation. */
+
+            /*
+             * V1010497_DESKTOP_ASSIST_POSITION_LOCAL_HIDER_HUNT_PAINT_FIX / PC_PAINT_HELP_SAFE_RIGHT_POSITION
+             *
+             * Keep Paint Help visibly separated from the left movement/UI edge,
+             * but still well left of the maximally enlarged Hider.
+             *
+             * Screenshot target ~= 19% of the real Phaser canvas width.
+             * MOBILE branch above is untouched.
+             */
+            const desiredPaintAssistX =
+                rect.left +
+                rect.width *
+                    0.19;
+
+            const alignedPaintAssistX =
                 Phaser.Math.Clamp(
-                    visibleCanvasLeft +
-                        18,
-                    8,
+                    desiredPaintAssistX,
                     Math.max(
                         8,
+                        rect.left + 8,
+                    ),
+                    Math.min(
+                        rect.right -
+                            buttonWidth -
+                            8,
                         window.innerWidth -
                             buttonWidth -
                             8,
                     ),
                 );
-
-            /*
-             * V1010452G3_PC_PARITY_MOBILE_WAITING_SKILL_POLISH / PC_PAINT_HELP_ALIGN
-             * Align to the right edge of chat/send when available.
-             */
-            const paintDockRect =
-                this.mobilePaintDock
-                    ?.getBoundingClientRect();
-
-            const alignedPaintAssistX =
-                paintDockRect
-                    ? Phaser.Math.Clamp(
-                        paintDockRect.left,
-                        8,
-                        Math.max(
-                            8,
-                            window.innerWidth -
-                                buttonWidth -
-                                8,
-                        ),
-                    )
-                    : x;
 
             this.paintAssistButton.style.left =
                 `${Math.round(alignedPaintAssistX)}px`;
@@ -47353,15 +47350,21 @@ const roomPlayers =
              * traffic already synchronized connected peers during Paint.
              * Full snapshot traffic stays reserved for ACTUAL reconnect recovery.
              */
-            if (
-                this.networkPlayerManager
-                    .isLocalHider() &&
-                this.localPaintHistory.length > 0
-            ) {
-                this.rebuildLocalPaintFromHistory(
-                    false,
-                );
-            }
+            /*
+             * V1010497_DESKTOP_ASSIST_POSITION_LOCAL_HIDER_HUNT_PAINT_FIX / DEFER_LOCAL_HIDER_REBUILD
+             *
+             * Do NOT rebuild before normalizeLocalPlayerForGameplay().
+             * The final owner-only raster restore is performed after startHunt().
+             */
+            const shouldRestoreLocalHiderPaintAfterHuntStart =
+                (
+                    this.networkPlayerManager
+                        .isLocalHider() ||
+                    multiplayerClient
+                        .getLocalPlayer()
+                        ?.role === 'hider'
+                ) &&
+                this.localPaintHistory.length > 0;
 
             this.clearStatus();
 
@@ -47407,6 +47410,32 @@ const roomPlayers =
                 .setHunterGunsVisible();
 
             this.startHunt();
+
+            /*
+             * V1010497_DESKTOP_ASSIST_POSITION_LOCAL_HIDER_HUNT_PAINT_FIX / LOCAL_HIDER_FINAL_RASTER_AFTER_ALL_NORMALIZE
+             *
+             * startHunt() performs another normalizeLocalPlayerForGameplay().
+             * Therefore this is the first safe point where the owner's final
+             * camouflage can be restored without a later transition normalize
+             * immediately replacing it.
+             *
+             * broadcast=false:
+             * - does NOT send paint_stroke
+             * - does NOT alter server paint state
+             * - does NOT affect what Hunters already see
+             * - only repairs the Hider owner's local RenderTexture
+             *
+             * This runs synchronously in the same Paint->Hunt task, before the
+             * browser renders the next frame, so there is no delayed replay pulse.
+             */
+            if (
+                shouldRestoreLocalHiderPaintAfterHuntStart
+            ) {
+                this.rebuildLocalPaintFromHistory(
+                    false,
+                );
+            }
+
             this.startGameplayCamera();
 
             /*
