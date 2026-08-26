@@ -1,3 +1,4 @@
+/* V1010501D_SNIPER_SPECTATOR_PHASE_CLEANUP: remote sniper spectator DOM/scope/state is hard-cleared whenever authoritative phase is not Hunt. */
 /* V1010501C_REMOVE_UNUSED_PAINT_ASSIST_DISCOVERY_ASSIGNMENT: remove leftover assignment after v501b removed obsolete Paint Assist discovery flag. */
 /* V1010501B_REMOVE_UNUSED_PAINT_ASSIST_DISCOVERY_FLAG: remove obsolete Paint Help discovery flag after v501 dedicated READY-style bubble migration. */
 /* V1010501_PAINT_READY_BUBBLE_SNIPER_STATUS_WINLOSE: READY-style Paint Help bubble, no assist toast, lower sniper hint, DOM sniper status, local WIN/LOSE result mood. */
@@ -47255,6 +47256,40 @@ const roomPlayers =
         phaseEndsAt: number,
     ): void {
         this.phaseExpiredSince = 0;
+
+        /*
+         * V1010501D_SNIPER_SPECTATOR_PHASE_CLEANUP
+         *
+         * Remote sniper spectator visuals/state belong to Hunt ONLY.
+         * v501 moved the visible "저격 모드 중..." badge to document.body,
+         * so Phaser's normal clearAllAimingVisuals() cannot remove that DOM node.
+         *
+         * Hard-clean at every non-Hunt authoritative phase boundary:
+         * finished -> lobby, direct lobby recovery, countdown/paint reconnect.
+         */
+        if (phase !== 'hunt') {
+            document
+                .querySelector(
+                    '.colorhunt-sniper-spectator-status',
+                )
+                ?.remove();
+
+            this.sniperSpectatorStatusText
+                ?.setVisible(false);
+
+            this.remoteSniperScopes
+                .forEach(
+                    (scope) => {
+                        scope.destroy();
+                    },
+                );
+            this.remoteSniperScopes.clear();
+
+            this.remoteSniperActiveSessionIds
+                .clear();
+            this.remoteSniperAimBySessionId
+                .clear();
+        }
 
         const remainingMs =
             Math.max(
