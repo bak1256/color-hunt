@@ -1,3 +1,4 @@
+/* V1010514_VULCAN_SNIPER_HELI_TRACKING_RESULT_CLEANUP: opaque Sniper-style rotor helicopter; half-size readable directional spotlight; live aim while firing; deterministic hold-fire; full WIN/LOSE clean capture cleanup. */
 /* V1010513_VULCAN_IMAGE_BLACKOUT_SPOTLIGHT_FIRE_FIX: generated helicopter sprite; guaranteed camera full-black; slower fade-in center travel; spotlight visibility deadlock removed; hold-fire and HEAT gauge restored. */
 /* V1010512_VULCAN_DARK_ENTRY_ORBIT_HOLD_FIRE: no bright flash on Vulcan entry; full-black 500% transfer; persistent dark aerial layer; larger radial ellipse lamp; visible orbit; restored hold-fire/heat/gun audio. */
 /* V1010511_VULCAN_CINEMATIC_SPECTATOR_SPOTLIGHT: owner-only Vulcan cinematic; helicopter vanishes at pilot transfer; Hider keeps own vision until explicitly spectating a Vulcan Hunter. */
@@ -58832,21 +58833,66 @@ const roomPlayers =
                 .setScrollFactor(0)
                 .setVisible(false);
 
-        this.input.on(Phaser.Input.Events.POINTER_MOVE, (pointer: Phaser.Input.Pointer) => {
-            if (
-                !this.vulcanActive ||
-                this.phase !== 'hunt' ||
-                this.vulcanSpotlightReveal < 0.98
-            ) return;
-            const world = pointer.positionToCamera(this.cameras.main) as Phaser.Math.Vector2;
-            this.vulcanTargetX = Phaser.Math.Clamp(world.x, 0, 960);
-            this.vulcanTargetY = Phaser.Math.Clamp(world.y, 0, 540);
-            const now = this.time.now;
-            if (now - this.vulcanLastAimBroadcastAt >= 66 && this.practiceMode !== 'hunter') {
-                this.vulcanLastAimBroadcastAt = now;
-                multiplayerClient.sendVulcanAim(this.vulcanTargetX, this.vulcanTargetY);
-            }
-        });
+        this.input.on(
+            Phaser.Input.Events.POINTER_MOVE,
+            (
+                pointer:
+                    Phaser.Input.Pointer,
+            ) => {
+                if (
+                    !this.vulcanActive ||
+                    this.phase !==
+                        'hunt' ||
+                    this.vulcanCinematicActive
+                ) {
+                    return;
+                }
+
+                const world =
+                    pointer.positionToCamera(
+                        this.cameras.main,
+                    ) as Phaser.Math.Vector2;
+
+                this.vulcanTargetX =
+                    Phaser.Math.Clamp(
+                        world.x,
+                        0,
+                        960,
+                    );
+
+                this.vulcanTargetY =
+                    Phaser.Math.Clamp(
+                        world.y,
+                        0,
+                        540,
+                    );
+
+                /*
+                 * IMPORTANT:
+                 * Do not freeze spotlight while the Vulcan is firing.
+                 * Hunter can sweep the 3-second burst across the map.
+                 */
+                const now =
+                    this.time.now;
+
+                if (
+                    now -
+                        this.vulcanLastAimBroadcastAt >=
+                        66 &&
+                    this.practiceMode !==
+                        'hunter'
+                ) {
+                    this.vulcanLastAimBroadcastAt =
+                        now;
+
+                    multiplayerClient
+                        .sendVulcanAim(
+                            this.vulcanTargetX,
+                            this.vulcanTargetY,
+                        );
+                }
+            },
+        );
 
         this.input.on(
             Phaser.Input.Events.POINTER_DOWN,
@@ -58910,12 +58956,12 @@ const roomPlayers =
                 this.vulcanLastMuzzleFxAt =
                     0;
 
-                /*
-                 * Immediate local feedback: sound + first HEAT frame.
-                 */
                 this.vulcanHeat =
                     0.001;
 
+                /*
+                 * Immediate audible confirmation.
+                 */
                 this.playVulcanGunPulse();
 
                 if (
@@ -62928,66 +62974,220 @@ const roomPlayers =
 
 
 
+
     private createVulcanHelicopter(): void {
-        if (
-            this.vulcanHelicopter
-        ) {
-            this.vulcanHelicopter
-                .destroy(true);
-
-            this.vulcanHelicopter =
-                undefined;
-        }
-
         this.vulcanHelicopterRotorTween
             ?.stop();
 
         this.vulcanHelicopterRotorTween =
             undefined;
 
-        const sprite =
-            this.add.image(
+        this.vulcanHelicopter
+            ?.destroy(true);
+
+        this.vulcanHelicopter =
+            undefined;
+
+        const black =
+            0x010204;
+
+        const fuselage =
+            this.add.ellipse(
+                0,
+                -4,
+                38,
+                82,
+                black,
+                1,
+            );
+
+        const cockpit =
+            this.add.ellipse(
+                0,
+                -28,
+                29,
+                31,
+                black,
+                1,
+            );
+
+        const tailBoom =
+            this.add.rectangle(
+                0,
+                54,
+                12,
+                67,
+                black,
+                1,
+            );
+
+        const tailFinLeft =
+            this.add.triangle(
+                -1,
+                83,
                 0,
                 0,
-                'vulcan-helicopter-topview',
-            )
-                .setOrigin(
-                    0.5,
-                )
-                /*
-                 * Generated asset points to screen-right.
-                 * Rotate nose upward for the entry shot.
-                 */
-                .setAngle(
-                    -90,
-                )
-                .setDisplaySize(
-                    292,
-                    195,
-                );
+                -24,
+                17,
+                -3,
+                19,
+                black,
+                1,
+            );
+
+        const tailFinRight =
+            this.add.triangle(
+                1,
+                83,
+                0,
+                0,
+                24,
+                17,
+                3,
+                19,
+                black,
+                1,
+            );
+
+        const skidLeft =
+            this.add.rectangle(
+                -25,
+                6,
+                6,
+                61,
+                black,
+                1,
+            );
+
+        const skidRight =
+            this.add.rectangle(
+                25,
+                6,
+                6,
+                61,
+                black,
+                1,
+            );
+
+        const rotorHorizontal =
+            this.add.rectangle(
+                0,
+                0,
+                150,
+                5,
+                black,
+                1,
+            );
+
+        const rotorVertical =
+            this.add.rectangle(
+                0,
+                0,
+                5,
+                150,
+                black,
+                1,
+            );
+
+        const rotorHub =
+            this.add.circle(
+                0,
+                0,
+                8,
+                black,
+                1,
+            );
+
+        const rotorGroup =
+            this.add.container(
+                0,
+                -8,
+                [
+                    rotorHorizontal,
+                    rotorVertical,
+                    rotorHub,
+                ],
+            );
+
+        const tailRotor =
+            this.add.container(
+                0,
+                88,
+                [
+                    this.add.rectangle(
+                        0,
+                        0,
+                        34,
+                        3,
+                        black,
+                        1,
+                    ),
+                    this.add.rectangle(
+                        0,
+                        0,
+                        3,
+                        34,
+                        black,
+                        1,
+                    ),
+                ],
+            );
 
         this.vulcanHelicopter =
             this.add.container(
                 0,
                 0,
                 [
-                    sprite,
+                    tailBoom,
+                    tailFinLeft,
+                    tailFinRight,
+                    skidLeft,
+                    skidRight,
+                    fuselage,
+                    cockpit,
+                    rotorGroup,
+                    tailRotor,
                 ],
             )
                 .setDepth(
                     25004,
                 )
                 .setAlpha(
-                    0.98,
+                    1,
                 )
                 .setScale(
-                    1,
+                    0.92,
                 )
                 .setVisible(
                     false,
                 );
-    }
 
+        /*
+         * Same rotor feel as Sniper mode.
+         */
+        this.vulcanHelicopterRotorTween =
+            this.tweens.add({
+                targets:
+                    rotorGroup,
+                angle:
+                    360,
+                duration:
+                    170,
+                repeat:
+                    -1,
+            });
+
+        this.tweens.add({
+            targets:
+                tailRotor,
+            angle:
+                -360,
+            duration:
+                105,
+            repeat:
+                -1,
+        });
+    }
 
     private enterVulcanCinematic(
         isOwner: boolean,
@@ -63965,6 +64165,7 @@ const roomPlayers =
     }
 
 
+
     private drawVulcanSpotlight(
         x: number,
         y: number,
@@ -63983,12 +64184,10 @@ const roomPlayers =
         }
 
         const dx =
-            x -
-            480;
+            x - 480;
 
         const dy =
-            y -
-            270;
+            y - 270;
 
         const distance =
             Math.hypot(
@@ -64014,28 +64213,22 @@ const roomPlayers =
             );
 
         /*
-         * Larger than v512:
-         * center = 144x144 circle,
-         * far edge = 350x86 directional ellipse.
+         * v513 was 144 -> 350.
+         * Exactly ~half now:
+         * center 72x72 circle
+         * far edge 175x43 ellipse.
          */
         const major =
             Phaser.Math.Linear(
-                144,
-                350,
+                72,
+                175,
                 t,
             );
 
         const minor =
             Phaser.Math.Linear(
-                144,
-                86,
-                t,
-            );
-
-        const intensity =
-            Phaser.Math.Linear(
-                1,
-                0.76,
+                72,
+                43,
                 t,
             );
 
@@ -64053,7 +64246,7 @@ const roomPlayers =
 
         darkness.fillStyle(
             0x000103,
-            0.60,
+            0.58,
         );
 
         darkness.fillRect(
@@ -64075,62 +64268,63 @@ const roomPlayers =
             .setRotation(
                 angle,
             )
+            /*
+             * NORMAL instead of ADD:
+             * ADD was washing out Hider/background detail.
+             */
             .setBlendMode(
-                Phaser.BlendModes.ADD,
+                Phaser.BlendModes.NORMAL,
             )
             .setVisible(
                 true,
             );
 
+        /*
+         * Small oblique shadow lip first.
+         * It gives a slight depth/contrast cue without identifying Hiders.
+         */
         light.fillStyle(
-            0xffc94f,
-            0.24 *
-                intensity,
+            0x000000,
+            0.16,
+        );
+
+        light.fillEllipse(
+            7,
+            5,
+            major * 1.62,
+            minor * 1.62,
+        );
+
+        /*
+         * Soft amber outer beam: saturation/contrast cue, not a white flood.
+         */
+        light.fillStyle(
+            0xffc85a,
+            0.10,
         );
 
         light.fillEllipse(
             0,
             0,
-            major *
-                3.2,
-            minor *
-                3.2,
+            major * 2.05,
+            minor * 2.05,
         );
 
         light.fillStyle(
-            0xffdf72,
-            0.36 *
-                intensity,
+            0xffdd7a,
+            0.13,
         );
 
         light.fillEllipse(
             0,
             0,
-            major *
-                2.35,
-            minor *
-                2.35,
+            major * 1.50,
+            minor * 1.50,
         );
 
         light.fillStyle(
-            0xffffb0,
-            0.58 *
-                intensity,
-        );
-
-        light.fillEllipse(
-            0,
-            0,
-            major *
-                1.65,
-            minor *
-                1.65,
-        );
-
-        light.fillStyle(
-            0xffffff,
-            0.94 *
-                intensity,
+            0xffefad,
+            0.15,
         );
 
         light.fillEllipse(
@@ -64141,9 +64335,9 @@ const roomPlayers =
         );
 
         light.lineStyle(
-            4,
-            0xffee9b,
-            0.94,
+            2,
+            0xffe290,
+            0.62,
         );
 
         light.strokeEllipse(
@@ -70772,7 +70966,108 @@ ${shareUrl}`,
         );
     }
 
+    private clearVulcanForResultCapture(): void {
+        this.vulcanActive =
+            false;
+
+        this.vulcanCinematicActive =
+            false;
+
+        this.vulcanSpectatorViewActive =
+            false;
+
+        this.vulcanPointerHeld =
+            false;
+
+        this.vulcanFiring =
+            false;
+
+        this.vulcanSpotlightReveal =
+            0;
+
+        this.vulcanSpotlight
+            ?.clear()
+            .setVisible(false);
+
+        this.vulcanDarkness
+            ?.clear()
+            .setVisible(false);
+
+        this.vulcanCinematicShade
+            ?.setVisible(false)
+            .setAlpha(0);
+
+        this.vulcanCooldownGraphics
+            ?.clear()
+            .setVisible(false);
+
+        this.vulcanImpactFx
+            .forEach(
+                (fx) =>
+                    fx.destroy(),
+            );
+
+        this.vulcanImpactFx
+            .clear();
+
+        this.vulcanHelicopterRotorTween
+            ?.stop();
+
+        this.vulcanHelicopterRotorTween =
+            undefined;
+
+        this.vulcanHelicopter
+            ?.destroy(true);
+
+        this.vulcanHelicopter =
+            undefined;
+
+        /*
+         * Vulcan intentionally reuses Sniper's helicopter ambience.
+         */
+        if (
+            this.sniperHelicopterSound
+                ?.isPlaying
+        ) {
+            this.sniperHelicopterSound
+                .stop();
+        }
+
+        this.networkPlayerManager
+            ?.setLocalMovementHardLocked(
+                false,
+            );
+
+        const camera =
+            this.cameras.main;
+
+        this.tweens.killTweensOf(
+            camera,
+        );
+
+        camera
+            .resetFX()
+            .setRotation(0)
+            .setZoom(
+                this.vulcanSavedCameraZoom ||
+                    1.65,
+            );
+
+        this.applyFixedHudForZoom(
+            camera.zoom,
+        );
+
+        /*
+         * Tactical support music must not leak into WIN/LOSE/result.
+         */
+        this.stopSniperTacticalBgm(
+            true,
+        );
+    }
+
+
     private showHunterVictory(): void {
+        this.clearVulcanForResultCapture();
         if (
             this.practiceMode ===
                 'hunter'
@@ -70833,6 +71128,7 @@ ${shareUrl}`,
     }
 
     private showHiderVictory(): void {
+        this.clearVulcanForResultCapture();
         if (
             this.practiceMode ===
                 'hunter'
