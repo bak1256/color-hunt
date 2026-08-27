@@ -1,3 +1,4 @@
+/* V1010527_PAINT_HUNT_POSITION_LATCH_HIDER_VULCAN_SELFVIEW: atomic local-Hider position latch for Paint->Hunt transition. */
 import Phaser from "phaser";
 
 import {
@@ -3387,6 +3388,91 @@ export class NetworkPlayerManager {
     }
 
     this.syncPaintLayerPosition(view);
+  }
+
+  /*
+   * V1010527_PAINT_HUNT_POSITION_LATCH_HIDER_VULCAN_SELFVIEW / LOCAL_HIDER_TRANSITION_POSITION_LATCH
+   *
+   * Paint may end while the mouse/finger is still held. During the same
+   * transition GameScene performs authoritative resync + normalize passes.
+   * Preserve the exact last rendered hiding position across those passes and
+   * rebase local prediction to it atomically.
+   */
+  latchLocalHiderPositionForHunt(
+    position: Phaser.Math.Vector2 | null,
+  ): void {
+    if (!position) {
+      return;
+    }
+
+    const sessionId =
+      this.getEffectiveLocalSessionId();
+
+    if (!sessionId) {
+      return;
+    }
+
+    const view =
+      this.players.get(sessionId);
+
+    if (
+      !view ||
+      view.role !== "hider"
+    ) {
+      return;
+    }
+
+    const x =
+      Phaser.Math.Clamp(
+        position.x,
+        24,
+        this.gameWidth - 24,
+      );
+
+    const y =
+      Phaser.Math.Clamp(
+        position.y,
+        24,
+        this.gameHeight - 24,
+      );
+
+    this.localX = x;
+    this.localY = y;
+    view.targetX = x;
+    view.targetY = y;
+    view.savedX = x;
+    view.savedY = y;
+    view.movingUntil = 0;
+    view.huntFrozenX = undefined;
+    view.huntFrozenY = undefined;
+
+    this.setViewPosition(
+      view,
+      x,
+      y,
+    );
+
+    this.localMovementInitialized = true;
+    this.localWasMoving = false;
+    this.lastLocalMoveInputAt = 0;
+    this.lastSendTime = this.scene.time.now;
+    this.recentSentPositions = [];
+
+    /*
+     * Make the server/Hunters converge on the same hiding coordinate too.
+     * One final move packet is enough; this is NOT paint snapshot traffic.
+     */
+    if (!this.practiceLocalSessionId) {
+      multiplayerClient.sendMove(
+        x,
+        y,
+      );
+
+      this.rememberSentPosition(
+        x,
+        y,
+      );
+    }
   }
 
   stabilizeHidersForHunt(): void {

@@ -1,3 +1,4 @@
+/* V1010527_PAINT_HUNT_POSITION_LATCH_HIDER_VULCAN_SELFVIEW: force-ended Paint keeps exact Hider hiding position; Hider own-view remote Vulcan VFX uses true camera-state gate. */
 /* V1010526_HIDER_SELF_VIEW_REMOTE_VULCAN_VFX: Hider own-view sees remote Vulcan searchlight + firing VFX without entering aerial spectator camera. */
 /* V1010524B_VULCAN_DOUBLE_ROF_TIGHT_SPREAD_CLIENT: same 3s heat window, 2x presentation ROF, tighter visual grouping. */
 /* V1010523B_VULCAN_MOBILE_VISIBILITY_HARD_GUARD: hard guard prevents generic mobile HUD refresh from resurrecting controls during Vulcan. */
@@ -48923,6 +48924,21 @@ if (
             }
 
             /*
+             * V1010527_PAINT_HUNT_POSITION_LATCH_HIDER_VULCAN_SELFVIEW / CAPTURE_PRE_TRANSITION_HIDER_POSITION
+             *
+             * Capture BEFORE finishActivePaintStroke()/resync/normalize.
+             * A held drawing pointer must never be able to shift the Hider's
+             * hiding coordinate when Paint is force-ended by the server timer.
+             */
+            const preHuntLocalHiderPosition =
+                (
+                    this.networkPlayerManager.isLocalHider() ||
+                    multiplayerClient.getLocalPlayer()?.role === 'hider'
+                )
+                    ? this.networkPlayerManager.getLocalPlayerPosition()
+                    : null;
+
+            /*
              * HOTFIX: Hunt can begin before the painter's final pointer-up.
              * Finish the last stroke first, then rebroadcast the Hider's
              * complete authoritative paint history. Hunter clients therefore
@@ -49004,6 +49020,19 @@ if (
                 .setHunterGunsVisible();
 
             this.startHunt();
+
+            /*
+             * V1010527_PAINT_HUNT_POSITION_LATCH_HIDER_VULCAN_SELFVIEW / RESTORE_PRE_TRANSITION_HIDER_POSITION
+             *
+             * startHunt() performs its own normalization. Re-latch only after
+             * that final pass, then rebuild camouflage at the same coordinate.
+             */
+            if (preHuntLocalHiderPosition) {
+                this.networkPlayerManager
+                    .latchLocalHiderPositionForHunt(
+                        preHuntLocalHiderPosition,
+                    );
+            }
 
             /*
              * V1010497_DESKTOP_ASSIST_POSITION_LOCAL_HIDER_HUNT_PAINT_FIX / LOCAL_HIDER_FINAL_RASTER_AFTER_ALL_NORMALIZE
@@ -65390,7 +65419,7 @@ if (
         graphics
             .clear()
             .setVisible(true)
-            .setDepth(24992)
+            .setDepth(25020)
             .setPosition(x, y)
             .setRotation(angle);
 
@@ -65462,8 +65491,18 @@ if (
         const shouldShow =
             this.phase === 'hunt' &&
             this.roundResultWinner === null &&
-            localPlayer?.role === 'hider' &&
-            !this.spectatorSessionId &&
+            (
+                localPlayer?.role === 'hider' ||
+                this.networkPlayerManager.isLocalHider()
+            ) &&
+            /*
+             * V1010527_PAINT_HUNT_POSITION_LATCH_HIDER_VULCAN_SELFVIEW / TRUE_SELF_VIEW_GATE
+             *
+             * spectatorSessionId can remain populated as the selected Hunter
+             * even after the Hider returns to his own camera. The real switch
+             * that means "Vulcan aerial spectator renderer owns the screen" is
+             * vulcanSpectatorViewActive.
+             */
             !this.vulcanSpectatorViewActive;
 
         if (!shouldShow) {
