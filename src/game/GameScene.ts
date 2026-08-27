@@ -1,3 +1,4 @@
+/* V1010526_HIDER_SELF_VIEW_REMOTE_VULCAN_VFX: Hider own-view sees remote Vulcan searchlight + firing VFX without entering aerial spectator camera. */
 /* V1010524B_VULCAN_DOUBLE_ROF_TIGHT_SPREAD_CLIENT: same 3s heat window, 2x presentation ROF, tighter visual grouping. */
 /* V1010523B_VULCAN_MOBILE_VISIBILITY_HARD_GUARD: hard guard prevents generic mobile HUD refresh from resurrecting controls during Vulcan. */
 /* V1010523_VULCAN_MOBILE_CONTROLS_HIDE_IMMEDIATE: Vulcan support tap instantly hides mobile MOVE/AIM/FIRE/FART controls and clears held pointers. */
@@ -1025,6 +1026,19 @@ export class GameScene extends Phaser.Scene {
     private vulcanImpactFx = new Set<Phaser.GameObjects.GameObject>();
     private readonly remoteVulcanActiveSessionIds = new Set<string>();
     private readonly remoteVulcanAimBySessionId = new Map<string, { x: number; y: number }>();
+
+    /* V1010526_HIDER_SELF_VIEW_REMOTE_VULCAN_VFX
+     * Passive world-space searchlights visible from a Hider's own camera.
+     * One Graphics per remote Vulcan Hunter so multi-Hunter support is safe.
+     */
+    private readonly remoteVulcanSelfViewLights =
+        new Map<string, Phaser.GameObjects.Graphics>();
+
+    private readonly remoteVulcanSelfViewDisplayAim =
+        new Map<string, { x: number; y: number }>();
+
+    private readonly remoteVulcanSelfViewLastFxAt =
+        new Map<string, number>();
     private vulcanSpectatorViewActive = false;
     private vulcanSpectatorSessionId = '';
     private sniperScope?: Phaser.GameObjects.Graphics;
@@ -15987,6 +16001,19 @@ const ribbon =
                     } else {
                         this.remoteVulcanActiveSessionIds.delete(state.sessionId);
                         this.remoteVulcanAimBySessionId.delete(state.sessionId);
+
+                        this.remoteVulcanSelfViewLights
+                            .get(state.sessionId)
+                            ?.destroy();
+
+                        this.remoteVulcanSelfViewLights
+                            .delete(state.sessionId);
+
+                        this.remoteVulcanSelfViewDisplayAim
+                            .delete(state.sessionId);
+
+                        this.remoteVulcanSelfViewLastFxAt
+                            .delete(state.sessionId);
                         if (this.vulcanSpectatorSessionId === state.sessionId) {
                             this.exitVulcanSpectatorView();
                         }
@@ -65319,6 +65346,263 @@ if (
     }
 
 
+    /* V1010526_HIDER_SELF_VIEW_REMOTE_VULCAN_VFX
+     * Draw ONLY the visible beam footprint in normal Hider self-view.
+     * No aerial zoom, no darkness replacement, no camera orbit.
+     */
+    private drawRemoteVulcanSelfViewLight(
+        graphics: Phaser.GameObjects.Graphics,
+        x: number,
+        y: number,
+    ): void {
+        const dx = x - 480;
+        const dy = y - 270;
+
+        const t =
+            Phaser.Math.Clamp(
+                Math.hypot(dx, dy) /
+                    Math.hypot(480, 270),
+                0,
+                1,
+            );
+
+        const angle =
+            Math.atan2(dy, dx);
+
+        /*
+         * Keep the SAME current Vulcan footprint proportions:
+         * center = circle, farther from center = directional ellipse.
+         */
+        const major =
+            Phaser.Math.Linear(
+                144,
+                350,
+                t,
+            );
+
+        const minor =
+            Phaser.Math.Linear(
+                144,
+                86,
+                t,
+            );
+
+        graphics
+            .clear()
+            .setVisible(true)
+            .setDepth(24992)
+            .setPosition(x, y)
+            .setRotation(angle);
+
+        /*
+         * Hider's own view already has its normal visibility treatment.
+         * Add a clean warm beam footprint above it instead of replacing the
+         * whole screen with Vulcan aerial darkness.
+         */
+        graphics.fillStyle(
+            0xfff3b0,
+            0.22,
+        );
+
+        graphics.fillEllipse(
+            0,
+            0,
+            major,
+            minor,
+        );
+
+        graphics.fillStyle(
+            0xfff9d6,
+            0.15,
+        );
+
+        graphics.fillEllipse(
+            0,
+            0,
+            major * 0.72,
+            minor * 0.72,
+        );
+
+        graphics.lineStyle(
+            2,
+            0xffefaa,
+            0.72,
+        );
+
+        graphics.strokeEllipse(
+            0,
+            0,
+            major,
+            minor,
+        );
+    }
+
+    private clearRemoteVulcanSelfViewVfx(): void {
+        this.remoteVulcanSelfViewLights
+            .forEach(
+                (graphics) => {
+                    graphics.destroy();
+                },
+            );
+
+        this.remoteVulcanSelfViewLights.clear();
+        this.remoteVulcanSelfViewDisplayAim.clear();
+        this.remoteVulcanSelfViewLastFxAt.clear();
+    }
+
+    private updateRemoteVulcanSelfViewVfx(): void {
+        const localPlayer =
+            multiplayerClient.getLocalPlayer();
+
+        /*
+         * Requirement: only Hider ORIGINAL self-view.
+         * If TAB/view-switch is watching a Hunter, the existing spectator
+         * Vulcan renderer remains authoritative and we must not double-draw.
+         */
+        const shouldShow =
+            this.phase === 'hunt' &&
+            this.roundResultWinner === null &&
+            localPlayer?.role === 'hider' &&
+            !this.spectatorSessionId &&
+            !this.vulcanSpectatorViewActive;
+
+        if (!shouldShow) {
+            this.clearRemoteVulcanSelfViewVfx();
+            return;
+        }
+
+        const activeIds =
+            Array.from(
+                this.remoteVulcanActiveSessionIds,
+            );
+
+        /*
+         * Destroy stale lights immediately when a Hunter leaves Vulcan mode.
+         */
+        this.remoteVulcanSelfViewLights
+            .forEach(
+                (graphics, sessionId) => {
+                    if (
+                        !this.remoteVulcanActiveSessionIds
+                            .has(sessionId)
+                    ) {
+                        graphics.destroy();
+
+                        this.remoteVulcanSelfViewLights
+                            .delete(sessionId);
+
+                        this.remoteVulcanSelfViewDisplayAim
+                            .delete(sessionId);
+
+                        this.remoteVulcanSelfViewLastFxAt
+                            .delete(sessionId);
+                    }
+                },
+            );
+
+        const now =
+            Date.now();
+
+        for (const sessionId of activeIds) {
+            const aim =
+                this.remoteVulcanAimBySessionId
+                    .get(sessionId);
+
+            if (!aim) {
+                continue;
+            }
+
+            let display =
+                this.remoteVulcanSelfViewDisplayAim
+                    .get(sessionId);
+
+            if (!display) {
+                display = {
+                    x: aim.x,
+                    y: aim.y,
+                };
+
+                this.remoteVulcanSelfViewDisplayAim
+                    .set(
+                        sessionId,
+                        display,
+                    );
+            }
+
+            /*
+             * Match the weighted/lagged searchlight feeling of the aerial view.
+             */
+            display.x =
+                Phaser.Math.Linear(
+                    display.x,
+                    aim.x,
+                    0.22,
+                );
+
+            display.y =
+                Phaser.Math.Linear(
+                    display.y,
+                    aim.y,
+                    0.22,
+                );
+
+            let light =
+                this.remoteVulcanSelfViewLights
+                    .get(sessionId);
+
+            if (!light) {
+                light =
+                    this.add.graphics();
+
+                this.remoteVulcanSelfViewLights
+                    .set(
+                        sessionId,
+                        light,
+                    );
+            }
+
+            this.drawRemoteVulcanSelfViewLight(
+                light,
+                display.x,
+                display.y,
+            );
+
+            /*
+             * Same network firing state, same world coordinate.
+             * The Hider sees the BRRRT impact/tracer shower in his own view.
+             * withSound=false: do not multiply remote gun audio per client.
+             */
+            const firing =
+                this.remoteVulcanFiringSessionIds
+                    .has(sessionId);
+
+            const lastFxAt =
+                this.remoteVulcanSelfViewLastFxAt
+                    .get(sessionId) ??
+                0;
+
+            /*
+             * 524b uses 29ms presentation cadence. Keep this renderer aligned.
+             */
+            if (
+                firing &&
+                now - lastFxAt >= 29
+            ) {
+                this.remoteVulcanSelfViewLastFxAt
+                    .set(
+                        sessionId,
+                        now,
+                    );
+
+                this.spawnVulcanPresentationImpact(
+                    display.x,
+                    display.y,
+                    false,
+                );
+            }
+        }
+    }
+
     private updateVulcanAirSupport(): void {
         /*
          * Result/lobby hard cleanup even if phase still transiently reports Hunt.
@@ -65370,11 +65654,20 @@ if (
                 this.clearVulcanForResultCapture();
             }
 
+            this.clearRemoteVulcanSelfViewVfx();
+
             return;
         }
 
         this.forceTacticalTopHud();
         this.applyTacticalSupportInputLock();
+
+        /*
+         * V1010526_HIDER_SELF_VIEW_REMOTE_VULCAN_VFX
+         * Must run before owner/spectator early-return so a normal Hider
+         * self-camera still receives remote spotlight + bullet presentation.
+         */
+        this.updateRemoteVulcanSelfViewVfx();
 
         const watchedSessionId =
             this.spectatorSessionId ??
@@ -73203,6 +73496,8 @@ ${shareUrl}`,
     }
 
     private clearVulcanForResultCapture(): void {
+        this.clearRemoteVulcanSelfViewVfx();
+
         this.sniperButton
             ?.disableInteractive()
             .setVisible(false);
