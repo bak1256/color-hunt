@@ -1,3 +1,4 @@
+/* V1010528_ATOMIC_PAINT_HUNT_AND_VULCAN_SELFVIEW_PACKET_AUTHORITY: persistent local-Hider transition position lock across both normalize passes. */
 /* V1010527_PAINT_HUNT_POSITION_LATCH_HIDER_VULCAN_SELFVIEW: atomic local-Hider position latch for Paint->Hunt transition. */
 import Phaser from "phaser";
 
@@ -132,6 +133,15 @@ export class NetworkPlayerManager {
 
   private localX = 480;
   private localY = 270;
+
+  /*
+   * V1010528_ATOMIC_PAINT_HUNT_AND_VULCAN_SELFVIEW_PACKET_AUTHORITY / HUNT_TRANSITION_POSITION_LOCK
+   * Exact rendered Hider coordinate captured at the Paint deadline.
+   * normalizeLocalPlayerForGameplay() must honor it until GameScene ends
+   * the transition after startHunt().
+   */
+  private localHiderHuntTransitionLock:
+    Phaser.Math.Vector2 | null = null;
 
   /*
    * 로컬 캐릭터가 현재 화면에 보이는 위치에서
@@ -3528,6 +3538,103 @@ export class NetworkPlayerManager {
     );
   }
 
+  beginLocalHiderHuntTransitionLock(
+    position: Phaser.Math.Vector2 | null,
+  ): void {
+    if (!position) {
+      this.localHiderHuntTransitionLock = null;
+      return;
+    }
+
+    const sessionId =
+      this.getEffectiveLocalSessionId();
+
+    const view =
+      sessionId
+        ? this.players.get(sessionId)
+        : undefined;
+
+    if (
+      !view ||
+      view.role !== "hider"
+    ) {
+      this.localHiderHuntTransitionLock = null;
+      return;
+    }
+
+    this.localHiderHuntTransitionLock =
+      new Phaser.Math.Vector2(
+        Phaser.Math.Clamp(
+          position.x,
+          24,
+          this.gameWidth - 24,
+        ),
+        Phaser.Math.Clamp(
+          position.y,
+          24,
+          this.gameHeight - 24,
+        ),
+      );
+  }
+
+  endLocalHiderHuntTransitionLock(): void {
+    const locked =
+      this.localHiderHuntTransitionLock;
+
+    if (!locked) {
+      return;
+    }
+
+    const sessionId =
+      this.getEffectiveLocalSessionId();
+
+    const view =
+      sessionId
+        ? this.players.get(sessionId)
+        : undefined;
+
+    if (
+      view &&
+      view.role === "hider"
+    ) {
+      this.localX = locked.x;
+      this.localY = locked.y;
+      view.targetX = locked.x;
+      view.targetY = locked.y;
+      view.savedX = locked.x;
+      view.savedY = locked.y;
+      view.movingUntil = 0;
+
+      this.setViewPosition(
+        view,
+        locked.x,
+        locked.y,
+      );
+
+      this.localMovementInitialized = true;
+      this.localWasMoving = false;
+      this.lastLocalMoveInputAt = 0;
+      this.recentSentPositions = [];
+
+      if (!this.practiceLocalSessionId) {
+        multiplayerClient.sendMove(
+          locked.x,
+          locked.y,
+        );
+
+        this.rememberSentPosition(
+          locked.x,
+          locked.y,
+        );
+
+        this.lastSendTime =
+          this.scene.time.now;
+      }
+    }
+
+    this.localHiderHuntTransitionLock = null;
+  }
+
   normalizeLocalPlayerForGameplay(): void {
     const sessionId =
       this.getEffectiveLocalSessionId();
@@ -3548,9 +3655,34 @@ export class NetworkPlayerManager {
     view.huntFrozenX = undefined;
     view.huntFrozenY = undefined;
 
-    this.localX = view.targetX;
-    this.localY = view.targetY;
+    const transitionPosition =
+      view.role === "hider"
+        ? this.localHiderHuntTransitionLock
+        : null;
+
+    const normalizedX =
+      transitionPosition?.x ??
+      view.targetX;
+
+    const normalizedY =
+      transitionPosition?.y ??
+      view.targetY;
+
+    /*
+     * V1010528_ATOMIC_PAINT_HUNT_AND_VULCAN_SELFVIEW_PACKET_AUTHORITY
+     * A stale Schema target must never yank the Hider between the two
+     * Paint->Hunt normalize passes.
+     */
+    this.localX = normalizedX;
+    this.localY = normalizedY;
     this.localMovementInitialized = true;
+
+    if (transitionPosition) {
+      view.targetX = normalizedX;
+      view.targetY = normalizedY;
+      view.savedX = normalizedX;
+      view.savedY = normalizedY;
+    }
 
     view.container
       .setScale(1)
@@ -3560,8 +3692,8 @@ export class NetworkPlayerManager {
           : 120,
       )
       .setPosition(
-        view.targetX,
-        view.targetY,
+        normalizedX,
+        normalizedY,
       )
       .setVisible(true);
 

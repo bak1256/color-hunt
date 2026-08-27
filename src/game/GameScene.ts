@@ -1,3 +1,4 @@
+/* V1010528_ATOMIC_PAINT_HUNT_AND_VULCAN_SELFVIEW_PACKET_AUTHORITY: atomic held-stroke Paint->Hunt handoff + packet-authoritative Hider self-view Vulcan VFX. */
 /* V1010527_PAINT_HUNT_POSITION_LATCH_HIDER_VULCAN_SELFVIEW: force-ended Paint keeps exact Hider hiding position; Hider own-view remote Vulcan VFX uses true camera-state gate. */
 /* V1010526_HIDER_SELF_VIEW_REMOTE_VULCAN_VFX: Hider own-view sees remote Vulcan searchlight + firing VFX without entering aerial spectator camera. */
 /* V1010524B_VULCAN_DOUBLE_ROF_TIGHT_SPREAD_CLIENT: same 3s heat window, 2x presentation ROF, tighter visual grouping. */
@@ -1027,6 +1028,14 @@ export class GameScene extends Phaser.Scene {
     private vulcanImpactFx = new Set<Phaser.GameObjects.GameObject>();
     private readonly remoteVulcanActiveSessionIds = new Set<string>();
     private readonly remoteVulcanAimBySessionId = new Map<string, { x: number; y: number }>();
+
+    /*
+     * V1010528_ATOMIC_PAINT_HUNT_AND_VULCAN_SELFVIEW_PACKET_AUTHORITY / VULCAN_PACKET_AUTHORITY
+     * A fresh vulcan_aim packet is itself proof that this Hunter is currently
+     * operating Vulcan. Do not depend only on vulcan_state delivery timing.
+     */
+    private readonly remoteVulcanAimSeenAtBySessionId =
+        new Map<string, number>();
 
     /* V1010526_HIDER_SELF_VIEW_REMOTE_VULCAN_VFX
      * Passive world-space searchlights visible from a Hider's own camera.
@@ -16037,6 +16046,17 @@ const ribbon =
                         y: Phaser.Math.Clamp(aim.y, 0, 540),
                     },
                 );
+
+                if (
+                    aim.sessionId !==
+                    multiplayerClient.getSessionId()
+                ) {
+                    this.remoteVulcanAimSeenAtBySessionId
+                        .set(
+                            aim.sessionId,
+                            Date.now(),
+                        );
+                }
 
                 if (
                     this.spectatorSessionId ===
@@ -48938,7 +48958,25 @@ if (
                     ? this.networkPlayerManager.getLocalPlayerPosition()
                     : null;
 
+            
             /*
+             * V1010528_ATOMIC_PAINT_HUNT_AND_VULCAN_SELFVIEW_PACKET_AUTHORITY / PRESERVE_LIVE_PAINT_RASTER
+             *
+             * If the deadline arrives while a brush is physically held down,
+             * the RenderTexture currently on screen is already the exact final
+             * camouflage. Commit the stroke, but DO NOT white-reset/replay it
+             * during this same handoff.
+             */
+            const hadLivePaintStrokeAtHuntBoundary =
+                this.isPainting ||
+                this.activeStrokePoints.length > 0 ||
+                this.currentStrokeHistoryPoints.length > 0;
+
+            this.networkPlayerManager
+                .beginLocalHiderHuntTransitionLock(
+                    preHuntLocalHiderPosition,
+                );
+/*
              * HOTFIX: Hunt can begin before the painter's final pointer-up.
              * Finish the last stroke first, then rebroadcast the Hider's
              * complete authoritative paint history. Hunter clients therefore
@@ -49027,14 +49065,7 @@ if (
              * startHunt() performs its own normalization. Re-latch only after
              * that final pass, then rebuild camouflage at the same coordinate.
              */
-            if (preHuntLocalHiderPosition) {
-                this.networkPlayerManager
-                    .latchLocalHiderPositionForHunt(
-                        preHuntLocalHiderPosition,
-                    );
-            }
-
-            /*
+/*
              * V1010497_DESKTOP_ASSIST_POSITION_LOCAL_HIDER_HUNT_PAINT_FIX / LOCAL_HIDER_FINAL_RASTER_AFTER_ALL_NORMALIZE
              *
              * startHunt() performs another normalizeLocalPlayerForGameplay().
@@ -49052,12 +49083,21 @@ if (
              * browser renders the next frame, so there is no delayed replay pulse.
              */
             if (
-                shouldRestoreLocalHiderPaintAfterHuntStart
+                shouldRestoreLocalHiderPaintAfterHuntStart &&
+                !hadLivePaintStrokeAtHuntBoundary
             ) {
                 this.rebuildLocalPaintFromHistory(
                     false,
                 );
             }
+
+            /*
+             * V1010528_ATOMIC_PAINT_HUNT_AND_VULCAN_SELFVIEW_PACKET_AUTHORITY
+             * Both normalize passes are finished. Publish one final position
+             * and release the transition lock only now.
+             */
+            this.networkPlayerManager
+                .endLocalHiderHuntTransitionLock();
 
             this.startGameplayCamera();
 
@@ -65453,9 +65493,9 @@ if (
         );
 
         graphics.lineStyle(
-            2,
-            0xffefaa,
-            0.72,
+            4,
+            0xfff3a8,
+            0.98,
         );
 
         graphics.strokeEllipse(
@@ -65477,6 +65517,7 @@ if (
         this.remoteVulcanSelfViewLights.clear();
         this.remoteVulcanSelfViewDisplayAim.clear();
         this.remoteVulcanSelfViewLastFxAt.clear();
+        this.remoteVulcanAimSeenAtBySessionId.clear();
     }
 
     private updateRemoteVulcanSelfViewVfx(): void {
@@ -65510,9 +65551,44 @@ if (
             return;
         }
 
+        const now =
+            Date.now();
+
+        const activeIdSet =
+            new Set<string>([
+                ...this.remoteVulcanActiveSessionIds,
+                ...this.remoteVulcanFiringSessionIds,
+            ]);
+
+        this.remoteVulcanAimSeenAtBySessionId
+            .forEach(
+                (
+                    seenAt,
+                    sessionId,
+                ) => {
+                    if (
+                        now - seenAt <=
+                        900
+                    ) {
+                        activeIdSet.add(
+                            sessionId,
+                        );
+                    }
+                },
+            );
+
+        const localSessionId =
+            multiplayerClient.getSessionId();
+
+        if (localSessionId) {
+            activeIdSet.delete(
+                localSessionId,
+            );
+        }
+
         const activeIds =
             Array.from(
-                this.remoteVulcanActiveSessionIds,
+                activeIdSet,
             );
 
         /*
@@ -65522,8 +65598,9 @@ if (
             .forEach(
                 (graphics, sessionId) => {
                     if (
-                        !this.remoteVulcanActiveSessionIds
-                            .has(sessionId)
+                        !activeIdSet.has(
+                            sessionId,
+                        )
                     ) {
                         graphics.destroy();
 
@@ -65538,9 +65615,6 @@ if (
                     }
                 },
             );
-
-        const now =
-            Date.now();
 
         for (const sessionId of activeIds) {
             const aim =
