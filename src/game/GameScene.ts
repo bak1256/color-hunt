@@ -1,4 +1,3 @@
-/* V1010521H_HIDER_POSTER_OUTLINE_ONLY_NO_DUPLICATE_AVATAR: Hider victory card keeps the captured painted Hider and draws only a 70% white 1px silhouette outside it. */
 /* V1010521G_VULCAN_SERVER_HEAT_RESULT_CLEAN_HIDER_OUTLINE_CURRENT_SOURCE: server-streamed Vulcan HEAT; one-choice tactical latch; result-first tactical cleanup; clean Hider poster + true white silhouette outline + 2x crown. */
 /* V1010520C_REMOVE_DUPLICATE_AUTHORITATIVE_WINNER: removes duplicate authoritativeWinner declaration introduced by v520b. */
 /* V1010520B_VULCAN_TIMER_RESULT_DOUBLE_BEAM_RECOIL_HEAT_SYNC_ROBUST: tactical clock forced top; winner frame immediately clears Vulcan; spotlight doubled; stronger recoil + shaking HEAT; empty bar and fire-ready state synchronized. */
@@ -46411,92 +46410,264 @@ const roomPlayers =
 
         if (!isHunter) {
             /*
-             * V1010521H_HIDER_POSTER_OUTLINE_ONLY_NO_DUPLICATE_AVATAR
-             *
-             * Victory capture already contains the real painted Hider.
-             * Use the painted avatar ONLY as an alpha mask for the outline.
-             * Never repaint a second avatar over the captured one.
-             */
-            const outlineSessionId =
-                multiplayerClient
-                    .getSessionId();
+ * V1010521K_RESCUE_AND_TRUE_HIDER_OUTLINE
+ *
+ * The real painted Hider already exists in the captured victory frame.
+ * This block generates ONLY a one-pixel outside outline.
+ */
+const outlineSessionId =
+    multiplayerClient
+        .getSessionId();
 
-            if (
-                outlineSessionId
+if (
+    outlineSessionId
+) {
+    const paintedAvatar =
+        this.buildVictoryPaintedHiderCanvas(
+            outlineSessionId,
+        );
+
+    const avatarContext =
+        paintedAvatar.getContext(
+            '2d',
+        );
+
+    if (
+        avatarContext
+    ) {
+        const avatarPixels =
+            avatarContext.getImageData(
+                0,
+                0,
+                paintedAvatar.width,
+                paintedAvatar.height,
+            );
+
+        let minX =
+            paintedAvatar.width;
+
+        let minY =
+            paintedAvatar.height;
+
+        let maxX =
+            -1;
+
+        let maxY =
+            -1;
+
+        for (
+            let pixelY =
+                0;
+            pixelY <
+                paintedAvatar.height;
+            pixelY +=
+                1
+        ) {
+            for (
+                let pixelX =
+                    0;
+                pixelX <
+                    paintedAvatar.width;
+                pixelX +=
+                    1
             ) {
-                const paintedAvatar =
-                    this.buildVictoryPaintedHiderCanvas(
-                        outlineSessionId,
+                const alphaIndex =
+                    (
+                        pixelY *
+                            paintedAvatar.width +
+                        pixelX
+                    ) *
+                        4 +
+                    3;
+
+                if (
+                    avatarPixels.data[
+                        alphaIndex
+                    ] ===
+                    0
+                ) {
+                    continue;
+                }
+
+                minX =
+                    Math.min(
+                        minX,
+                        pixelX,
                     );
 
-                const silhouette =
+                minY =
+                    Math.min(
+                        minY,
+                        pixelY,
+                    );
+
+                maxX =
+                    Math.max(
+                        maxX,
+                        pixelX,
+                    );
+
+                maxY =
+                    Math.max(
+                        maxY,
+                        pixelY,
+                    );
+            }
+        }
+
+        if (
+            maxX >=
+                minX &&
+            maxY >=
+                minY
+        ) {
+            /*
+             * Hider capture uses 4.9x.
+             * Poster then maps sourceW/sourceH into frameW/frameH.
+             */
+            const captureZoom =
+                4.9;
+
+            const avatarScaleX =
+                captureZoom *
+                frameW /
+                Math.max(
+                    1,
+                    sourceW,
+                );
+
+            const avatarScaleY =
+                captureZoom *
+                frameH /
+                Math.max(
+                    1,
+                    sourceH,
+                );
+
+            const renderedW =
+                paintedAvatar.width *
+                avatarScaleX;
+
+            const renderedH =
+                paintedAvatar.height *
+                avatarScaleY;
+
+            const alphaCenterX =
+                (
+                    minX +
+                    maxX +
+                    1
+                ) /
+                2;
+
+            const alphaCenterY =
+                (
+                    minY +
+                    maxY +
+                    1
+                ) /
+                2;
+
+            /*
+             * Victory capture camera centers the actual visual bounds.
+             * Align the alpha silhouette center to the poster frame center.
+             */
+            const drawX =
+                frameX +
+                frameW /
+                    2 -
+                alphaCenterX *
+                    avatarScaleX;
+
+            const drawY =
+                frameY +
+                frameH /
+                    2 -
+                alphaCenterY *
+                    avatarScaleY;
+
+            const whiteMask =
+                document.createElement(
+                    'canvas',
+                );
+
+            whiteMask.width =
+                paintedAvatar.width;
+
+            whiteMask.height =
+                paintedAvatar.height;
+
+            const whiteMaskContext =
+                whiteMask.getContext(
+                    '2d',
+                );
+
+            if (
+                whiteMaskContext
+            ) {
+                whiteMaskContext.drawImage(
+                    paintedAvatar,
+                    0,
+                    0,
+                );
+
+                whiteMaskContext.globalCompositeOperation =
+                    'source-in';
+
+                whiteMaskContext.fillStyle =
+                    '#ffffff';
+
+                whiteMaskContext.fillRect(
+                    0,
+                    0,
+                    whiteMask.width,
+                    whiteMask.height,
+                );
+
+                /*
+                 * Work at FINAL poster resolution.
+                 * ±1 therefore means exactly one output pixel.
+                 */
+                const pad =
+                    2;
+
+                const ringCanvas =
                     document.createElement(
                         'canvas',
                     );
 
-                silhouette.width =
-                    paintedAvatar.width;
+                ringCanvas.width =
+                    Math.max(
+                        1,
+                        Math.ceil(
+                            renderedW,
+                        ) +
+                            pad *
+                                2,
+                    );
 
-                silhouette.height =
-                    paintedAvatar.height;
+                ringCanvas.height =
+                    Math.max(
+                        1,
+                        Math.ceil(
+                            renderedH,
+                        ) +
+                            pad *
+                                2,
+                    );
 
-                const silhouetteContext =
-                    silhouette.getContext(
+                const ringContext =
+                    ringCanvas.getContext(
                         '2d',
                     );
 
                 if (
-                    silhouetteContext
+                    ringContext
                 ) {
-                    silhouetteContext.drawImage(
-                        paintedAvatar,
-                        0,
-                        0,
-                    );
-
-                    silhouetteContext.globalCompositeOperation =
-                        'source-in';
-
-                    silhouetteContext.fillStyle =
-                        'rgba(255,255,255,.70)';
-
-                    silhouetteContext.fillRect(
-                        0,
-                        0,
-                        silhouette.width,
-                        silhouette.height,
-                    );
-
-                    /*
-                     * Match the already-captured Hider's poster placement.
-                     * The center is intentionally NEVER drawn.
-                     */
-                    const heroW =
-                        400;
-
-                    const heroH =
-                        600;
-
-                    const heroX =
-                        frameX +
-                        frameW /
-                            2 -
-                        heroW /
-                            2;
-
-                    const heroY =
-                        frameY +
-                        frameH /
-                            2 -
-                        heroH /
-                            2;
-
-                    context.save();
-
-                    context.imageSmoothingEnabled =
+                    ringContext.imageSmoothingEnabled =
                         false;
 
-                    const outlineOffsets = [
+                    const offsets = [
                         [-1, -1],
                         [0, -1],
                         [1, -1],
@@ -46507,32 +46678,68 @@ const roomPlayers =
                         [1, 1],
                     ] as const;
 
-                    outlineOffsets.forEach(
+                    offsets.forEach(
                         (
                             [
-                                ox,
-                                oy,
+                                offsetX,
+                                offsetY,
                             ],
                         ) => {
-                            context.drawImage(
-                                silhouette,
-                                heroX +
-                                    ox,
-                                heroY +
-                                    oy,
-                                heroW,
-                                heroH,
+                            ringContext.drawImage(
+                                whiteMask,
+                                pad +
+                                    offsetX,
+                                pad +
+                                    offsetY,
+                                renderedW,
+                                renderedH,
                             );
                         },
                     );
 
                     /*
-                     * NO center drawImage(paintedAvatar, ...).
-                     * The captured real painted Hider remains the foreground.
+                     * Remove the complete body from the dilation.
+                     * Only the outside ring remains.
                      */
+                    ringContext.globalCompositeOperation =
+                        'destination-out';
+
+                    ringContext.globalAlpha =
+                        1;
+
+                    ringContext.drawImage(
+                        whiteMask,
+                        pad,
+                        pad,
+                        renderedW,
+                        renderedH,
+                    );
+
+                    ringContext.globalCompositeOperation =
+                        'source-over';
+
+                    context.save();
+
+                    context.globalAlpha =
+                        0.70;
+
+                    context.imageSmoothingEnabled =
+                        false;
+
+                    context.drawImage(
+                        ringCanvas,
+                        drawX -
+                            pad,
+                        drawY -
+                            pad,
+                    );
+
                     context.restore();
                 }
             }
+        }
+    }
+}
 
             const survivorX =
                 frameX +
