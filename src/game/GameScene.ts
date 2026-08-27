@@ -1,3 +1,4 @@
+/* V1010524B_VULCAN_DOUBLE_ROF_TIGHT_SPREAD_CLIENT: same 3s heat window, 2x presentation ROF, tighter visual grouping. */
 /* V1010523B_VULCAN_MOBILE_VISIBILITY_HARD_GUARD: hard guard prevents generic mobile HUD refresh from resurrecting controls during Vulcan. */
 /* V1010523_VULCAN_MOBILE_CONTROLS_HIDE_IMMEDIATE: Vulcan support tap instantly hides mobile MOVE/AIM/FIRE/FART controls and clears held pointers. */
 /* V1010522_MOBILE_VULCAN_BUTTON_SELF_HEAL: self-heals missing Vulcan tactical button on mobile and locks it exactly 2px under Sniper. */
@@ -65069,8 +65070,8 @@ if (
             Phaser.Math.Clamp(
                 x +
                     Phaser.Math.Between(
-                        -26,
-                        26,
+                        -13,
+                        13,
                     ),
                 0,
                 960,
@@ -65080,8 +65081,8 @@ if (
             Phaser.Math.Clamp(
                 y +
                     Phaser.Math.Between(
-                        -18,
-                        18,
+                        -9,
+                        9,
                     ),
                 0,
                 540,
@@ -65667,7 +65668,7 @@ if (
             visualFiring &&
             now -
                 this.vulcanLastMuzzleFxAt >=
-                58
+                29
         ) {
             this.vulcanLastMuzzleFxAt =
                 now;
