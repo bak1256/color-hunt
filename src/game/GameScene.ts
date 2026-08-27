@@ -1,3 +1,4 @@
+/* V1010521H_HIDER_POSTER_OUTLINE_ONLY_NO_DUPLICATE_AVATAR: Hider victory card keeps the captured painted Hider and draws only a 70% white 1px silhouette outside it. */
 /* V1010521G_VULCAN_SERVER_HEAT_RESULT_CLEAN_HIDER_OUTLINE_CURRENT_SOURCE: server-streamed Vulcan HEAT; one-choice tactical latch; result-first tactical cleanup; clean Hider poster + true white silhouette outline + 2x crown. */
 /* V1010520C_REMOVE_DUPLICATE_AUTHORITATIVE_WINNER: removes duplicate authoritativeWinner declaration introduced by v520b. */
 /* V1010520B_VULCAN_TIMER_RESULT_DOUBLE_BEAM_RECOIL_HEAT_SYNC_ROBUST: tactical clock forced top; winner frame immediately clears Vulcan; spotlight doubled; stronger recoil + shaking HEAT; empty bar and fire-ready state synchronized. */
@@ -46410,9 +46411,11 @@ const roomPlayers =
 
         if (!isHunter) {
             /*
-             * V521 HIDER_POSTER_TRUE_OUTLINE:
-             * buildVictoryPaintedHiderCanvas() is transparent outside the actual
-             * painted body. Use its alpha as a real silhouette mask.
+             * V1010521H_HIDER_POSTER_OUTLINE_ONLY_NO_DUPLICATE_AVATAR
+             *
+             * Victory capture already contains the real painted Hider.
+             * Use the painted avatar ONLY as an alpha mask for the outline.
+             * Never repaint a second avatar over the captured one.
              */
             const outlineSessionId =
                 multiplayerClient
@@ -46464,6 +46467,10 @@ const roomPlayers =
                         silhouette.height,
                     );
 
+                    /*
+                     * Match the already-captured Hider's poster placement.
+                     * The center is intentionally NEVER drawn.
+                     */
                     const heroW =
                         400;
 
@@ -46519,14 +46526,10 @@ const roomPlayers =
                         },
                     );
 
-                    context.drawImage(
-                        paintedAvatar,
-                        heroX,
-                        heroY,
-                        heroW,
-                        heroH,
-                    );
-
+                    /*
+                     * NO center drawImage(paintedAvatar, ...).
+                     * The captured real painted Hider remains the foreground.
+                     */
                     context.restore();
                 }
             }
