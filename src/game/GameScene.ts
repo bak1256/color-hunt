@@ -1,3 +1,5 @@
+/* V1010519C_REMOVE_ALL_UNUSED_VULCAN_COOLING_STARTED_AT: removes the obsolete cooling-start field and all stale writes from the pre-v519 proportional cooldown system. */
+/* V1010519_VULCAN_CONTINUOUS_HEAT_SPECTATOR_SYNC_DARK_ALIGN: world-aligned darkness; immediate Hider Vulcan spectator takeover; shared live lamp/fire FX; continuous 3s heat / 3s overheat; hard result-button hide. */
 /* V1010518C_REMOVE_LEGACY_REVEAL_MASK_FIELDS: removes stale spotlightReveal assignments and obsolete GeometryMask remnants after v518b direct-strip spotlight rendering. */
 /* V1010518B_NO_GEOMETRY_MASK_CLEAR_BEAM: removes obsolete spotlightReveal and GeometryMask inversion; true bright spotlight hole is drawn directly into darkness geometry for Phaser 4 compatibility. */
 /* V1010518_VULCAN_CLEAR_BEAM_THIN_HEAT_SPECTATOR_FIRE_LOBBY_HIDE: spotlight cuts a true undarkened ellipse out of Vulcan darkness; thin horizontal HEAT; stronger BRRRT; Hider spectator shares live aim+fire FX; tactical buttons hard-hidden outside Hunt. */
@@ -1003,8 +1005,10 @@ export class GameScene extends Phaser.Scene {
     private vulcanHelicopterRotorTween?: Phaser.Tweens.Tween;
     private vulcanOrbitStartedAt = 0;
     private vulcanHeat = 0;
+    private vulcanHeatUpdatedAt = 0;
+    private vulcanOverheated = false;
+
     private vulcanFireStartedAt = 0;
-    private vulcanCoolingStartedAt = 0;
     private vulcanCoolingDurationMs = 0;
     private vulcanLastMuzzleFxAt = 0;
     private vulcanPointerHeld = false;
@@ -15841,6 +15845,20 @@ const ribbon =
                         this.enterVulcanCinematic(true);
                     } else {
                         this.remoteVulcanActiveSessionIds.add(state.sessionId);
+
+                        /*
+                         * If this Hider was ALREADY watching the Hunter when
+                         * Vulcan activates, switch immediately to the same
+                         * aerial/searchlight camera at the same cinematic moment.
+                         */
+                        if (
+                            this.spectatorSessionId ===
+                            state.sessionId
+                        ) {
+                            this.enterVulcanSpectatorView(
+                                state.sessionId,
+                            );
+                        }
                     }
                 } else {
                     if (isOwner) {
@@ -15865,6 +15883,46 @@ const ribbon =
 
         this.networkUnsubscribers.push(
             multiplayerClient.onVulcanAim((aim: NetworkVulcanAim) => {
+                this.remoteVulcanAimBySessionId.set(
+                    aim.sessionId,
+                    {
+                        x: Phaser.Math.Clamp(aim.x, 0, 960),
+                        y: Phaser.Math.Clamp(aim.y, 0, 540),
+                    },
+                );
+
+                if (
+                    this.spectatorSessionId ===
+                        aim.sessionId &&
+                    this.remoteVulcanActiveSessionIds.has(
+                        aim.sessionId,
+                    )
+                ) {
+                    if (
+                        !this.vulcanSpectatorViewActive ||
+                        this.vulcanSpectatorSessionId !==
+                            aim.sessionId
+                    ) {
+                        this.enterVulcanSpectatorView(
+                            aim.sessionId,
+                        );
+                    }
+
+                    this.vulcanTargetX =
+                        Phaser.Math.Clamp(
+                            aim.x,
+                            0,
+                            960,
+                        );
+
+                    this.vulcanTargetY =
+                        Phaser.Math.Clamp(
+                            aim.y,
+                            0,
+                            540,
+                        );
+                }
+
                 if (this.phase !== 'hunt') return;
                 const x = Phaser.Math.Clamp(aim.x, 0, 960);
                 const y = Phaser.Math.Clamp(aim.y, 0, 540);
@@ -15915,7 +15973,42 @@ const ribbon =
                         );
                 }
 
-                const localId =
+                
+                const localVulcanId =
+                    multiplayerClient.getSessionId();
+
+                /*
+                 * Local heat is now frame-driven continuous HEAT.
+                 * Network packets only confirm active/overheat state and must
+                 * not reset partial accumulated heat.
+                 */
+                if (
+                    state.shooterId ===
+                    localVulcanId
+                ) {
+                    this.vulcanFiring =
+                        state.active;
+
+                    if (
+                        !state.active &&
+                        state.cooldownMs >=
+                            2990
+                    ) {
+                        this.vulcanOverheated =
+                            true;
+
+                        this.vulcanReadyAt =
+                            Date.now() +
+                            Math.max(
+                                0,
+                                state.readyAt -
+                                    state.serverNow,
+                            );
+                    }
+
+                    return;
+                }
+const localId =
                     multiplayerClient.getSessionId();
 
                 if (
@@ -15945,8 +16038,6 @@ const ribbon =
                                 state.startedAt,
                         );
 
-                    this.vulcanCoolingStartedAt =
-                        0;
 
                     this.vulcanCoolingDurationMs =
                         0;
@@ -15968,8 +16059,6 @@ const ribbon =
                         1,
                     );
 
-                this.vulcanCoolingStartedAt =
-                    now;
 
                 this.vulcanCoolingDurationMs =
                     Math.max(
@@ -43262,6 +43351,8 @@ this.networkUnsubscribers.push(
         this.remoteVulcanActiveSessionIds.clear();
         this.remoteVulcanAimBySessionId.clear();
         this.vulcanHeat = 0;
+        this.vulcanHeatUpdatedAt = 0;
+        this.vulcanOverheated = false;
         this.vulcanCoolingDurationMs = 0;
         this.vulcanCinematicActive = false;
         this.vulcanReadyAt = 0;
@@ -58984,10 +59075,11 @@ const roomPlayers =
 
                 if (
                     this.vulcanFiring ||
+                    this.vulcanOverheated ||
                     now <
                         this.vulcanReadyAt ||
-                    this.vulcanHeat >
-                        0.001
+                    this.vulcanHeat >=
+                        0.999
                 ) {
                     return;
                 }
@@ -59026,8 +59118,6 @@ const roomPlayers =
                 this.vulcanLastMuzzleFxAt =
                     0;
 
-                this.vulcanHeat =
-                    0.001;
 
                 /*
                  * Immediate audible confirmation.
@@ -59062,40 +59152,14 @@ const roomPlayers =
                 const now =
                     Date.now();
 
-                const heldMs =
-                    Math.max(
-                        80,
-                        Math.min(
-                            3000,
-                            now -
-                                this.vulcanFireStartedAt,
-                        ),
-                    );
-
                 this.vulcanPointerHeld =
                     false;
 
                 this.vulcanFiring =
                     false;
 
-                this.vulcanHeat =
-                    Phaser.Math.Clamp(
-                        heldMs /
-                            3000,
-                        0,
-                        1,
-                    );
-
-                this.vulcanCoolingStartedAt =
+                this.vulcanHeatUpdatedAt =
                     now;
-
-                this.vulcanCoolingDurationMs =
-                    heldMs *
-                    2;
-
-                this.vulcanReadyAt =
-                    now +
-                    this.vulcanCoolingDurationMs;
 
                 if (
                     this.practiceMode !==
@@ -63295,6 +63359,8 @@ const roomPlayers =
 
         this.vulcanHeat =
             0;
+        this.vulcanHeatUpdatedAt = 0;
+        this.vulcanOverheated = false;
 
         this.vulcanReadyAt =
             0;
@@ -63993,10 +64059,11 @@ const roomPlayers =
 
                 if (
                     this.vulcanFiring ||
+                    this.vulcanOverheated ||
                     now <
                         this.vulcanReadyAt ||
-                    this.vulcanHeat >
-                        0.001
+                    this.vulcanHeat >=
+                        0.999
                 ) {
                     return;
                 }
@@ -64019,8 +64086,6 @@ const roomPlayers =
                 this.vulcanLastMuzzleFxAt =
                     0;
 
-                this.vulcanHeat =
-                    0.001;
 
                 this.playVulcanGunPulse();
 
@@ -64080,8 +64145,6 @@ const roomPlayers =
                         1,
                     );
 
-                this.vulcanCoolingStartedAt =
-                    now;
 
                 this.vulcanCoolingDurationMs =
                     heldMs *
@@ -64364,11 +64427,28 @@ const roomPlayers =
 
 
 
+
     private updateVulcanAirSupport(): void {
+        /*
+         * Result/lobby hard cleanup even if phase still transiently reports Hunt.
+         */
+        const authoritativeWinner =
+            multiplayerClient.getRoom()
+                ?.state.winner;
+
         if (
             this.phase !==
-            'hunt'
+                'hunt' ||
+            this.roundResultWinner !==
+                null ||
+            Boolean(
+                authoritativeWinner,
+            )
         ) {
+            this.sniperButton
+                ?.disableInteractive()
+                .setVisible(false);
+
             this.vulcanButton
                 ?.disableInteractive()
                 .setVisible(false);
@@ -64378,10 +64458,6 @@ const roomPlayers =
 
         this.applyTacticalSupportInputLock();
 
-        /*
-         * If a spectator target exists, test it directly.
-         * Do not require a transient local-role lookup to say "hider".
-         */
         const watchedSessionId =
             this.spectatorSessionId ??
             '';
@@ -64514,107 +64590,121 @@ const roomPlayers =
             Date.now();
 
         /*
-         * Local firing owns HEAT/cooldown authority.
+         * Shotgun-style continuous HEAT.
+         *
+         * FIRE: +100% over 3 seconds.
+         * REST: -100% over 3 seconds.
+         * Partial heat does NOT lock firing.
+         * Only reaching 100% creates a real 3-second overheat lock.
          */
         if (
-            ownerActive &&
-            this.vulcanFiring
+            ownerActive
         ) {
-            const heldMs =
+            if (
+                this.vulcanHeatUpdatedAt <=
+                    0
+            ) {
+                this.vulcanHeatUpdatedAt =
+                    now;
+            }
+
+            const heatDeltaMs =
                 Math.max(
                     0,
-                    now -
-                        this.vulcanFireStartedAt,
+                    Math.min(
+                        100,
+                        now -
+                            this.vulcanHeatUpdatedAt,
+                    ),
                 );
 
-            this.vulcanHeat =
-                Phaser.Math.Clamp(
-                    heldMs /
-                        3000,
-                    0,
-                    1,
-                );
+            this.vulcanHeatUpdatedAt =
+                now;
 
             if (
-                heldMs >=
-                    3000
+                this.vulcanOverheated
             ) {
-                this.vulcanPointerHeld =
-                    false;
-
-                this.vulcanFiring =
-                    false;
+                const remaining =
+                    Math.max(
+                        0,
+                        this.vulcanReadyAt -
+                            now,
+                    );
 
                 this.vulcanHeat =
-                    1;
-
-                this.vulcanCoolingStartedAt =
-                    now;
-
-                this.vulcanCoolingDurationMs =
-                    6000;
-
-                this.vulcanReadyAt =
-                    now +
-                    6000;
+                    Phaser.Math.Clamp(
+                        remaining /
+                            3000,
+                        0,
+                        1,
+                    );
 
                 if (
-                    this.practiceMode !==
-                    'hunter'
+                    remaining <=
+                    0
                 ) {
-                    multiplayerClient
-                        .sendVulcanFireStop();
+                    this.vulcanOverheated =
+                        false;
+
+                    this.vulcanHeat =
+                        0;
+        this.vulcanHeatUpdatedAt = 0;
+        this.vulcanOverheated = false;
                 }
-            }
-        } else if (
-            ownerActive &&
-            this.vulcanHeat >
-                0 &&
-            this.vulcanCoolingDurationMs >
-                0
-        ) {
-            const coolT =
-                Phaser.Math.Clamp(
-                    (
-                        now -
-                        this.vulcanCoolingStartedAt
-                    ) /
-                        this.vulcanCoolingDurationMs,
-                    0,
-                    1,
-                );
-
-            const startHeat =
-                Phaser.Math.Clamp(
-                    this.vulcanCoolingDurationMs /
-                        6000,
-                    0,
-                    1,
-                );
-
-            this.vulcanHeat =
-                Phaser.Math.Linear(
-                    startHeat,
-                    0,
-                    coolT,
-                );
-
-            if (
-                coolT >=
-                    1
+            } else if (
+                this.vulcanFiring
             ) {
                 this.vulcanHeat =
-                    0;
+                    Phaser.Math.Clamp(
+                        this.vulcanHeat +
+                            heatDeltaMs /
+                                3000,
+                        0,
+                        1,
+                    );
 
-                this.vulcanCoolingDurationMs =
-                    0;
+                if (
+                    this.vulcanHeat >=
+                    0.999
+                ) {
+                    this.vulcanHeat =
+                        1;
+
+                    this.vulcanPointerHeld =
+                        false;
+
+                    this.vulcanFiring =
+                        false;
+
+                    this.vulcanOverheated =
+                        true;
+
+                    this.vulcanReadyAt =
+                        now +
+                        3000;
+
+                    if (
+                        this.practiceMode !==
+                        'hunter'
+                    ) {
+                        multiplayerClient
+                            .sendVulcanFireStop();
+                    }
+                }
+            } else {
+                this.vulcanHeat =
+                    Phaser.Math.Clamp(
+                        this.vulcanHeat -
+                            heatDeltaMs /
+                                3000,
+                        0,
+                        1,
+                    );
             }
         }
 
         /*
-         * Presentation firing:
-         * Hunter owner uses local firing state.
-         * Hider spectator uses the watched Hunter's network firing state.
+         * Owner and spectating Hider share the same firing presentation.
          */
         const spectatorFiring =
             this.vulcanSpectatorViewActive &&
@@ -64637,7 +64727,7 @@ const roomPlayers =
             visualFiring &&
             now -
                 this.vulcanLastMuzzleFxAt >=
-                64
+                58
         ) {
             this.vulcanLastMuzzleFxAt =
                 now;
@@ -64646,6 +64736,15 @@ const roomPlayers =
                 this.vulcanDisplayX,
                 this.vulcanDisplayY,
                 true,
+            );
+
+            /*
+             * Extra BRRRT recoil.
+             * Noticeable, but small enough not to sabotage aiming.
+             */
+            camera.shake(
+                52,
+                0.0020,
             );
         }
 
@@ -64731,18 +64830,12 @@ const roomPlayers =
             );
 
         /*
-         * TRUE clear spotlight without GeometryMask.
+         * IMPORTANT:
+         * Darkness stays world-aligned at rotation=0.
+         * Only the clear ellipse is mathematically rotated.
          *
-         * Darkness is rotated around the lamp.
-         * We paint a huge dark field in horizontal strips, but skip the
-         * mathematically calculated ellipse interval in every strip.
-         *
-         * Result:
-         *   outside ellipse -> restricted Vulcan darkness
-         *   inside ellipse  -> untouched ORIGINAL bright map / Hider colors
-         *
-         * This works without GeometryMask.invertAlpha and is stable across
-         * Phaser 3/4 typings and WebGL.
+         * This removes the unpleasant "dark layer tilted against the map"
+         * edge/corner artifact during the helicopter orbit.
          */
         darkness
             .clear()
@@ -64750,11 +64843,11 @@ const roomPlayers =
                 24993,
             )
             .setPosition(
-                x,
-                y,
+                0,
+                0,
             )
             .setRotation(
-                angle,
+                0,
             )
             .setBlendMode(
                 Phaser.BlendModes.NORMAL,
@@ -64768,50 +64861,128 @@ const roomPlayers =
             0.56,
         );
 
-        const fieldHalfWidth =
-            1100;
-
-        const fieldHalfHeight =
-            900;
-
-        const clearRadiusX =
+        const rx =
             major *
             0.59;
 
-        const clearRadiusY =
+        const ry =
             minor *
             0.59;
 
+        const c =
+            Math.cos(
+                angle,
+            );
+
+        const sn =
+            Math.sin(
+                angle,
+            );
+
+        const invRx2 =
+            1 /
+            Math.max(
+                1,
+                rx *
+                    rx,
+            );
+
+        const invRy2 =
+            1 /
+            Math.max(
+                1,
+                ry *
+                    ry,
+            );
+
+        /*
+         * Rotated ellipse:
+         * A*x² + B*x*y + C*y² = 1
+         * solved for x on each horizontal world scanline.
+         */
+        const A =
+            c *
+                c *
+                invRx2 +
+            sn *
+                sn *
+                invRy2;
+
+        const B =
+            2 *
+            c *
+            sn *
+            (
+                invRx2 -
+                invRy2
+            );
+
+        const C =
+            sn *
+                sn *
+                invRx2 +
+            c *
+                c *
+                invRy2;
+
         const bandHeight =
-            5;
+            4;
+
+        const fieldLeft =
+            -120;
+
+        const fieldRight =
+            1080;
+
+        const fieldTop =
+            -120;
+
+        const fieldBottom =
+            660;
 
         for (
-            let localY =
-                -fieldHalfHeight;
-            localY <
-                fieldHalfHeight;
-            localY +=
+            let worldY =
+                fieldTop;
+            worldY <
+                fieldBottom;
+            worldY +=
                 bandHeight
         ) {
-            const centerY =
-                localY +
+            const relativeY =
+                worldY +
                 bandHeight *
-                    0.5;
+                    0.5 -
+                y;
 
-            /*
-             * Outside the vertical ellipse extent, the complete row is dark.
-             */
+            const qa =
+                A;
+
+            const qb =
+                B *
+                relativeY;
+
+            const qc =
+                C *
+                    relativeY *
+                    relativeY -
+                1;
+
+            const discriminant =
+                qb *
+                    qb -
+                4 *
+                    qa *
+                    qc;
+
             if (
-                Math.abs(
-                    centerY,
-                ) >=
-                clearRadiusY
+                discriminant <=
+                0
             ) {
                 darkness.fillRect(
-                    -fieldHalfWidth,
-                    localY,
-                    fieldHalfWidth *
-                        2,
+                    fieldLeft,
+                    worldY,
+                    fieldRight -
+                        fieldLeft,
                     bandHeight +
                         1,
                 );
@@ -64819,47 +64990,84 @@ const roomPlayers =
                 continue;
             }
 
-            /*
-             * x = rx * sqrt(1 - y²/ry²)
-             */
-            const normalizedY =
-                centerY /
-                clearRadiusY;
-
-            const clearHalfWidth =
-                clearRadiusX *
+            const root =
                 Math.sqrt(
-                    Math.max(
-                        0,
-                        1 -
-                            normalizedY *
-                                normalizedY,
-                    ),
+                    discriminant,
                 );
 
-            darkness.fillRect(
-                -fieldHalfWidth,
-                localY,
-                fieldHalfWidth -
-                    clearHalfWidth,
-                bandHeight +
-                    1,
-            );
+            const localX1 =
+                (
+                    -qb -
+                    root
+                ) /
+                (
+                    2 *
+                    qa
+                );
 
-            darkness.fillRect(
-                clearHalfWidth,
-                localY,
-                fieldHalfWidth -
-                    clearHalfWidth,
-                bandHeight +
-                    1,
-            );
+            const localX2 =
+                (
+                    -qb +
+                    root
+                ) /
+                (
+                    2 *
+                    qa
+                );
+
+            const clearLeft =
+                Phaser.Math.Clamp(
+                    x +
+                        Math.min(
+                            localX1,
+                            localX2,
+                        ),
+                    fieldLeft,
+                    fieldRight,
+                );
+
+            const clearRight =
+                Phaser.Math.Clamp(
+                    x +
+                        Math.max(
+                            localX1,
+                            localX2,
+                        ),
+                    fieldLeft,
+                    fieldRight,
+                );
+
+            if (
+                clearLeft >
+                fieldLeft
+            ) {
+                darkness.fillRect(
+                    fieldLeft,
+                    worldY,
+                    clearLeft -
+                        fieldLeft,
+                    bandHeight +
+                        1,
+                );
+            }
+
+            if (
+                clearRight <
+                fieldRight
+            ) {
+                darkness.fillRect(
+                    clearRight,
+                    worldY,
+                    fieldRight -
+                        clearRight,
+                    bandHeight +
+                        1,
+                );
+            }
         }
 
         /*
-         * Visual searchlight rim.
-         * The center stays mostly untouched so camouflage/background detail
-         * remains crisp rather than becoming white/yellow washed-out.
+         * Light graphic may rotate; the GLOBAL darkness layer never does.
          */
         light
             .clear()
@@ -64880,9 +65088,6 @@ const roomPlayers =
                 true,
             );
 
-        /*
-         * Very subtle directional warm edge / saturation cue.
-         */
         light.fillStyle(
             0xffb830,
             0.035,
@@ -64912,16 +65117,17 @@ const roomPlayers =
         );
 
         /*
-         * Slight opposite-direction shadow lip gives a manual depth cue,
-         * but never directly identifies a Hider.
+         * Tiny directional contrast lip:
+         * enough to notice camouflage depth/shadow manually,
+         * never a direct Hider marker.
          */
         light.fillStyle(
             0x3a2100,
-            0.028,
+            0.032,
         );
 
         light.fillEllipse(
-            5,
+            6,
             4,
             major *
                 0.94,
@@ -64943,6 +65149,7 @@ const roomPlayers =
         );
     }
 
+
     private drawVulcanCooldownGauge(
         x: number,
         y: number,
@@ -64959,7 +65166,9 @@ const roomPlayers =
         if (
             !this.vulcanActive ||
             this.phase !==
-                'hunt'
+                'hunt' ||
+            this.roundResultWinner !==
+                null
         ) {
             g.setVisible(
                 false,
@@ -64991,9 +65200,6 @@ const roomPlayers =
                 t,
             );
 
-        /*
-         * Thin, horizontal, centered under the lamp.
-         */
         const width =
             92;
 
@@ -65048,22 +65254,21 @@ const roomPlayers =
             4,
         );
 
+        const color =
+            this.vulcanOverheated
+                ? 0xff2822
+                : heat >
+                    0.72
+                    ? 0xff6c26
+                    : heat >
+                        0.38
+                        ? 0xffc52e
+                        : 0x7ee06b;
+
         if (
             heat >
             0.001
         ) {
-            const color =
-                heat >=
-                    0.99
-                    ? 0xff3429
-                    : heat >
-                        0.66
-                        ? 0xff7b27
-                        : heat >
-                            0.33
-                            ? 0xffc52e
-                            : 0x7ee06b;
-
             g.fillStyle(
                 color,
                 0.98,
@@ -65080,9 +65285,13 @@ const roomPlayers =
         }
 
         g.lineStyle(
-            1,
-            0xffedb0,
-            0.86,
+            this.vulcanOverheated
+                ? 2
+                : 1,
+            this.vulcanOverheated
+                ? 0xff5248
+                : 0xffedb0,
+            0.92,
         );
 
         g.strokeRoundedRect(
@@ -65576,7 +65785,13 @@ const roomPlayers =
          */
         if (
             this.phase !==
-            'hunt'
+                'hunt' ||
+            this.roundResultWinner !==
+                null ||
+            Boolean(
+                multiplayerClient.getRoom()
+                    ?.state.winner,
+            )
         ) {
             this.sniperButton
                 ?.disableInteractive()
@@ -70142,6 +70357,8 @@ this.weaponHeat =
         this.remoteVulcanActiveSessionIds.clear();
         this.remoteVulcanAimBySessionId.clear();
         this.vulcanHeat = 0;
+        this.vulcanHeatUpdatedAt = 0;
+        this.vulcanOverheated = false;
         this.vulcanCoolingDurationMs = 0;
         this.vulcanCinematicActive = false;
         this.vulcanReadyAt = 0;
@@ -71835,6 +72052,14 @@ ${shareUrl}`,
     }
 
     private clearVulcanForResultCapture(): void {
+        this.sniperButton
+            ?.disableInteractive()
+            .setVisible(false);
+
+        this.vulcanButton
+            ?.disableInteractive()
+            .setVisible(false);
+
 
 
 
@@ -71944,6 +72169,14 @@ ${shareUrl}`,
 
 
     private showHunterVictory(): void {
+        this.sniperButton
+            ?.disableInteractive()
+            .setVisible(false);
+
+        this.vulcanButton
+            ?.disableInteractive()
+            .setVisible(false);
+
         this.clearVulcanForResultCapture();
         if (
             this.practiceMode ===
@@ -72005,6 +72238,14 @@ ${shareUrl}`,
     }
 
     private showHiderVictory(): void {
+        this.sniperButton
+            ?.disableInteractive()
+            .setVisible(false);
+
+        this.vulcanButton
+            ?.disableInteractive()
+            .setVisible(false);
+
         this.clearVulcanForResultCapture();
         if (
             this.practiceMode ===
