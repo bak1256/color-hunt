@@ -1,3 +1,4 @@
+/* V1010521G_VULCAN_SERVER_HEAT_RESULT_CLEAN_HIDER_OUTLINE_CURRENT_SOURCE: server-streamed Vulcan HEAT; one-choice tactical latch; result-first tactical cleanup; clean Hider poster + true white silhouette outline + 2x crown. */
 /* V1010520C_REMOVE_DUPLICATE_AUTHORITATIVE_WINNER: removes duplicate authoritativeWinner declaration introduced by v520b. */
 /* V1010520B_VULCAN_TIMER_RESULT_DOUBLE_BEAM_RECOIL_HEAT_SYNC_ROBUST: tactical clock forced top; winner frame immediately clears Vulcan; spotlight doubled; stronger recoil + shaking HEAT; empty bar and fire-ready state synchronized. */
 /* V1010519C_REMOVE_ALL_UNUSED_VULCAN_COOLING_STARTED_AT: removes the obsolete cooling-start field and all stale writes from the pre-v519 proportional cooldown system. */
@@ -971,6 +972,7 @@ export class GameScene extends Phaser.Scene {
     private sniperButtonText?: Phaser.GameObjects.Text;
     /* V1010507_TACTICAL_VULCAN_AIR_SUPPORT */
     private vulcanActive = false;
+    private tacticalSupportChosenThisHunt = false;
     /*
      * V518: darkness is geometry-masked so the spotlight core reveals the
      * ORIGINAL undarkened scene instead of painting pale yellow on top.
@@ -15755,6 +15757,13 @@ const ribbon =
                     if (state.sessionId === localId) {
                         const wasActive = this.sniperActive;
                         this.sniperActive = state.active;
+
+                        if (
+                            state.active
+                        ) {
+                            this.tacticalSupportChosenThisHunt =
+                                true;
+                        }
                         this.sniperAvailable = state.available;
                         this.networkPlayerManager.setLocalHunterSpeedMultiplier(
                             state.active ? 0 : 1,
@@ -15979,33 +15988,82 @@ const ribbon =
                 const localVulcanId =
                     multiplayerClient.getSessionId();
 
-                /*
-                 * Local heat is now frame-driven continuous HEAT.
-                 * Network packets only confirm active/overheat state and must
-                 * not reset partial accumulated heat.
-                 */
                 if (
                     state.shooterId ===
                     localVulcanId
                 ) {
+                    const now =
+                        Date.now();
+
+                    /*
+                     * V521 ONE HEAT SOURCE OF TRUTH:
+                     * The same server HEAT that decides whether firing is legal
+                     * drives the local bar. No independent accumulated total can
+                     * silently drift and later jump to 100%.
+                     */
+                    const serverHeat =
+                        Phaser.Math.Clamp(
+                            Number(
+                                state.heat,
+                            ) ||
+                                0,
+                            0,
+                            1,
+                        );
+
+                    this.vulcanHeat =
+                        serverHeat;
+
+                    this.vulcanHeatUpdatedAt =
+                        now;
+
                     this.vulcanFiring =
                         state.active;
 
+                    this.vulcanPointerHeld =
+                        state.active;
+
                     if (
-                        !state.active &&
+                        state.active
+                    ) {
+                        this.vulcanOverheated =
+                            false;
+
+                        this.vulcanReadyAt =
+                            0;
+
+                        this.vulcanFireStartedAt =
+                            now -
+                            Math.max(
+                                0,
+                                state.serverNow -
+                                    state.startedAt,
+                            );
+                    } else if (
                         state.cooldownMs >=
-                            2990
+                            2_990 ||
+                        serverHeat >=
+                            0.999
                     ) {
                         this.vulcanOverheated =
                             true;
 
+                        this.vulcanHeat =
+                            1;
+
                         this.vulcanReadyAt =
-                            Date.now() +
+                            now +
                             Math.max(
                                 0,
                                 state.readyAt -
                                     state.serverNow,
                             );
+                    } else {
+                        this.vulcanOverheated =
+                            false;
+
+                        this.vulcanReadyAt =
+                            0;
                     }
 
                     return;
@@ -44359,6 +44417,32 @@ this.networkUnsubscribers.push(
         this.roundResultWinner = result.winner;
 
         /*
+         * V521 RESULT_FIRST_CLEAN:
+         * result UI/capture starts only after every tactical gameplay layer is
+         * gone, including remote-Hunter spectator Vulcan view.
+         */
+        this.tacticalSupportChosenThisHunt =
+            true;
+
+        this.sniperButton
+            ?.disableInteractive()
+            .setVisible(false);
+
+        this.vulcanButton
+            ?.disableInteractive()
+            .setVisible(false);
+
+        this.clearVulcanForResultCapture();
+
+        this.exitSniperCinematic();
+
+        this.sniperActive =
+            false;
+
+        this.vulcanActive =
+            false;
+
+        /*
          * v0.10.10.96:
          * A previous status/guide message must never survive into the final
          * result screen as a second contradictory winner box.
@@ -44887,6 +44971,27 @@ this.networkUnsubscribers.push(
     private async captureVictoryFrameForRoleShowcase(
         result: NetworkRoundResult,
     ): Promise<HTMLImageElement> {
+        /*
+         * V521 POSTER_TACTICAL_SEAL:
+         * no spotlight/darkness/orbit/scope may be present in the source frame.
+         */
+        this.clearVulcanForResultCapture();
+
+        this.exitSniperCinematic();
+
+        this.vulcanSpotlight
+            ?.clear()
+            .setVisible(false);
+
+        this.vulcanDarkness
+            ?.clear()
+            .setVisible(false);
+
+        this.vulcanCooldownGraphics
+            ?.clear()
+            .setVisible(false);
+
+
         /*
          * Experimental Battle-mode FX must never cover real Hider camouflage
          * in a normal victory card.
@@ -46304,6 +46409,128 @@ const roomPlayers =
         context.stroke();
 
         if (!isHunter) {
+            /*
+             * V521 HIDER_POSTER_TRUE_OUTLINE:
+             * buildVictoryPaintedHiderCanvas() is transparent outside the actual
+             * painted body. Use its alpha as a real silhouette mask.
+             */
+            const outlineSessionId =
+                multiplayerClient
+                    .getSessionId();
+
+            if (
+                outlineSessionId
+            ) {
+                const paintedAvatar =
+                    this.buildVictoryPaintedHiderCanvas(
+                        outlineSessionId,
+                    );
+
+                const silhouette =
+                    document.createElement(
+                        'canvas',
+                    );
+
+                silhouette.width =
+                    paintedAvatar.width;
+
+                silhouette.height =
+                    paintedAvatar.height;
+
+                const silhouetteContext =
+                    silhouette.getContext(
+                        '2d',
+                    );
+
+                if (
+                    silhouetteContext
+                ) {
+                    silhouetteContext.drawImage(
+                        paintedAvatar,
+                        0,
+                        0,
+                    );
+
+                    silhouetteContext.globalCompositeOperation =
+                        'source-in';
+
+                    silhouetteContext.fillStyle =
+                        'rgba(255,255,255,.70)';
+
+                    silhouetteContext.fillRect(
+                        0,
+                        0,
+                        silhouette.width,
+                        silhouette.height,
+                    );
+
+                    const heroW =
+                        400;
+
+                    const heroH =
+                        600;
+
+                    const heroX =
+                        frameX +
+                        frameW /
+                            2 -
+                        heroW /
+                            2;
+
+                    const heroY =
+                        frameY +
+                        frameH /
+                            2 -
+                        heroH /
+                            2;
+
+                    context.save();
+
+                    context.imageSmoothingEnabled =
+                        false;
+
+                    const outlineOffsets = [
+                        [-1, -1],
+                        [0, -1],
+                        [1, -1],
+                        [-1, 0],
+                        [1, 0],
+                        [-1, 1],
+                        [0, 1],
+                        [1, 1],
+                    ] as const;
+
+                    outlineOffsets.forEach(
+                        (
+                            [
+                                ox,
+                                oy,
+                            ],
+                        ) => {
+                            context.drawImage(
+                                silhouette,
+                                heroX +
+                                    ox,
+                                heroY +
+                                    oy,
+                                heroW,
+                                heroH,
+                            );
+                        },
+                    );
+
+                    context.drawImage(
+                        paintedAvatar,
+                        heroX,
+                        heroY,
+                        heroW,
+                        heroH,
+                    );
+
+                    context.restore();
+                }
+            }
+
             const survivorX =
                 frameX +
                 frameW / 2;
@@ -46363,11 +46590,11 @@ const roomPlayers =
             context.fillStyle =
                 '#ffd45f';
             context.font =
-                '900 31px Arial, sans-serif';
+                '900 62px Arial, sans-serif';
             context.fillText(
                 '♛',
                 survivorX,
-                badgeY - 22,
+                badgeY - 42,
             );
 
             context.restore();
@@ -64810,18 +65037,30 @@ const roomPlayers =
             } else if (
                 this.vulcanFiring
             ) {
-                this.vulcanHeat =
-                    Phaser.Math.Clamp(
-                        this.vulcanHeat +
-                            heatDeltaMs /
-                                3000,
-                        0,
-                        1,
-                    );
+                if (
+                    this.practiceMode ===
+                        'hunter'
+                ) {
+                    this.vulcanHeat =
+                        Phaser.Math.Clamp(
+                            this.vulcanHeat +
+                                heatDeltaMs /
+                                    3000,
+                            0,
+                            1,
+                        );
+                }
+
+                /*
+                 * Multiplayer HEAT comes from the server stream every ~90ms.
+                 * Do not double-integrate it locally.
+                 */
 
                 if (
+                    this.practiceMode ===
+                        'hunter' &&
                     this.vulcanHeat >=
-                    0.999
+                        0.999
                 ) {
                     this.vulcanHeat =
                         1;
@@ -64838,14 +65077,6 @@ const roomPlayers =
                     this.vulcanReadyAt =
                         now +
                         3000;
-
-                    if (
-                        this.practiceMode !==
-                        'hunter'
-                    ) {
-                        multiplayerClient
-                            .sendVulcanFireStop();
-                    }
                 }
             } else {
                 this.vulcanHeat =
@@ -65993,6 +66224,25 @@ const roomPlayers =
     }
 
     private refreshSniperSupportUi(): void {
+        /*
+         * V521 TACTICAL_CHOICE_LATCH:
+         * one press = both support choices are gone until the next Hunt.
+         */
+        if (
+            this.tacticalSupportChosenThisHunt
+        ) {
+            this.sniperButton
+                ?.disableInteractive()
+                .setVisible(false);
+
+            this.vulcanButton
+                ?.disableInteractive()
+                .setVisible(false);
+
+            return;
+        }
+
+
         /*
          * V518: tactical choice UI belongs ONLY to Hunt.
          * Prevent stale Vulcan button from surviving into result/lobby.
@@ -70545,6 +70795,9 @@ this.weaponHeat =
 
         this.phase = 'hunt';
         this.syncPhaseMusic();
+
+        this.tacticalSupportChosenThisHunt =
+            false;
 
         /*
          * V1010474B_STANDALONE_MOBILE_PAINT_UX / HUNT_PIPETTE_CLEANUP

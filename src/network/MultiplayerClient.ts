@@ -1,3 +1,4 @@
+/* V1010521G_VULCAN_SERVER_HEAT_RESULT_CLEAN_HIDER_OUTLINE_CURRENT_SOURCE: NetworkVulcanFiringState carries authoritative accumulated heat. */
 /* V1010510_VULCAN_HOLD_FIRE_CINEMATIC_SEARCHLIGHT: Vulcan hold-fire network protocol. */
 /* V1010508_VULCAN_SEARCHLIGHT_COOLDOWN_CINEMATIC: Vulcan repeated-fire cooldown deadline. */
 /* V1010507_TACTICAL_VULCAN_AIR_SUPPORT: tactical support transport, synced spotlight + Vulcan burst. */
@@ -124,6 +125,7 @@ export type NetworkVulcanFiringState = {
   cooldownMs: number;
   readyAt: number;
   serverNow: number;
+  heat: number;
 };
 export type VulcanStateHandler = (state: NetworkVulcanState) => void;
 export type VulcanAimHandler = (aim: NetworkVulcanAim) => void;
