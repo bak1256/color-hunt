@@ -1,3 +1,4 @@
+/* V1010530F_VULCAN_AUTHORITATIVE_IMPACT_NO_GUESS: server shot.x/y directly drives visible Vulcan impacts. */
 /* V1010526B_VULCAN_1P5X: presentation 29ms->39ms. */
 /* V1010528B_VULCAN_SELFVIEW_MAIN_UPDATE: Hider own-view Vulcan rendering moved from mobile HUD path to the real Scene update loop. */
 /* V1010528_ATOMIC_PAINT_HUNT_AND_VULCAN_SELFVIEW_PACKET_AUTHORITY: atomic held-stroke Paint->Hunt handoff + packet-authoritative Hider self-view Vulcan VFX. */
@@ -16130,9 +16131,61 @@ const ribbon =
 
         this.networkUnsubscribers.push(
             multiplayerClient.onVulcanFired((shot: NetworkVulcanFired) => {
-                // Legacy v507/v508 packet: kept only for rolling-server compatibility.
-                this.vulcanTargetX = shot.x;
-                this.vulcanTargetY = shot.y;
+                /*
+                 * V1010530F_VULCAN_AUTHORITATIVE_IMPACT_NO_GUESS
+                 * v530 server sends the REAL random impact coordinate.
+                 * Draw a compact impact directly at shot.x/y.
+                 * Do not feed bullet impacts back into vulcanTargetX/Y.
+                 */
+                const impactX =
+                    Phaser.Math.Clamp(
+                        shot.x,
+                        0,
+                        960,
+                    );
+
+                const impactY =
+                    Phaser.Math.Clamp(
+                        shot.y,
+                        0,
+                        540,
+                    );
+
+                const impact =
+                    this.add
+                        .circle(
+                            impactX,
+                            impactY,
+                            7,
+                            0xffd166,
+                            0.96,
+                        )
+                        .setDepth(
+                            10035,
+                        );
+
+                impact.setStrokeStyle(
+                    3,
+                    0xff7a00,
+                    0.98,
+                );
+
+                this.tweens.add({
+                    targets:
+                        impact,
+                    scale:
+                        1.65,
+                    alpha:
+                        0,
+                    duration:
+                        105,
+                    ease:
+                        'Quad.Out',
+                    onComplete:
+                        () =>
+                            impact.destroy(),
+                });
+
             }),
         );
 
@@ -66110,12 +66163,8 @@ if (
         ) {
             this.vulcanLastMuzzleFxAt =
                 now;
-
-            this.spawnVulcanPresentationImpact(
-                this.vulcanDisplayX,
-                this.vulcanDisplayY,
-                true,
-            );
+            /* V1010530F_VULCAN_AUTHORITATIVE_IMPACT_NO_GUESS: impact position comes only from server vulcan_fired. */
+            this.playVulcanGunPulse();
 
             /*
              * Extra BRRRT recoil.
