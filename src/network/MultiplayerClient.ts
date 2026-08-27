@@ -1,3 +1,4 @@
+/* V1010510_VULCAN_HOLD_FIRE_CINEMATIC_SEARCHLIGHT: Vulcan hold-fire network protocol. */
 /* V1010508_VULCAN_SEARCHLIGHT_COOLDOWN_CINEMATIC: Vulcan repeated-fire cooldown deadline. */
 /* V1010507_TACTICAL_VULCAN_AIR_SUPPORT: tactical support transport, synced spotlight + Vulcan burst. */
 /* V1010470_FRESH_HANDOFF_RELEASE: successful fresh reconnect no longer waits on stale Room.leave(); transport gate releases as soon as replacement local state is authoritative. */
@@ -115,9 +116,19 @@ export type NetworkVulcanFired = {
   readyAt: number;
   serverNow: number;
 };
+export type NetworkVulcanFiringState = {
+  shooterId: string;
+  active: boolean;
+  startedAt: number;
+  heldMs: number;
+  cooldownMs: number;
+  readyAt: number;
+  serverNow: number;
+};
 export type VulcanStateHandler = (state: NetworkVulcanState) => void;
 export type VulcanAimHandler = (aim: NetworkVulcanAim) => void;
 export type VulcanFiredHandler = (shot: NetworkVulcanFired) => void;
+export type VulcanFiringStateHandler = (state: NetworkVulcanFiringState) => void;
 
 export type NetworkHunterAim = {
   sessionId: string;
@@ -581,6 +592,7 @@ this.phaseChangedHandlers.forEach(
   private readonly vulcanStateHandlers = new Set<VulcanStateHandler>();
   private readonly vulcanAimHandlers = new Set<VulcanAimHandler>();
   private readonly vulcanFiredHandlers = new Set<VulcanFiredHandler>();
+  private readonly vulcanFiringStateHandlers = new Set<VulcanFiringStateHandler>();
 
 
 
@@ -3334,6 +3346,10 @@ this.room = room;
       'vulcan_fired',
       (shot) => this.vulcanFiredHandlers.forEach((handler) => handler(shot)),
     );
+    room.onMessage<NetworkVulcanFiringState>(
+      'vulcan_firing',
+      (state) => this.vulcanFiringStateHandlers.forEach((handler) => handler(state)),
+    );
 
     room.onMessage<{ readyAt: number; serverNow: number }>(
       "sniper_reload",
@@ -3932,6 +3948,16 @@ this.room = room;
   sendVulcanFire(x: number, y: number): void {
     if (!this.isGameplayTransportStable()) return;
     this.room?.send('vulcan_fire', { x, y });
+  }
+
+  sendVulcanFireStart(): void {
+    if (!this.isGameplayTransportStable()) return;
+    this.room?.send('vulcan_fire_start', {});
+  }
+
+  sendVulcanFireStop(): void {
+    if (!this.isGameplayTransportStable()) return;
+    this.room?.send('vulcan_fire_stop', {});
   }
 
   sendHunterAim(
@@ -4726,6 +4752,11 @@ this.room = room;
     return () => this.vulcanFiredHandlers.delete(handler);
   }
 
+
+  onVulcanFiringState(handler: VulcanFiringStateHandler): () => void {
+    this.vulcanFiringStateHandlers.add(handler);
+    return () => this.vulcanFiringStateHandlers.delete(handler);
+  }
   onHunterAim(
     handler: HunterAimHandler,
   ): () => void {

@@ -1,3 +1,4 @@
+/* V1010510_VULCAN_HOLD_FIRE_CINEMATIC_SEARCHLIGHT: hold-to-fire Vulcan, proportional heat cooldown, 500% helicopter transfer, radial searchlight, hard shotgun-aim seal. */
 /* V1010509_VULCAN_REAL_SEARCHLIGHT_CINEMATIC: separate Vulcan cinematic, real helicopter, radial ellipse spotlight, visible cooldown gauge, procedural BRRRT. */
 /* V1010508_VULCAN_SEARCHLIGHT_COOLDOWN_CINEMATIC: visible searchlight, dark surround, stronger orbit, persistent 6s repeat-fire cooldown. */
 /* V1010507_TACTICAL_VULCAN_AIR_SUPPORT: tactical support chooser + synchronized oblique searchlight + 3s Vulcan area burst. */
@@ -78,6 +79,7 @@ import {
     type NetworkVulcanState,
     type NetworkVulcanAim,
     type NetworkVulcanFired,
+    type NetworkVulcanFiringState,
     type NetworkWeaponState,
     type NetworkFartState,
     type NetworkFartBurst,
@@ -968,13 +970,18 @@ export class GameScene extends Phaser.Scene {
     private vulcanCinematicActive = false;
     private vulcanSpotlightReveal = 0;
     private vulcanReadyAt = 0;
-    private readonly vulcanCooldownMs = 6_000;
     private vulcanDarkness?: Phaser.GameObjects.Graphics;
     private vulcanCooldownGraphics?: Phaser.GameObjects.Graphics;
     private vulcanCinematicShade?: Phaser.GameObjects.Rectangle;
     private vulcanHelicopter?: Phaser.GameObjects.Container;
     private vulcanHelicopterRotorTween?: Phaser.Tweens.Tween;
     private vulcanOrbitStartedAt = 0;
+    private vulcanHeat = 0;
+    private vulcanFireStartedAt = 0;
+    private vulcanCoolingStartedAt = 0;
+    private vulcanCoolingDurationMs = 0;
+    private vulcanLastMuzzleFxAt = 0;
+    private vulcanPointerHeld = false;
     private vulcanSavedCameraZoom = 1.65;
     private vulcanSavedCameraRotation = 0;
     private vulcanImpactFx = new Set<Phaser.GameObjects.GameObject>();
@@ -15797,13 +15804,28 @@ const ribbon =
 
         this.networkUnsubscribers.push(
             multiplayerClient.onVulcanFired((shot: NetworkVulcanFired) => {
+                // Legacy v507/v508 packet: kept only for rolling-server compatibility.
                 this.vulcanTargetX = shot.x;
                 this.vulcanTargetY = shot.y;
-                this.vulcanReadyAt = Number.isFinite(shot.readyAt)
-                    ? shot.readyAt
-                    : Date.now() + this.vulcanCooldownMs;
-                this.vulcanFiring = true;
-                this.playVulcanBurst(shot);
+            }),
+        );
+
+        this.networkUnsubscribers.push(
+            multiplayerClient.onVulcanFiringState((state: NetworkVulcanFiringState) => {
+                const now = Date.now();
+                if (state.active) {
+                    this.vulcanFiring = true;
+                    this.vulcanFireStartedAt = now - Math.max(0, now - state.serverNow);
+                    this.vulcanCoolingStartedAt = 0;
+                    this.vulcanCoolingDurationMs = 0;
+                } else {
+                    this.vulcanFiring = false;
+                    this.vulcanPointerHeld = false;
+                    this.vulcanHeat = Phaser.Math.Clamp(state.heldMs / 3000, 0, 1);
+                    this.vulcanCoolingStartedAt = now;
+                    this.vulcanCoolingDurationMs = Math.max(0, state.cooldownMs);
+                    this.vulcanReadyAt = now + Math.max(0, state.readyAt - state.serverNow);
+                }
             }),
         );
 
@@ -43062,10 +43084,14 @@ this.networkUnsubscribers.push(
          * reload state, movement lock or the support button into Lobby.
          */
         this.exitSniperCinematic();
+        this.exitVulcanCinematic();
         this.sniperActive = false;
         this.vulcanActive = false;
         this.vulcanSupportCommitted = false;
         this.vulcanFiring = false;
+        this.vulcanPointerHeld = false;
+        this.vulcanHeat = 0;
+        this.vulcanCoolingDurationMs = 0;
         this.vulcanCinematicActive = false;
         this.vulcanReadyAt = 0;
         this.vulcanDarkness?.clear().setVisible(false);
@@ -57604,7 +57630,10 @@ const roomPlayers =
          */
         if (
             this.sniperCinematicActive ||
-            this.sniperActive
+            this.sniperActive ||
+            this.vulcanCinematicActive ||
+            this.vulcanActive ||
+            Boolean(this.vulcanSpotlight?.visible)
         ) {
             this.aimLine
                 ?.clear()
@@ -57614,6 +57643,8 @@ const roomPlayers =
                 ?.clear()
                 .setVisible(false);
 
+            this.gun?.setVisible(false);
+            this.networkPlayerManager?.clearHunterAimLines();
             return;
         }
 
@@ -58697,7 +58728,6 @@ const roomPlayers =
         this.input.on(Phaser.Input.Events.POINTER_MOVE, (pointer: Phaser.Input.Pointer) => {
             if (
                 !this.vulcanActive ||
-                this.vulcanFiring ||
                 this.phase !== 'hunt' ||
                 this.vulcanSpotlightReveal < 0.98
             ) return;
@@ -58712,24 +58742,47 @@ const roomPlayers =
         });
 
         this.input.on(Phaser.Input.Events.POINTER_DOWN, (pointer: Phaser.Input.Pointer) => {
-            if (!this.vulcanActive || this.vulcanFiring || this.phase !== 'hunt') return;
+            if (!this.vulcanActive || this.phase !== 'hunt' || this.vulcanSpotlightReveal < 0.98) return;
             if (this.vulcanButton?.visible || this.sniperButton?.visible) return;
             const now = Date.now();
-            if (now < this.vulcanReadyAt) return;
+            if (this.vulcanFiring || now < this.vulcanReadyAt || this.vulcanHeat > 0.001) return;
+
             pointer.event?.preventDefault?.();
             pointer.event?.stopPropagation?.();
-            // Optimistic local gate; server remains authoritative.
-            this.vulcanReadyAt = now + this.vulcanCooldownMs;
+            const world = pointer.positionToCamera(this.cameras.main) as Phaser.Math.Vector2;
+            this.vulcanTargetX = Phaser.Math.Clamp(world.x, 0, 960);
+            this.vulcanTargetY = Phaser.Math.Clamp(world.y, 0, 540);
+            this.vulcanPointerHeld = true;
+            this.vulcanFiring = true;
+            this.vulcanFireStartedAt = now;
+            this.vulcanLastMuzzleFxAt = 0;
+
             if (this.practiceMode === 'hunter') {
-                this.playVulcanBurst({
-                    shooterId: 'practice', x: this.vulcanTargetX, y: this.vulcanTargetY,
-                    seed: Math.floor(Math.random() * 0x7fffffff), startedAt: now,
-                    durationMs: 3000, hitIds: [], readyAt: this.vulcanReadyAt, serverNow: now,
-                });
-            } else {
-                multiplayerClient.sendVulcanFire(this.vulcanTargetX, this.vulcanTargetY);
+                return;
             }
+            multiplayerClient.sendVulcanAim(this.vulcanTargetX, this.vulcanTargetY);
+            multiplayerClient.sendVulcanFireStart();
         });
+
+        const stopVulcanPointerFire = (): void => {
+            if (!this.vulcanPointerHeld && !this.vulcanFiring) return;
+            const now = Date.now();
+            const heldMs = Math.max(80, Math.min(3000, now - this.vulcanFireStartedAt));
+            this.vulcanPointerHeld = false;
+
+            if (this.practiceMode === 'hunter') {
+                this.vulcanFiring = false;
+                this.vulcanHeat = Phaser.Math.Clamp(heldMs / 3000, 0, 1);
+                this.vulcanCoolingStartedAt = now;
+                this.vulcanCoolingDurationMs = heldMs * 2;
+                this.vulcanReadyAt = now + this.vulcanCoolingDurationMs;
+                return;
+            }
+            multiplayerClient.sendVulcanFireStop();
+        };
+
+        this.input.on(Phaser.Input.Events.POINTER_UP, stopVulcanPointerFire);
+        this.input.on(Phaser.Input.Events.POINTER_UP_OUTSIDE, stopVulcanPointerFire);
 
         this.fixedHudBaseTransforms.set(
             button,
@@ -62657,66 +62710,74 @@ const roomPlayers =
     /* V1010507_TACTICAL_VULCAN_AIR_SUPPORT: same support intro, different final instrument. */
 
 
+
     private createVulcanHelicopter(): void {
         if (this.vulcanHelicopter) return;
 
-        const bodyDark = 0x1b2a22;
-        const body = 0x385747;
-        const edge = 0x8aa897;
-        const glass = 0x71c9d6;
-        const rotorColor = 0x151a18;
+        const metal = 0x263d35;
+        const metalDark = 0x101b18;
+        const armor = 0x49685b;
+        const edge = 0xa9c0b3;
+        const glass = 0x76b9c6;
+        const rotorColor = 0x0a0e0d;
 
-        const tailBoom = this.add.rectangle(0, 48, 13, 70, bodyDark, 1);
-        const tailFin = this.add.triangle(0, 82, -2, 0, -24, 18, 18, 15, body, 1);
-        const fuselage = this.add.ellipse(0, -7, 48, 89, body, 1)
-            .setStrokeStyle(2, edge, 0.9);
-        const cockpit = this.add.ellipse(0, -30, 34, 30, glass, 0.88)
-            .setStrokeStyle(2, 0xc7f7ff, 0.62);
-        const nose = this.add.triangle(0, -48, -17, 15, 17, 15, 0, -10, bodyDark, 1);
-        const skidLeft = this.add.rectangle(-28, 8, 5, 62, 0x0c1110, 0.96);
-        const skidRight = this.add.rectangle(28, 8, 5, 62, 0x0c1110, 0.96);
-        const weaponPod = this.add.rectangle(22, 17, 18, 8, 0x252b28, 1)
-            .setStrokeStyle(1, 0xb7bdb8, 0.8);
-        const barrel = this.add.rectangle(35, 21, 23, 3, 0x111514, 1);
+        const tailBoom = this.add.polygon(0, 48, [
+            -7,-5, 7,-5, 11,63, -11,63,
+        ], metalDark, 1);
+        const tailPlane = this.add.polygon(0, 93, [
+            -36,0, -8,-8, 8,-8, 36,0, 8,8, -8,8,
+        ], metal, 1).setStrokeStyle(2, edge, 0.55);
+        const tailFin = this.add.triangle(0, 104, -4,8, 4,-16, 14,10, armor, 1)
+            .setStrokeStyle(2, edge, 0.5);
 
-        const rotorHorizontal = this.add.rectangle(0, 0, 168, 5, rotorColor, 0.78);
-        const rotorVertical = this.add.rectangle(0, 0, 5, 168, rotorColor, 0.62);
-        const rotorHub = this.add.circle(0, 0, 8, 0xc1cbc5, 0.95);
-        const rotorGroup = this.add.container(0, -8, [rotorHorizontal, rotorVertical, rotorHub]);
+        const fuselage = this.add.polygon(0, -6, [
+            -20,-42, 20,-42, 29,-15, 25,24, 15,46, -15,46, -25,24, -29,-15,
+        ], armor, 1).setStrokeStyle(2.5, edge, 0.86);
+        const belly = this.add.ellipse(0, 4, 38, 62, metal, 0.95);
+        const cockpit = this.add.polygon(0, -31, [
+            -15,-10, 15,-10, 20,4, 11,18, -11,18, -20,4,
+        ], glass, 0.94).setStrokeStyle(2, 0xd2f6ff, 0.72);
+        const cockpitSplit = this.add.rectangle(0, -28, 2, 27, 0x1b3438, 0.72);
+        const nose = this.add.triangle(0, -55, -16,16, 16,16, 0,-13, metalDark, 1);
 
-        const tailRotorA = this.add.rectangle(0, 0, 34, 3, rotorColor, 0.78);
-        const tailRotorB = this.add.rectangle(0, 0, 3, 34, rotorColor, 0.70);
-        const tailRotor = this.add.container(0, 89, [tailRotorA, tailRotorB]);
+        const wing = this.add.rectangle(0, 13, 94, 10, metal, 1)
+            .setStrokeStyle(2, edge, 0.65);
+        const podL = this.add.rectangle(-43, 18, 18, 31, metalDark, 1)
+            .setStrokeStyle(1.5, 0x76887f, 0.8);
+        const podR = this.add.rectangle(43, 18, 18, 31, metalDark, 1)
+            .setStrokeStyle(1.5, 0x76887f, 0.8);
+        const cannonMount = this.add.circle(0, -48, 7, 0x111615, 1);
+        const cannon = this.add.rectangle(0, -62, 5, 24, 0x090c0b, 1);
 
-        this.vulcanHelicopter = this.add.container(0, 0, [
-            tailBoom,
-            tailFin,
-            skidLeft,
-            skidRight,
-            fuselage,
-            cockpit,
-            nose,
-            weaponPod,
-            barrel,
-            rotorGroup,
-            tailRotor,
+        const skidL = this.add.line(-23, 11, 0,-32, 0,32, 0x0b0e0d, 0.96).setLineWidth(4);
+        const skidR = this.add.line(23, 11, 0,-32, 0,32, 0x0b0e0d, 0.96).setLineWidth(4);
+
+        const rotorA = this.add.rectangle(0, 0, 194, 5, rotorColor, 0.78);
+        const rotorB = this.add.rectangle(0, 0, 5, 194, rotorColor, 0.66);
+        const rotorC = this.add.rectangle(0, 0, 148, 3, 0x89948e, 0.28).setAngle(45);
+        const hub = this.add.circle(0, 0, 9, 0xb9c4be, 0.96).setStrokeStyle(2,0x111514,1);
+        const rotorGroup = this.add.container(0, -4, [rotorA,rotorB,rotorC,hub]);
+
+        const tailRotorA = this.add.rectangle(0,0,39,3,rotorColor,0.8);
+        const tailRotorB = this.add.rectangle(0,0,3,39,rotorColor,0.7);
+        const tailRotor = this.add.container(7,106,[tailRotorA,tailRotorB]);
+
+        this.vulcanHelicopter = this.add.container(0,0,[
+            tailBoom, tailPlane, tailFin,
+            skidL, skidR, wing, podL, podR,
+            fuselage, belly, cockpit, cockpitSplit, nose,
+            cannonMount, cannon, rotorGroup, tailRotor,
         ])
             .setDepth(25004)
-            .setScale(1.42)
-            .setAlpha(0.96)
+            .setScale(1.34)
+            .setAlpha(0.98)
             .setVisible(false);
 
         this.vulcanHelicopterRotorTween = this.tweens.add({
-            targets: rotorGroup,
-            angle: 360,
-            duration: 145,
-            repeat: -1,
+            targets: rotorGroup, angle: 360, duration: 118, repeat: -1,
         });
         this.tweens.add({
-            targets: tailRotor,
-            angle: -360,
-            duration: 88,
-            repeat: -1,
+            targets: tailRotor, angle: -360, duration: 74, repeat: -1,
         });
     }
 
@@ -62729,12 +62790,16 @@ const roomPlayers =
         this.vulcanSavedCameraRotation = 0;
         this.vulcanSpotlightReveal = 0;
         this.vulcanFiring = false;
+        this.vulcanPointerHeld = false;
+        this.vulcanHeat = 0;
+        this.vulcanReadyAt = 0;
 
         this.hiderVisionGraphics?.clear().setVisible(false);
         this.hiderVisionOverlays.forEach((overlay) => overlay.setVisible(false));
         this.aimLine?.clear().setVisible(false);
         this.crosshair?.clear().setVisible(false);
         this.gun?.setVisible(false);
+        this.networkPlayerManager?.clearHunterAimLines();
         this.mobileMoveBase?.setVisible(false);
         this.mobileMoveKnob?.setVisible(false);
         this.mobileMoveLabel?.setVisible(false);
@@ -62749,44 +62814,36 @@ const roomPlayers =
         this.createVulcanHelicopter();
 
         const camera = this.cameras.main;
-        const startCenter = camera.midPoint.clone();
+        camera.stopFollow().removeBounds().setSize(this.gameWidth,this.gameHeight);
+        const hunterCenter = camera.midPoint.clone();
         const startZoom = camera.zoom;
-
-        // Search always begins directly under the helicopter at MAP CENTER.
         this.vulcanTargetX = 480;
         this.vulcanTargetY = 270;
         this.vulcanDisplayX = 480;
         this.vulcanDisplayY = 270;
 
-        const startY = camera.worldView.bottom + 92 / Math.max(0.01, camera.zoom);
-        this.vulcanHelicopter
-            ?.setPosition(startCenter.x, startY)
-            .setScale(1.42)
-            .setAlpha(0.96)
-            .setVisible(true);
+        const entryY = camera.worldView.bottom + 110 / Math.max(0.01,startZoom);
+        this.vulcanHelicopter?.setPosition(hunterCenter.x,entryY).setScale(1.34).setAlpha(0).setVisible(true);
+        this.vulcanCinematicShade?.setVisible(true).setAlpha(0);
 
-        const startPunch = (): void => {
+        const beginPilotTransfer = (): void => {
             if (this.phase !== 'hunt') return;
-            camera.stopFollow();
-            camera.removeBounds();
-            camera.setSize(this.gameWidth, this.gameHeight);
-
-            const shade = this.vulcanCinematicShade;
-            shade?.setAlpha(0).setVisible(true);
-
+            const heliX = this.vulcanHelicopter?.x ?? hunterCenter.x;
+            const heliY = this.vulcanHelicopter?.y ?? hunterCenter.y;
             const punch = { value: 0 };
-            const punchZoom = Math.min(3.0, Math.max(2.65, startZoom * 3));
+            const punchZoom = Math.min(6.4, Math.max(5.0, startZoom * 5.0));
+            this.playVulcanTransitionWhoosh();
 
             this.tweens.add({
                 targets: punch,
                 value: 1,
-                duration: 285,
+                duration: 360,
                 ease: 'Cubic.easeIn',
                 onUpdate: () => {
-                    const t = Phaser.Math.Clamp(punch.value, 0, 1);
-                    camera.setZoom(Phaser.Math.Linear(startZoom, punchZoom, t));
-                    camera.centerOn(startCenter.x, startCenter.y);
-                    shade?.setAlpha(0.46 * t);
+                    const t = Phaser.Math.Clamp(punch.value,0,1);
+                    camera.setZoom(Phaser.Math.Linear(startZoom,punchZoom,t));
+                    camera.centerOn(heliX,heliY);
+                    this.vulcanCinematicShade?.setAlpha(0.68 * t);
                     this.applyFixedHudForZoom(camera.zoom);
                 },
                 onComplete: () => {
@@ -62794,48 +62851,36 @@ const roomPlayers =
                     this.tweens.add({
                         targets: travel,
                         value: 1,
-                        duration: 880,
+                        duration: 1050,
                         ease: 'Sine.easeInOut',
                         onUpdate: () => {
-                            const t = Phaser.Math.Clamp(travel.value, 0, 1);
-                            const eased = Phaser.Math.SmoothStep(t, 0, 1);
-                            const centerX = Phaser.Math.Linear(startCenter.x, 480, eased);
-                            const centerY = Phaser.Math.Linear(startCenter.y, 270, eased);
-                            const zoom = Phaser.Math.Linear(punchZoom, 1.34, eased);
-                            camera.setZoom(zoom);
-                            camera.centerOn(centerX, centerY);
-                            this.vulcanHelicopter?.setPosition(centerX, centerY - 58 / Math.max(0.8, zoom));
-                            shade?.setAlpha(0.46 * (1 - eased));
+                            const t = Phaser.Math.Clamp(travel.value,0,1);
+                            const e = Phaser.Math.SmoothStep(t,0,1);
+                            const cx = Phaser.Math.Linear(heliX,480,e);
+                            const cy = Phaser.Math.Linear(heliY,270,e);
+                            const zoom = Phaser.Math.Linear(punchZoom,1.34,e);
+                            camera.setZoom(zoom).centerOn(cx,cy);
+                            this.vulcanCinematicShade?.setAlpha(0.68 * (1-e));
                             this.applyFixedHudForZoom(zoom);
                         },
                         onComplete: () => {
                             if (this.phase !== 'hunt') return;
-                            camera.setZoom(1.34);
-                            camera.centerOn(480, 270);
-                            shade?.setVisible(false).setAlpha(0);
-
-                            // Helicopter remains just above the map center as the implied light origin.
-                            this.vulcanHelicopter?.setPosition(480, 222).setScale(1.18).setAlpha(0.88);
+                            camera.setZoom(1.34).centerOn(480,270).setRotation(0);
+                            this.vulcanCinematicShade?.setVisible(false).setAlpha(0);
+                            this.vulcanHelicopter?.setPosition(480,202).setScale(1.08).setAlpha(0.94);
                             this.vulcanOrbitStartedAt = this.time.now;
-
                             this.vulcanDarkness?.setVisible(true);
                             this.vulcanSpotlight?.setVisible(true);
                             this.vulcanCooldownGraphics?.setVisible(true);
 
                             const reveal = { value: 0 };
                             this.tweens.add({
-                                targets: reveal,
-                                value: 1,
-                                duration: 520,
-                                ease: 'Back.easeOut',
-                                onUpdate: () => {
-                                    this.vulcanSpotlightReveal = Phaser.Math.Clamp(reveal.value, 0, 1);
-                                },
+                                targets: reveal, value: 1, duration: 500, ease: 'Back.easeOut',
+                                onUpdate: () => { this.vulcanSpotlightReveal = Phaser.Math.Clamp(reveal.value,0,1); },
                                 onComplete: () => {
                                     this.vulcanSpotlightReveal = 1;
-                                    if (isOwner && this.practiceMode !== 'hunter') {
-                                        multiplayerClient.sendVulcanAim(480, 270);
-                                    }
+                                    this.vulcanCinematicActive = false;
+                                    if (isOwner && this.practiceMode !== 'hunter') multiplayerClient.sendVulcanAim(480,270);
                                 },
                             });
                         },
@@ -62847,236 +62892,157 @@ const roomPlayers =
         if (this.vulcanHelicopter) {
             this.tweens.add({
                 targets: this.vulcanHelicopter,
-                y: startCenter.y - 24,
-                scaleX: 1.58,
-                scaleY: 1.58,
-                duration: 650,
+                y: hunterCenter.y - 8,
+                alpha: 1,
+                scaleX: 1.62,
+                scaleY: 1.62,
+                duration: 720,
                 ease: 'Cubic.easeOut',
-                onComplete: startPunch,
+                onComplete: beginPilotTransfer,
             });
-        } else {
-            startPunch();
-        }
+        } else beginPilotTransfer();
     }
 
 
     private updateVulcanAirSupport(): void {
-        if (
-            (!this.vulcanCinematicActive && !this.vulcanActive && !this.vulcanSpotlight?.visible) ||
-            this.phase !== 'hunt'
-        ) return;
+        if (this.phase !== 'hunt') {
+            if (this.vulcanHelicopter || this.vulcanSpotlight?.visible || this.vulcanButton?.visible) {
+                this.vulcanButton?.disableInteractive().setVisible(false);
+                this.exitVulcanCinematic();
+            }
+            return;
+        }
 
-        // During the zoom/travel sequence, the tween owns the camera completely.
+        if ((!this.vulcanCinematicActive && !this.vulcanActive && !this.vulcanSpotlight?.visible)) return;
         if (this.vulcanSpotlightReveal <= 0 || !this.vulcanSpotlight?.visible) return;
 
         const camera = this.cameras.main;
-        const elapsed = Math.max(0, this.time.now - this.vulcanOrbitStartedAt);
-        const orbit = elapsed * 0.00034;
+        const elapsed = Math.max(0,this.time.now-this.vulcanOrbitStartedAt);
+        const orbit = elapsed*0.00036;
+        const orbitX = Math.cos(orbit)*16;
+        const orbitY = Math.sin(orbit)*10;
+        camera.setZoom(1.34).centerOn(480+orbitX,270+orbitY);
+        camera.setRotation(Math.sin(orbit*0.93)*0.0155);
+        this.vulcanHelicopter?.setPosition(480+orbitX*0.40,202+orbitY*0.40);
 
-        const orbitX = Math.cos(orbit) * 14;
-        const orbitY = Math.sin(orbit) * 9;
-        camera.setZoom(1.34);
-        camera.centerOn(480 + orbitX, 270 + orbitY);
-        camera.setRotation(Math.sin(orbit * 0.92) * 0.014);
+        this.vulcanDisplayX = Phaser.Math.Linear(this.vulcanDisplayX,this.vulcanTargetX,0.13);
+        this.vulcanDisplayY = Phaser.Math.Linear(this.vulcanDisplayY,this.vulcanTargetY,0.13);
 
-        // Keep the aircraft subtly counter-orbiting above center so the viewpoint feels airborne.
-        this.vulcanHelicopter?.setPosition(
-            480 + orbitX * 0.42,
-            222 + orbitY * 0.42,
-        );
+        const now = Date.now();
+        if (this.vulcanFiring) {
+            const heldMs = Math.max(0,now-this.vulcanFireStartedAt);
+            this.vulcanHeat = Phaser.Math.Clamp(heldMs/3000,0,1);
+            if (now-this.vulcanLastMuzzleFxAt >= 72) {
+                this.vulcanLastMuzzleFxAt = now;
+                this.playVulcanGunPulse();
+                const spreadX = Phaser.Math.Between(-34,34);
+                const spreadY = Phaser.Math.Between(-23,23);
+                const px = Phaser.Math.Clamp(this.vulcanDisplayX+spreadX,0,960);
+                const py = Phaser.Math.Clamp(this.vulcanDisplayY+spreadY,0,540);
+                const flash=this.add.circle(px,py,Phaser.Math.Between(4,8),0xffdc6b,0.95).setDepth(24998);
+                const ring=this.add.circle(px,py,5).setStrokeStyle(2,0xffffff,0.65).setDepth(24997);
+                this.vulcanImpactFx.add(flash); this.vulcanImpactFx.add(ring);
+                this.tweens.add({targets:flash,alpha:0,scale:2.1,duration:130,onComplete:()=>{this.vulcanImpactFx.delete(flash);flash.destroy();}});
+                this.tweens.add({targets:ring,alpha:0,scale:2.4,duration:170,onComplete:()=>{this.vulcanImpactFx.delete(ring);ring.destroy();}});
+                camera.shake(36,0.0012);
+            }
+            if (heldMs >= 3000 && this.vulcanPointerHeld) {
+                this.vulcanPointerHeld = false;
+                if (this.practiceMode === 'hunter') {
+                    this.vulcanFiring=false; this.vulcanHeat=1; this.vulcanCoolingStartedAt=now; this.vulcanCoolingDurationMs=6000; this.vulcanReadyAt=now+6000;
+                } else multiplayerClient.sendVulcanFireStop();
+            }
+        } else if (this.vulcanHeat > 0 && this.vulcanCoolingDurationMs > 0) {
+            const coolT = Phaser.Math.Clamp((now-this.vulcanCoolingStartedAt)/this.vulcanCoolingDurationMs,0,1);
+            const startHeat = Phaser.Math.Clamp(this.vulcanCoolingDurationMs/6000,0,1);
+            this.vulcanHeat = Phaser.Math.Linear(startHeat,0,coolT);
+            if (coolT>=1) { this.vulcanHeat=0; this.vulcanCoolingDurationMs=0; }
+        }
 
-        // ~= 0.08~0.15s visual lag at typical frame rates.
-        this.vulcanDisplayX = Phaser.Math.Linear(this.vulcanDisplayX, this.vulcanTargetX, 0.12);
-        this.vulcanDisplayY = Phaser.Math.Linear(this.vulcanDisplayY, this.vulcanTargetY, 0.12);
-
-        this.drawVulcanSpotlight(this.vulcanDisplayX, this.vulcanDisplayY);
-        this.drawVulcanCooldownGauge(this.vulcanDisplayX, this.vulcanDisplayY);
+        this.drawVulcanSpotlight(this.vulcanDisplayX,this.vulcanDisplayY);
+        this.drawVulcanCooldownGauge(this.vulcanDisplayX,this.vulcanDisplayY);
     }
 
 
     private drawVulcanSpotlight(x: number, y: number): void {
-        const light = this.vulcanSpotlight;
-        const darkness = this.vulcanDarkness;
-        if (!light || !darkness) return;
+        const light=this.vulcanSpotlight, darkness=this.vulcanDarkness;
+        if(!light||!darkness) return;
+        const dx=x-480, dy=y-270;
+        const t=Phaser.Math.Clamp(Math.hypot(dx,dy)/Math.hypot(480,270),0,1);
+        const angle=Math.atan2(dy,dx);
+        const reveal=Phaser.Math.Clamp(this.vulcanSpotlightReveal,0,1);
+        const major=Phaser.Math.Linear(68,205,t)*Phaser.Math.Linear(0.10,1,reveal);
+        const minor=Phaser.Math.Linear(68,46,t)*Phaser.Math.Linear(0.10,1,reveal);
+        const intensity=Phaser.Math.Linear(1,0.72,t);
 
-        const centerX = 480;
-        const centerY = 270;
-        const dx = x - centerX;
-        const dy = y - centerY;
-        const distance = Math.hypot(dx, dy);
-        const maxDistance = Math.hypot(480, 270);
-        const t = Phaser.Math.Clamp(distance / maxDistance, 0, 1);
-        const angle = Math.atan2(dy, dx);
-        const reveal = Phaser.Math.Clamp(this.vulcanSpotlightReveal, 0, 1);
+        darkness.clear().setPosition(0,0).setRotation(0).setBlendMode(Phaser.BlendModes.NORMAL);
+        darkness.fillStyle(0x000205,0.48*reveal);
+        darkness.fillRect(-120,-120,1200,780);
 
-        // Exactly the requested perspective rule:
-        // center -> O, farther from center -> longer radial ellipse.
-        const major = Phaser.Math.Linear(70, 188, t) * Phaser.Math.Linear(0.12, 1, reveal);
-        const minor = Phaser.Math.Linear(70, 48, t) * Phaser.Math.Linear(0.12, 1, reveal);
-        const intensity = Phaser.Math.Linear(1.0, 0.74, t);
-
-        // Half-ish strength of the ordinary Hunter black vision restriction.
-        darkness.clear();
-        darkness.setPosition(0, 0).setRotation(0);
-        darkness.fillStyle(0x010407, 0.34 * reveal);
-        darkness.fillRect(-80, -80, 1120, 700);
-
-        light.clear();
-        light.setPosition(x, y);
-        light.setRotation(angle);
-        light.setBlendMode(Phaser.BlendModes.ADD);
-
-        light.fillStyle(0xffe58a, 0.14 * intensity * reveal);
-        light.fillEllipse(0, 0, major * 2.65, minor * 2.65);
-        light.fillStyle(0xffed9e, 0.24 * intensity * reveal);
-        light.fillEllipse(0, 0, major * 2.0, minor * 2.0);
-        light.fillStyle(0xfff6c6, 0.39 * intensity * reveal);
-        light.fillEllipse(0, 0, major * 1.42, minor * 1.42);
-        light.fillStyle(0xffffff, 0.56 * intensity * reveal);
-        light.fillEllipse(0, 0, major, minor);
-        light.lineStyle(3, 0xfff1a8, 0.82 * reveal);
-        light.strokeEllipse(0, 0, major, minor);
+        light.clear().setPosition(x,y).setRotation(angle).setBlendMode(Phaser.BlendModes.ADD);
+        light.fillStyle(0xffd86a,0.16*intensity*reveal); light.fillEllipse(0,0,major*2.8,minor*2.8);
+        light.fillStyle(0xffe994,0.28*intensity*reveal); light.fillEllipse(0,0,major*2.05,minor*2.05);
+        light.fillStyle(0xffffd3,0.46*intensity*reveal); light.fillEllipse(0,0,major*1.42,minor*1.42);
+        light.fillStyle(0xffffff,0.72*intensity*reveal); light.fillEllipse(0,0,major,minor);
+        light.lineStyle(3.5,0xfff0a0,0.94*reveal); light.strokeEllipse(0,0,major,minor);
     }
-
 
     private drawVulcanCooldownGauge(x: number, y: number): void {
-        const g = this.vulcanCooldownGraphics;
-        if (!g) return;
+        const g=this.vulcanCooldownGraphics;
+        if(!g) return;
         g.clear();
-        if (!this.vulcanSpotlight?.visible || this.vulcanSpotlightReveal < 0.20) return;
+        if(!this.vulcanSpotlight?.visible || this.vulcanSpotlightReveal<0.2) return;
 
-        const dx = x - 480;
-        const dy = y - 270;
-        const t = Phaser.Math.Clamp(Math.hypot(dx, dy) / Math.hypot(480, 270), 0, 1);
-        const major = Phaser.Math.Linear(70, 188, t);
-        const now = Date.now();
-        const remaining = Math.max(0, this.vulcanReadyAt - now);
-        const ratio = Phaser.Math.Clamp(1 - remaining / this.vulcanCooldownMs, 0, 1);
-
-        // Screen-right, not ellipse-local right: it remains easy to read at every ellipse angle.
-        const barX = Phaser.Math.Clamp(x + Math.max(54, major * 0.62) + 24, 18, 934);
-        const barY = Phaser.Math.Clamp(y - 48, 18, 430);
-        const width = 14;
-        const height = 96;
+        const dx=x-480, dy=y-270;
+        const t=Phaser.Math.Clamp(Math.hypot(dx,dy)/Math.hypot(480,270),0,1);
+        const major=Phaser.Math.Linear(70,188,t);
+        const barX=Phaser.Math.Clamp(x+Math.max(58,major*0.64)+24,18,934);
+        const barY=Phaser.Math.Clamp(y-52,18,424);
+        const width=16, height=104;
+        const heat=Phaser.Math.Clamp(this.vulcanHeat,0,1);
 
         g.setBlendMode(Phaser.BlendModes.NORMAL);
-        g.fillStyle(0x020406, 0.92);
-        g.fillRoundedRect(barX - 5, barY - 5, width + 10, height + 10, 6);
-        g.lineStyle(2.5, 0xf8e7a0, 0.94);
-        g.strokeRoundedRect(barX - 5, barY - 5, width + 10, height + 10, 6);
-
-        if (ratio > 0) {
-            const fillHeight = Math.max(3, height * ratio);
-            g.fillStyle(ratio >= 0.999 ? 0xfff4b8 : 0xf0a72f, 0.98);
-            g.fillRect(barX, barY + height - fillHeight, width, fillHeight);
+        g.fillStyle(0x020406,0.94); g.fillRoundedRect(barX-6,barY-6,width+12,height+12,7);
+        g.lineStyle(2.5,0xffedaa,0.95); g.strokeRoundedRect(barX-6,barY-6,width+12,height+12,7);
+        if(heat>0){
+            const fill=Math.max(3,height*heat);
+            const color=heat>0.83?0xff4b32:heat>0.55?0xff9f2f:0xffdc64;
+            g.fillStyle(color,0.98); g.fillRect(barX,barY+height-fill,width,fill);
         }
-
-        // Small readiness ticks make the gauge readable even on bright map art.
-        for (let i = 1; i < 4; i += 1) {
-            const yy = barY + (height / 4) * i;
-            g.lineStyle(1, 0xffffff, 0.34);
-            g.lineBetween(barX + 1, yy, barX + width - 1, yy);
-        }
+        for(let i=1;i<4;i+=1){ const yy=barY+(height/4)*i; g.lineStyle(1,0xffffff,0.34); g.lineBetween(barX+1,yy,barX+width-1,yy); }
     }
 
-
-    private playProceduralVulcanBurstSound(durationMs: number): void {
+    private playVulcanTransitionWhoosh(): void {
         if (!this.audioUnlocked || !this.bgmEnabled) return;
-
         try {
             const manager = this.sound as unknown as { context?: AudioContext };
             const context = manager.context;
             if (!context) return;
-
             const now = context.currentTime;
-            const duration = Phaser.Math.Clamp(durationMs / 1000, 0.5, 4.0);
-            const master = context.createGain();
-            master.gain.setValueAtTime(0.0001, now);
-            master.connect(context.destination);
-
-            // Rapid pressure pulses: heavy "두두두두/BRRRT" rather than a clean tone.
-            const interval = 0.073;
-            for (let t = 0; t < duration; t += interval) {
-                master.gain.setValueAtTime(0.035, now + t);
-                master.gain.linearRampToValueAtTime(0.34, now + t + 0.008);
-                master.gain.exponentialRampToValueAtTime(0.040, now + Math.min(duration, t + 0.058));
-            }
-            master.gain.exponentialRampToValueAtTime(0.0001, now + duration + 0.08);
-
-            const buffer = context.createBuffer(
-                1,
-                Math.floor(context.sampleRate * duration),
-                context.sampleRate,
-            );
+            const buffer = context.createBuffer(1, Math.floor(context.sampleRate * 0.75), context.sampleRate);
             const data = buffer.getChannelData(0);
-            for (let i = 0; i < data.length; i += 1) {
-                data[i] = (Math.random() * 2 - 1) * 0.72;
-            }
-            const noise = context.createBufferSource();
-            noise.buffer = buffer;
-            const filter = context.createBiquadFilter();
-            filter.type = 'bandpass';
-            filter.frequency.setValueAtTime(620, now);
-            filter.Q.setValueAtTime(0.82, now);
-            noise.connect(filter);
-            filter.connect(master);
-            noise.start(now);
-            noise.stop(now + duration);
-
-            const thump = context.createOscillator();
-            thump.type = 'sawtooth';
-            thump.frequency.setValueAtTime(78, now);
-            thump.frequency.linearRampToValueAtTime(92, now + duration);
-            const thumpGain = context.createGain();
-            thumpGain.gain.setValueAtTime(0.13, now);
-            thumpGain.gain.exponentialRampToValueAtTime(0.0001, now + duration + 0.05);
-            thump.connect(thumpGain);
-            thumpGain.connect(master);
-            thump.start(now);
-            thump.stop(now + duration);
-        } catch {
-            // Procedural Vulcan SFX is optional.
-        }
+            for (let i=0;i<data.length;i+=1) data[i] = (Math.random()*2-1) * Math.sin(Math.PI * i/data.length);
+            const src = context.createBufferSource(); src.buffer = buffer;
+            const filter = context.createBiquadFilter(); filter.type='bandpass'; filter.Q.value=0.7;
+            filter.frequency.setValueAtTime(240,now); filter.frequency.exponentialRampToValueAtTime(1550,now+0.62);
+            const gain = context.createGain(); gain.gain.setValueAtTime(0.0001,now); gain.gain.linearRampToValueAtTime(0.34,now+0.18); gain.gain.exponentialRampToValueAtTime(0.0001,now+0.74);
+            src.connect(filter); filter.connect(gain); gain.connect(context.destination); src.start(now); src.stop(now+0.75);
+        } catch {}
     }
 
-    private playVulcanBurst(shot: NetworkVulcanFired): void {
-        this.vulcanFiring = true;
-        this.playProceduralVulcanBurstSound(shot.durationMs);
-        this.vulcanTargetX = shot.x;
-        this.vulcanTargetY = shot.y;
-        let state = shot.seed >>> 0;
-        const rand = (): number => {
-            state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
-            return state / 4294967296;
-        };
-        const total = 42;
-        for (let i = 0; i < total; i += 1) {
-            this.time.delayedCall((shot.durationMs / total) * i, () => {
-                if (this.phase !== 'hunt') return;
-                const progress = i / Math.max(1, total - 1);
-                const tighten = Phaser.Math.Linear(1.0, 0.58, progress);
-                const angle = rand() * Math.PI * 2;
-                const radius = Math.sqrt(rand());
-                const localX = Math.cos(angle) * 108 * radius * tighten;
-                const localY = Math.sin(angle) * 68 * radius * tighten;
-                const radial = Math.atan2(shot.y - 270, shot.x - 480);
-                const c = Math.cos(radial), s = Math.sin(radial);
-                const px = shot.x + localX * c - localY * s;
-                const py = shot.y + localX * s + localY * c;
-
-                const flash = this.add.circle(px, py, 5 + rand() * 7, 0xffdf7a, 0.96).setDepth(24998);
-                const ring = this.add.circle(px, py, 6).setStrokeStyle(2, 0xffffff, 0.72).setDepth(24997);
-                this.vulcanImpactFx.add(flash);
-                this.vulcanImpactFx.add(ring);
-                this.tweens.add({ targets: flash, alpha: 0, scale: 2.2, duration: 150, onComplete: () => { this.vulcanImpactFx.delete(flash); flash.destroy(); } });
-                this.tweens.add({ targets: ring, alpha: 0, scale: 2.8, duration: 210, onComplete: () => { this.vulcanImpactFx.delete(ring); ring.destroy(); } });
-                this.cameras.main.shake(45, 0.0018);
-            });
-        }
-        this.time.delayedCall(shot.durationMs + 120, () => {
-            // Burst ends, but selected air-support mode persists until the round ends.
-            this.vulcanFiring = false;
-        });
+    private playVulcanGunPulse(): void {
+        if (!this.audioUnlocked || !this.bgmEnabled) return;
+        try {
+            const manager = this.sound as unknown as { context?: AudioContext };
+            const context = manager.context;
+            if (!context) return;
+            const now = context.currentTime;
+            const gain = context.createGain(); gain.gain.setValueAtTime(0.30,now); gain.gain.exponentialRampToValueAtTime(0.0001,now+0.065); gain.connect(context.destination);
+            const osc = context.createOscillator(); osc.type='square'; osc.frequency.setValueAtTime(92,now); osc.frequency.exponentialRampToValueAtTime(58,now+0.055); osc.connect(gain); osc.start(now); osc.stop(now+0.06);
+            const len = Math.floor(context.sampleRate*0.055); const buffer=context.createBuffer(1,len,context.sampleRate); const data=buffer.getChannelData(0);
+            for(let i=0;i<len;i+=1) data[i]=(Math.random()*2-1)*(1-i/len);
+            const noise=context.createBufferSource(); noise.buffer=buffer; const f=context.createBiquadFilter(); f.type='bandpass'; f.frequency.value=720; noise.connect(f); f.connect(gain); noise.start(now);
+        } catch {}
     }
 
     private exitVulcanCinematic(): void {
@@ -63089,6 +63055,7 @@ const roomPlayers =
         this.vulcanImpactFx.forEach((fx) => fx.destroy());
         this.vulcanImpactFx.clear();
         this.vulcanFiring = false;
+        this.vulcanPointerHeld = false;
         this.vulcanHelicopterRotorTween?.stop();
         this.vulcanHelicopterRotorTween = undefined;
         this.vulcanHelicopter?.destroy(true);
@@ -63357,14 +63324,17 @@ const roomPlayers =
             this.vulcanButton
                 ?.setPosition(
                     this.sniperButton.x,
-                    Phaser.Math.Clamp(
-                        this.sniperButton.y + 46,
-                        halfH + 10,
-                        this.gameHeight - halfH - 10,
-                    ),
+                    this.sniperButton.y + 46,
                 )
                 .setDepth(25020)
                 .setVisible(!this.vulcanSupportCommitted);
+
+            if (this.vulcanButton?.visible) {
+                const sniperBounds = this.sniperButton.getBounds();
+                const vulcanBounds = this.vulcanButton.getBounds();
+                const exactTop = sniperBounds.bottom + 2;
+                this.vulcanButton.y += exactTop - vulcanBounds.top;
+            }
             if (this.vulcanButton?.input) this.vulcanButton.input.enabled = !this.vulcanSupportCommitted;
 
             if (wasHidden) {
@@ -67617,6 +67587,9 @@ this.weaponHeat =
         this.vulcanActive = false;
         this.vulcanSupportCommitted = false;
         this.vulcanFiring = false;
+        this.vulcanPointerHeld = false;
+        this.vulcanHeat = 0;
+        this.vulcanCoolingDurationMs = 0;
         this.vulcanCinematicActive = false;
         this.vulcanReadyAt = 0;
         this.vulcanDarkness?.clear().setVisible(false);
