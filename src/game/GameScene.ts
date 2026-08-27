@@ -1,3 +1,4 @@
+/* V1010534B_REMOVE_HUNT_INTRO_ROBUST: prevent Hunt intro from overlapping final result. */
 /* V1010532B_VULCAN_FULL_MAP_ORBIT_EXACT_SOURCE: full-map Vulcan aerial view at 0.94; existing circular orbit preserved. */
 /* V1010531_TACTICAL_IDLE_FADE_HIDE: unused tactical choices stay 10s, blink semi-transparent for 3s, then both buttons + support bubble hard-disappear. */
 /* V1010530F_VULCAN_AUTHORITATIVE_IMPACT_NO_GUESS: server shot.x/y directly drives visible Vulcan impacts. */
@@ -44643,6 +44644,18 @@ this.networkUnsubscribers.push(
 
         this.roundResultWinner = result.winner;
 
+
+        /*
+         * V1010534B_REMOVE_HUNT_INTRO_ROBUST
+         * Hunt-start DOM intro is valid only during live Hunt.
+         * Kill it immediately before WIN / LOSE can render.
+         */
+        document
+            .querySelector(
+                '.colorhunt-main-hunt-intro',
+            )
+            ?.remove();
+
         /*
          * V521 RESULT_FIRST_CLEAN:
          * result UI/capture starts only after every tactical gameplay layer is
@@ -48447,6 +48460,18 @@ if (
         phase: string,
         phaseEndsAt: number,
     ): void {
+        /*
+         * V1010534B_REMOVE_HUNT_INTRO_ROBUST / PHASE_OWNERSHIP
+         * A delayed Hunt intro must never survive Finished/Lobby/Paint.
+         */
+        if (phase !== 'hunt') {
+            document
+                .querySelector(
+                    '.colorhunt-main-hunt-intro',
+                )
+                ?.remove();
+        }
+
         this.phaseExpiredSince = 0;
 
         /*
