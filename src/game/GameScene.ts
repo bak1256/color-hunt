@@ -1,3 +1,4 @@
+/* V1010532B_VULCAN_FULL_MAP_ORBIT_EXACT_SOURCE: full-map Vulcan aerial view at 0.94; existing circular orbit preserved. */
 /* V1010531_TACTICAL_IDLE_FADE_HIDE: unused tactical choices stay 10s, blink semi-transparent for 3s, then both buttons + support bubble hard-disappear. */
 /* V1010530F_VULCAN_AUTHORITATIVE_IMPACT_NO_GUESS: server shot.x/y directly drives visible Vulcan impacts. */
 /* V1010526B_VULCAN_1P5X: presentation 29ms->39ms. */
@@ -64638,7 +64639,7 @@ if (
                                                     .setZoom(
                                                         Phaser.Math.Linear(
                                                             punchZoom,
-                                                            1.34,
+                                                            0.94,
                                                             eased,
                                                         ),
                                                     )
@@ -64675,7 +64676,7 @@ if (
                                                 camera
                                                     .resetFX()
                                                     .setZoom(
-                                                        1.34,
+                                                        0.94,
                                                     )
                                                     .centerOn(
                                                         480,
@@ -65958,7 +65959,7 @@ if (
 
         camera
             .setZoom(
-                1.34,
+                0.94,
             )
             .centerOn(
                 480 +
@@ -67163,7 +67164,7 @@ if (
                 this.gameHeight,
             )
             .setZoom(
-                1.34,
+                0.94,
             )
             .centerOn(
                 480,
