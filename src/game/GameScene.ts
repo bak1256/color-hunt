@@ -1,3 +1,4 @@
+/* V1010526B_VULCAN_1P5X: presentation 29ms->39ms. */
 /* V1010528B_VULCAN_SELFVIEW_MAIN_UPDATE: Hider own-view Vulcan rendering moved from mobile HUD path to the real Scene update loop. */
 /* V1010528_ATOMIC_PAINT_HUNT_AND_VULCAN_SELFVIEW_PACKET_AUTHORITY: atomic held-stroke Paint->Hunt handoff + packet-authoritative Hider self-view Vulcan VFX. */
 /* V1010527_PAINT_HUNT_POSITION_LATCH_HIDER_VULCAN_SELFVIEW: force-ended Paint keeps exact Hider hiding position; Hider own-view remote Vulcan VFX uses true camera-state gate. */
@@ -66105,8 +66106,7 @@ if (
         if (
             visualFiring &&
             now -
-                this.vulcanLastMuzzleFxAt >=
-                29
+                this.vulcanLastMuzzleFxAt >= 39
         ) {
             this.vulcanLastMuzzleFxAt =
                 now;
