@@ -1,3 +1,4 @@
+/* V1010528B_VULCAN_SELFVIEW_MAIN_UPDATE: Hider own-view Vulcan rendering moved from mobile HUD path to the real Scene update loop. */
 /* V1010528_ATOMIC_PAINT_HUNT_AND_VULCAN_SELFVIEW_PACKET_AUTHORITY: atomic held-stroke Paint->Hunt handoff + packet-authoritative Hider self-view Vulcan VFX. */
 /* V1010527_PAINT_HUNT_POSITION_LATCH_HIDER_VULCAN_SELFVIEW: force-ended Paint keeps exact Hider hiding position; Hider own-view remote Vulcan VFX uses true camera-state gate. */
 /* V1010526_HIDER_SELF_VIEW_REMOTE_VULCAN_VFX: Hider own-view sees remote Vulcan searchlight + firing VFX without entering aerial spectator camera. */
@@ -7076,7 +7077,6 @@ private timerText!: Phaser.GameObjects.Text;
 
         if (this.phase === 'hunt') {
             this.refreshSniperSupportUi();
-            this.updateVulcanAirSupport();
         }
 
         const showHunterCombat =
@@ -9714,6 +9714,21 @@ private timerText!: Phaser.GameObjects.Text;
         }
 
         this.ensureGameplayCameraFollow();
+
+        /*
+         * V1010528B_VULCAN_SELFVIEW_MAIN_UPDATE
+         *
+         * Passive remote Vulcan VFX belongs to gameplay rendering, NOT mobile
+         * HUD visibility. Run it every Scene frame on desktop and mobile.
+         *
+         * It internally gates itself to:
+         * - Hunt
+         * - local Hider
+         * - own camera (not Vulcan spectator aerial camera)
+         * - no victory/result capture
+         */
+        this.updateRemoteVulcanSelfViewVfx();
+
         this.updateHuntTension(delta);
 
         if (this.phase === 'paint') {
@@ -65504,6 +65519,21 @@ if (
             major,
             minor,
         );
+
+        /*
+         * V1010528B_VULCAN_SELFVIEW_MAIN_UPDATE / CENTER_CONFIRMATION_DOT
+         * Small visual anchor at the live network aim point.
+         */
+        graphics.fillStyle(
+            0xfff6bf,
+            0.95,
+        );
+
+        graphics.fillCircle(
+            0,
+            0,
+            3,
+        );
     }
 
     private clearRemoteVulcanSelfViewVfx(): void {
@@ -65775,12 +65805,7 @@ if (
         this.forceTacticalTopHud();
         this.applyTacticalSupportInputLock();
 
-        /*
-         * V1010526_HIDER_SELF_VIEW_REMOTE_VULCAN_VFX
-         * Must run before owner/spectator early-return so a normal Hider
-         * self-camera still receives remote spotlight + bullet presentation.
-         */
-        this.updateRemoteVulcanSelfViewVfx();
+
 
         const watchedSessionId =
             this.spectatorSessionId ??
