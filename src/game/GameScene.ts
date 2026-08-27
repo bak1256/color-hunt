@@ -1,3 +1,5 @@
+/* V1010520C_REMOVE_DUPLICATE_AUTHORITATIVE_WINNER: removes duplicate authoritativeWinner declaration introduced by v520b. */
+/* V1010520B_VULCAN_TIMER_RESULT_DOUBLE_BEAM_RECOIL_HEAT_SYNC_ROBUST: tactical clock forced top; winner frame immediately clears Vulcan; spotlight doubled; stronger recoil + shaking HEAT; empty bar and fire-ready state synchronized. */
 /* V1010519C_REMOVE_ALL_UNUSED_VULCAN_COOLING_STARTED_AT: removes the obsolete cooling-start field and all stale writes from the pre-v519 proportional cooldown system. */
 /* V1010519_VULCAN_CONTINUOUS_HEAT_SPECTATOR_SYNC_DARK_ALIGN: world-aligned darkness; immediate Hider Vulcan spectator takeover; shared live lamp/fire FX; continuous 3s heat / 3s overheat; hard result-button hide. */
 /* V1010518C_REMOVE_LEGACY_REVEAL_MASK_FIELDS: removes stale spotlightReveal assignments and obsolete GeometryMask remnants after v518b direct-strip spotlight rendering. */
@@ -64057,11 +64059,27 @@ const roomPlayers =
                 const now =
                     Date.now();
 
+                /*
+                 * One source of truth:
+                 * - partial heat never blocks
+                 * - only visible overheat blocks
+                 * - if bar reached zero, stale readyAt is cleared here too
+                 */
+                if (
+                    this.vulcanHeat <=
+                        0.001 &&
+                    !this.vulcanOverheated
+                ) {
+                    this.vulcanHeat =
+                        0;
+
+                    this.vulcanReadyAt =
+                        0;
+                }
+
                 if (
                     this.vulcanFiring ||
                     this.vulcanOverheated ||
-                    now <
-                        this.vulcanReadyAt ||
                     this.vulcanHeat >=
                         0.999
                 ) {
@@ -64428,6 +64446,91 @@ const roomPlayers =
 
 
 
+    private forceTacticalTopHud(): void {
+        if (
+            this.phase !==
+                'hunt' ||
+            (
+                !this.sniperActive &&
+                !this.sniperCinematicActive &&
+                !this.vulcanActive &&
+                !this.vulcanCinematicActive &&
+                !this.vulcanSpectatorViewActive
+            )
+        ) {
+            return;
+        }
+
+        /*
+         * Tactical scopes/lamps live around depth 25k.
+         * Keep the actual round clock/role strip decisively above them.
+         */
+        this.survivalHudGraphics
+            ?.setDepth(
+                100060,
+            )
+            .setScrollFactor(
+                0,
+            );
+
+        this.survivalHudText
+            ?.setDepth(
+                100061,
+            )
+            .setScrollFactor(
+                0,
+            )
+            .setVisible(
+                true,
+            );
+
+        this.survivalHiderLabelText
+            ?.setDepth(
+                100062,
+            )
+            .setScrollFactor(
+                0,
+            );
+
+        this.survivalHunterLabelText
+            ?.setDepth(
+                100062,
+            )
+            .setScrollFactor(
+                0,
+            );
+
+        this.phaseText
+            ?.setDepth(
+                100063,
+            )
+            .setScrollFactor(
+                0,
+            );
+
+        /*
+         * Legacy timerText may be the active clock in some HUD branches.
+         * Never force empty text visible, but if it is currently in use,
+         * give it the same top-most tactical priority.
+         */
+        if (
+            this.timerText &&
+            this.timerText.text
+        ) {
+            this.timerText
+                .setDepth(
+                    100064,
+                )
+                .setScrollFactor(
+                    0,
+                )
+                .setVisible(
+                    true,
+                );
+        }
+    }
+
+
     private updateVulcanAirSupport(): void {
         /*
          * Result/lobby hard cleanup even if phase still transiently reports Hunt.
@@ -64436,14 +64539,18 @@ const roomPlayers =
             multiplayerClient.getRoom()
                 ?.state.winner;
 
-        if (
+
+        const resultKnown =
             this.phase !==
                 'hunt' ||
             this.roundResultWinner !==
                 null ||
             Boolean(
                 authoritativeWinner,
-            )
+            );
+
+        if (
+            resultKnown
         ) {
             this.sniperButton
                 ?.disableInteractive()
@@ -64453,9 +64560,32 @@ const roomPlayers =
                 ?.disableInteractive()
                 .setVisible(false);
 
+            /*
+             * IMPORTANT:
+             * WIN/LOSE frame itself must already be clean.
+             * No dark layer, lamp, HEAT bar, orbit, recoil or tactical zoom
+             * may survive behind the result text/card.
+             */
+            if (
+                this.vulcanActive ||
+                this.vulcanCinematicActive ||
+                this.vulcanSpectatorViewActive ||
+                Boolean(
+                    this.vulcanDarkness
+                        ?.visible,
+                ) ||
+                Boolean(
+                    this.vulcanSpotlight
+                        ?.visible,
+                )
+            ) {
+                this.clearVulcanForResultCapture();
+            }
+
             return;
         }
 
+        this.forceTacticalTopHud();
         this.applyTacticalSupportInputLock();
 
         const watchedSessionId =
@@ -64588,6 +64718,32 @@ const roomPlayers =
 
         const now =
             Date.now();
+
+        /*
+         * V520B HEAT/INPUT ATOMIC READY SYNC:
+         * when the visible 3-second overheat reaches its final frame,
+         * clear visual heat AND the actual fire lock together.
+         */
+        if (
+            this.vulcanOverheated &&
+            this.vulcanReadyAt >
+                0 &&
+            this.vulcanReadyAt -
+                now <=
+                35
+        ) {
+            this.vulcanOverheated =
+                false;
+
+            this.vulcanHeat =
+                0;
+
+            this.vulcanReadyAt =
+                0;
+
+            this.vulcanHeatUpdatedAt =
+                now;
+        }
 
         /*
          * Shotgun-style continuous HEAT.
@@ -64743,8 +64899,8 @@ const roomPlayers =
              * Noticeable, but small enough not to sabotage aiming.
              */
             camera.shake(
-                52,
-                0.0020,
+                70,
+                0.0030,
             );
         }
 
@@ -64817,15 +64973,15 @@ const roomPlayers =
 
         const major =
             Phaser.Math.Linear(
-                72,
-                175,
+                144,
+                350,
                 t,
             );
 
         const minor =
             Phaser.Math.Linear(
-                72,
-                43,
+                144,
+                86,
                 t,
             );
 
@@ -65150,6 +65306,7 @@ const roomPlayers =
     }
 
 
+
     private drawVulcanCooldownGauge(
         x: number,
         y: number,
@@ -65170,9 +65327,14 @@ const roomPlayers =
             this.roundResultWinner !==
                 null
         ) {
-            g.setVisible(
-                false,
-            );
+            g
+                .setPosition(
+                    0,
+                    0,
+                )
+                .setVisible(
+                    false,
+                );
 
             return;
         }
@@ -65193,15 +65355,18 @@ const roomPlayers =
                 1,
             );
 
+        /*
+         * Spotlight itself is now 2x.
+         */
         const minor =
             Phaser.Math.Linear(
-                72,
-                43,
+                144,
+                86,
                 t,
             );
 
         const width =
-            92;
+            112;
 
         const height =
             6;
@@ -65220,12 +65385,15 @@ const roomPlayers =
             Phaser.Math.Clamp(
                 y +
                     minor *
-                        0.72 +
+                        0.60 +
                     13,
                 12,
                 520,
             );
 
+        /*
+         * SAME value controls BOTH visual bar and actual fire eligibility.
+         */
         const heat =
             Phaser.Math.Clamp(
                 this.vulcanHeat,
@@ -65233,13 +65401,37 @@ const roomPlayers =
                 1,
             );
 
+        /*
+         * BRRRT vibration: shake the entire bar 1~2 px with each runtime frame.
+         * Rest/cooling immediately returns it to the exact anchor.
+         */
+        if (
+            this.vulcanFiring
+        ) {
+            g.setPosition(
+                Phaser.Math.Between(
+                    -2,
+                    2,
+                ),
+                Phaser.Math.Between(
+                    -2,
+                    2,
+                ),
+            );
+        } else {
+            g.setPosition(
+                0,
+                0,
+            );
+        }
+
         g.setVisible(
             true,
         );
 
         g.fillStyle(
             0x050709,
-            0.90,
+            0.92,
         );
 
         g.fillRoundedRect(
@@ -65271,7 +65463,7 @@ const roomPlayers =
         ) {
             g.fillStyle(
                 color,
-                0.98,
+                0.99,
             );
 
             g.fillRoundedRect(
@@ -65291,7 +65483,7 @@ const roomPlayers =
             this.vulcanOverheated
                 ? 0xff5248
                 : 0xffedb0,
-            0.92,
+            0.94,
         );
 
         g.strokeRoundedRect(
@@ -65301,6 +65493,28 @@ const roomPlayers =
             height,
             2,
         );
+
+        /*
+         * Tiny hot marker at the exact maximum.
+         */
+        if (
+            heat >=
+                0.995
+        ) {
+            g.fillStyle(
+                0xffffff,
+                0.92,
+            );
+
+            g.fillCircle(
+                barX +
+                    width,
+                barY +
+                    height /
+                        2,
+                2.4,
+            );
+        }
     }
 
     private playVulcanSearchlightPop(): void {
