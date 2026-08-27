@@ -1,3 +1,4 @@
+/* V1010539B_UNDO_SAFE_GRANULARITY_ROBUST: Undo no longer wipes a large one-stroke painting; rebuild callbacks are generation-safe. */
 /* V1010538B_SIX_PLAYER_STABILITY_REMOTE_SNIPER_AUDIO_ROBUST: Hunter recovery paint barrier relaxed in Hunt; remote sniper report synced. */
 /* V1010537_VULCAN_OWNER_AUTHORITATIVE_TRACER: local firing Hunter receives authoritative Vulcan tracer at shot.x/y; Hider passive path remains single-rendered. */
 /* V1010536B_VULCAN_TRACER_DOUBLE_LENGTH_ROBUST: Vulcan shared tracer visual length 18..34px -> 36..68px. No firing-path rewrite. */
@@ -7550,6 +7551,9 @@ private timerText!: Phaser.GameObjects.Text;
     private currentStrokeHistoryPoints: NetworkPaintPoint[] = [];
     private localPaintHistory: NetworkPaintStroke[] = [];
     private redoPaintHistory: NetworkPaintStroke[] = [];
+    /* V1010539B_UNDO_SAFE_GRANULARITY_ROBUST: Undo rebuild is last-request-wins and keeps an emergency snapshot. */
+    private paintHistoryRebuildGeneration = 0;
+    private paintHistoryLastNonEmptySnapshot: NetworkPaintStroke[] = [];
 
     /*
      * v0.10.10.168
@@ -56194,7 +56198,41 @@ if (
         );
     }
 
+    private clonePaintHistory(
+        history: NetworkPaintStroke[],
+    ): NetworkPaintStroke[] {
+        return history.map(
+            (stroke) => ({
+                ...stroke,
+                points: stroke.points.map(
+                    (point) => ({
+                        ...point,
+                    }),
+                ),
+            }),
+        );
+    }
+
+    private rememberPaintHistoryForUndoSafety(): void {
+        if (
+            this.localPaintHistory.length >
+            0
+        ) {
+            this.paintHistoryLastNonEmptySnapshot =
+                this.clonePaintHistory(
+                    this.localPaintHistory,
+                );
+        }
+    }
+
     private schedulePaintHistoryRebuild(): void {
+        /*
+         * V1010539B_UNDO_SAFE_GRANULARITY_ROBUST / LAST_REQUEST_WINS
+         * Rapid Undo/Redo taps collapse into the latest requested history.
+         */
+        const generation =
+            ++this.paintHistoryRebuildGeneration;
+
         if (
             this.paintHistoryRebuildTimer !==
             undefined
@@ -56204,13 +56242,16 @@ if (
             );
         }
 
-        /*
-         * 42 ms is short enough to feel instant, but long enough to collapse
-         * button mashing into a single expensive texture reconstruction.
-         */
         this.paintHistoryRebuildTimer =
             window.setTimeout(
                 () => {
+                    if (
+                        generation !==
+                        this.paintHistoryRebuildGeneration
+                    ) {
+                        return;
+                    }
+
                     this.paintHistoryRebuildTimer =
                         undefined;
 
@@ -56234,11 +56275,112 @@ if (
 
         this.finishActivePaintStroke();
 
-        const removedStroke =
+        this.rememberPaintHistoryForUndoSafety();
+
+        let removedStroke =
             this.localPaintHistory.pop();
+
+        /*
+         * V1010539B_UNDO_SAFE_GRANULARITY_ROBUST / GIANT_SINGLE_STROKE_GUARD
+         *
+         * A player may paint almost the whole character without releasing the
+         * pointer. Technically that is one stroke, so legacy Undo erased the
+         * entire painting at once. If the only stroke is large, undo only its
+         * newest tail and keep the earlier part as the remaining stroke.
+         */
+        if (
+            removedStroke &&
+            this.localPaintHistory.length ===
+                0 &&
+            this.paintHistoryLastNonEmptySnapshot.length ===
+                1 &&
+            removedStroke.points.length >
+                16
+        ) {
+            const undoPointCount =
+                Math.min(
+                    8,
+                    Math.max(
+                        4,
+                        Math.floor(
+                            removedStroke.points.length *
+                                0.10,
+                        ),
+                    ),
+                );
+
+            const splitIndex =
+                Math.max(
+                    1,
+                    removedStroke.points.length -
+                        undoPointCount,
+                );
+
+            const remainingStroke:
+                NetworkPaintStroke = {
+                    ...removedStroke,
+                    points:
+                        removedStroke.points
+                            .slice(
+                                0,
+                                splitIndex,
+                            )
+                            .map(
+                                (point) => ({
+                                    ...point,
+                                }),
+                            ),
+                };
+
+            const tailStroke:
+                NetworkPaintStroke = {
+                    ...removedStroke,
+                    points:
+                        removedStroke.points
+                            .slice(
+                                splitIndex,
+                            )
+                            .map(
+                                (point) => ({
+                                    ...point,
+                                }),
+                            ),
+                };
+
+            this.localPaintHistory.push(
+                remainingStroke,
+            );
+
+            removedStroke =
+                tailStroke;
+        }
 
         if (!removedStroke) {
             return;
+        }
+
+        /*
+         * V1010539B_UNDO_SAFE_GRANULARITY_ROBUST / IMPOSSIBLE_EMPTY_GUARD
+         * With 2+ stored strokes, one Undo cannot legally erase all history.
+         */
+        if (
+            this.localPaintHistory.length ===
+                0 &&
+            this.paintHistoryLastNonEmptySnapshot.length >
+                1
+        ) {
+            const restoredRemaining =
+                this.paintHistoryLastNonEmptySnapshot
+                    .slice(
+                        0,
+                        -1,
+                    );
+
+            this.localPaintHistory.push(
+                ...this.clonePaintHistory(
+                    restoredRemaining,
+                ),
+            );
         }
 
         /*
