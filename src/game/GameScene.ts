@@ -15947,8 +15947,15 @@ const ribbon =
                 const isOwner = state.sessionId === localId;
 
                 if (state.active) {
+                    /*
+                     * V1010525C_GLOBAL_TACTICAL_BGM_MINIMAL
+                     * Match Sniper: every client receiving active Vulcan state
+                     * enters the shared tactical BGM. startSniperTacticalBgm()
+                     * already prevents duplicate playback.
+                     */
+                    this.startSniperTacticalBgm();
+
                     if (isOwner) {
-                        this.startSniperTacticalBgm();
                         this.vulcanSupportCommitted = true;
                         this.vulcanActive = true;
 
