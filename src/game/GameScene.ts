@@ -1,3 +1,4 @@
+/* V1010535_VULCAN_MOUSE_FOLLOW_HELICAM: Vulcan aerial camera zooms to 1.12 and smoothly pans with spotlight/mouse aim while retaining helicopter orbit and map-edge clamps. */
 /* V1010534B_REMOVE_HUNT_INTRO_ROBUST: prevent Hunt intro from overlapping final result. */
 /* V1010532B_VULCAN_FULL_MAP_ORBIT_EXACT_SOURCE: full-map Vulcan aerial view at 0.94; existing circular orbit preserved. */
 /* V1010531_TACTICAL_IDLE_FADE_HIDE: unused tactical choices stay 10s, blink semi-transparent for 3s, then both buttons + support bubble hard-disappear. */
@@ -64664,7 +64665,7 @@ if (
                                                     .setZoom(
                                                         Phaser.Math.Linear(
                                                             punchZoom,
-                                                            0.94,
+                                                            1.12,
                                                             eased,
                                                         ),
                                                     )
@@ -64701,7 +64702,7 @@ if (
                                                 camera
                                                     .resetFX()
                                                     .setZoom(
-                                                        0.94,
+                                                        1.12,
                                                     )
                                                     .centerOn(
                                                         480,
@@ -65982,21 +65983,73 @@ if (
             elapsed *
             0.00048;
 
+        /*
+         * V1010535_VULCAN_MOUSE_FOLLOW_HELICAM
+         * Helicopter camera follows the already-smoothed spotlight position.
+         * Only part of the aim displacement is inherited so aiming remains
+         * controllable while the aerial camera visibly searches with the lamp.
+         */
+        const vulcanCameraZoom =
+            1.12;
+
+        const halfVisibleWorldW =
+            480 /
+            vulcanCameraZoom;
+
+        const halfVisibleWorldH =
+            270 /
+            vulcanCameraZoom;
+
+        const cameraFollowStrength =
+            0.32;
+
+        const desiredCameraX =
+            480 +
+            (
+                this.vulcanDisplayX -
+                480
+            ) *
+                cameraFollowStrength +
+            Math.cos(
+                orbit,
+            ) *
+                24;
+
+        const desiredCameraY =
+            270 +
+            (
+                this.vulcanDisplayY -
+                270
+            ) *
+                cameraFollowStrength +
+            Math.sin(
+                orbit,
+            ) *
+                16;
+
+        const cameraCenterX =
+            Phaser.Math.Clamp(
+                desiredCameraX,
+                halfVisibleWorldW,
+                960 -
+                    halfVisibleWorldW,
+            );
+
+        const cameraCenterY =
+            Phaser.Math.Clamp(
+                desiredCameraY,
+                halfVisibleWorldH,
+                540 -
+                    halfVisibleWorldH,
+            );
+
         camera
             .setZoom(
-                0.94,
+                vulcanCameraZoom,
             )
             .centerOn(
-                480 +
-                    Math.cos(
-                        orbit,
-                    ) *
-                        24,
-                270 +
-                    Math.sin(
-                        orbit,
-                    ) *
-                        16,
+                cameraCenterX,
+                cameraCenterY,
             )
             .setRotation(
                 Math.sin(
@@ -67189,7 +67242,7 @@ if (
                 this.gameHeight,
             )
             .setZoom(
-                0.94,
+                1.12,
             )
             .centerOn(
                 480,
