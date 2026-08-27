@@ -1,3 +1,4 @@
+/* V1010508_VULCAN_SEARCHLIGHT_COOLDOWN_CINEMATIC: visible searchlight, dark surround, stronger orbit, persistent 6s repeat-fire cooldown. */
 /* V1010507_TACTICAL_VULCAN_AIR_SUPPORT: tactical support chooser + synchronized oblique searchlight + 3s Vulcan area burst. */
 /* V1010506_PC_SNIPER_BLUR_COMPOSITOR_STABILIZE: stabilize PC masked backdrop-filter compositor only; physical sniper scope LOCKED. */
 /* V1010505_SECOND_ROUND_SNIPER_BLUR_LIFECYCLE: re-show reused blur DOM on active scope sync; fixes first-round-only blur. Scope geometry/rack-in/cameras LOCKED. */
@@ -963,6 +964,12 @@ export class GameScene extends Phaser.Scene {
     private vulcanDisplayY = 270;
     private vulcanLastAimBroadcastAt = 0;
     private vulcanFiring = false;
+    private vulcanCinematicActive = false;
+    private vulcanSpotlightReveal = 0;
+    private vulcanReadyAt = 0;
+    private readonly vulcanCooldownMs = 6_000;
+    private vulcanDarkness?: Phaser.GameObjects.Graphics;
+    private vulcanCooldownGraphics?: Phaser.GameObjects.Graphics;
     private vulcanOrbitStartedAt = 0;
     private vulcanSavedCameraZoom = 1.65;
     private vulcanSavedCameraRotation = 0;
@@ -15788,6 +15795,9 @@ const ribbon =
             multiplayerClient.onVulcanFired((shot: NetworkVulcanFired) => {
                 this.vulcanTargetX = shot.x;
                 this.vulcanTargetY = shot.y;
+                this.vulcanReadyAt = Number.isFinite(shot.readyAt)
+                    ? shot.readyAt
+                    : Date.now() + this.vulcanCooldownMs;
                 this.vulcanFiring = true;
                 this.playVulcanBurst(shot);
             }),
@@ -43034,7 +43044,11 @@ this.networkUnsubscribers.push(
         this.vulcanActive = false;
         this.vulcanSupportCommitted = false;
         this.vulcanFiring = false;
+        this.vulcanCinematicActive = false;
+        this.vulcanReadyAt = 0;
+        this.vulcanDarkness?.clear().setVisible(false);
         this.vulcanSpotlight?.clear().setVisible(false);
+        this.vulcanCooldownGraphics?.clear().setVisible(false);
         this.sniperAvailable = false;
         this.sniperReadyAt = 0;
         this.sniperHelicopterArrived = false;
@@ -43708,6 +43722,7 @@ this.networkUnsubscribers.push(
         if (
             this.sniperCinematicActive ||
             this.sniperActive ||
+            this.vulcanCinematicActive ||
             this.vulcanActive ||
             Boolean(this.vulcanSpotlight?.visible)
         ) {
@@ -58577,7 +58592,7 @@ const roomPlayers =
         const vulcanButton =
             this.add.container(
                 this.gameWidth / 2,
-                this.gameHeight / 2 + 116,
+                this.gameHeight / 2 + 128,
                 [vulcanBg, vulcanLabel],
             )
                 .setDepth(25020)
@@ -58613,7 +58628,7 @@ const roomPlayers =
 
         this.fixedHudBaseTransforms.set(vulcanButton, {
             x: this.gameWidth / 2,
-            y: this.gameHeight / 2 + 116,
+            y: this.gameHeight / 2 + 128,
             scaleX: 1,
             scaleY: 1,
         });
@@ -58628,9 +58643,19 @@ const roomPlayers =
             ease: 'Sine.easeInOut',
         });
 
+        this.vulcanDarkness =
+            this.add.graphics()
+                .setDepth(24993)
+                .setVisible(false);
+
         this.vulcanSpotlight =
             this.add.graphics()
                 .setDepth(24995)
+                .setVisible(false);
+
+        this.vulcanCooldownGraphics =
+            this.add.graphics()
+                .setDepth(24996)
                 .setVisible(false);
 
         this.input.on(Phaser.Input.Events.POINTER_MOVE, (pointer: Phaser.Input.Pointer) => {
@@ -58648,14 +58673,17 @@ const roomPlayers =
         this.input.on(Phaser.Input.Events.POINTER_DOWN, (pointer: Phaser.Input.Pointer) => {
             if (!this.vulcanActive || this.vulcanFiring || this.phase !== 'hunt') return;
             if (this.vulcanButton?.visible || this.sniperButton?.visible) return;
+            const now = Date.now();
+            if (now < this.vulcanReadyAt) return;
             pointer.event?.preventDefault?.();
             pointer.event?.stopPropagation?.();
-            this.vulcanFiring = true;
+            // Optimistic local gate; server remains authoritative.
+            this.vulcanReadyAt = now + this.vulcanCooldownMs;
             if (this.practiceMode === 'hunter') {
                 this.playVulcanBurst({
                     shooterId: 'practice', x: this.vulcanTargetX, y: this.vulcanTargetY,
-                    seed: Math.floor(Math.random() * 0x7fffffff), startedAt: Date.now(),
-                    durationMs: 3000, hitIds: [], serverNow: Date.now(),
+                    seed: Math.floor(Math.random() * 0x7fffffff), startedAt: now,
+                    durationMs: 3000, hitIds: [], readyAt: this.vulcanReadyAt, serverNow: now,
                 });
             } else {
                 multiplayerClient.sendVulcanFire(this.vulcanTargetX, this.vulcanTargetY);
@@ -58928,7 +58956,7 @@ const roomPlayers =
             return `狙击支援待命中... ${value}`;
         }
 
-        return `저격 지원 대기 중... ${value}`;
+        return `전술지원 대기중... ${value}`;
     }
 
     private setSniperAimWorld(
@@ -62601,11 +62629,14 @@ const roomPlayers =
     private sniperScopeStripCameras: Phaser.Cameras.Scene2D.Camera[] = [];
 
     /* V1010507_TACTICAL_VULCAN_AIR_SUPPORT: same support intro, different final instrument. */
+
     private enterVulcanCinematic(isOwner: boolean): void {
         if (this.phase !== 'hunt') return;
+        this.vulcanCinematicActive = true;
         this.vulcanSavedCameraZoom = this.cameras.main.zoom;
         this.vulcanSavedCameraRotation = 0;
         this.vulcanOrbitStartedAt = this.time.now;
+        this.vulcanSpotlightReveal = 0;
         this.vulcanFiring = false;
 
         this.hiderVisionGraphics?.clear().setVisible(false);
@@ -62623,42 +62654,75 @@ const roomPlayers =
         this.mobileFireLabel?.setVisible(false);
         this.hunterWeaponHudContainer?.setVisible(false);
 
+        // Same tactical intro contract as Sniper: BGM/audio -> large helicopter -> camera travel.
         this.startSniperHelicopterAudio();
         this.createSniperHelicopter();
 
         const camera = this.cameras.main;
-        const currentWorldCenter = camera.midPoint;
+        const currentWorldCenter = camera.midPoint.clone();
         this.vulcanTargetX = Phaser.Math.Clamp(currentWorldCenter.x, 0, 960);
         this.vulcanTargetY = Phaser.Math.Clamp(currentWorldCenter.y, 0, 540);
         this.vulcanDisplayX = this.vulcanTargetX;
         this.vulcanDisplayY = this.vulcanTargetY;
 
         const startY = camera.worldView.bottom + 74 / Math.max(0.01, camera.zoom);
-        this.sniperHelicopter?.setPosition(currentWorldCenter.x, startY).setAlpha(0.68).setVisible(true);
+        this.sniperHelicopter
+            ?.setPosition(currentWorldCenter.x, startY)
+            .setAlpha(0.68)
+            .setVisible(true);
 
-        const arrive = (): void => {
+        const beginCameraTravel = (): void => {
             if (this.phase !== 'hunt') return;
-            camera.stopFollow().removeBounds().setSize(this.gameWidth, this.gameHeight);
+            camera.stopFollow();
+            camera.removeBounds();
+            camera.setSize(this.gameWidth, this.gameHeight);
+
             const fromZoom = camera.zoom;
             const fromX = camera.midPoint.x;
             const fromY = camera.midPoint.y;
-            const progress = { value: 0 };
+            const travel = { value: 0 };
+
             this.tweens.add({
-                targets: progress, value: 1, duration: 1050, ease: 'Sine.easeInOut',
+                targets: travel,
+                value: 1,
+                duration: 1150,
+                ease: 'Sine.easeInOut',
                 onUpdate: () => {
-                    const t = Phaser.Math.Clamp(progress.value, 0, 1);
-                    // Unlike sniper's full-map 1.0, Vulcan stays closer: aerial search at ~1.16x.
-                    const zoom = Phaser.Math.Linear(fromZoom, 1.16, t);
-                    camera.setZoom(zoom).centerOn(
-                        Phaser.Math.Linear(fromX, 480, t),
-                        Phaser.Math.Linear(fromY, 270, t),
+                    const t = Phaser.Math.Clamp(travel.value, 0, 1);
+                    const eased = Phaser.Math.SmoothStep(t, 0, 1);
+                    const zoom = Phaser.Math.Linear(fromZoom, 1.16, eased);
+                    camera.setZoom(zoom);
+                    camera.centerOn(
+                        Phaser.Math.Linear(fromX, 480, eased),
+                        Phaser.Math.Linear(fromY, 270, eased),
                     );
                     this.applyFixedHudForZoom(zoom);
                 },
                 onComplete: () => {
                     if (this.phase !== 'hunt') return;
-                    camera.setZoom(1.16).centerOn(480, 270);
+                    camera.setZoom(1.16);
+                    camera.centerOn(480, 270);
+                    this.vulcanOrbitStartedAt = this.time.now;
+
+                    // Searchlight is physically "raised/armed" after the camera settles.
+                    this.vulcanDarkness?.setVisible(true);
                     this.vulcanSpotlight?.setVisible(true);
+                    this.vulcanCooldownGraphics?.setVisible(true);
+                    const reveal = { value: 0 };
+                    this.tweens.add({
+                        targets: reveal,
+                        value: 1,
+                        duration: 460,
+                        ease: 'Back.easeOut',
+                        onUpdate: () => {
+                            this.vulcanSpotlightReveal = Phaser.Math.Clamp(reveal.value, 0, 1);
+                        },
+                        onComplete: () => {
+                            this.vulcanSpotlightReveal = 1;
+                            this.vulcanCinematicActive = true;
+                        },
+                    });
+
                     if (isOwner && this.practiceMode !== 'hunter') {
                         multiplayerClient.sendVulcanAim(this.vulcanTargetX, this.vulcanTargetY);
                     }
@@ -62670,58 +62734,101 @@ const roomPlayers =
             this.tweens.add({
                 targets: this.sniperHelicopter,
                 y: currentWorldCenter.y,
-                alpha: 0.72,
+                alpha: 0.76,
                 duration: 720,
                 ease: 'Cubic.easeOut',
-                onComplete: arrive,
+                onComplete: beginCameraTravel,
             });
         } else {
-            arrive();
+            beginCameraTravel();
         }
     }
 
+
     private updateVulcanAirSupport(): void {
-        if ((!this.vulcanActive && !this.vulcanSpotlight?.visible) || this.phase !== 'hunt') return;
+        if ((!this.vulcanCinematicActive && !this.vulcanActive && !this.vulcanSpotlight?.visible) || this.phase !== 'hunt') return;
+
         const camera = this.cameras.main;
         const elapsed = Math.max(0, this.time.now - this.vulcanOrbitStartedAt);
-        const orbit = elapsed * 0.00032;
-        // Tiny circular drift sells a helicopter orbit without sabotaging targeting.
-        const orbitX = Math.cos(orbit) * 7;
-        const orbitY = Math.sin(orbit) * 4;
-        camera.centerOn(480 + orbitX, 270 + orbitY);
-        camera.setRotation(Math.sin(orbit * 0.78) * 0.0075);
+        const orbit = elapsed * 0.00046;
 
-        this.vulcanDisplayX = Phaser.Math.Linear(this.vulcanDisplayX, this.vulcanTargetX, 0.18);
-        this.vulcanDisplayY = Phaser.Math.Linear(this.vulcanDisplayY, this.vulcanTargetY, 0.18);
+        // Noticeable but still playable helicopter orbit.
+        const orbitX = Math.cos(orbit) * 16;
+        const orbitY = Math.sin(orbit) * 10;
+        camera.centerOn(480 + orbitX, 270 + orbitY);
+        camera.setRotation(Math.sin(orbit * 0.86) * 0.015);
+
+        this.vulcanDisplayX = Phaser.Math.Linear(this.vulcanDisplayX, this.vulcanTargetX, 0.16);
+        this.vulcanDisplayY = Phaser.Math.Linear(this.vulcanDisplayY, this.vulcanTargetY, 0.16);
         this.drawVulcanSpotlight(this.vulcanDisplayX, this.vulcanDisplayY);
+        this.drawVulcanCooldownGauge(this.vulcanDisplayX, this.vulcanDisplayY);
     }
 
+
     private drawVulcanSpotlight(x: number, y: number): void {
-        const g = this.vulcanSpotlight;
-        if (!g) return;
-        g.clear();
+        const light = this.vulcanSpotlight;
+        const darkness = this.vulcanDarkness;
+        if (!light || !darkness) return;
+
         const dx = x - 480;
         const dy = y - 270;
         const distance = Math.hypot(dx, dy);
         const maxDistance = Math.hypot(480, 270);
         const t = Phaser.Math.Clamp(distance / maxDistance, 0, 1);
         const angle = Math.atan2(dy, dx);
-        const major = Phaser.Math.Linear(62, 150, t);
-        const minor = Phaser.Math.Linear(62, 48, t);
+        const reveal = Phaser.Math.Clamp(this.vulcanSpotlightReveal, 0, 1);
 
-        // Real oblique footprint: the ellipse's major axis always points away from map center.
-        g.save();
-        g.translateCanvas(x, y);
-        g.rotateCanvas(angle);
-        g.fillStyle(0xfff7c2, 0.055);
-        g.fillEllipse(0, 0, major * 2.35, minor * 2.35);
-        g.fillStyle(0xfff2a8, 0.095);
-        g.fillEllipse(0, 0, major * 1.70, minor * 1.70);
-        g.fillStyle(0xffffff, 0.15);
-        g.fillEllipse(0, 0, major, minor);
-        g.lineStyle(2, 0xfff4ba, 0.34);
-        g.strokeEllipse(0, 0, major, minor);
-        g.restore();
+        // At map center: nearly circular. Toward edges: long oblique ellipse pointing radially outward.
+        const major = Phaser.Math.Linear(66, 164, t) * Phaser.Math.Linear(0.18, 1, reveal);
+        const minor = Phaser.Math.Linear(64, 48, t) * Phaser.Math.Linear(0.18, 1, reveal);
+
+        // Outside the lamp is about half-strength of the normal black vision restriction.
+        darkness.clear();
+        darkness.fillStyle(0x000000, 0.26 * reveal);
+        darkness.fillRect(0, 0, 960, 540);
+        darkness.setPosition(0, 0).setRotation(0);
+
+        // Do not rely on canvas-only transform APIs: rotate the Graphics object itself for WebGL too.
+        light.clear();
+        light.setPosition(x, y);
+        light.setRotation(angle);
+        light.fillStyle(0xfff5b8, 0.16 * reveal);
+        light.fillEllipse(0, 0, major * 2.35, minor * 2.35);
+        light.fillStyle(0xfff0a2, 0.23 * reveal);
+        light.fillEllipse(0, 0, major * 1.72, minor * 1.72);
+        light.fillStyle(0xffffff, 0.31 * reveal);
+        light.fillEllipse(0, 0, major, minor);
+        light.lineStyle(2.5, 0xfff2b0, 0.62 * reveal);
+        light.strokeEllipse(0, 0, major, minor);
+    }
+
+    private drawVulcanCooldownGauge(x: number, y: number): void {
+        const g = this.vulcanCooldownGraphics;
+        if (!g) return;
+        g.clear();
+        if (!this.vulcanSpotlight?.visible || this.vulcanSpotlightReveal < 0.25) return;
+
+        const dx = x - 480;
+        const dy = y - 270;
+        const distance = Math.hypot(dx, dy);
+        const t = Phaser.Math.Clamp(distance / Math.hypot(480, 270), 0, 1);
+        const major = Phaser.Math.Linear(66, 164, t);
+        const now = Date.now();
+        const remaining = Math.max(0, this.vulcanReadyAt - now);
+        const ratio = Phaser.Math.Clamp(1 - remaining / this.vulcanCooldownMs, 0, 1);
+
+        const barX = Phaser.Math.Clamp(x + major + 22, 12, 944);
+        const barY = Phaser.Math.Clamp(y - 38, 12, 452);
+        const width = 10;
+        const height = 76;
+
+        g.fillStyle(0x05070a, 0.82);
+        g.fillRoundedRect(barX - 3, barY - 3, width + 6, height + 6, 5);
+        g.lineStyle(2, 0xe5e7eb, 0.72);
+        g.strokeRoundedRect(barX - 3, barY - 3, width + 6, height + 6, 5);
+        const fillHeight = Math.max(2, height * ratio);
+        g.fillStyle(ratio >= 0.999 ? 0xfef3c7 : 0xf59e0b, 0.94);
+        g.fillRect(barX, barY + height - fillHeight, width, fillHeight);
     }
 
     private playVulcanBurst(shot: NetworkVulcanFired): void {
@@ -62758,17 +62865,17 @@ const roomPlayers =
             });
         }
         this.time.delayedCall(shot.durationMs + 120, () => {
+            // Burst ends, but selected air-support mode persists until the round ends.
             this.vulcanFiring = false;
-            if (this.practiceMode === 'hunter') {
-                this.vulcanActive = false;
-                this.networkPlayerManager.setLocalMovementHardLocked(false);
-                this.exitVulcanCinematic();
-            }
         });
     }
 
     private exitVulcanCinematic(): void {
+        this.vulcanCinematicActive = false;
+        this.vulcanSpotlightReveal = 0;
+        this.vulcanDarkness?.clear().setVisible(false);
         this.vulcanSpotlight?.clear().setVisible(false);
+        this.vulcanCooldownGraphics?.clear().setVisible(false);
         this.vulcanImpactFx.forEach((fx) => fx.destroy());
         this.vulcanImpactFx.clear();
         this.vulcanFiring = false;
@@ -63040,7 +63147,7 @@ const roomPlayers =
             this.vulcanButton
                 ?.setPosition(
                     Phaser.Math.Clamp(hudX, halfW + 10, this.gameWidth - halfW - 10),
-                    Phaser.Math.Clamp(hudY + 54, halfH + 10, this.gameHeight - halfH - 10),
+                    Phaser.Math.Clamp(hudY + 46, halfH + 10, this.gameHeight - halfH - 10),
                 )
                 .setDepth(25020)
                 .setVisible(!this.vulcanSupportCommitted);
@@ -67296,7 +67403,11 @@ this.weaponHeat =
         this.vulcanActive = false;
         this.vulcanSupportCommitted = false;
         this.vulcanFiring = false;
+        this.vulcanCinematicActive = false;
+        this.vulcanReadyAt = 0;
+        this.vulcanDarkness?.clear().setVisible(false);
         this.vulcanSpotlight?.clear().setVisible(false);
+        this.vulcanCooldownGraphics?.clear().setVisible(false);
         this.sniperAvailable = false;
         this.sniperReadyAt = 0;
         this.ensureSniperSupportUi();

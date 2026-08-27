@@ -1,3 +1,4 @@
+/* V1010508_VULCAN_SEARCHLIGHT_COOLDOWN_CINEMATIC: Vulcan repeated-fire cooldown deadline. */
 /* V1010507_TACTICAL_VULCAN_AIR_SUPPORT: tactical support transport, synced spotlight + Vulcan burst. */
 /* V1010470_FRESH_HANDOFF_RELEASE: successful fresh reconnect no longer waits on stale Room.leave(); transport gate releases as soon as replacement local state is authoritative. */
 /* V1010468D_REPAIR_RESUME_FUNCTIONS: restores lifecycle function declarations accidentally removed by 468c while preserving v468 fast reconnect behavior. */
@@ -111,6 +112,7 @@ export type NetworkVulcanFired = {
   startedAt: number;
   durationMs: number;
   hitIds: string[];
+  readyAt: number;
   serverNow: number;
 };
 export type VulcanStateHandler = (state: NetworkVulcanState) => void;
