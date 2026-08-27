@@ -1,3 +1,4 @@
+/* V1010531_TACTICAL_IDLE_FADE_HIDE: unused tactical choices stay 10s, blink semi-transparent for 3s, then both buttons + support bubble hard-disappear. */
 /* V1010530F_VULCAN_AUTHORITATIVE_IMPACT_NO_GUESS: server shot.x/y directly drives visible Vulcan impacts. */
 /* V1010526B_VULCAN_1P5X: presentation 29ms->39ms. */
 /* V1010528B_VULCAN_SELFVIEW_MAIN_UPDATE: Hider own-view Vulcan rendering moved from mobile HUD path to the real Scene update loop. */
@@ -67280,6 +67281,10 @@ if (
                 ?.disableInteractive()
                 .setVisible(false);
 
+            this.hideFeatureDiscoveryBubble(
+                'sniper',
+            );
+
             return;
         }
 
@@ -67617,29 +67622,122 @@ if (
                     !this.vulcanSupportCommitted;
             }
 
-            if (wasHidden) {
-                window.setTimeout(() => {
-                    if (!this.sniperButton?.visible) return;
+            /*
+             * V1010531_TACTICAL_IDLE_FADE_HIDE
+             *
+             * The tactical choice is intentionally temporary.
+             *
+             * available at Hunt remaining 30s
+             *   0~10s  : fully visible
+             *  10~13s  : both choices blink semi-transparent
+             *   13s+   : both choices disappear permanently for this round
+             *
+             * This uses round time instead of hover/activity timers.
+             * Therefore moving the mouse over the old hit area CANNOT restore
+             * either button after expiry.
+             */
+            const tacticalChoiceElapsedMs =
+                Phaser.Math.Clamp(
+                    30000 -
+                        remainingMs,
+                    0,
+                    30000,
+                );
 
-                    let blink = 0;
-                    const timer = window.setInterval(() => {
-                        if (!this.sniperButton?.visible || blink >= 8) {
-                            window.clearInterval(timer);
-                            this.sniperButton?.setVisible(false);
-                            return;
-                        }
+            if (
+                wasHidden &&
+                !this.sniperDiscoveryBubbleShown
+            ) {
+                this.sniperDiscoveryBubbleShown =
+                    true;
 
-                        this.sniperButton.setAlpha(
-                            blink % 2 === 0 ? 0.25 : 1
+                this.showFeatureDiscoveryBubble(
+                    'sniper',
+                );
+            }
+
+            if (
+                tacticalChoiceElapsedMs >=
+                    13000
+            ) {
+                this.sniperButton
+                    .setAlpha(1)
+                    .disableInteractive()
+                    .setVisible(false);
+
+                this.vulcanButton
+                    ?.setAlpha(1)
+                    .disableInteractive()
+                    .setVisible(false);
+
+                /*
+                 * The ultimate-support explanation bubble belongs to the same
+                 * choice UI. Never leave it floating after both choices expire.
+                 */
+                this.hideFeatureDiscoveryBubble(
+                    'sniper',
+                );
+
+                return;
+            }
+
+            if (
+                tacticalChoiceElapsedMs >=
+                    10000
+            ) {
+                /*
+                 * ~3 seconds of warning blink before disappearing.
+                 * 320ms half-period => readable but clearly urgent.
+                 */
+                const blinkPhase =
+                    Math.floor(
+                        (
+                            tacticalChoiceElapsedMs -
+                            10000
+                        ) /
+                        320,
+                    ) %
+                    2;
+
+                const warningAlpha =
+                    blinkPhase ===
+                        0
+                        ? 0.30
+                        : 0.68;
+
+                this.sniperButton
+                    .setAlpha(
+                        warningAlpha,
+                    );
+
+                this.vulcanButton
+                    ?.setAlpha(
+                        warningAlpha,
+                    );
+
+                /*
+                 * If the discovery bubble is still present in a future UI
+                 * revision, pulse it with the choices too. Current short-lived
+                 * bubbles may already be gone by this point.
+                 */
+                if (
+                    this.sniperDiscoveryBubble &&
+                    document.body.contains(
+                        this.sniperDiscoveryBubble,
+                    )
+                ) {
+                    this.sniperDiscoveryBubble
+                        .style.opacity =
+                        String(
+                            warningAlpha,
                         );
-                        blink++;
-                    },150);
-                },10000);
-
-                if (!this.sniperDiscoveryBubbleShown) {
-                    this.sniperDiscoveryBubbleShown = true;
-                    this.showFeatureDiscoveryBubble('sniper');
                 }
+            } else {
+                this.sniperButton
+                    .setAlpha(1);
+
+                this.vulcanButton
+                    ?.setAlpha(1);
             }
         }
 
