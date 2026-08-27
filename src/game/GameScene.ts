@@ -1,3 +1,4 @@
+/* V1010522_MOBILE_VULCAN_BUTTON_SELF_HEAL: self-heals missing Vulcan tactical button on mobile and locks it exactly 2px under Sniper. */
 /* V1010521G_VULCAN_SERVER_HEAT_RESULT_CLEAN_HIDER_OUTLINE_CURRENT_SOURCE: server-streamed Vulcan HEAT; one-choice tactical latch; result-first tactical cleanup; clean Hider poster + true white silhouette outline + 2x crown. */
 /* V1010520C_REMOVE_DUPLICATE_AUTHORITATIVE_WINNER: removes duplicate authoritativeWinner declaration introduced by v520b. */
 /* V1010520B_VULCAN_TIMER_RESULT_DOUBLE_BEAM_RECOIL_HEAT_SYNC_ROBUST: tactical clock forced top; winner frame immediately clears Vulcan; spotlight doubled; stronger recoil + shaking HEAT; empty bar and fire-ready state synchronized. */
@@ -59141,8 +59142,238 @@ if (
     }
 
     /* V1010456_SNIPER_SEQUENCE_SCOPE_REWORK */
+    /*
+     * V1010522_MOBILE_VULCAN_BUTTON_SELF_HEAL
+     *
+     * Mobile-safe Vulcan support-button recovery.
+     * Sniper may already exist while Vulcan is missing; never silently accept
+     * that partial tactical UI state.
+     */
+    private ensureVulcanSupportButton(): void {
+        if (
+            this.vulcanButton &&
+            this.vulcanButtonText
+        ) {
+            return;
+        }
+
+        /*
+         * Destroy any half-created remnants before rebuilding.
+         */
+        this.vulcanButton
+            ?.destroy(
+                true,
+            );
+
+        this.vulcanButton =
+            undefined;
+
+        this.vulcanButtonText =
+            undefined;
+
+        const buttonWidth =
+            176;
+
+        const buttonHeight =
+            44;
+
+        const vulcanBg =
+            this.add.rectangle(
+                0,
+                0,
+                buttonWidth,
+                buttonHeight,
+                0x302814,
+                0.98,
+            )
+                .setStrokeStyle(
+                    2,
+                    0xfde68a,
+                    0.96,
+                );
+
+        const vulcanLabel =
+            this.add.text(
+                0,
+                0,
+                '🚁 발칸 공중지원',
+                {
+                    fontFamily:
+                        'Arial, sans-serif',
+                    fontSize:
+                        '15px',
+                    fontStyle:
+                        'bold',
+                    color:
+                        '#ffffff',
+                    stroke:
+                        '#120d04',
+                    strokeThickness:
+                        2,
+                },
+            )
+                .setOrigin(
+                    0.5,
+                );
+
+        const vulcanButton =
+            this.add.container(
+                this.gameWidth /
+                    2,
+                this.gameHeight /
+                    2 +
+                    110,
+                [
+                    vulcanBg,
+                    vulcanLabel,
+                ],
+            )
+                /*
+                 * One step above the Sniper button prevents any mobile combat
+                 * overlay from accidentally winning the render order.
+                 */
+                .setDepth(
+                    25021,
+                )
+                .setScrollFactor(
+                    0,
+                )
+                .setSize(
+                    buttonWidth,
+                    buttonHeight,
+                )
+                .setInteractive({
+                    useHandCursor:
+                        true,
+                })
+                .setVisible(
+                    false,
+                );
+
+        vulcanButton.on(
+            'pointerdown',
+            (
+                pointer:
+                    Phaser.Input.Pointer,
+            ) => {
+                pointer.event
+                    ?.preventDefault?.();
+
+                pointer.event
+                    ?.stopPropagation?.();
+
+                if (
+                    !this.sniperAvailable ||
+                    this.sniperActive ||
+                    this.vulcanActive ||
+                    this.vulcanSupportCommitted
+                ) {
+                    return;
+                }
+
+                this.hideFeatureDiscoveryBubble(
+                    'sniper',
+                );
+
+                this.vulcanSupportCommitted =
+                    true;
+
+                this.sniperButtonPressBlockUntil =
+                    Date.now() +
+                    2_500;
+
+                this.sniperButton
+                    ?.disableInteractive()
+                    .setVisible(
+                        false,
+                    );
+
+                vulcanButton
+                    .disableInteractive()
+                    .setVisible(
+                        false,
+                    );
+
+                this.unlockGameAudio();
+
+                if (
+                    this.practiceMode ===
+                    'hunter'
+                ) {
+                    this.vulcanActive =
+                        true;
+
+                    this.networkPlayerManager
+                        .setLocalMovementHardLocked(
+                            true,
+                        );
+
+                    this.startSniperTacticalBgm();
+
+                    this.enterVulcanCinematic(
+                        true,
+                    );
+
+                    return;
+                }
+
+                multiplayerClient
+                    .sendVulcanToggle(
+                        true,
+                    );
+            },
+        );
+
+        this.vulcanButton =
+            vulcanButton;
+
+        this.vulcanButtonText =
+            vulcanLabel;
+
+        this.fixedHudBaseTransforms.set(
+            vulcanButton,
+            {
+                x:
+                    this.gameWidth /
+                    2,
+                y:
+                    this.gameHeight /
+                        2 +
+                    110,
+                scaleX:
+                    1,
+                scaleY:
+                    1,
+            },
+        );
+
+        this.tweens.add({
+            targets:
+                vulcanBg,
+            scaleX:
+                178 /
+                176,
+            scaleY:
+                46 /
+                44,
+            duration:
+                820,
+            yoyo:
+                true,
+            repeat:
+                -1,
+            ease:
+                'Sine.easeInOut',
+        });
+    }
+
     private ensureSniperSupportUi(): void {
-        if (this.sniperButton) return;
+        if (
+            this.sniperButton
+        ) {
+            this.ensureVulcanSupportButton();
+            return;
+        }
 
         const buttonWidth =
             176;
@@ -66485,17 +66716,22 @@ if (
             this.phase === 'hunt' &&
             (
                 !this.sniperButton ||
-                !this.sniperRadioText
+                !this.sniperRadioText ||
+                !this.vulcanButton ||
+                !this.vulcanButtonText
             )
         ) {
             this.ensureSniperSupportUi();
+            this.ensureVulcanSupportButton();
         }
 
         if (
             !this.sniperButton ||
             !this.sniperButtonText ||
             !this.sniperButtonBg ||
-            !this.sniperRadioText
+            !this.sniperRadioText ||
+            !this.vulcanButton ||
+            !this.vulcanButtonText
         ) {
             return;
         }
@@ -66730,20 +66966,56 @@ if (
                     : '🚁 발칸 공중지원',
             );
             this.vulcanButton
-                ?.setPosition(
+                .setPosition(
                     this.sniperButton.x,
-                    this.sniperButton.y + 46,
+                    this.sniperButton.y +
+                        46,
                 )
-                .setDepth(25020)
-                .setVisible(!this.vulcanSupportCommitted);
+                .setDepth(
+                    25021,
+                )
+                .setAlpha(
+                    1,
+                )
+                .setVisible(
+                    !this.vulcanSupportCommitted,
+                );
 
-            if (this.vulcanButton?.visible) {
-                const sniperBounds = this.sniperButton.getBounds();
-                const vulcanBounds = this.vulcanButton.getBounds();
-                const exactTop = sniperBounds.bottom + 2;
-                this.vulcanButton.y += exactTop - vulcanBounds.top;
+            if (
+                this.vulcanButton.visible
+            ) {
+                /*
+                 * PC/mobile parity:
+                 * use rendered bounds, not guessed center distance.
+                 */
+                const sniperBounds =
+                    this.sniperButton.getBounds();
+
+                const vulcanBounds =
+                    this.vulcanButton.getBounds();
+
+                const exactTop =
+                    sniperBounds.bottom +
+                    2;
+
+                this.vulcanButton.y +=
+                    exactTop -
+                    vulcanBounds.top;
+
+                /*
+                 * Reassert the exact X center too, because fixed-HUD scaling
+                 * can apply before this refresh on mobile.
+                 */
+                this.vulcanButton.x =
+                    this.sniperButton.x;
             }
-            if (this.vulcanButton?.input) this.vulcanButton.input.enabled = !this.vulcanSupportCommitted;
+
+            if (
+                this.vulcanButton.input
+            ) {
+                this.vulcanButton.input.enabled =
+                    !this.vulcanSupportCommitted;
+            }
 
             if (wasHidden) {
                 window.setTimeout(() => {
