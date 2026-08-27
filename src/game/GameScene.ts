@@ -1,3 +1,4 @@
+/* V1010537_VULCAN_OWNER_AUTHORITATIVE_TRACER: local firing Hunter receives authoritative Vulcan tracer at shot.x/y; Hider passive path remains single-rendered. */
 /* V1010536B_VULCAN_TRACER_DOUBLE_LENGTH_ROBUST: Vulcan shared tracer visual length 18..34px -> 36..68px. No firing-path rewrite. */
 /* V1010535_VULCAN_MOUSE_FOLLOW_HELICAM: Vulcan aerial camera zooms to 1.12 and smoothly pans with spotlight/mouse aim while retaining helicopter orbit and map-edge clamps. */
 /* V1010534B_REMOVE_HUNT_INTRO_ROBUST: prevent Hunt intro from overlapping final result. */
@@ -16155,6 +16156,71 @@ const ribbon =
                         0,
                         540,
                     );
+
+                /*
+                 * V1010537_VULCAN_OWNER_AUTHORITATIVE_TRACER
+                 * v530f removed the local synthetic tracer to keep impacts
+                 * server-authoritative. Restore ONLY the firing Hunter's
+                 * straight tracer, at the exact authoritative shot.x/y.
+                 *
+                 * Hider self-view already has its passive shared tracer path,
+                 * so shooterId gating prevents double tracer rendering there.
+                 */
+                if (
+                    shot.shooterId ===
+                    multiplayerClient.getSessionId()
+                ) {
+                    const ownerTracer =
+                        this.add
+                            .rectangle(
+                                impactX -
+                                    36,
+                                impactY -
+                                    8,
+                                Phaser.Math.Between(
+                                    36,
+                                    68,
+                                ),
+                                2,
+                                0xffcf54,
+                                0.96,
+                            )
+                            .setAngle(
+                                Phaser.Math.Between(
+                                    -24,
+                                    24,
+                                ),
+                            )
+                            .setDepth(
+                                25030,
+                            );
+
+                    this.vulcanImpactFx
+                        .add(
+                            ownerTracer,
+                        );
+
+                    this.tweens.add({
+                        targets:
+                            ownerTracer,
+                        alpha:
+                            0,
+                        duration:
+                            135,
+                        ease:
+                            'Quad.Out',
+                        onComplete:
+                            () => {
+                                this.vulcanImpactFx
+                                    .delete(
+                                        ownerTracer,
+                                    );
+
+                                ownerTracer
+                                    .destroy();
+                            },
+                    });
+                }
 
                 const impact =
                     this.add
