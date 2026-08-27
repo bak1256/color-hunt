@@ -1,3 +1,4 @@
+/* V1010516_VULCAN_OWNER_ROOTFIX_TACTICAL_FART_LOCK_SPECTATOR: Vulcan owner uses vulcanActive directly; main update hook verified; tactical modes hard-lock SPACE/GAS; Hider spectator follows shared aerial spotlight instead of Hunter body. */
 /* V1010515_VULCAN_FRAME_POINTER_FIRE_SYNC: Vulcan aim/fire are driven from activePointer every frame; spotlight now follows mouse reliably; visible BRRRT impacts match server kills. */
 /* V1010514_VULCAN_SNIPER_HELI_TRACKING_RESULT_CLEANUP: opaque Sniper-style rotor helicopter; half-size readable directional spotlight; live aim while firing; deterministic hold-fire; full WIN/LOSE clean capture cleanup. */
 /* V1010513_VULCAN_IMAGE_BLACKOUT_SPOTLIGHT_FIRE_FIX: generated helicopter sprite; guaranteed camera full-black; slower fade-in center travel; spotlight visibility deadlock removed; hold-fire and HEAT gauge restored. */
@@ -5812,7 +5813,9 @@ private timerText!: Phaser.GameObjects.Text;
                     return;
                 }
 
-                multiplayerClient.sendFart();
+                if (!this.isTacticalSupportInputLocked()) {
+                    multiplayerClient.sendFart();
+                }
             },
         );
 
@@ -20035,6 +20038,12 @@ this.networkUnsubscribers.push(
 
     private useHunterPracticeFart(): void {
         if (
+            this.isTacticalSupportInputLocked()
+        ) {
+            return;
+        }
+
+        if (
             this.practiceFartLocked ||
             this.practicePoopRemainingMs >
                 0
@@ -24735,6 +24744,7 @@ this.networkUnsubscribers.push(
         if (
             this.phase === 'hunt' &&
             this.networkPlayerManager.isLocalHunter() &&
+            !this.isTacticalSupportInputLocked() &&
             Phaser.Input.Keyboard.JustDown(this.fartKey)
         ) {
             const now =
@@ -24748,7 +24758,9 @@ this.networkUnsubscribers.push(
                 this.lastFartUseAt =
                     now;
 
-                multiplayerClient.sendFart();
+                if (!this.isTacticalSupportInputLocked()) {
+                    multiplayerClient.sendFart();
+                }
             }
         }
 
@@ -59508,6 +59520,8 @@ const roomPlayers =
 
     /* RESTORE_SNIPER_EXACT_E43DCB5_LOCAL_SUBSYSTEM: exact local sniper subsystem restored from git e43dcb5. */
     private enterSniperCinematic(): void {
+        this.applyTacticalSupportInputLock();
+
 
         /*
          * V1010501G2_CLEAN_SCOPE_START
@@ -63736,6 +63750,8 @@ const roomPlayers =
 
 
     private updateVulcanAirSupport(): void {
+        this.applyTacticalSupportInputLock();
+
         if (
             this.phase !==
             'hunt'
@@ -63813,14 +63829,14 @@ const roomPlayers =
             this.exitVulcanSpectatorView();
         }
 
+        /*
+         * V516 ROOT FIX:
+         * server/local Vulcan state is authoritative.
+         * Role lookup can transiently be undefined during cinematic/spectator
+         * transitions and must NEVER freeze the owner's spotlight.
+         */
         const ownerActive =
-            this.vulcanActive &&
-            (
-                localRole ===
-                    'hunter' ||
-                this.practiceMode ===
-                    'hunter'
-            );
+            this.vulcanActive;
 
         const aerialViewActive =
             ownerActive ||
@@ -64879,40 +64895,107 @@ const roomPlayers =
         } catch {}
     }
 
-    private enterVulcanSpectatorView(sessionId: string): void {
+
+    private enterVulcanSpectatorView(
+        sessionId: string,
+    ): void {
         if (
-            this.phase !== 'hunt' ||
-            !sessionId ||
-            !this.remoteVulcanActiveSessionIds.has(sessionId)
-        ) return;
+            this.phase !==
+            'hunt'
+        ) {
+            return;
+        }
 
-        this.vulcanSpectatorViewActive = true;
-        this.vulcanSpectatorSessionId = sessionId;
-        this.vulcanSavedCameraZoom = this.cameras.main.zoom;
-        this.vulcanSavedCameraRotation = 0;
-        this.vulcanSpotlightReveal = 1;
-        this.vulcanOrbitStartedAt = this.time.now;
+        this.vulcanSpectatorViewActive =
+            true;
 
-        const aim = this.remoteVulcanAimBySessionId.get(sessionId) ?? { x: 480, y: 270 };
-        this.vulcanTargetX = aim.x;
-        this.vulcanTargetY = aim.y;
-        this.vulcanDisplayX = aim.x;
-        this.vulcanDisplayY = aim.y;
+        this.vulcanSpectatorSessionId =
+            sessionId;
 
-        this.hiderVisionGraphics?.clear().setVisible(false);
-        this.hiderVisionOverlays.forEach((overlay) => overlay.setVisible(false));
+        this.vulcanSpotlightReveal =
+            1;
 
-        this.cameras.main
+        this.vulcanOrbitStartedAt =
+            this.time.now;
+
+        const remoteAim =
+            this.remoteVulcanAimBySessionId
+                .get(
+                    sessionId,
+                );
+
+        this.vulcanTargetX =
+            remoteAim?.x ??
+            480;
+
+        this.vulcanTargetY =
+            remoteAim?.y ??
+            270;
+
+        this.vulcanDisplayX =
+            this.vulcanTargetX;
+
+        this.vulcanDisplayY =
+            this.vulcanTargetY;
+
+        /*
+         * IMPORTANT:
+         * Hider spectator must see the Hunter's AIR SUPPORT view,
+         * not the Hunter character's frozen body camera.
+         */
+        const camera =
+            this.cameras.main;
+
+        camera
             .stopFollow()
             .removeBounds()
-            .setSize(this.gameWidth, this.gameHeight)
-            .setZoom(1.34)
-            .centerOn(480, 270)
-            .setRotation(0);
+            .setSize(
+                this.gameWidth,
+                this.gameHeight,
+            )
+            .setZoom(
+                1.34,
+            )
+            .centerOn(
+                480,
+                270,
+            )
+            .setRotation(
+                0,
+            );
 
-        this.vulcanDarkness?.setVisible(true);
-        this.vulcanSpotlight?.setVisible(true);
-        this.vulcanCooldownGraphics?.setVisible(false);
+        this.hiderVisionGraphics
+            ?.clear()
+            .setVisible(false);
+
+        this.hiderVisionOverlays
+            .forEach(
+                (overlay) =>
+                    overlay
+                        .setVisible(false),
+            );
+
+        this.vulcanDarkness
+            ?.setVisible(
+                true,
+            );
+
+        this.vulcanSpotlight
+            ?.setVisible(
+                true,
+            );
+
+        this.drawVulcanSpotlight(
+            this.vulcanDisplayX,
+            this.vulcanDisplayY,
+        );
+
+        /*
+         * Hider only watches the shared lamp; no firing/HEAT controls.
+         */
+        this.vulcanCooldownGraphics
+            ?.clear()
+            .setVisible(false);
     }
 
     private exitVulcanSpectatorView(): void {
@@ -64960,6 +65043,8 @@ const roomPlayers =
     }
 
     private refreshSniperSupportUi(): void {
+        this.applyTacticalSupportInputLock();
+
         if (
             this.phase === 'hunt' &&
             (
@@ -66713,6 +66798,35 @@ this.weaponHeat =
 
 
     /* V1010242_HUNTER_FART_SKILL */
+    private isTacticalSupportInputLocked(): boolean {
+        return Boolean(
+            this.sniperActive ||
+            this.sniperCinematicActive ||
+            this.vulcanActive ||
+            this.vulcanCinematicActive
+        );
+    }
+
+    private applyTacticalSupportInputLock(): void {
+        const locked =
+            this.isTacticalSupportInputLocked();
+
+        if (!locked) {
+            return;
+        }
+
+        this.fartHudContainer
+            ?.setVisible(false);
+
+        this.mobileFartButton
+            ?.disableInteractive()
+            .setVisible(false);
+
+        this.mobileFartLabel
+            ?.setVisible(false);
+    }
+
+
     private updateFartHud(): void {
         if (!this.fartHudContainer || !this.fartGaugeGraphics || !this.fartGaugeLabel) return;
         const localRole =
@@ -66726,6 +66840,7 @@ this.weaponHeat =
          * Hunter role survives for a frame while switching modes.
          */
         const visible =
+            !this.isTacticalSupportInputLocked() &&
             this.practiceMode !== 'hider' &&
             this.phase === 'hunt' &&
             !this.sniperActive &&
