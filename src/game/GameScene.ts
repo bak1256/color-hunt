@@ -1,3 +1,4 @@
+/* V1010507_TACTICAL_VULCAN_AIR_SUPPORT: tactical support chooser + synchronized oblique searchlight + 3s Vulcan area burst. */
 /* V1010506_PC_SNIPER_BLUR_COMPOSITOR_STABILIZE: stabilize PC masked backdrop-filter compositor only; physical sniper scope LOCKED. */
 /* V1010505_SECOND_ROUND_SNIPER_BLUR_LIFECYCLE: re-show reused blur DOM on active scope sync; fixes first-round-only blur. Scope geometry/rack-in/cameras LOCKED. */
 /* V1010504C_FIX_DUPLICATE_PAINT_BUBBLE_WIDTH: remove only duplicate width property introduced by 504b; sniper subsystem untouched. */
@@ -72,6 +73,9 @@ import {
     type NetworkSniperState,
     type NetworkSniperAim,
     type NetworkSniperFired,
+    type NetworkVulcanState,
+    type NetworkVulcanAim,
+    type NetworkVulcanFired,
     type NetworkWeaponState,
     type NetworkFartState,
     type NetworkFartBurst,
@@ -947,6 +951,22 @@ export class GameScene extends Phaser.Scene {
     private sniperButton?: Phaser.GameObjects.Container;
     private sniperButtonBg?: Phaser.GameObjects.Rectangle;
     private sniperButtonText?: Phaser.GameObjects.Text;
+    /* V1010507_TACTICAL_VULCAN_AIR_SUPPORT */
+    private vulcanActive = false;
+    private vulcanSupportCommitted = false;
+    private vulcanButton?: Phaser.GameObjects.Container;
+    private vulcanButtonText?: Phaser.GameObjects.Text;
+    private vulcanSpotlight?: Phaser.GameObjects.Graphics;
+    private vulcanTargetX = 480;
+    private vulcanTargetY = 270;
+    private vulcanDisplayX = 480;
+    private vulcanDisplayY = 270;
+    private vulcanLastAimBroadcastAt = 0;
+    private vulcanFiring = false;
+    private vulcanOrbitStartedAt = 0;
+    private vulcanSavedCameraZoom = 1.65;
+    private vulcanSavedCameraRotation = 0;
+    private vulcanImpactFx = new Set<Phaser.GameObjects.GameObject>();
     private sniperScope?: Phaser.GameObjects.Graphics;
     private readonly remoteSniperScopes = new Map<string, Phaser.GameObjects.Graphics>();
 
@@ -6859,6 +6879,7 @@ private timerText!: Phaser.GameObjects.Text;
 
         if (this.phase === 'hunt') {
             this.refreshSniperSupportUi();
+            this.updateVulcanAirSupport();
         }
 
         const showHunterCombat =
@@ -15730,6 +15751,46 @@ const ribbon =
                     this.refreshSniperSupportUi();
                 },
             ),
+        );
+
+        this.networkUnsubscribers.push(
+            multiplayerClient.onVulcanState((state: NetworkVulcanState) => {
+                if (state.active) this.startSniperTacticalBgm();
+                const localId = multiplayerClient.getSessionId();
+                if (state.active) {
+                    this.vulcanSupportCommitted = state.sessionId === localId ? true : this.vulcanSupportCommitted;
+                    if (state.sessionId === localId) {
+                        this.vulcanActive = true;
+                        this.networkPlayerManager.setLocalMovementHardLocked(true);
+                    }
+                    this.enterVulcanCinematic(state.sessionId === localId);
+                } else {
+                    if (state.sessionId === localId) {
+                        this.vulcanActive = false;
+                        this.networkPlayerManager.setLocalMovementHardLocked(false);
+                    }
+                    this.exitVulcanCinematic();
+                }
+                this.sniperButton?.setVisible(false);
+                this.vulcanButton?.setVisible(false);
+            }),
+        );
+
+        this.networkUnsubscribers.push(
+            multiplayerClient.onVulcanAim((aim: NetworkVulcanAim) => {
+                if (!this.vulcanActive && this.phase !== 'hunt') return;
+                this.vulcanTargetX = Phaser.Math.Clamp(aim.x, 0, 960);
+                this.vulcanTargetY = Phaser.Math.Clamp(aim.y, 0, 540);
+            }),
+        );
+
+        this.networkUnsubscribers.push(
+            multiplayerClient.onVulcanFired((shot: NetworkVulcanFired) => {
+                this.vulcanTargetX = shot.x;
+                this.vulcanTargetY = shot.y;
+                this.vulcanFiring = true;
+                this.playVulcanBurst(shot);
+            }),
         );
 
         this.networkUnsubscribers.push(
@@ -42970,6 +43031,10 @@ this.networkUnsubscribers.push(
          */
         this.exitSniperCinematic();
         this.sniperActive = false;
+        this.vulcanActive = false;
+        this.vulcanSupportCommitted = false;
+        this.vulcanFiring = false;
+        this.vulcanSpotlight?.clear().setVisible(false);
         this.sniperAvailable = false;
         this.sniperReadyAt = 0;
         this.sniperHelicopterArrived = false;
@@ -43642,7 +43707,9 @@ this.networkUnsubscribers.push(
          */
         if (
             this.sniperCinematicActive ||
-            this.sniperActive
+            this.sniperActive ||
+            this.vulcanActive ||
+            Boolean(this.vulcanSpotlight?.visible)
         ) {
             return;
         }
@@ -58208,8 +58275,8 @@ const roomPlayers =
                  */
                 const sniperGap =
                     this.mobileControlsEnabled
-                        ? 60
-                        : 64;
+                        ? 112
+                        : 116;
                 top=target.bottom+sniperGap;
 
                 if(top+bubble.offsetHeight>canvas.bottom-6){
@@ -58387,6 +58454,9 @@ const roomPlayers =
                  * Do not wait for server RTT to set sniperActive.
                  */
                 this.hideFeatureDiscoveryBubble('sniper');
+                this.vulcanSupportCommitted = true;
+                this.sniperButton?.disableInteractive().setVisible(false);
+                this.vulcanButton?.disableInteractive().setVisible(false);
 
                 this.sniperButtonPressBlockUntil =
                     Date.now() +
@@ -58489,6 +58559,108 @@ const roomPlayers =
             bg;
         this.sniperButtonText =
             label;
+
+        const vulcanBg =
+            this.add.rectangle(0, 0, buttonWidth, buttonHeight, 0x302814, 0.98)
+                .setStrokeStyle(2, 0xfde68a, 0.96);
+
+        const vulcanLabel =
+            this.add.text(0, 0, '🚁 발칸 공중지원', {
+                fontFamily: 'Arial, sans-serif',
+                fontSize: '15px',
+                fontStyle: 'bold',
+                color: '#ffffff',
+                stroke: '#120d04',
+                strokeThickness: 2,
+            }).setOrigin(0.5);
+
+        const vulcanButton =
+            this.add.container(
+                this.gameWidth / 2,
+                this.gameHeight / 2 + 116,
+                [vulcanBg, vulcanLabel],
+            )
+                .setDepth(25020)
+                .setScrollFactor(0)
+                .setSize(buttonWidth, buttonHeight)
+                .setInteractive({ useHandCursor: true })
+                .setVisible(false);
+
+        vulcanButton.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+            pointer.event?.preventDefault?.();
+            pointer.event?.stopPropagation?.();
+            if (!this.sniperAvailable || this.sniperActive || this.vulcanActive || this.vulcanSupportCommitted) return;
+
+            this.hideFeatureDiscoveryBubble('sniper');
+            this.vulcanSupportCommitted = true;
+            this.sniperButtonPressBlockUntil = Date.now() + 2_500;
+            this.sniperButton?.disableInteractive().setVisible(false);
+            vulcanButton.disableInteractive().setVisible(false);
+            this.unlockGameAudio();
+
+            if (this.practiceMode === 'hunter') {
+                this.vulcanActive = true;
+                this.networkPlayerManager.setLocalMovementHardLocked(true);
+                this.startSniperTacticalBgm();
+                this.enterVulcanCinematic(true);
+                return;
+            }
+            multiplayerClient.sendVulcanToggle(true);
+        });
+
+        this.vulcanButton = vulcanButton;
+        this.vulcanButtonText = vulcanLabel;
+
+        this.fixedHudBaseTransforms.set(vulcanButton, {
+            x: this.gameWidth / 2,
+            y: this.gameHeight / 2 + 116,
+            scaleX: 1,
+            scaleY: 1,
+        });
+
+        this.tweens.add({
+            targets: vulcanBg,
+            scaleX: 178 / 176,
+            scaleY: 46 / 44,
+            duration: 820,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut',
+        });
+
+        this.vulcanSpotlight =
+            this.add.graphics()
+                .setDepth(24995)
+                .setVisible(false);
+
+        this.input.on(Phaser.Input.Events.POINTER_MOVE, (pointer: Phaser.Input.Pointer) => {
+            if (!this.vulcanActive || this.vulcanFiring || this.phase !== 'hunt') return;
+            const world = pointer.positionToCamera(this.cameras.main) as Phaser.Math.Vector2;
+            this.vulcanTargetX = Phaser.Math.Clamp(world.x, 0, 960);
+            this.vulcanTargetY = Phaser.Math.Clamp(world.y, 0, 540);
+            const now = this.time.now;
+            if (now - this.vulcanLastAimBroadcastAt >= 66 && this.practiceMode !== 'hunter') {
+                this.vulcanLastAimBroadcastAt = now;
+                multiplayerClient.sendVulcanAim(this.vulcanTargetX, this.vulcanTargetY);
+            }
+        });
+
+        this.input.on(Phaser.Input.Events.POINTER_DOWN, (pointer: Phaser.Input.Pointer) => {
+            if (!this.vulcanActive || this.vulcanFiring || this.phase !== 'hunt') return;
+            if (this.vulcanButton?.visible || this.sniperButton?.visible) return;
+            pointer.event?.preventDefault?.();
+            pointer.event?.stopPropagation?.();
+            this.vulcanFiring = true;
+            if (this.practiceMode === 'hunter') {
+                this.playVulcanBurst({
+                    shooterId: 'practice', x: this.vulcanTargetX, y: this.vulcanTargetY,
+                    seed: Math.floor(Math.random() * 0x7fffffff), startedAt: Date.now(),
+                    durationMs: 3000, hitIds: [], serverNow: Date.now(),
+                });
+            } else {
+                multiplayerClient.sendVulcanFire(this.vulcanTargetX, this.vulcanTargetY);
+            }
+        });
 
         this.fixedHudBaseTransforms.set(
             button,
@@ -58745,7 +58917,7 @@ const roomPlayers =
             getLanguage();
 
         if (language === 'ja') {
-            return `狙撃支援 待機中... ${value}`;
+            return `戦術支援 待機中... ${value}`;
         }
 
         if (language === 'en') {
@@ -60309,7 +60481,8 @@ const roomPlayers =
             )
                 .setDepth(1200)
                 .setAlpha(0.72)
-                .setScale(0.92);
+                /* V1010507_TACTICAL_VULCAN_AIR_SUPPORT: same helicopter, twice the former presence for both support modes. */
+                .setScale(1.84);
 
         this.sniperHelicopter =
             heli;
@@ -62427,6 +62600,194 @@ const roomPlayers =
     /* V1010460_SNIPER_OVERWATCH_UI_SCOPE_INPUT_TIMEOUT */
     private sniperScopeStripCameras: Phaser.Cameras.Scene2D.Camera[] = [];
 
+    /* V1010507_TACTICAL_VULCAN_AIR_SUPPORT: same support intro, different final instrument. */
+    private enterVulcanCinematic(isOwner: boolean): void {
+        if (this.phase !== 'hunt') return;
+        this.vulcanSavedCameraZoom = this.cameras.main.zoom;
+        this.vulcanSavedCameraRotation = 0;
+        this.vulcanOrbitStartedAt = this.time.now;
+        this.vulcanFiring = false;
+
+        this.hiderVisionGraphics?.clear().setVisible(false);
+        this.hiderVisionOverlays.forEach((overlay) => overlay.setVisible(false));
+        this.aimLine?.clear().setVisible(false);
+        this.crosshair?.clear().setVisible(false);
+        this.gun?.setVisible(false);
+        this.mobileMoveBase?.setVisible(false);
+        this.mobileMoveKnob?.setVisible(false);
+        this.mobileMoveLabel?.setVisible(false);
+        this.mobileAimBase?.setVisible(false);
+        this.mobileAimKnob?.setVisible(false);
+        this.mobileAimLabel?.setVisible(false);
+        this.mobileFireButton?.setVisible(false);
+        this.mobileFireLabel?.setVisible(false);
+        this.hunterWeaponHudContainer?.setVisible(false);
+
+        this.startSniperHelicopterAudio();
+        this.createSniperHelicopter();
+
+        const camera = this.cameras.main;
+        const currentWorldCenter = camera.midPoint;
+        this.vulcanTargetX = Phaser.Math.Clamp(currentWorldCenter.x, 0, 960);
+        this.vulcanTargetY = Phaser.Math.Clamp(currentWorldCenter.y, 0, 540);
+        this.vulcanDisplayX = this.vulcanTargetX;
+        this.vulcanDisplayY = this.vulcanTargetY;
+
+        const startY = camera.worldView.bottom + 74 / Math.max(0.01, camera.zoom);
+        this.sniperHelicopter?.setPosition(currentWorldCenter.x, startY).setAlpha(0.68).setVisible(true);
+
+        const arrive = (): void => {
+            if (this.phase !== 'hunt') return;
+            camera.stopFollow().removeBounds().setSize(this.gameWidth, this.gameHeight);
+            const fromZoom = camera.zoom;
+            const fromX = camera.midPoint.x;
+            const fromY = camera.midPoint.y;
+            const progress = { value: 0 };
+            this.tweens.add({
+                targets: progress, value: 1, duration: 1050, ease: 'Sine.easeInOut',
+                onUpdate: () => {
+                    const t = Phaser.Math.Clamp(progress.value, 0, 1);
+                    // Unlike sniper's full-map 1.0, Vulcan stays closer: aerial search at ~1.16x.
+                    const zoom = Phaser.Math.Linear(fromZoom, 1.16, t);
+                    camera.setZoom(zoom).centerOn(
+                        Phaser.Math.Linear(fromX, 480, t),
+                        Phaser.Math.Linear(fromY, 270, t),
+                    );
+                    this.applyFixedHudForZoom(zoom);
+                },
+                onComplete: () => {
+                    if (this.phase !== 'hunt') return;
+                    camera.setZoom(1.16).centerOn(480, 270);
+                    this.vulcanSpotlight?.setVisible(true);
+                    if (isOwner && this.practiceMode !== 'hunter') {
+                        multiplayerClient.sendVulcanAim(this.vulcanTargetX, this.vulcanTargetY);
+                    }
+                },
+            });
+        };
+
+        if (this.sniperHelicopter) {
+            this.tweens.add({
+                targets: this.sniperHelicopter,
+                y: currentWorldCenter.y,
+                alpha: 0.72,
+                duration: 720,
+                ease: 'Cubic.easeOut',
+                onComplete: arrive,
+            });
+        } else {
+            arrive();
+        }
+    }
+
+    private updateVulcanAirSupport(): void {
+        if ((!this.vulcanActive && !this.vulcanSpotlight?.visible) || this.phase !== 'hunt') return;
+        const camera = this.cameras.main;
+        const elapsed = Math.max(0, this.time.now - this.vulcanOrbitStartedAt);
+        const orbit = elapsed * 0.00032;
+        // Tiny circular drift sells a helicopter orbit without sabotaging targeting.
+        const orbitX = Math.cos(orbit) * 7;
+        const orbitY = Math.sin(orbit) * 4;
+        camera.centerOn(480 + orbitX, 270 + orbitY);
+        camera.setRotation(Math.sin(orbit * 0.78) * 0.0075);
+
+        this.vulcanDisplayX = Phaser.Math.Linear(this.vulcanDisplayX, this.vulcanTargetX, 0.18);
+        this.vulcanDisplayY = Phaser.Math.Linear(this.vulcanDisplayY, this.vulcanTargetY, 0.18);
+        this.drawVulcanSpotlight(this.vulcanDisplayX, this.vulcanDisplayY);
+    }
+
+    private drawVulcanSpotlight(x: number, y: number): void {
+        const g = this.vulcanSpotlight;
+        if (!g) return;
+        g.clear();
+        const dx = x - 480;
+        const dy = y - 270;
+        const distance = Math.hypot(dx, dy);
+        const maxDistance = Math.hypot(480, 270);
+        const t = Phaser.Math.Clamp(distance / maxDistance, 0, 1);
+        const angle = Math.atan2(dy, dx);
+        const major = Phaser.Math.Linear(62, 150, t);
+        const minor = Phaser.Math.Linear(62, 48, t);
+
+        // Real oblique footprint: the ellipse's major axis always points away from map center.
+        g.save();
+        g.translateCanvas(x, y);
+        g.rotateCanvas(angle);
+        g.fillStyle(0xfff7c2, 0.055);
+        g.fillEllipse(0, 0, major * 2.35, minor * 2.35);
+        g.fillStyle(0xfff2a8, 0.095);
+        g.fillEllipse(0, 0, major * 1.70, minor * 1.70);
+        g.fillStyle(0xffffff, 0.15);
+        g.fillEllipse(0, 0, major, minor);
+        g.lineStyle(2, 0xfff4ba, 0.34);
+        g.strokeEllipse(0, 0, major, minor);
+        g.restore();
+    }
+
+    private playVulcanBurst(shot: NetworkVulcanFired): void {
+        this.vulcanFiring = true;
+        this.vulcanTargetX = shot.x;
+        this.vulcanTargetY = shot.y;
+        let state = shot.seed >>> 0;
+        const rand = (): number => {
+            state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+            return state / 4294967296;
+        };
+        const total = 42;
+        for (let i = 0; i < total; i += 1) {
+            this.time.delayedCall((shot.durationMs / total) * i, () => {
+                if (this.phase !== 'hunt') return;
+                const progress = i / Math.max(1, total - 1);
+                const tighten = Phaser.Math.Linear(1.0, 0.58, progress);
+                const angle = rand() * Math.PI * 2;
+                const radius = Math.sqrt(rand());
+                const localX = Math.cos(angle) * 108 * radius * tighten;
+                const localY = Math.sin(angle) * 68 * radius * tighten;
+                const radial = Math.atan2(shot.y - 270, shot.x - 480);
+                const c = Math.cos(radial), s = Math.sin(radial);
+                const px = shot.x + localX * c - localY * s;
+                const py = shot.y + localX * s + localY * c;
+
+                const flash = this.add.circle(px, py, 5 + rand() * 7, 0xffdf7a, 0.96).setDepth(24998);
+                const ring = this.add.circle(px, py, 6).setStrokeStyle(2, 0xffffff, 0.72).setDepth(24997);
+                this.vulcanImpactFx.add(flash);
+                this.vulcanImpactFx.add(ring);
+                this.tweens.add({ targets: flash, alpha: 0, scale: 2.2, duration: 150, onComplete: () => { this.vulcanImpactFx.delete(flash); flash.destroy(); } });
+                this.tweens.add({ targets: ring, alpha: 0, scale: 2.8, duration: 210, onComplete: () => { this.vulcanImpactFx.delete(ring); ring.destroy(); } });
+                this.cameras.main.shake(45, 0.0018);
+            });
+        }
+        this.time.delayedCall(shot.durationMs + 120, () => {
+            this.vulcanFiring = false;
+            if (this.practiceMode === 'hunter') {
+                this.vulcanActive = false;
+                this.networkPlayerManager.setLocalMovementHardLocked(false);
+                this.exitVulcanCinematic();
+            }
+        });
+    }
+
+    private exitVulcanCinematic(): void {
+        this.vulcanSpotlight?.clear().setVisible(false);
+        this.vulcanImpactFx.forEach((fx) => fx.destroy());
+        this.vulcanImpactFx.clear();
+        this.vulcanFiring = false;
+        this.sniperHelicopterRotorTween?.stop();
+        this.sniperHelicopterRotorTween = undefined;
+        this.sniperHelicopter?.destroy(true);
+        this.sniperHelicopter = undefined;
+        this.sniperHelicopterSound?.stop();
+        this.cameras.main.setRotation(this.vulcanSavedCameraRotation);
+        this.cameras.main.setZoom(this.vulcanSavedCameraZoom);
+        this.ensureGameplayCameraFollow();
+        if (this.phase === 'hunt') {
+            const localRole = multiplayerClient.getLocalPlayer()?.role ?? this.networkPlayerManager?.getLocalRole?.();
+            if (localRole === 'hunter' || this.practiceMode === 'hunter') {
+                this.hunterWeaponHudContainer?.setVisible(true);
+            }
+        }
+    }
+
     private refreshSniperSupportUi(): void {
         if (
             this.phase === 'hunt' &&
@@ -62588,6 +62949,7 @@ const roomPlayers =
             this.sniperButton
                 .disableInteractive()
                 .setVisible(false);
+            this.vulcanButton?.disableInteractive().setVisible(false);
 
             return;
         }
@@ -62597,11 +62959,14 @@ const roomPlayers =
 
         if (
             !this.sniperAvailable ||
-            this.sniperActive
+            this.sniperActive ||
+            this.vulcanActive ||
+            this.vulcanSupportCommitted
         ) {
             this.sniperButton
                 .disableInteractive()
                 .setVisible(false);
+            this.vulcanButton?.disableInteractive().setVisible(false);
         } else {
             const halfW =
                 176 / 2;
@@ -62666,6 +63031,21 @@ const roomPlayers =
                 .setDepth(25020)
                 .setVisible(true);
 
+            this.vulcanButtonText?.setText(
+                language === 'ja' ? '🚁 バルカン航空支援'
+                    : language === 'en' ? '🚁 VULCAN AIR SUPPORT'
+                    : language === 'zh' ? '🚁 火神空中支援'
+                    : '🚁 발칸 공중지원',
+            );
+            this.vulcanButton
+                ?.setPosition(
+                    Phaser.Math.Clamp(hudX, halfW + 10, this.gameWidth - halfW - 10),
+                    Phaser.Math.Clamp(hudY + 54, halfH + 10, this.gameHeight - halfH - 10),
+                )
+                .setDepth(25020)
+                .setVisible(!this.vulcanSupportCommitted);
+            if (this.vulcanButton?.input) this.vulcanButton.input.enabled = !this.vulcanSupportCommitted;
+
             if (wasHidden) {
                 window.setTimeout(() => {
                     if (!this.sniperButton?.visible) return;
@@ -62714,6 +63094,8 @@ const roomPlayers =
         ) {
             return;
         }
+
+        if (this.vulcanActive) return;
 
         if (this.sniperActive) {
             if (explicitMobileFire) {
@@ -66911,6 +67293,10 @@ this.weaponHeat =
         this.updateEyedropperButtonUi();
 
         this.sniperActive = false;
+        this.vulcanActive = false;
+        this.vulcanSupportCommitted = false;
+        this.vulcanFiring = false;
+        this.vulcanSpotlight?.clear().setVisible(false);
         this.sniperAvailable = false;
         this.sniperReadyAt = 0;
         this.ensureSniperSupportUi();

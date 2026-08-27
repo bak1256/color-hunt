@@ -1,3 +1,4 @@
+/* V1010507_TACTICAL_VULCAN_AIR_SUPPORT: tactical support transport, synced spotlight + Vulcan burst. */
 /* V1010470_FRESH_HANDOFF_RELEASE: successful fresh reconnect no longer waits on stale Room.leave(); transport gate releases as soon as replacement local state is authoritative. */
 /* V1010468D_REPAIR_RESUME_FUNCTIONS: restores lifecycle function declarations accidentally removed by 468c while preserving v468 fast reconnect behavior. */
 /* V1010468_FAST_MOBILE_FOREGROUND_RECONNECT: Lobby now probes immediately on mobile foreground; confirmed onDrop gets an 850ms same-session grace then bounded stable-clientKey handoff; post-leave retries/convergence are faster. */
@@ -92,6 +93,29 @@ export type NetworkSniperFired = {
 export type SniperStateHandler = (state: NetworkSniperState) => void;
 export type SniperAimHandler = (aim: NetworkSniperAim) => void;
 export type SniperFiredHandler = (shot: NetworkSniperFired) => void;
+
+/* V1010507_TACTICAL_VULCAN_AIR_SUPPORT */
+export type NetworkVulcanState = {
+  sessionId: string;
+  active: boolean;
+  available: boolean;
+  remainingMs: number;
+  serverNow: number;
+};
+export type NetworkVulcanAim = { sessionId: string; x: number; y: number };
+export type NetworkVulcanFired = {
+  shooterId: string;
+  x: number;
+  y: number;
+  seed: number;
+  startedAt: number;
+  durationMs: number;
+  hitIds: string[];
+  serverNow: number;
+};
+export type VulcanStateHandler = (state: NetworkVulcanState) => void;
+export type VulcanAimHandler = (aim: NetworkVulcanAim) => void;
+export type VulcanFiredHandler = (shot: NetworkVulcanFired) => void;
 
 export type NetworkHunterAim = {
   sessionId: string;
@@ -552,6 +576,9 @@ this.phaseChangedHandlers.forEach(
   private readonly sniperStateHandlers = new Set<SniperStateHandler>();
   private readonly sniperAimHandlers = new Set<SniperAimHandler>();
   private readonly sniperFiredHandlers = new Set<SniperFiredHandler>();
+  private readonly vulcanStateHandlers = new Set<VulcanStateHandler>();
+  private readonly vulcanAimHandlers = new Set<VulcanAimHandler>();
+  private readonly vulcanFiredHandlers = new Set<VulcanFiredHandler>();
 
 
 
@@ -3291,6 +3318,21 @@ this.room = room;
       (shot) => this.sniperFiredHandlers.forEach((handler) => handler(shot)),
     );
 
+    room.onMessage<NetworkVulcanState>(
+      'vulcan_state',
+      (state) => this.vulcanStateHandlers.forEach((handler) => handler(state)),
+    );
+
+    room.onMessage<NetworkVulcanAim>(
+      'vulcan_aim',
+      (aim) => this.vulcanAimHandlers.forEach((handler) => handler(aim)),
+    );
+
+    room.onMessage<NetworkVulcanFired>(
+      'vulcan_fired',
+      (shot) => this.vulcanFiredHandlers.forEach((handler) => handler(shot)),
+    );
+
     room.onMessage<{ readyAt: number; serverNow: number }>(
       "sniper_reload",
       (payload) => {
@@ -3873,6 +3915,21 @@ this.room = room;
   sendSniperFire(x: number, y: number): void {
     if (!this.isGameplayTransportStable()) return;
     this.room?.send("sniper_fire", { x, y });
+  }
+
+  sendVulcanToggle(active: boolean): void {
+    if (!this.isGameplayTransportStable()) return;
+    this.room?.send('vulcan_toggle', { active });
+  }
+
+  sendVulcanAim(x: number, y: number): void {
+    if (!this.isGameplayTransportStable()) return;
+    this.room?.send('vulcan_aim', { x, y });
+  }
+
+  sendVulcanFire(x: number, y: number): void {
+    if (!this.isGameplayTransportStable()) return;
+    this.room?.send('vulcan_fire', { x, y });
   }
 
   sendHunterAim(
@@ -4650,6 +4707,21 @@ this.room = room;
   onSniperFired(handler: SniperFiredHandler): () => void {
     this.sniperFiredHandlers.add(handler);
     return () => this.sniperFiredHandlers.delete(handler);
+  }
+
+  onVulcanState(handler: VulcanStateHandler): () => void {
+    this.vulcanStateHandlers.add(handler);
+    return () => this.vulcanStateHandlers.delete(handler);
+  }
+
+  onVulcanAim(handler: VulcanAimHandler): () => void {
+    this.vulcanAimHandlers.add(handler);
+    return () => this.vulcanAimHandlers.delete(handler);
+  }
+
+  onVulcanFired(handler: VulcanFiredHandler): () => void {
+    this.vulcanFiredHandlers.add(handler);
+    return () => this.vulcanFiredHandlers.delete(handler);
   }
 
   onHunterAim(
