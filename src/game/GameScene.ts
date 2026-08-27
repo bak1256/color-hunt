@@ -1,3 +1,6 @@
+/* V1010518C_REMOVE_LEGACY_REVEAL_MASK_FIELDS: removes stale spotlightReveal assignments and obsolete GeometryMask remnants after v518b direct-strip spotlight rendering. */
+/* V1010518B_NO_GEOMETRY_MASK_CLEAR_BEAM: removes obsolete spotlightReveal and GeometryMask inversion; true bright spotlight hole is drawn directly into darkness geometry for Phaser 4 compatibility. */
+/* V1010518_VULCAN_CLEAR_BEAM_THIN_HEAT_SPECTATOR_FIRE_LOBBY_HIDE: spotlight cuts a true undarkened ellipse out of Vulcan darkness; thin horizontal HEAT; stronger BRRRT; Hider spectator shares live aim+fire FX; tactical buttons hard-hidden outside Hunt. */
 /* V1010517_VULCAN_DOM_POINTER_RUNTIME_CLEAR_BEAM: browser capture pointer bridge bypasses dead Phaser input; independent 16ms runtime drives lamp/fire/HEAT; ADD beam restores clarity inside spotlight. */
 /* V1010516_VULCAN_OWNER_ROOTFIX_TACTICAL_FART_LOCK_SPECTATOR: Vulcan owner uses vulcanActive directly; main update hook verified; tactical modes hard-lock SPACE/GAS; Hider spectator follows shared aerial spotlight instead of Hunter body. */
 /* V1010515_VULCAN_FRAME_POINTER_FIRE_SYNC: Vulcan aim/fire are driven from activePointer every frame; spotlight now follows mouse reliably; visible BRRRT impacts match server kills. */
@@ -965,6 +968,12 @@ export class GameScene extends Phaser.Scene {
     /* V1010507_TACTICAL_VULCAN_AIR_SUPPORT */
     private vulcanActive = false;
     /*
+     * V518: darkness is geometry-masked so the spotlight core reveals the
+     * ORIGINAL undarkened scene instead of painting pale yellow on top.
+     */
+    private readonly remoteVulcanFiringSessionIds = new Set<string>();
+
+    /*
      * V517: do not depend on Phaser pointer dispatch for Vulcan.
      * Browser pointer capture + an independent scene timer drive the mode.
      */
@@ -986,7 +995,6 @@ export class GameScene extends Phaser.Scene {
     private vulcanLastAimBroadcastAt = 0;
     private vulcanFiring = false;
     private vulcanCinematicActive = false;
-    private vulcanSpotlightReveal = 0;
     private vulcanReadyAt = 0;
     private vulcanDarkness?: Phaser.GameObjects.Graphics;
     private vulcanCooldownGraphics?: Phaser.GameObjects.Graphics;
@@ -15889,6 +15897,24 @@ const ribbon =
 
         this.networkUnsubscribers.push(
             multiplayerClient.onVulcanFiringState((state: NetworkVulcanFiringState) => {
+
+                /*
+                 * V518: remote spectators need the Vulcan firing presentation too.
+                 */
+                if (
+                    state.active
+                ) {
+                    this.remoteVulcanFiringSessionIds
+                        .add(
+                            state.shooterId,
+                        );
+                } else {
+                    this.remoteVulcanFiringSessionIds
+                        .delete(
+                            state.shooterId,
+                        );
+                }
+
                 const localId =
                     multiplayerClient.getSessionId();
 
@@ -63260,8 +63286,6 @@ const roomPlayers =
         this.vulcanSpectatorViewActive =
             false;
 
-        this.vulcanSpotlightReveal =
-            0;
 
         this.vulcanFiring =
             false;
@@ -63658,8 +63682,6 @@ const roomPlayers =
                                                  * Make the lamp explicitly visible
                                                  * BEFORE enabling input.
                                                  */
-                                                this.vulcanSpotlightReveal =
-                                                    1;
 
                                                 this.vulcanSpotlight
                                                     ?.setDepth(
@@ -64171,31 +64193,198 @@ const roomPlayers =
 
 
 
+    private spawnVulcanPresentationImpact(
+        x: number,
+        y: number,
+        withSound: boolean,
+    ): void {
+        if (
+            withSound
+        ) {
+            this.playVulcanGunPulse();
+        }
+
+        const px =
+            Phaser.Math.Clamp(
+                x +
+                    Phaser.Math.Between(
+                        -26,
+                        26,
+                    ),
+                0,
+                960,
+            );
+
+        const py =
+            Phaser.Math.Clamp(
+                y +
+                    Phaser.Math.Between(
+                        -18,
+                        18,
+                    ),
+                0,
+                540,
+            );
+
+        const flash =
+            this.add.circle(
+                px,
+                py,
+                Phaser.Math.Between(
+                    5,
+                    9,
+                ),
+                0xffa126,
+                0.98,
+            )
+                .setDepth(
+                    25009,
+                );
+
+        const ring =
+            this.add.circle(
+                px,
+                py,
+                5,
+            )
+                .setStrokeStyle(
+                    2,
+                    0xfff0a0,
+                    0.96,
+                )
+                .setDepth(
+                    25008,
+                );
+
+        const tracer =
+            this.add.rectangle(
+                px -
+                    18,
+                py -
+                    8,
+                Phaser.Math.Between(
+                    18,
+                    34,
+                ),
+                2,
+                0xffcf54,
+                0.92,
+            )
+                .setAngle(
+                    Phaser.Math.Between(
+                        -24,
+                        24,
+                    ),
+                )
+                .setDepth(
+                    25008,
+                );
+
+        this.vulcanImpactFx
+            .add(
+                flash,
+            );
+
+        this.vulcanImpactFx
+            .add(
+                ring,
+            );
+
+        this.vulcanImpactFx
+            .add(
+                tracer,
+            );
+
+        this.tweens.add({
+            targets:
+                flash,
+            alpha:
+                0,
+            scale:
+                2.2,
+            duration:
+                130,
+            onComplete:
+                () => {
+                    this.vulcanImpactFx
+                        .delete(
+                            flash,
+                        );
+
+                    flash.destroy();
+                },
+        });
+
+        this.tweens.add({
+            targets:
+                ring,
+            alpha:
+                0,
+            scale:
+                2.8,
+            duration:
+                180,
+            onComplete:
+                () => {
+                    this.vulcanImpactFx
+                        .delete(
+                            ring,
+                        );
+
+                    ring.destroy();
+                },
+        });
+
+        this.tweens.add({
+            targets:
+                tracer,
+            alpha:
+                0,
+            x:
+                tracer.x +
+                24,
+            duration:
+                95,
+            onComplete:
+                () => {
+                    this.vulcanImpactFx
+                        .delete(
+                            tracer,
+                        );
+
+                    tracer.destroy();
+                },
+        });
+
+        this.cameras.main.shake(
+            34,
+            0.0012,
+        );
+    }
+
+
+
     private updateVulcanAirSupport(): void {
         if (
             this.phase !==
             'hunt'
         ) {
+            this.vulcanButton
+                ?.disableInteractive()
+                .setVisible(false);
+
             return;
         }
 
         this.applyTacticalSupportInputLock();
 
-        const localRole =
-            this.practiceMode ===
-                'hunter'
-                ? 'hunter'
-                : this.networkPlayerManager
-                    ?.getLocalRole?.();
-
+        /*
+         * If a spectator target exists, test it directly.
+         * Do not require a transient local-role lookup to say "hider".
+         */
         const watchedSessionId =
-            localRole ===
-                'hider'
-                ? (
-                    this.spectatorSessionId ??
-                    ''
-                )
-                : '';
+            this.spectatorSessionId ??
+            '';
 
         const watchingRemoteVulcan =
             Boolean(
@@ -64312,7 +64501,9 @@ const roomPlayers =
             );
 
         this.vulcanSpotlight
-            ?.setVisible(true);
+            ?.setVisible(
+                true,
+            );
 
         this.drawVulcanSpotlight(
             this.vulcanDisplayX,
@@ -64322,6 +64513,9 @@ const roomPlayers =
         const now =
             Date.now();
 
+        /*
+         * Local firing owns HEAT/cooldown authority.
+         */
         if (
             ownerActive &&
             this.vulcanFiring
@@ -64340,124 +64534,6 @@ const roomPlayers =
                     0,
                     1,
                 );
-
-            if (
-                now -
-                    this.vulcanLastMuzzleFxAt >=
-                    65
-            ) {
-                this.vulcanLastMuzzleFxAt =
-                    now;
-
-                this.playVulcanGunPulse();
-
-                const px =
-                    Phaser.Math.Clamp(
-                        this.vulcanDisplayX +
-                            Phaser.Math.Between(
-                                -26,
-                                26,
-                            ),
-                        0,
-                        960,
-                    );
-
-                const py =
-                    Phaser.Math.Clamp(
-                        this.vulcanDisplayY +
-                            Phaser.Math.Between(
-                                -18,
-                                18,
-                            ),
-                        0,
-                        540,
-                    );
-
-                const flash =
-                    this.add.circle(
-                        px,
-                        py,
-                        Phaser.Math.Between(
-                            5,
-                            9,
-                        ),
-                        0xffa126,
-                        0.98,
-                    )
-                        .setDepth(
-                            25009,
-                        );
-
-                const ring =
-                    this.add.circle(
-                        px,
-                        py,
-                        5,
-                    )
-                        .setStrokeStyle(
-                            2,
-                            0xfff0a0,
-                            0.96,
-                        )
-                        .setDepth(
-                            25008,
-                        );
-
-                this.vulcanImpactFx
-                    .add(
-                        flash,
-                    );
-
-                this.vulcanImpactFx
-                    .add(
-                        ring,
-                    );
-
-                this.tweens.add({
-                    targets:
-                        flash,
-                    alpha:
-                        0,
-                    scale:
-                        2.2,
-                    duration:
-                        130,
-                    onComplete:
-                        () => {
-                            this.vulcanImpactFx
-                                .delete(
-                                    flash,
-                                );
-
-                            flash.destroy();
-                        },
-                });
-
-                this.tweens.add({
-                    targets:
-                        ring,
-                    alpha:
-                        0,
-                    scale:
-                        2.8,
-                    duration:
-                        180,
-                    onComplete:
-                        () => {
-                            this.vulcanImpactFx
-                                .delete(
-                                    ring,
-                                );
-
-                            ring.destroy();
-                        },
-                });
-
-                camera.shake(
-                    34,
-                    0.0012,
-                );
-            }
 
             if (
                 heldMs >=
@@ -64535,11 +64611,51 @@ const roomPlayers =
             }
         }
 
+        /*
+         * Presentation firing:
+         * Hunter owner uses local firing state.
+         * Hider spectator uses the watched Hunter's network firing state.
+         */
+        const spectatorFiring =
+            this.vulcanSpectatorViewActive &&
+            Boolean(
+                this.vulcanSpectatorSessionId,
+            ) &&
+            this.remoteVulcanFiringSessionIds
+                .has(
+                    this.vulcanSpectatorSessionId,
+                );
+
+        const visualFiring =
+            (
+                ownerActive &&
+                this.vulcanFiring
+            ) ||
+            spectatorFiring;
+
+        if (
+            visualFiring &&
+            now -
+                this.vulcanLastMuzzleFxAt >=
+                64
+        ) {
+            this.vulcanLastMuzzleFxAt =
+                now;
+
+            this.spawnVulcanPresentationImpact(
+                this.vulcanDisplayX,
+                this.vulcanDisplayY,
+                true,
+            );
+        }
+
         if (
             ownerActive
         ) {
             this.vulcanCooldownGraphics
-                ?.setVisible(true);
+                ?.setVisible(
+                    true,
+                );
 
             this.drawVulcanCooldownGauge(
                 this.vulcanDisplayX,
@@ -64548,7 +64664,9 @@ const roomPlayers =
         } else {
             this.vulcanCooldownGraphics
                 ?.clear()
-                .setVisible(false);
+                .setVisible(
+                    false,
+                );
         }
     }
 
@@ -64613,12 +64731,30 @@ const roomPlayers =
             );
 
         /*
-         * Outside remains restricted/dark.
+         * TRUE clear spotlight without GeometryMask.
+         *
+         * Darkness is rotated around the lamp.
+         * We paint a huge dark field in horizontal strips, but skip the
+         * mathematically calculated ellipse interval in every strip.
+         *
+         * Result:
+         *   outside ellipse -> restricted Vulcan darkness
+         *   inside ellipse  -> untouched ORIGINAL bright map / Hider colors
+         *
+         * This works without GeometryMask.invertAlpha and is stable across
+         * Phaser 3/4 typings and WebGL.
          */
         darkness
             .clear()
             .setDepth(
                 24993,
+            )
+            .setPosition(
+                x,
+                y,
+            )
+            .setRotation(
+                angle,
             )
             .setBlendMode(
                 Phaser.BlendModes.NORMAL,
@@ -64629,19 +64765,101 @@ const roomPlayers =
 
         darkness.fillStyle(
             0x000103,
-            0.54,
+            0.56,
         );
 
-        darkness.fillRect(
-            -260,
-            -260,
-            1500,
-            1060,
-        );
+        const fieldHalfWidth =
+            1100;
+
+        const fieldHalfHeight =
+            900;
+
+        const clearRadiusX =
+            major *
+            0.59;
+
+        const clearRadiusY =
+            minor *
+            0.59;
+
+        const bandHeight =
+            5;
+
+        for (
+            let localY =
+                -fieldHalfHeight;
+            localY <
+                fieldHalfHeight;
+            localY +=
+                bandHeight
+        ) {
+            const centerY =
+                localY +
+                bandHeight *
+                    0.5;
+
+            /*
+             * Outside the vertical ellipse extent, the complete row is dark.
+             */
+            if (
+                Math.abs(
+                    centerY,
+                ) >=
+                clearRadiusY
+            ) {
+                darkness.fillRect(
+                    -fieldHalfWidth,
+                    localY,
+                    fieldHalfWidth *
+                        2,
+                    bandHeight +
+                        1,
+                );
+
+                continue;
+            }
+
+            /*
+             * x = rx * sqrt(1 - y²/ry²)
+             */
+            const normalizedY =
+                centerY /
+                clearRadiusY;
+
+            const clearHalfWidth =
+                clearRadiusX *
+                Math.sqrt(
+                    Math.max(
+                        0,
+                        1 -
+                            normalizedY *
+                                normalizedY,
+                    ),
+                );
+
+            darkness.fillRect(
+                -fieldHalfWidth,
+                localY,
+                fieldHalfWidth -
+                    clearHalfWidth,
+                bandHeight +
+                    1,
+            );
+
+            darkness.fillRect(
+                clearHalfWidth,
+                localY,
+                fieldHalfWidth -
+                    clearHalfWidth,
+                bandHeight +
+                    1,
+            );
+        }
 
         /*
-         * Beam uses restrained ADD to restore readability against the dark layer.
-         * Warm light preserves texture/color contrast instead of whitewashing it.
+         * Visual searchlight rim.
+         * The center stays mostly untouched so camouflage/background detail
+         * remains crisp rather than becoming white/yellow washed-out.
          */
         light
             .clear()
@@ -64662,49 +64880,58 @@ const roomPlayers =
                 true,
             );
 
+        /*
+         * Very subtle directional warm edge / saturation cue.
+         */
         light.fillStyle(
-            0xffb83f,
-            0.10,
+            0xffb830,
+            0.035,
         );
 
         light.fillEllipse(
             0,
             0,
             major *
-                2.10,
+                1.34,
             minor *
-                2.10,
+                1.34,
         );
 
         light.fillStyle(
-            0xffd768,
-            0.16,
+            0xffdf7a,
+            0.040,
         );
 
         light.fillEllipse(
             0,
             0,
             major *
-                1.48,
+                1.08,
             minor *
-                1.48,
+                1.08,
         );
 
+        /*
+         * Slight opposite-direction shadow lip gives a manual depth cue,
+         * but never directly identifies a Hider.
+         */
         light.fillStyle(
-            0xffef9e,
-            0.22,
+            0x3a2100,
+            0.028,
         );
 
         light.fillEllipse(
-            0,
-            0,
-            major,
-            minor,
+            5,
+            4,
+            major *
+                0.94,
+            minor *
+                0.94,
         );
 
         light.lineStyle(
             2,
-            0xffe99b,
+            0xffefaa,
             0.72,
         );
 
@@ -64723,30 +64950,31 @@ const roomPlayers =
         const g =
             this.vulcanCooldownGraphics;
 
-        if (!g) return;
+        if (!g) {
+            return;
+        }
 
         g.clear();
 
         if (
-            !this.vulcanSpotlight
-                ?.visible ||
-            this.vulcanSpotlightReveal <
-                0.15
+            !this.vulcanActive ||
+            this.phase !==
+                'hunt'
         ) {
+            g.setVisible(
+                false,
+            );
+
             return;
         }
-
-        const dx =
-            x - 480;
-
-        const dy =
-            y - 270;
 
         const t =
             Phaser.Math.Clamp(
                 Math.hypot(
-                    dx,
-                    dy,
+                    x -
+                        480,
+                    y -
+                        270,
                 ) /
                     Math.hypot(
                         480,
@@ -64756,35 +64984,41 @@ const roomPlayers =
                 1,
             );
 
-        const major =
+        const minor =
             Phaser.Math.Linear(
-                112,
-                292,
+                72,
+                43,
                 t,
             );
 
+        /*
+         * Thin, horizontal, centered under the lamp.
+         */
+        const width =
+            92;
+
+        const height =
+            6;
+
         const barX =
             Phaser.Math.Clamp(
-                x +
-                    major *
-                        0.58 +
-                    26,
-                22,
-                924,
+                x -
+                    width /
+                        2,
+                10,
+                950 -
+                    width,
             );
 
         const barY =
             Phaser.Math.Clamp(
-                y - 64,
-                18,
-                392,
+                y +
+                    minor *
+                        0.72 +
+                    13,
+                12,
+                520,
             );
-
-        const width =
-            18;
-
-        const height =
-            128;
 
         const heat =
             Phaser.Math.Clamp(
@@ -64793,111 +65027,69 @@ const roomPlayers =
                 1,
             );
 
-        g.setBlendMode(
-            Phaser.BlendModes.NORMAL,
+        g.setVisible(
+            true,
         );
 
         g.fillStyle(
-            0x020406,
-            0.96,
+            0x050709,
+            0.90,
         );
 
         g.fillRoundedRect(
-            barX - 7,
-            barY - 22,
-            width + 14,
-            height + 31,
-            7,
-        );
-
-        g.lineStyle(
-            2.5,
-            0xffedaa,
-            0.96,
-        );
-
-        g.strokeRoundedRect(
-            barX - 7,
-            barY - 22,
-            width + 14,
-            height + 31,
-            7,
+            barX -
+                3,
+            barY -
+                3,
+            width +
+                6,
+            height +
+                6,
+            4,
         );
 
         if (
             heat >
             0.001
         ) {
-            const fill =
-                Math.max(
-                    3,
-                    height *
-                        heat,
-                );
-
             const color =
                 heat >=
                     0.99
-                    ? 0xff3326
+                    ? 0xff3429
                     : heat >
                         0.66
-                        ? 0xff7b28
+                        ? 0xff7b27
                         : heat >
                             0.33
-                            ? 0xffc42e
-                            : 0x77e06a;
+                            ? 0xffc52e
+                            : 0x7ee06b;
 
             g.fillStyle(
                 color,
                 0.98,
             );
 
-            g.fillRect(
+            g.fillRoundedRect(
                 barX,
-                barY +
-                    height -
-                    fill,
-                width,
-                fill,
+                barY,
+                width *
+                    heat,
+                height,
+                2,
             );
         }
 
-        for (
-            let index = 1;
-            index < 3;
-            index += 1
-        ) {
-            const yy =
-                barY +
-                height /
-                    3 *
-                    index;
-
-            g.lineStyle(
-                1,
-                0xffffff,
-                0.38,
-            );
-
-            g.lineBetween(
-                barX + 1,
-                yy,
-                barX +
-                    width -
-                    1,
-                yy,
-            );
-        }
-
-        g.fillStyle(
-            0xfff2c0,
-            0.96,
+        g.lineStyle(
+            1,
+            0xffedb0,
+            0.86,
         );
 
-        g.fillRect(
-            barX - 1,
-            barY - 14,
-            width + 2,
+        g.strokeRoundedRect(
+            barX,
+            barY,
+            width,
+            height,
             2,
         );
     }
@@ -65026,21 +65218,196 @@ const roomPlayers =
         } catch {}
     }
 
-    private playVulcanGunPulse(): void {
-        if (!this.audioUnlocked || !this.bgmEnabled) return;
-        try {
-            const manager = this.sound as unknown as { context?: AudioContext };
-            const context = manager.context;
-            if (!context) return;
-            const now = context.currentTime;
-            const gain = context.createGain(); gain.gain.setValueAtTime(0.30,now); gain.gain.exponentialRampToValueAtTime(0.0001,now+0.065); gain.connect(context.destination);
-            const osc = context.createOscillator(); osc.type='square'; osc.frequency.setValueAtTime(92,now); osc.frequency.exponentialRampToValueAtTime(58,now+0.055); osc.connect(gain); osc.start(now); osc.stop(now+0.06);
-            const len = Math.floor(context.sampleRate*0.055); const buffer=context.createBuffer(1,len,context.sampleRate); const data=buffer.getChannelData(0);
-            for(let i=0;i<len;i+=1) data[i]=(Math.random()*2-1)*(1-i/len);
-            const noise=context.createBufferSource(); noise.buffer=buffer; const f=context.createBiquadFilter(); f.type='bandpass'; f.frequency.value=720; noise.connect(f); f.connect(gain); noise.start(now);
-        } catch {}
-    }
 
+    private playVulcanGunPulse(): void {
+        if (
+            !this.audioUnlocked
+        ) {
+            return;
+        }
+
+        try {
+            const manager =
+                this.sound as unknown as {
+                    context?: AudioContext;
+                };
+
+            const context =
+                manager.context;
+
+            if (!context) {
+                return;
+            }
+
+            const now =
+                context.currentTime;
+
+            /*
+             * Short hard mechanical transient.
+             */
+            const gain =
+                context.createGain();
+
+            gain.gain
+                .setValueAtTime(
+                    0.0001,
+                    now,
+                );
+
+            gain.gain
+                .exponentialRampToValueAtTime(
+                    0.34,
+                    now +
+                        0.002,
+                );
+
+            gain.gain
+                .exponentialRampToValueAtTime(
+                    0.0001,
+                    now +
+                        0.075,
+                );
+
+            gain.connect(
+                context.destination,
+            );
+
+            const oscillator =
+                context.createOscillator();
+
+            oscillator.type =
+                'square';
+
+            oscillator.frequency
+                .setValueAtTime(
+                    128,
+                    now,
+                );
+
+            oscillator.frequency
+                .exponentialRampToValueAtTime(
+                    72,
+                    now +
+                        0.065,
+                );
+
+            oscillator.connect(
+                gain,
+            );
+
+            oscillator.start(
+                now,
+            );
+
+            oscillator.stop(
+                now +
+                    0.078,
+            );
+
+            /*
+             * Metallic/noisy "dadada" body.
+             */
+            const length =
+                Math.max(
+                    1,
+                    Math.floor(
+                        context.sampleRate *
+                            0.07,
+                    ),
+                );
+
+            const buffer =
+                context.createBuffer(
+                    1,
+                    length,
+                    context.sampleRate,
+                );
+
+            const channel =
+                buffer.getChannelData(
+                    0,
+                );
+
+            for (
+                let index = 0;
+                index <
+                channel.length;
+                index += 1
+            ) {
+                const envelope =
+                    1 -
+                    index /
+                        channel.length;
+
+                channel[
+                    index
+                ] =
+                    (
+                        Math.random() *
+                            2 -
+                        1
+                    ) *
+                    envelope;
+            }
+
+            const noise =
+                context.createBufferSource();
+
+            noise.buffer =
+                buffer;
+
+            const filter =
+                context.createBiquadFilter();
+
+            filter.type =
+                'bandpass';
+
+            filter.frequency.value =
+                980;
+
+            filter.Q.value =
+                0.72;
+
+            const noiseGain =
+                context.createGain();
+
+            noiseGain.gain
+                .setValueAtTime(
+                    0.20,
+                    now,
+                );
+
+            noiseGain.gain
+                .exponentialRampToValueAtTime(
+                    0.0001,
+                    now +
+                        0.07,
+                );
+
+            noise.connect(
+                filter,
+            );
+
+            filter.connect(
+                noiseGain,
+            );
+
+            noiseGain.connect(
+                context.destination,
+            );
+
+            noise.start(
+                now,
+            );
+
+            noise.stop(
+                now +
+                    0.072,
+            );
+        } catch {
+            // Procedural weapon SFX is non-critical.
+        }
+    }
 
     private enterVulcanSpectatorView(
         sessionId: string,
@@ -65060,8 +65427,6 @@ const roomPlayers =
         this.vulcanSpectatorSessionId =
             sessionId;
 
-        this.vulcanSpotlightReveal =
-            1;
 
         this.vulcanOrbitStartedAt =
             this.time.now;
@@ -65151,7 +65516,6 @@ const roomPlayers =
 
         this.vulcanSpectatorViewActive = false;
         this.vulcanSpectatorSessionId = '';
-        this.vulcanSpotlightReveal = 0;
         this.vulcanSpotlight?.clear().setVisible(false);
         this.vulcanDarkness?.clear().setVisible(false);
         this.vulcanCooldownGraphics?.clear().setVisible(false);
@@ -65164,6 +65528,14 @@ const roomPlayers =
     }
 
     private exitVulcanCinematic(): void {
+
+
+
+
+        this.remoteVulcanFiringSessionIds
+            .clear();
+
+
         this.removeVulcanDomInputBridge();
 
         if (
@@ -65173,7 +65545,6 @@ const roomPlayers =
         }
 
         this.vulcanCinematicActive = false;
-        this.vulcanSpotlightReveal = 0;
         this.vulcanDarkness?.clear().setVisible(false);
         this.vulcanSpotlight?.clear().setVisible(false);
         this.vulcanCooldownGraphics?.clear().setVisible(false);
@@ -65199,6 +65570,26 @@ const roomPlayers =
     }
 
     private refreshSniperSupportUi(): void {
+        /*
+         * V518: tactical choice UI belongs ONLY to Hunt.
+         * Prevent stale Vulcan button from surviving into result/lobby.
+         */
+        if (
+            this.phase !==
+            'hunt'
+        ) {
+            this.sniperButton
+                ?.disableInteractive()
+                .setVisible(false);
+
+            this.vulcanButton
+                ?.disableInteractive()
+                .setVisible(false);
+
+            return;
+        }
+
+
         this.applyTacticalSupportInputLock();
 
         if (
@@ -71444,6 +71835,14 @@ ${shareUrl}`,
     }
 
     private clearVulcanForResultCapture(): void {
+
+
+
+
+        this.remoteVulcanFiringSessionIds
+            .clear();
+
+
         this.removeVulcanDomInputBridge();
         this.stopVulcanRuntimeTimer();
 
@@ -71462,8 +71861,6 @@ ${shareUrl}`,
         this.vulcanFiring =
             false;
 
-        this.vulcanSpotlightReveal =
-            0;
 
         this.vulcanSpotlight
             ?.clear()
