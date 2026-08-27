@@ -1,3 +1,4 @@
+/* V1010523B_VULCAN_MOBILE_VISIBILITY_HARD_GUARD: hard guard prevents generic mobile HUD refresh from resurrecting controls during Vulcan. */
 /* V1010523_VULCAN_MOBILE_CONTROLS_HIDE_IMMEDIATE: Vulcan support tap instantly hides mobile MOVE/AIM/FIRE/FART controls and clears held pointers. */
 /* V1010522_MOBILE_VULCAN_BUTTON_SELF_HEAL: self-heals missing Vulcan tactical button on mobile and locks it exactly 2px under Sniper. */
 /* V1010521G_VULCAN_SERVER_HEAT_RESULT_CLEAN_HIDER_OUTLINE_CURRENT_SOURCE: server-streamed Vulcan HEAT; one-choice tactical latch; result-first tactical cleanup; clean Hider poster + true white silhouette outline + 2x crown. */
@@ -6697,6 +6698,95 @@ private timerText!: Phaser.GameObjects.Text;
     private updateMobileControlVisibility(): void {
 
         /*
+         * V1010523B_VULCAN_MOBILE_VISIBILITY_HARD_GUARD
+         *
+         * Vulcan owns the whole mobile combat surface.
+         * Generic mobile visibility code below MUST NOT resurrect the normal
+         * MOVE / AIM / FIRE / FART controls while Vulcan is selected,
+         * cinematic, active, or committed and waiting for authoritative state.
+         */
+        const vulcanOwnsMobileControls =
+            this.phase === 'hunt' &&
+            (
+                this.vulcanSupportCommitted ||
+                this.vulcanCinematicActive ||
+                this.vulcanActive
+            );
+
+        if (
+            this.mobileControlsEnabled &&
+            vulcanOwnsMobileControls
+        ) {
+            this.resetMobileMoveControl();
+
+            this.mobileMovePointerId =
+                -1;
+
+            this.mobileAimPointerId =
+                -1;
+
+            this.mobileFirePointerId =
+                -1;
+
+            this.mobileFartPointerId =
+                -1;
+
+            this.mobileMoveBase
+                ?.setVisible(false);
+
+            this.mobileMoveKnob
+                ?.setVisible(false);
+
+            this.mobileMoveLabel
+                ?.setVisible(false);
+
+            this.mobileAimBase
+                ?.setVisible(false);
+
+            this.mobileAimKnob
+                ?.setVisible(false);
+
+            this.mobileAimLabel
+                ?.setVisible(false);
+
+            this.mobileFireButton
+                ?.setVisible(false);
+
+            this.mobileFireLabel
+                ?.setVisible(false);
+
+            this.mobileFartButton
+                ?.setVisible(false);
+
+            this.mobileFartLabel
+                ?.setVisible(false);
+
+            this.hunterWeaponHudContainer
+                ?.setVisible(false);
+
+            this.aimLine
+                ?.clear()
+                .setVisible(false);
+
+            this.crosshair
+                ?.clear()
+                .setVisible(false);
+
+            this.gun
+                ?.setVisible(false);
+
+            this.networkPlayerManager
+                ?.clearHunterAimLines();
+
+            /*
+             * Keep spectator UI untouched here: this guard only owns normal
+             * Hunter mobile combat controls.
+             */
+            return;
+        }
+
+
+        /*
          * V1010451M4E_VICTORY_CLEAN_CAPTURE_UI_LOCK_ROBUST / MOBILE_SPECTATOR_LOCK
          * Victory-card capture must not resurrect TAB/spectator/mobile controls.
          */
@@ -6941,7 +7031,10 @@ private timerText!: Phaser.GameObjects.Text;
                 this.phase === 'hunt'
             ) &&
             !this.networkPlayerManager
-                .isLocalCustomizationMode();
+                .isLocalCustomizationMode() &&
+            !this.vulcanSupportCommitted &&
+            !this.vulcanCinematicActive &&
+            !this.vulcanActive;
 
         const localHiderSkillCombat =
             canMove &&
@@ -6964,6 +7057,9 @@ private timerText!: Phaser.GameObjects.Text;
         const showHunterCombat =
             canMove &&
             this.phase === 'hunt' &&
+            !this.vulcanSupportCommitted &&
+            !this.vulcanCinematicActive &&
+            !this.vulcanActive &&
             (
                 localRole ===
                     'hunter' ||
