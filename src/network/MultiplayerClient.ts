@@ -1,3 +1,4 @@
+/* V1010538B_SIX_PLAYER_STABILITY_REMOTE_SNIPER_AUDIO_ROBUST: preserves current reconnect policy; only unsafe legacy ping-only warning is rewritten. */
 /* V1010521G_VULCAN_SERVER_HEAT_RESULT_CLEAN_HIDER_OUTLINE_CURRENT_SOURCE: NetworkVulcanFiringState carries authoritative accumulated heat. */
 /* V1010510_VULCAN_HOLD_FIRE_CINEMATIC_SEARCHLIGHT: Vulcan hold-fire network protocol. */
 /* V1010508_VULCAN_SEARCHLIGHT_COOLDOWN_CINEMATIC: Vulcan repeated-fire cooldown deadline. */

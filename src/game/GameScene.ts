@@ -1,3 +1,4 @@
+/* V1010538B_SIX_PLAYER_STABILITY_REMOTE_SNIPER_AUDIO_ROBUST: Hunter recovery paint barrier relaxed in Hunt; remote sniper report synced. */
 /* V1010537_VULCAN_OWNER_AUTHORITATIVE_TRACER: local firing Hunter receives authoritative Vulcan tracer at shot.x/y; Hider passive path remains single-rendered. */
 /* V1010536B_VULCAN_TRACER_DOUBLE_LENGTH_ROBUST: Vulcan shared tracer visual length 18..34px -> 36..68px. No firing-path rewrite. */
 /* V1010535_VULCAN_MOUSE_FOLLOW_HELICAM: Vulcan aerial camera zooms to 1.12 and smoothly pans with spotlight/mouse aim while retaining helicopter orbit and map-edge clamps. */
@@ -15977,6 +15978,17 @@ const ribbon =
         this.networkUnsubscribers.push(
             multiplayerClient.onSniperFired(
                 (shot: NetworkSniperFired) => {
+                    /*
+                     * V1010538B_SIX_PLAYER_STABILITY_REMOTE_SNIPER_AUDIO_ROBUST / REMOTE_SNIPER_REPORT
+                     * Local shooter already plays the report before send.
+                     */
+                    if (
+                        shot.shooterId !==
+                        multiplayerClient.getSessionId()
+                    ) {
+                        this.playProceduralSniperShot();
+                    }
+
                     if (shot.shooterId === multiplayerClient.getSessionId()) {
                         this.sniperReadyAt = shot.readyAt;
                     }
@@ -24863,7 +24875,15 @@ this.networkUnsubscribers.push(
                 this.reconnectGameplayUnlockNotBefore ||
             !multiplayerClient
                 .isGameplayTransportStable() ||
-            this.recoveryPaintSnapshotPending
+            (
+                this.recoveryPaintSnapshotPending &&
+                !(
+                    this.phase ===
+                        'hunt' &&
+                    this.networkPlayerManager
+                        ?.isLocalHunter()
+                )
+            )
         ) {
             return false;
         }
