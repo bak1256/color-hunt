@@ -1,3 +1,4 @@
+/* V1010540_RECONNECT_GRACE_REAL_DROP_UI_DEDUPE: real drops get 550ms invisible grace; only persistent drops lock gameplay/show reconnect UI; recovered UI is one-shot. */
 /* V1010538B_SIX_PLAYER_STABILITY_REMOTE_SNIPER_AUDIO_ROBUST: preserves current reconnect policy; only unsafe legacy ping-only warning is rewritten. */
 /* V1010521G_VULCAN_SERVER_HEAT_RESULT_CLEAN_HIDER_OUTLINE_CURRENT_SOURCE: NetworkVulcanFiringState carries authoritative accumulated heat. */
 /* V1010510_VULCAN_HOLD_FIRE_CINEMATIC_SEARCHLIGHT: Vulcan hold-fire network protocol. */
@@ -652,6 +653,16 @@ this.phaseChangedHandlers.forEach(
 
   private connectionIssueNotified = false;
 
+  /*
+   * V1010540_RECONNECT_GRACE_REAL_DROP_UI_DEDUPE
+   * Brief real WebSocket drops are common during network jitter / busy multi-
+   * player frames. Give the SAME Room 550ms to recover before surfacing the
+   * reconnect UI or freezing local gameplay.
+   */
+  private connectionIssueGraceTimer?: number;
+  private connectionIssueGraceGeneration = 0;
+  private connectionIssueGraceUntil = 0;
+
   /* V1010471_RECOVERY_NOTICE_EPOCH_DEDUPE
    * Transport recovery itself is unchanged. This flag only deduplicates the
    * public connectionRecovered pulse so one confirmed drop produces one
@@ -684,7 +695,11 @@ this.phaseChangedHandlers.forEach(
       !this.connectionIssueNotified &&
       !this.manualReconnectInFlight &&
       !this.freshRejoinInFlight &&
-      !room.reconnection.isReconnecting,
+      (
+        !room.reconnection.isReconnecting ||
+        Date.now() <
+          this.connectionIssueGraceUntil
+      ),
     );
   }
 
@@ -2003,41 +2018,96 @@ private async attemptFreshRejoin(
   private notifyConnectionIssue(
     reason?: string,
   ): void {
-    if (this.connectionIssueNotified) {
+    if (
+      this.connectionIssueNotified ||
+      this.connectionIssueGraceTimer !==
+        undefined
+    ) {
       return;
     }
 
-    this.connectionIssueNotified = true;
-
-    /* V1010471_RECOVERY_NOTICE_EPOCH_DEDUPE / ARM_ON_REAL_ISSUE
-     * Arm exactly one recovered pulse for this connection-issue epoch.
-     * Reconnect ownership, watchdog timing and transport recovery are untouched.
+    /*
+     * V1010540_RECONNECT_GRACE_REAL_DROP_UI_DEDUPE / INVISIBLE_GRACE
+     *
+     * Do not immediately tell GameScene to lock movement/show "reconnecting".
+     * Colyseus gets a short chance to recover the same session invisibly.
      */
-    this.connectionRecoveryNoticeArmed = true;
+    const generation =
+      ++this.connectionIssueGraceGeneration;
 
-this.connectionDropHandlers
-      .forEach(
-        (handler) => {
-          handler(reason);
+    this.connectionIssueGraceUntil =
+      Date.now() +
+      550;
+
+    this.connectionIssueGraceTimer =
+      globalThis.setTimeout(
+        () => {
+          if (
+            generation !==
+              this.connectionIssueGraceGeneration
+          ) {
+            return;
+          }
+
+          this.connectionIssueGraceTimer =
+            undefined;
+
+          if (this.connectionIssueNotified) {
+            return;
+          }
+
+          this.connectionIssueGraceUntil =
+            0;
+          this.connectionIssueNotified =
+            true;
+          this.connectionRecoveryNoticeArmed =
+            true;
+
+          this.connectionDropHandlers
+            .forEach(
+              (handler) => {
+                handler(reason);
+              },
+            );
         },
+        550,
       );
   }
 
   private clearConnectionIssue(): void {
-    this.connectionIssueNotified = false;
-this.lastRoomPingAt = Date.now();
-
-    /* V1010471_RECOVERY_NOTICE_EPOCH_DEDUPE / ONE_RECOVERED_PULSE
-     * IMPORTANT: do not gate transport recovery itself here. attachRoom(),
-     * SDK reconnect, manual reconnect and fresh clientKey handoff still run
-     * exactly as before. We only suppress duplicate recovered callbacks after
-     * the first successful clear belonging to the same issue epoch.
+    /*
+     * V1010540_RECONNECT_GRACE_REAL_DROP_UI_DEDUPE / CANCEL_MICRO_DROP
+     * Recovery inside the invisible grace produces NO drop UI and NO
+     * "reconnected" toast. To the player, gameplay simply continued.
      */
+    this.connectionIssueGraceGeneration +=
+      1;
+
+    if (
+      this.connectionIssueGraceTimer !==
+      undefined
+    ) {
+      globalThis.clearTimeout(
+        this.connectionIssueGraceTimer,
+      );
+
+      this.connectionIssueGraceTimer =
+        undefined;
+    }
+
+    this.connectionIssueGraceUntil =
+      0;
+    this.connectionIssueNotified =
+      false;
+    this.lastRoomPingAt =
+      Date.now();
+
     if (!this.connectionRecoveryNoticeArmed) {
       return;
     }
 
-    this.connectionRecoveryNoticeArmed = false;
+    this.connectionRecoveryNoticeArmed =
+      false;
 
     this.connectionRecoveredHandlers
       .forEach(
@@ -2159,6 +2229,30 @@ this.room = room;
       Date.now();
     this.connectionIssueNotified =
       false;
+
+    /*
+     * V1010540_RECONNECT_GRACE_REAL_DROP_UI_DEDUPE / NEW_ROOM_CANCELS_PENDING_GRACE
+     * A newly attached Room invalidates any delayed drop callback belonging
+     * to the previous Room. Preserve connectionRecoveryNoticeArmed if the
+     * visible issue had already been dispatched.
+     */
+    this.connectionIssueGraceGeneration +=
+      1;
+
+    if (
+      this.connectionIssueGraceTimer !==
+      undefined
+    ) {
+      globalThis.clearTimeout(
+        this.connectionIssueGraceTimer,
+      );
+
+      this.connectionIssueGraceTimer =
+        undefined;
+    }
+
+    this.connectionIssueGraceUntil =
+      0;
 /* V1010433_RESTORE_819_SINGLE_RECOVERY_OWNER / ATTACH_ROOM_DOES_NOT_RELEASE_OWNER
      * Recovery ownership is released only by the reconnect method's finally.
      */
