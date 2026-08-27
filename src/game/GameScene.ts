@@ -1,3 +1,4 @@
+/* V1010523_VULCAN_MOBILE_CONTROLS_HIDE_IMMEDIATE: Vulcan support tap instantly hides mobile MOVE/AIM/FIRE/FART controls and clears held pointers. */
 /* V1010522_MOBILE_VULCAN_BUTTON_SELF_HEAL: self-heals missing Vulcan tactical button on mobile and locks it exactly 2px under Sniper. */
 /* V1010521G_VULCAN_SERVER_HEAT_RESULT_CLEAN_HIDER_OUTLINE_CURRENT_SOURCE: server-streamed Vulcan HEAT; one-choice tactical latch; result-first tactical cleanup; clean Hider poster + true white silhouette outline + 2x crown. */
 /* V1010520C_REMOVE_DUPLICATE_AUTHORITATIVE_WINNER: removes duplicate authoritativeWinner declaration introduced by v520b. */
@@ -15853,6 +15854,8 @@ const ribbon =
                         this.startSniperTacticalBgm();
                         this.vulcanSupportCommitted = true;
                         this.vulcanActive = true;
+
+                        this.hideMobileControlsForVulcanImmediate();
                         this.networkPlayerManager.setLocalMovementHardLocked(true);
                         this.enterVulcanCinematic(true);
                     } else {
@@ -59278,6 +59281,12 @@ if (
                 this.vulcanSupportCommitted =
                     true;
 
+                /*
+                 * Mobile parity with Sniper:
+                 * support tap instantly clears normal Hunter controls.
+                 */
+                this.hideMobileControlsForVulcanImmediate();
+
                 this.sniperButtonPressBlockUntil =
                     Date.now() +
                     2_500;
@@ -59600,7 +59609,14 @@ if (
             if (!this.sniperAvailable || this.sniperActive || this.vulcanActive || this.vulcanSupportCommitted) return;
 
             this.hideFeatureDiscoveryBubble('sniper');
-            this.vulcanSupportCommitted = true;
+            this.vulcanSupportCommitted =
+                    true;
+
+                /*
+                 * Mobile parity with Sniper:
+                 * support tap instantly clears normal Hunter controls.
+                 */
+                this.hideMobileControlsForVulcanImmediate();
             this.sniperButtonPressBlockUntil = Date.now() + 2_500;
             this.sniperButton?.disableInteractive().setVisible(false);
             vulcanButton.disableInteractive().setVisible(false);
@@ -68515,12 +68531,94 @@ this.weaponHeat =
         );
     }
 
+    /*
+     * V1010523_VULCAN_MOBILE_CONTROLS_HIDE_IMMEDIATE
+     *
+     * Hide every normal mobile Hunter control on the SAME frame that
+     * Vulcan support is selected. Do not wait for server RTT/cinematic start.
+     */
+    private hideMobileControlsForVulcanImmediate(): void {
+        /*
+         * Stop any movement vector that was held while tapping the support UI.
+         */
+        this.resetMobileMoveControl();
+
+        this.mobileMovePointerId =
+            -1;
+
+        this.mobileAimPointerId =
+            -1;
+
+        this.mobileFirePointerId =
+            -1;
+
+        this.mobileFartPointerId =
+            -1;
+
+        this.mobileMoveBase
+            ?.setVisible(false);
+
+        this.mobileMoveKnob
+            ?.setVisible(false);
+
+        this.mobileMoveLabel
+            ?.setVisible(false);
+
+        this.mobileAimBase
+            ?.setVisible(false);
+
+        this.mobileAimKnob
+            ?.setVisible(false);
+
+        this.mobileAimLabel
+            ?.setVisible(false);
+
+        this.mobileFireButton
+            ?.setVisible(false);
+
+        this.mobileFireLabel
+            ?.setVisible(false);
+
+        this.mobileFartButton
+            ?.setVisible(false);
+
+        this.mobileFartLabel
+            ?.setVisible(false);
+
+        /*
+         * Normal Hunter weapon HUD/aim also disappears immediately.
+         */
+        this.aimLine
+            ?.clear()
+            .setVisible(false);
+
+        this.crosshair
+            ?.clear()
+            .setVisible(false);
+
+        this.gun
+            ?.setVisible(false);
+
+        this.hunterWeaponHudContainer
+            ?.setVisible(false);
+
+        this.networkPlayerManager
+            ?.clearHunterAimLines();
+    }
+
     private applyTacticalSupportInputLock(): void {
         const locked =
             this.isTacticalSupportInputLocked();
 
         if (!locked) {
             return;
+        }
+
+        if (
+            this.vulcanActive ||
+            this.vulcanCinematicActive
+        ) {
+            this.hideMobileControlsForVulcanImmediate();
         }
 
         this.fartHudContainer
