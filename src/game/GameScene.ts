@@ -1,3 +1,4 @@
+/* V1010536B_VULCAN_TRACER_DOUBLE_LENGTH_ROBUST: Vulcan shared tracer visual length 18..34px -> 36..68px. No firing-path rewrite. */
 /* V1010535_VULCAN_MOUSE_FOLLOW_HELICAM: Vulcan aerial camera zooms to 1.12 and smoothly pans with spotlight/mouse aim while retaining helicopter orbit and map-edge clamps. */
 /* V1010534B_REMOVE_HUNT_INTRO_ROBUST: prevent Hunt intro from overlapping final result. */
 /* V1010532B_VULCAN_FULL_MAP_ORBIT_EXACT_SOURCE: full-map Vulcan aerial view at 0.94; existing circular orbit preserved. */
@@ -65325,8 +65326,8 @@ if (
                 py -
                     8,
                 Phaser.Math.Between(
-                    18,
-                    34,
+                    36,
+                    68,
                 ),
                 2,
                 0xffcf54,
