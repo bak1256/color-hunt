@@ -1,3 +1,4 @@
+/* V1010541_PAINT_CURSOR_PIXEL_CENTER_ALIGNMENT: desktop/finger paint preview targets the exact center of the texture pixel cell under the pointer. */
 /* V1010539B_UNDO_SAFE_GRANULARITY_ROBUST: Undo no longer wipes a large one-stroke painting; rebuild callbacks are generation-safe. */
 /* V1010538B_SIX_PLAYER_STABILITY_REMOTE_SNIPER_AUDIO_ROBUST: Hunter recovery paint barrier relaxed in Hunt; remote sniper report synced. */
 /* V1010537_VULCAN_OWNER_AUTHORITATIVE_TRACER: local firing Hunter receives authoritative Vulcan tracer at shot.x/y; Hider passive path remains single-rendered. */
@@ -52789,25 +52790,29 @@ if (
             ) /
             scaleY;
 
+        /*
+         * V1010541_PAINT_CURSOR_PIXEL_CENTER_ALIGNMENT
+         * Preview and raster now share the same containing-cell convention.
+         */
         const textureX =
-            Math.round(
+            Math.floor(
                 localX + 40,
             );
 
-        const textureY =
-            Math.round(
+                const textureY =
+            Math.floor(
                 localY + 60,
             );
 
         return new Phaser.Math.Vector2(
             container.x +
                 (
-                    textureX - 40
+                    textureX - 40 + 0.5
                 ) *
                     scaleX,
             container.y +
                 (
-                    textureY - 60
+                    textureY - 60 + 0.5
                 ) *
                     scaleY,
         );

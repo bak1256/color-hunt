@@ -1,3 +1,4 @@
+/* V1010541_PAINT_CURSOR_PIXEL_CENTER_ALIGNMENT: local paint uses containing pixel cell (floor), preserving top-left-origin seam-free raster stamps. */
 /* V1010528_ATOMIC_PAINT_HUNT_AND_VULCAN_SELFVIEW_PACKET_AUTHORITY: persistent local-Hider transition position lock across both normalize passes. */
 /* V1010527_PAINT_HUNT_POSITION_LATCH_HIDER_VULCAN_SELFVIEW: atomic local-Hider position latch for Paint->Hunt transition. */
 import Phaser from "phaser";
@@ -2588,13 +2589,18 @@ export class NetworkPlayerManager {
      * 색칠 좌표를 texture pixel grid에 스냅합니다.
      * 소수점 위치에 stamp되어 가장자리가 흐릿해지는 현상을 줄입니다.
      */
+    /*
+     * V1010541_PAINT_CURSOR_PIXEL_CENTER_ALIGNMENT
+     * Select the pixel CELL actually under the cursor.
+     * Pixel raster uses top-left-origin integer cells, so floor is correct.
+     */
     const textureX =
-      Math.round(
+      Math.floor(
         localX + 40,
       );
 
-    const textureY =
-      Math.round(
+        const textureY =
+      Math.floor(
         localY + 60,
       );
 
