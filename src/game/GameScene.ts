@@ -1,3 +1,5 @@
+/* V1010542C_REMOVE_UNUSED_TELEMETRY_ROBUST: removed only unused v542 telemetry declarations; core 10-player optimizations preserved in their respective files. */
+/* V1010542_TEN_PLAYER_PREFLIGHT_SAFE_OPT: 10-player preflight - stationary fallback fast-path, pathological VFX cap, passive diagnostics. Reconnect/gameplay cadence unchanged. */
 /* V1010541_PAINT_CURSOR_PIXEL_CENTER_ALIGNMENT: desktop/finger paint preview targets the exact center of the texture pixel cell under the pointer. */
 /* V1010539B_UNDO_SAFE_GRANULARITY_ROBUST: Undo no longer wipes a large one-stroke painting; rebuild callbacks are generation-safe. */
 /* V1010538B_SIX_PLAYER_STABILITY_REMOTE_SNIPER_AUDIO_ROBUST: Hunter recovery paint barrier relaxed in Hunt; remote sniper report synced. */
@@ -965,6 +967,8 @@ export class GameScene extends Phaser.Scene {
      */
     private transientGameplayVfx =
         new Set<Phaser.GameObjects.GameObject>();
+
+    /* V1010542_TEN_PLAYER_PREFLIGHT_SAFE_OPT: invisible 8-10 player preflight diagnostics; no network/UI side effects. */
 
     /* V1010263_FOLLOW_POOP_COMBO_EFFECT: merge "detected!" + poop into one readable special effect. */
     private recentHunterDetectionText?: Phaser.GameObjects.Text;
@@ -69757,6 +69761,49 @@ this.weaponHeat =
     private trackTransientGameplayVfx<T extends Phaser.GameObjects.GameObject>(
         object: T,
     ): T {
+        /*
+         * V1010542_TEN_PLAYER_PREFLIGHT_SAFE_OPT / LARGE_ROOM_VFX_CIRCUIT_BREAKER
+         *
+         * This is intentionally a very high emergency ceiling, not a normal
+         * visual-quality reduction. 10-player tactical-effect storms can
+         * otherwise create hundreds of short-lived Phaser objects/tweens at
+         * exactly the same time and trigger a GC/render spike.
+         */
+        if (
+            this.networkPlayerCount >=
+                8 &&
+            this.transientGameplayVfx.size >=
+                220
+        ) {
+            const oldest =
+                [
+                    ...this.transientGameplayVfx,
+                ];
+
+            const removeCount =
+                Math.max(
+                    0,
+                    oldest.length -
+                        190,
+                );
+
+            for (
+                let index = 0;
+                index < removeCount;
+                index += 1
+            ) {
+                const stale =
+                    oldest[index];
+
+                if (
+                    stale &&
+                    stale.active
+                ) {
+                    stale.destroy();
+                }
+            }
+        }
+
         this.transientGameplayVfx.add(
             object,
         );

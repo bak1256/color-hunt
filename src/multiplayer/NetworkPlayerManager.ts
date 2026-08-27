@@ -1,3 +1,4 @@
+/* V1010542_TEN_PLAYER_PREFLIGHT_SAFE_OPT: stationary remote fallback updates are skipped; moving-player 15Hz transport/smoothing is untouched. */
 /* V1010541_PAINT_CURSOR_PIXEL_CENTER_ALIGNMENT: local paint uses containing pixel cell (floor), preserving top-left-origin seam-free raster stamps. */
 /* V1010528_ATOMIC_PAINT_HUNT_AND_VULCAN_SELFVIEW_PACKET_AUTHORITY: persistent local-Hider transition position lock across both normalize passes. */
 /* V1010527_PAINT_HUNT_POSITION_LATCH_HIDER_VULCAN_SELFVIEW: atomic local-Hider position latch for Paint->Hunt transition. */
@@ -1353,11 +1354,41 @@ export class NetworkPlayerManager {
           return;
         }
 
-        if (
-          this.players.has(
+        const existingView =
+          this.players.get(
             sessionId,
-          )
-        ) {
+          );
+
+        if (existingView) {
+          /*
+           * V1010542_TEN_PLAYER_PREFLIGHT_SAFE_OPT / STATIONARY_REMOTE_FAST_PATH
+           *
+           * Keep the existing ~15Hz movement cadence for moving players.
+           * Skip only an expensive fallback update when every gameplay field
+           * this scan is responsible for is already identical.
+           *
+           * Normal Schema onChange handlers are untouched, so role/alive/etc.
+           * changes still arrive immediately through the normal path.
+           */
+          const unchangedPosition =
+            existingView.targetX ===
+              player.x &&
+            existingView.targetY ===
+              player.y;
+
+          const unchangedIdentity =
+            existingView.role ===
+              player.role &&
+            existingView.alive ===
+              player.alive;
+
+          if (
+            unchangedPosition &&
+            unchangedIdentity
+          ) {
+            return;
+          }
+
           this.updatePlayer(
             sessionId,
             player,
