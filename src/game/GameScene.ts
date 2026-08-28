@@ -69535,6 +69535,13 @@ this.weaponHeat =
         return Boolean(
             this.sniperActive ||
             this.sniperCinematicActive ||
+            /*
+             * V1010544_VULCAN_COMMIT_INPUT_LOCK
+             * Lock GAS/normal Hunter input immediately when Vulcan is selected.
+             * Do not leave an RTT-sized gap before vulcan_state(active=true)
+             * arrives from the server.
+             */
+            this.vulcanSupportCommitted ||
             this.vulcanActive ||
             this.vulcanCinematicActive
         );
