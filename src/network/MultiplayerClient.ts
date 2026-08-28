@@ -1,3 +1,4 @@
+/* V1010547_SINGLE_RECONNECT_WINNER: exactly one reconnect path may become authoritative; late SDK/manual/fresh results are retired. */
 /* V1010546_STALE_ROOM_RECONNECT_KILL: obsolete Rooms lose their SDK retry budget on handoff/disconnect; stale 524 cannot keep reconnecting behind the current Room. */
 /* V1010540_RECONNECT_GRACE_REAL_DROP_UI_DEDUPE: real drops get 550ms invisible grace; only persistent drops lock gameplay/show reconnect UI; recovered UI is one-shot. */
 /* V1010538B_SIX_PLAYER_STABILITY_REMOTE_SNIPER_AUDIO_ROBUST: preserves current reconnect policy; only unsafe legacy ping-only warning is rewritten. */
@@ -823,6 +824,15 @@ this.phaseChangedHandlers.forEach(
   private lastConfirmedTransportDropAt = 0;
   private browserOfflineCycleActive = false;
   private recoveryEscalationGeneration = 0;
+
+  /*
+   * V1010547_SINGLE_RECONNECT_WINNER / AUTHORITY_GENERATION
+   * Every successful recovery invalidates all older in-flight recovery attempts.
+   * This prevents SDK auto-reconnect, manual reconnect, and fresh clientKey rejoin
+   * from all becoming live owners of the same logical player.
+   */
+  private recoveryAuthorityGeneration = 0;
+  private lastRecoverySuccessAt = 0;
 
   /*
    * v0.10.10.221: foreground/background transitions must not force a
@@ -1684,6 +1694,8 @@ private async attemptFreshRejoin(
     }
 
     this.freshRejoinInFlight = true;
+    const recoveryAuthorityGeneration =
+      this.recoveryAuthorityGeneration;
 
     try {
       /*
@@ -1718,8 +1730,15 @@ private async attemptFreshRejoin(
           },
         );
 
-      if (this.room !== sourceRoom) {
-        await room.leave();
+      if (
+        this.recoveryAuthorityGeneration !==
+          recoveryAuthorityGeneration ||
+        this.room !== sourceRoom
+      ) {
+        try {
+          room.reconnection.maxRetries = 0;
+        } catch {}
+        void room.leave().catch(() => {});
         return;
       }
 
@@ -1893,6 +1912,8 @@ private async attemptFreshRejoin(
       this.room !== sourceRoom ||
       this.manualReconnectInFlight ||
       this.freshRejoinInFlight ||
+      !this.connectionIssueNotified ||
+      Date.now() - this.lastRecoverySuccessAt < 1500 ||
       sourceRoom.reconnection
         .isReconnecting
     ) {
@@ -1921,6 +1942,8 @@ private async attemptFreshRejoin(
       now;
     this.manualReconnectInFlight =
       true;
+    const recoveryAuthorityGeneration =
+      this.recoveryAuthorityGeneration;
     this.notifyConnectionIssue(
       "manual_reconnect",
     );
@@ -1932,11 +1955,17 @@ private async attemptFreshRejoin(
         >(token);
 
       if (
-        this.room !== sourceRoom &&
-        this.room !== undefined
+        this.recoveryAuthorityGeneration !==
+          recoveryAuthorityGeneration ||
+        (
+          this.room !== sourceRoom &&
+          this.room !== undefined
+        )
       ) {
-        await recoveredRoom
-          .leave();
+        try {
+          recoveredRoom.reconnection.maxRetries = 0;
+        } catch {}
+        void recoveredRoom.leave().catch(() => {});
         return;
       }
 
@@ -2169,6 +2198,9 @@ private async attemptFreshRejoin(
       1;
     this.seatExpiryRecoveryRoom =
       undefined;
+
+    this.recoveryAuthorityGeneration += 1;
+    this.lastRecoverySuccessAt = Date.now();
 
 this.room = room;
 
@@ -2828,6 +2860,14 @@ this.room = room;
         if (this.room !== room) {
           return;
         }
+
+        /*
+         * V1010547_SINGLE_RECONNECT_WINNER / SDK_RECONNECT_WINS
+         * Invalidate any manual/fresh attempt that started before this official
+         * same-session reconnect completed.
+         */
+        this.recoveryAuthorityGeneration += 1;
+        this.lastRecoverySuccessAt = Date.now();
 
         /*
          * V1010426B_RECONNECT_STORM_VISUAL_CONVERGENCE / SINGLE_RECOVERY_PULSE
@@ -4082,6 +4122,18 @@ this.room = room;
             });
             return;
           }
+
+          /*
+           * V1010547_SINGLE_RECONNECT_WINNER / CURRENT_524_SINGLE_OWNER
+           * A 524 is terminal for the current reconnect token. Stop the SDK
+           * retry owner BEFORE starting fresh clientKey handoff, otherwise both
+           * paths can succeed and leave two live browser connections.
+           */
+          try {
+            room.reconnection.maxRetries = 0;
+          } catch {}
+
+          this.recoveryAuthorityGeneration += 1;
 
           /*
            * V1010372_SEAT_EXPIRED_FRESH_REJOIN / TERMINAL_524
