@@ -573,6 +573,135 @@ this.phaseChangedHandlers.forEach(
   private readonly playerChangedHandlers =
     new Set<PlayerChangedHandler>();
 
+  /*
+   * V1010553_SINGLE_PLAYER_LIFECYCLE_REGISTRY_HOTFIX / ONE_SESSION_ONE_LIFECYCLE
+   *
+   * Schema initial replay, live Schema callbacks and lobby_snapshot are three
+   * delivery paths for the SAME logical player. Keep one client lifecycle per
+   * sessionId so browser timing differences cannot create duplicate actors.
+   */
+  private readonly activePlayerLifecycleIds =
+    new Set<string>();
+
+  private readonly pendingPlayerRemoveTimers =
+    new Map<string, number>();
+
+  private cancelPendingPlayerRemove(
+    sessionId: string,
+  ): void {
+    const timer =
+      this.pendingPlayerRemoveTimers.get(
+        sessionId,
+      );
+
+    if (timer !== undefined) {
+      globalThis.clearTimeout(timer);
+      this.pendingPlayerRemoveTimers.delete(
+        sessionId,
+      );
+    }
+  }
+
+  private publishPlayerPresent(
+    sessionId: string,
+    player: NetworkPlayerState,
+  ): void {
+    this.cancelPendingPlayerRemove(
+      sessionId,
+    );
+
+    const alreadyActive =
+      this.activePlayerLifecycleIds.has(
+        sessionId,
+      );
+
+    if (!alreadyActive) {
+      this.activePlayerLifecycleIds.add(
+        sessionId,
+      );
+
+      this.playerAddedHandlers.forEach(
+        (handler) => {
+          try {
+            handler(
+              sessionId,
+              player,
+            );
+          } catch (error) {
+            console.error(
+              "[Chameleon Hunt] Player lifecycle add handler failed",
+              {
+                sessionId,
+                error,
+              },
+            );
+          }
+        },
+      );
+
+      return;
+    }
+
+    this.playerChangedHandlers.forEach(
+      (handler) => {
+        try {
+          handler(
+            sessionId,
+            player,
+          );
+        } catch (error) {
+          console.error(
+            "[Chameleon Hunt] Player lifecycle change handler failed",
+            {
+              sessionId,
+              error,
+            },
+          );
+        }
+      },
+    );
+  }
+
+  private publishPlayerRemoved(
+    sessionId: string,
+    player: NetworkPlayerState,
+  ): void {
+    this.cancelPendingPlayerRemove(
+      sessionId,
+    );
+
+    if (
+      !this.activePlayerLifecycleIds.delete(
+        sessionId,
+      )
+    ) {
+      return;
+    }
+
+    this.snapshotPlayers.delete(
+      sessionId,
+    );
+
+    this.playerRemovedHandlers.forEach(
+      (handler) => {
+        try {
+          handler(
+            sessionId,
+            player,
+          );
+        } catch (error) {
+          console.error(
+            "[Chameleon Hunt] Player lifecycle remove handler failed",
+            {
+              sessionId,
+              error,
+            },
+          );
+        }
+      },
+    );
+  }
+
   private readonly connectionChangedHandlers =
     new Set<ConnectionChangedHandler>();
 
@@ -1515,63 +1644,19 @@ this.phaseChangedHandlers.forEach(
               ),
           };
 
-        const existedInSnapshot =
-          this.snapshotPlayers.has(
-            sessionId,
-          );
-
-        /*
-         * V1010551_SCHEMA_AUTHORITATIVE_PLAYER_PRESENCE / SNAPSHOT_FALLBACK_ONLY
-         *
-         * Schema is the live-presence authority. A lobby_snapshot may race the
-         * Schema stream during join/reconnect, so it must not emit a second ADD
-         * for a player already present in room.state.players.
-         */
-        const schemaPlayers =
-          this.room?.state?.players as any;
-        const existsInSchema =
-          Boolean(
-            schemaPlayers?.has?.(
-              sessionId,
-            ),
-          );
-
         this.snapshotPlayers.set(
           sessionId,
           player,
         );
 
-        if (existsInSchema) {
-          /*
-           * Schema onAdd / initial replay owns actor creation. Snapshot only
-           * refreshes fallback data here; Schema onChange owns live updates.
-           */
-          return;
-        }
-
-        const targetHandlers =
-          existedInSnapshot
-            ? this.playerChangedHandlers
-            : this.playerAddedHandlers;
-
-        targetHandlers.forEach(
-          (handler) => {
-            try {
-              handler(
-                sessionId,
-                player,
-              );
-            } catch (error) {
-              console.error(
-                "[Chameleon Hunt] Lobby snapshot fallback player handler failed",
-                {
-                  sessionId,
-                  existedInSnapshot,
-                  error,
-                },
-              );
-            }
-          },
+        /*
+         * V1010553_SINGLE_PLAYER_LIFECYCLE_REGISTRY_HOTFIX / SNAPSHOT_CONVERGES_SAME_LIFECYCLE
+         * Snapshot may arrive before OR after Schema. Either way the same
+         * sessionId becomes one actor and later deliveries become CHANGE.
+         */
+        this.publishPlayerPresent(
+          sessionId,
+          player,
         );
       },
     );
@@ -1597,10 +1682,8 @@ this.phaseChangedHandlers.forEach(
             );
 
           /*
-           * V1010551_SCHEMA_AUTHORITATIVE_PLAYER_PRESENCE / NO_FALSE_SNAPSHOT_REMOVE
-           *
-           * A stale/partial lobby_snapshot is never allowed to remove a player
-           * that the live Schema collection still contains.
+           * v551 rule stays intact: a partial snapshot cannot evict a player
+           * still present in live Schema.
            */
           if (existsInSchema) {
             return;
@@ -1611,29 +1694,10 @@ this.phaseChangedHandlers.forEach(
               sessionId,
             );
 
-          this.snapshotPlayers.delete(
-            sessionId,
-          );
-
-          /*
-           * Snapshot-only fallback actors can still be cleaned up when BOTH
-           * authorities agree they are absent: missing from snapshot and Schema.
-           */
           if (removedPlayer) {
-            this.playerRemovedHandlers.forEach(
-              (handler) => {
-                try {
-                  handler(
-                    sessionId,
-                    removedPlayer,
-                  );
-                } catch (error) {
-                  console.error(
-                    "[Chameleon Hunt] Snapshot fallback stale-player removal failed",
-                    { sessionId, error },
-                  );
-                }
-              },
+            this.publishPlayerRemoved(
+              sessionId,
+              removedPlayer,
             );
           }
         },
@@ -2228,6 +2292,14 @@ private async attemptFreshRejoin(
         // Already-dead/half-open stale transport: nothing else to clean up.
       });
     }
+
+    this.pendingPlayerRemoveTimers.forEach(
+      (timer) => {
+        globalThis.clearTimeout(timer);
+      },
+    );
+    this.pendingPlayerRemoveTimers.clear();
+    this.activePlayerLifecycleIds.clear();
 
     this.snapshotPlayers.clear();
     this.snapshotHostId = "";
@@ -3018,58 +3090,39 @@ this.room = room;
         player: NetworkPlayerState,
         sessionId: string,
       ) => {
-        /*
-         * V1010551_SCHEMA_AUTHORITATIVE_PLAYER_PRESENCE / INITIAL_SCHEMA_SEEDS_FALLBACK
-         * Seed the fallback cache before the requested lobby_snapshot arrives,
-         * preventing the same live Schema player from being announced twice.
-         */
         this.snapshotPlayers.set(
           sessionId,
           player,
         );
 
-        this.playerAddedHandlers
-          .forEach(
-            (handler) => {
-              try {
-                handler(
-                  sessionId,
-                  player,
-                );
-              } catch (error) {
-                console.error(
-                  "[Chameleon Hunt] Initial player replay handler failed",
-                  {
-                    sessionId,
-                    error,
-                  },
-                );
-              }
-            },
-          );
+        this.publishPlayerPresent(
+          sessionId,
+          player,
+        );
 
         this.callbacks?.onChange(
           player,
           () => {
-            this.playerChangedHandlers
-              .forEach(
-                (handler) => {
-                  try {
+            this.snapshotPlayers.set(
+              sessionId,
+              player,
+            );
+
+            if (
+              this.activePlayerLifecycleIds.has(
+                sessionId,
+              )
+            ) {
+              this.playerChangedHandlers
+                .forEach(
+                  (handler) => {
                     handler(
                       sessionId,
                       player,
                     );
-                  } catch (error) {
-                    console.error(
-                      "[Chameleon Hunt] Initial player change handler failed",
-                      {
-                        sessionId,
-                        error,
-                      },
-                    );
-                  }
-                },
-              );
+                  },
+                );
+            }
           },
         );
       },
@@ -3141,37 +3194,39 @@ this.room = room;
           NetworkPlayerState,
         sessionId: string,
       ) => {
-        /*
-         * V1010551_SCHEMA_AUTHORITATIVE_PLAYER_PRESENCE / LIVE_SCHEMA_SEEDS_FALLBACK
-         * Keep snapshot cache converged with the authoritative live collection.
-         */
         this.snapshotPlayers.set(
           sessionId,
           player,
         );
 
-        this.playerAddedHandlers
-          .forEach(
-            (handler) => {
-              handler(
-                sessionId,
-                player,
-              );
-            },
-          );
+        this.publishPlayerPresent(
+          sessionId,
+          player,
+        );
 
         callbacks.onChange(
           player,
           () => {
-            this.playerChangedHandlers
-              .forEach(
-                (handler) => {
-                  handler(
-                    sessionId,
-                    player,
-                  );
-                },
-              );
+            this.snapshotPlayers.set(
+              sessionId,
+              player,
+            );
+
+            if (
+              this.activePlayerLifecycleIds.has(
+                sessionId,
+              )
+            ) {
+              this.playerChangedHandlers
+                .forEach(
+                  (handler) => {
+                    handler(
+                      sessionId,
+                      player,
+                    );
+                  },
+                );
+            }
           },
         );
       },
@@ -3185,21 +3240,110 @@ this.room = room;
         sessionId: string,
       ) => {
         /*
-         * V1010551_SCHEMA_AUTHORITATIVE_PLAYER_PRESENCE / SCHEMA_REMOVE_IS_AUTHORITATIVE
+         * V1010553_SINGLE_PLAYER_LIFECYCLE_REGISTRY_HOTFIX / VERIFIED_SCHEMA_REMOVE
+         *
+         * Some desktop/browser timings can briefly deliver REMOVE between
+         * snapshot/Schema convergence even though the remote seat is still live.
+         * Hold removal for 320ms. Any ADD/snapshot for the same session cancels
+         * it. At expiry, re-check BOTH Schema and the latest snapshot cache.
          */
-        this.snapshotPlayers.delete(
+        this.cancelPendingPlayerRemove(
           sessionId,
         );
 
-        this.playerRemovedHandlers
-          .forEach(
-            (handler) => {
-              handler(
+        const timer =
+          globalThis.setTimeout(
+            () => {
+              this.pendingPlayerRemoveTimers.delete(
+                sessionId,
+              );
+
+              if (this.room !== room) {
+                return;
+              }
+
+              const schemaPlayers =
+                room.state?.players as any;
+
+              const existsInSchema =
+                Boolean(
+                  schemaPlayers?.has?.(
+                    sessionId,
+                  ),
+                );
+
+              if (existsInSchema) {
+                return;
+              }
+
+              const latestSnapshotPlayer =
+                this.snapshotPlayers.get(
+                  sessionId,
+                );
+
+              /*
+               * A fresh roster snapshot still listing this session is enough to
+               * classify the transient Schema remove as false/out-of-order.
+               */
+              if (latestSnapshotPlayer) {
+                this.requestLobbySnapshot();
+
+                globalThis.setTimeout(
+                  () => {
+                    if (this.room !== room) {
+                      return;
+                    }
+
+                    const stillInSchema =
+                      Boolean(
+                        (room.state?.players as any)
+                          ?.has?.(
+                            sessionId,
+                          ),
+                      );
+
+                    if (stillInSchema) {
+                      return;
+                    }
+
+                    const stillInSnapshot =
+                      this.snapshotPlayers.has(
+                        sessionId,
+                      );
+
+                    if (stillInSnapshot) {
+                      return;
+                    }
+
+                    this.publishPlayerRemoved(
+                      sessionId,
+                      player,
+                    );
+                  },
+                  220,
+                );
+
+                return;
+              }
+
+              this.publishPlayerRemoved(
                 sessionId,
                 player,
               );
             },
+            320,
           );
+
+        this.pendingPlayerRemoveTimers.set(
+          sessionId,
+          timer,
+        );
+
+        /*
+         * Ask the server for a tiny authoritative roster confirmation while the
+         * debounce is running. No paint snapshot or reconnect owner is touched.
+         */
+        this.requestLobbySnapshot();
       },
     );
 
