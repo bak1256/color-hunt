@@ -25126,10 +25126,16 @@ this.networkUnsubscribers.push(
         }
 
         /*
-         * V1010343_URGENT_HUNTER_INPUT_JITTER_EYEDROPPER / FOREGROUND_INPUT_RECOVERY
+         * V1010550_FOCUS_RETURN_GHOST_MOVEMENT_HARD_STOP
          *
-         * The reported bug self-heals after leaving the browser and returning.
-         * Reproduce that recovery intentionally on the actual focus edge.
+         * Alt+Tab / browser blur may swallow the physical KEYUP event. Phaser
+         * can then keep WASD Key.isDown=true and the local player "ghost moves"
+         * when the tab returns.
+         *
+         * Treat browser focus loss as an immediate STOP epoch for EVERY role,
+         * not Hunter-only. While unfocused we never consume cached movement
+         * keys. On the first foreground frame, clear the old keyboard/pointer
+         * epoch once more before accepting fresh physical input.
          */
         const gameplayDocumentFocused =
             typeof document === 'undefined'
@@ -25138,16 +25144,9 @@ this.networkUnsubscribers.push(
 
         if (
             this.phase === 'hunt' &&
-            this.networkPlayerManager
-                ?.isLocalHunter?.() &&
-            gameplayDocumentFocused &&
-            !this.gameplayDocumentWasFocused
+            !gameplayDocumentFocused
         ) {
-            this.input.enabled = true;
-
             if (this.input.keyboard) {
-                this.input.keyboard.enabled =
-                    true;
                 this.input.keyboard.resetKeys();
             }
 
@@ -25157,7 +25156,45 @@ this.networkUnsubscribers.push(
             this.mobileFartPointerId = -1;
             this.mobileTouchPoints.clear();
 
-            if (!this.isReloading) {
+            this.gameplayDocumentWasFocused = false;
+
+            /*
+             * Send an explicit local STOP through the normal prediction path.
+             * Do not install a persistent hard-lock here because Sniper/Vulcan
+             * own that state independently.
+             */
+            this.networkPlayerManager.moveLocalPlayer(
+                0,
+                0,
+                delta,
+            );
+            this.networkPlayerManager.update(delta);
+            return;
+        }
+
+        if (
+            this.phase === 'hunt' &&
+            gameplayDocumentFocused &&
+            !this.gameplayDocumentWasFocused
+        ) {
+            this.input.enabled = true;
+
+            if (this.input.keyboard) {
+                this.input.keyboard.enabled = true;
+                this.input.keyboard.resetKeys();
+            }
+
+            this.resetMobileMoveControl();
+            this.mobileAimPointerId = -1;
+            this.mobileFirePointerId = -1;
+            this.mobileFartPointerId = -1;
+            this.mobileTouchPoints.clear();
+
+            if (
+                this.networkPlayerManager
+                    ?.isLocalHunter?.() &&
+                !this.isReloading
+            ) {
                 this.canShoot = true;
             }
         }
