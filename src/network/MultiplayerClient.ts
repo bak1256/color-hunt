@@ -1,3 +1,4 @@
+/* V1010551_SCHEMA_AUTHORITATIVE_PLAYER_PRESENCE: Schema owns live player presence; lobby_snapshot is recovery fallback only and cannot evict a live Schema player. */
 /* V1010548_FRESH_REJOIN_AUTHORITY_GATE: fresh Client creation requires explicit terminal authority; successful SDK recovery revokes it. */
 /* V1010547_SINGLE_RECONNECT_WINNER: exactly one reconnect path may become authoritative; late SDK/manual/fresh results are retired. */
 /* V1010546_STALE_ROOM_RECONNECT_KILL: obsolete Rooms lose their SDK retry budget on handoff/disconnect; stale 524 cannot keep reconnecting behind the current Room. */
@@ -1514,9 +1515,25 @@ this.phaseChangedHandlers.forEach(
               ),
           };
 
-        const existed =
+        const existedInSnapshot =
           this.snapshotPlayers.has(
             sessionId,
+          );
+
+        /*
+         * V1010551_SCHEMA_AUTHORITATIVE_PLAYER_PRESENCE / SNAPSHOT_FALLBACK_ONLY
+         *
+         * Schema is the live-presence authority. A lobby_snapshot may race the
+         * Schema stream during join/reconnect, so it must not emit a second ADD
+         * for a player already present in room.state.players.
+         */
+        const schemaPlayers =
+          this.room?.state?.players as any;
+        const existsInSchema =
+          Boolean(
+            schemaPlayers?.has?.(
+              sessionId,
+            ),
           );
 
         this.snapshotPlayers.set(
@@ -1524,16 +1541,16 @@ this.phaseChangedHandlers.forEach(
           player,
         );
 
-        /*
-         * V1010450ZG_SNAPSHOT_ADD_DEDUP
-         *
-         * lobby_snapshot is a recovery snapshot and may legitimately arrive
-         * many times. Re-emitting PlayerAdded for an already-known session made
-         * GameScene rebuild the same actors repeatedly and produced the visible
-         * "Player added" storm. Existing snapshot players are updates, not adds.
-         */
+        if (existsInSchema) {
+          /*
+           * Schema onAdd / initial replay owns actor creation. Snapshot only
+           * refreshes fallback data here; Schema onChange owns live updates.
+           */
+          return;
+        }
+
         const targetHandlers =
-          existed
+          existedInSnapshot
             ? this.playerChangedHandlers
             : this.playerAddedHandlers;
 
@@ -1546,38 +1563,16 @@ this.phaseChangedHandlers.forEach(
               );
             } catch (error) {
               console.error(
-                "[Chameleon Hunt] Lobby snapshot player handler failed",
+                "[Chameleon Hunt] Lobby snapshot fallback player handler failed",
                 {
                   sessionId,
-                  existed,
+                  existedInSnapshot,
                   error,
                 },
               );
             }
           },
         );
-
-        if (existed) {
-          this.playerChangedHandlers
-            .forEach(
-              (handler) => {
-                try {
-                  handler(
-                    sessionId,
-                    player,
-                  );
-                } catch (error) {
-                  console.error(
-                    "[Chameleon Hunt] Lobby snapshot change handler failed",
-                    {
-                      sessionId,
-                      error,
-                    },
-                  );
-                }
-              },
-            );
-        }
       },
     );
 
@@ -1585,43 +1580,61 @@ this.phaseChangedHandlers.forEach(
       .forEach(
         (sessionId) => {
           if (
-            !incomingIds.has(
+            incomingIds.has(
               sessionId,
             )
           ) {
-            const removedPlayer =
-              this.snapshotPlayers.get(
-                sessionId,
-              );
+            return;
+          }
 
-            this.snapshotPlayers.delete(
+          const schemaPlayers =
+            this.room?.state?.players as any;
+          const existsInSchema =
+            Boolean(
+              schemaPlayers?.has?.(
+                sessionId,
+              ),
+            );
+
+          /*
+           * V1010551_SCHEMA_AUTHORITATIVE_PLAYER_PRESENCE / NO_FALSE_SNAPSHOT_REMOVE
+           *
+           * A stale/partial lobby_snapshot is never allowed to remove a player
+           * that the live Schema collection still contains.
+           */
+          if (existsInSchema) {
+            return;
+          }
+
+          const removedPlayer =
+            this.snapshotPlayers.get(
               sessionId,
             );
 
-            /*
-             * v0.10.10.239 GHOST SNAPSHOT CLEANUP:
-             * A plain lobby_snapshot can be the only authoritative source
-             * after a mobile handoff. If a stale session disappeared from the
-             * snapshot, emit the same removal event as Schema onRemove so the
-             * renderer cannot keep a ghost actor in the lobby.
-             */
-            if (removedPlayer) {
-              this.playerRemovedHandlers.forEach(
-                (handler) => {
-                  try {
-                    handler(
-                      sessionId,
-                      removedPlayer,
-                    );
-                  } catch (error) {
-                    console.error(
-                      "[Chameleon Hunt] Snapshot stale-player removal failed",
-                      { sessionId, error },
-                    );
-                  }
-                },
-              );
-            }
+          this.snapshotPlayers.delete(
+            sessionId,
+          );
+
+          /*
+           * Snapshot-only fallback actors can still be cleaned up when BOTH
+           * authorities agree they are absent: missing from snapshot and Schema.
+           */
+          if (removedPlayer) {
+            this.playerRemovedHandlers.forEach(
+              (handler) => {
+                try {
+                  handler(
+                    sessionId,
+                    removedPlayer,
+                  );
+                } catch (error) {
+                  console.error(
+                    "[Chameleon Hunt] Snapshot fallback stale-player removal failed",
+                    { sessionId, error },
+                  );
+                }
+              },
+            );
           }
         },
       );
@@ -3005,6 +3018,16 @@ this.room = room;
         player: NetworkPlayerState,
         sessionId: string,
       ) => {
+        /*
+         * V1010551_SCHEMA_AUTHORITATIVE_PLAYER_PRESENCE / INITIAL_SCHEMA_SEEDS_FALLBACK
+         * Seed the fallback cache before the requested lobby_snapshot arrives,
+         * preventing the same live Schema player from being announced twice.
+         */
+        this.snapshotPlayers.set(
+          sessionId,
+          player,
+        );
+
         this.playerAddedHandlers
           .forEach(
             (handler) => {
@@ -3118,6 +3141,15 @@ this.room = room;
           NetworkPlayerState,
         sessionId: string,
       ) => {
+        /*
+         * V1010551_SCHEMA_AUTHORITATIVE_PLAYER_PRESENCE / LIVE_SCHEMA_SEEDS_FALLBACK
+         * Keep snapshot cache converged with the authoritative live collection.
+         */
+        this.snapshotPlayers.set(
+          sessionId,
+          player,
+        );
+
         this.playerAddedHandlers
           .forEach(
             (handler) => {
@@ -3152,6 +3184,13 @@ this.room = room;
           NetworkPlayerState,
         sessionId: string,
       ) => {
+        /*
+         * V1010551_SCHEMA_AUTHORITATIVE_PLAYER_PRESENCE / SCHEMA_REMOVE_IS_AUTHORITATIVE
+         */
+        this.snapshotPlayers.delete(
+          sessionId,
+        );
+
         this.playerRemovedHandlers
           .forEach(
             (handler) => {
