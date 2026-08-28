@@ -1,3 +1,4 @@
+/* V1010546_STALE_ROOM_RECONNECT_KILL: obsolete Rooms lose their SDK retry budget on handoff/disconnect; stale 524 cannot keep reconnecting behind the current Room. */
 /* V1010540_RECONNECT_GRACE_REAL_DROP_UI_DEDUPE: real drops get 550ms invisible grace; only persistent drops lock gameplay/show reconnect UI; recovered UI is one-shot. */
 /* V1010538B_SIX_PLAYER_STABILITY_REMOTE_SNIPER_AUDIO_ROBUST: preserves current reconnect policy; only unsafe legacy ping-only warning is rewritten. */
 /* V1010521G_VULCAN_SERVER_HEAT_RESULT_CLEAN_HIDER_OUTLINE_CURRENT_SOURCE: NetworkVulcanFiringState carries authoritative accumulated heat. */
@@ -2128,6 +2129,30 @@ private async attemptFreshRejoin(
   private attachRoom(
     room: Room<NetworkGameState>,
   ): void {
+    /*
+     * V1010546_STALE_ROOM_RECONNECT_KILL / ATTACH_RETIRE_PREVIOUS
+     *
+     * A previous Room can still have Colyseus' internal reconnect loop alive
+     * even after a fresh/current Room has become authoritative. Merely ignoring
+     * its callbacks does not stop the SDK from opening doomed WebSockets.
+     *
+     * Retire that previous retry owner synchronously before promoting the new
+     * Room. leave() remains best-effort/non-blocking so mobile handoff speed is
+     * unchanged.
+     */
+    const previousRoom = this.room;
+    if (previousRoom && previousRoom !== room) {
+      try {
+        previousRoom.reconnection.maxRetries = 0;
+      } catch {
+        // Older/closing transports may no longer expose mutable reconnection config.
+      }
+
+      void previousRoom.leave().catch(() => {
+        // Already-dead/half-open stale transport: nothing else to clean up.
+      });
+    }
+
     this.snapshotPlayers.clear();
     this.snapshotHostId = "";
     this.snapshotSelectedMap = "random";
@@ -4039,6 +4064,26 @@ this.room = room;
           )
         ) {
           /*
+           * V1010546_STALE_ROOM_RECONNECT_KILL / TERMINAL_524_CANCEL_OLD_RETRY
+           *
+           * 524 is terminal for this reconnection token. If this callback belongs
+           * to an obsolete Room, kill its SDK retry budget and stop here. The
+           * current authoritative Room must not be disturbed.
+           */
+          if (this.room !== room) {
+            try {
+              room.reconnection.maxRetries = 0;
+            } catch {
+              // Obsolete transport may already be disposed.
+            }
+
+            void room.leave().catch(() => {
+              // Best-effort stale transport cleanup.
+            });
+            return;
+          }
+
+          /*
            * V1010372_SEAT_EXPIRED_FRESH_REJOIN / TERMINAL_524
            *
            * The old token cannot recover anymore. Move immediately to the
@@ -5078,6 +5123,26 @@ this.room = room;
     if (!room) {
       return;
     }
+
+    /*
+     * V1010546_STALE_ROOM_RECONNECT_KILL / DISCONNECT_CANCEL_RETRY_OWNER
+     *
+     * Normal room transition is terminal for THIS Room. Stop Colyseus' retry
+     * budget before dropping the authoritative reference; otherwise a half-open
+     * old room can keep retrying an expired seat (524) behind the new room.
+     */
+    try {
+      room.reconnection.maxRetries = 0;
+    } catch {
+      // Best-effort only; leave() below still closes a live transport.
+    }
+
+    this.recoveryEscalationGeneration += 1;
+    this.seatExpiryRecoveryGeneration += 1;
+    this.resumeProbeGeneration += 1;
+    this.freshRejoinInFlight = false;
+    this.manualReconnectInFlight = false;
+    this.seatExpiryRecoveryRoom = undefined;
 
     /*
      * UI/새 join을 WebSocket close handshake가 끝날 때까지 막지 않습니다.
