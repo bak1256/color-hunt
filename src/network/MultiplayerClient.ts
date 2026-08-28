@@ -651,6 +651,14 @@ this.phaseChangedHandlers.forEach(
 
   private lastRoomPingAt = 0;
 
+  /*
+   * V1010545_RECONNECT_DIAGNOSTICS_ONLY
+   * Diagnostics only: no transport/reconnect/gameplay behavior is changed.
+   */
+  private lastDiagMoveSentAt = 0;
+  private lastDiagAimSentAt = 0;
+  private lastDiagFireSentAt = 0;
+
   private connectionIssueNotified = false;
 
   /*
@@ -2726,6 +2734,45 @@ this.room = room;
         this.lastConfirmedTransportDropAt =
           Date.now();
 
+        const diagNow = Date.now();
+        console.warn(
+          "[NETDIAG v545][DROP]",
+          {
+            at: new Date(diagNow).toISOString(),
+            code: _code,
+            reason: reason ?? "",
+            sessionId: room.sessionId,
+            phase: this.deliveredPhase,
+            reconnecting:
+              room.reconnection
+                .isReconnecting,
+            online:
+              typeof navigator === "undefined"
+                ? undefined
+                : navigator.onLine,
+            hidden:
+              typeof document === "undefined"
+                ? undefined
+                : document.hidden,
+            msSincePing:
+              this.lastRoomPingAt > 0
+                ? diagNow - this.lastRoomPingAt
+                : null,
+            msSinceMove:
+              this.lastDiagMoveSentAt > 0
+                ? diagNow - this.lastDiagMoveSentAt
+                : null,
+            msSinceAim:
+              this.lastDiagAimSentAt > 0
+                ? diagNow - this.lastDiagAimSentAt
+                : null,
+            msSinceFire:
+              this.lastDiagFireSentAt > 0
+                ? diagNow - this.lastDiagFireSentAt
+                : null,
+          },
+        );
+
         this.notifyConnectionIssue(
           reason,
         );
@@ -2764,6 +2811,40 @@ this.room = room;
          * one recovered transport -> one authoritative convergence pass.
          * Do not create a burst of delayed lobby/paint recovery work.
          */
+        const diagNow = Date.now();
+        console.warn(
+          "[NETDIAG v545][RECONNECT]",
+          {
+            at: new Date(diagNow).toISOString(),
+            sessionId: room.sessionId,
+            phase: this.deliveredPhase,
+            reconnecting:
+              room.reconnection
+                .isReconnecting,
+            msSinceConfirmedDrop:
+              this.lastConfirmedTransportDropAt > 0
+                ? diagNow -
+                  this.lastConfirmedTransportDropAt
+                : null,
+            msSincePing:
+              this.lastRoomPingAt > 0
+                ? diagNow - this.lastRoomPingAt
+                : null,
+            msSinceMove:
+              this.lastDiagMoveSentAt > 0
+                ? diagNow - this.lastDiagMoveSentAt
+                : null,
+            msSinceAim:
+              this.lastDiagAimSentAt > 0
+                ? diagNow - this.lastDiagAimSentAt
+                : null,
+            msSinceFire:
+              this.lastDiagFireSentAt > 0
+                ? diagNow - this.lastDiagFireSentAt
+                : null,
+          },
+        );
+
         this.lastHunterAimSentAt = 0;
         this.lastHunterAimSentAngle =
           Number.NaN;
@@ -3997,6 +4078,8 @@ this.room = room;
       return;
     }
 
+    this.lastDiagMoveSentAt = Date.now();
+
     this.room.send(
       "move",
       {
@@ -4114,6 +4197,8 @@ this.room = room;
     this.lastHunterAimSentAngle =
       angle;
 
+    this.lastDiagAimSentAt = Date.now();
+
     this.room.send(
       "hunter_aim",
       {
@@ -4130,6 +4215,8 @@ this.room = room;
     ) {
       return;
     }
+
+    this.lastDiagFireSentAt = Date.now();
 
     this.room?.send(
       "fire_shot",
