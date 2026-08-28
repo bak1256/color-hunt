@@ -1,3 +1,4 @@
+/* V1010548_FRESH_REJOIN_AUTHORITY_GATE: fresh Client creation requires explicit terminal authority; successful SDK recovery revokes it. */
 /* V1010547_SINGLE_RECONNECT_WINNER: exactly one reconnect path may become authoritative; late SDK/manual/fresh results are retired. */
 /* V1010546_STALE_ROOM_RECONNECT_KILL: obsolete Rooms lose their SDK retry budget on handoff/disconnect; stale 524 cannot keep reconnecting behind the current Room. */
 /* V1010540_RECONNECT_GRACE_REAL_DROP_UI_DEDUPE: real drops get 550ms invisible grace; only persistent drops lock gameplay/show reconnect UI; recovered UI is one-shot. */
@@ -735,6 +736,32 @@ this.phaseChangedHandlers.forEach(
   private freshRejoinInFlight = false;
 
   /*
+   * V1010548_FRESH_REJOIN_AUTHORITY_GATE / EXPLICIT_FRESH_AUTHORITY
+   * Opening a second Client/WebSocket is forbidden unless the current token
+   * has terminal evidence: seat-expired/524 or a genuinely final onLeave.
+   * This prevents a late onLeave/watchdog from racing a successful SDK reconnect.
+   */
+  private freshRejoinAuthorizedRoom?: object;
+  private freshRejoinAuthorityGeneration = 0;
+
+  private authorizeFreshRejoin(
+    room: Room<NetworkGameState>,
+  ): void {
+    if (this.room !== room) return;
+    this.freshRejoinAuthorizedRoom = room;
+    this.freshRejoinAuthorityGeneration += 1;
+  }
+
+  private revokeFreshRejoin(
+    room?: Room<NetworkGameState>,
+  ): void {
+    if (!room || this.freshRejoinAuthorizedRoom === room) {
+      this.freshRejoinAuthorizedRoom = undefined;
+      this.freshRejoinAuthorityGeneration += 1;
+    }
+  }
+
+  /*
    * V1010451E2_TERMINAL_REJOIN_AND_FOUND_POSITIONS_ROBUST / TERMINAL_JOIN_REJECTION
    * Persist a terminal active-round rejection until GameScene consumes it.
    */
@@ -775,6 +802,7 @@ this.phaseChangedHandlers.forEach(
 
     this.seatExpiryRecoveryRoom =
       sourceRoom;
+    this.authorizeFreshRejoin(sourceRoom);
 
     const generation =
       ++this.seatExpiryRecoveryGeneration;
@@ -1682,6 +1710,7 @@ private async attemptFreshRejoin(
   ): Promise<void> {
     if (
       this.room !== sourceRoom ||
+      this.freshRejoinAuthorizedRoom !== sourceRoom ||
       this.freshRejoinInFlight ||
       (
         this.manualReconnectInFlight &&
@@ -1696,6 +1725,8 @@ private async attemptFreshRejoin(
     this.freshRejoinInFlight = true;
     const recoveryAuthorityGeneration =
       this.recoveryAuthorityGeneration;
+    const freshRejoinAuthorityGeneration =
+      this.freshRejoinAuthorityGeneration;
 
     try {
       /*
@@ -1733,6 +1764,9 @@ private async attemptFreshRejoin(
       if (
         this.recoveryAuthorityGeneration !==
           recoveryAuthorityGeneration ||
+        this.freshRejoinAuthorityGeneration !==
+          freshRejoinAuthorityGeneration ||
+        this.freshRejoinAuthorizedRoom !== sourceRoom ||
         this.room !== sourceRoom
       ) {
         try {
@@ -2201,6 +2235,7 @@ private async attemptFreshRejoin(
 
     this.recoveryAuthorityGeneration += 1;
     this.lastRecoverySuccessAt = Date.now();
+    this.revokeFreshRejoin();
 
 this.room = room;
 
@@ -2868,6 +2903,7 @@ this.room = room;
          */
         this.recoveryAuthorityGeneration += 1;
         this.lastRecoverySuccessAt = Date.now();
+        this.revokeFreshRejoin(room);
 
         /*
          * V1010426B_RECONNECT_STORM_VISUAL_CONVERGENCE / SINGLE_RECOVERY_PULSE
@@ -3964,13 +4000,19 @@ this.room = room;
           );
 
           /*
-           * attemptFreshRejoin() only requires this.room === sourceRoom;
-           * keeping the old object here intentionally allows the handoff
-           * even though its socket has already closed.
+           * V1010548_FRESH_REJOIN_AUTHORITY_GATE / FINAL_ONLEAVE_GATE
+           * A late onLeave can arrive immediately after SDK onReconnect. In that
+           * window it is NOT permission to create a second session. A genuinely
+           * final leave (no recent recovery success) may authorize fresh handoff.
            */
-          void this.attemptFreshRejoin(
-            room,
-          );
+          const recentReconnectWon =
+            this.lastRecoverySuccessAt > 0 &&
+            Date.now() - this.lastRecoverySuccessAt < 3000;
+
+          if (!recentReconnectWon) {
+            this.authorizeFreshRejoin(room);
+            void this.attemptFreshRejoin(room);
+          }
 
           const leaveAt = Date.now();
           const hiddenNow =
@@ -4134,6 +4176,7 @@ this.room = room;
           } catch {}
 
           this.recoveryAuthorityGeneration += 1;
+          this.authorizeFreshRejoin(room);
 
           /*
            * V1010372_SEAT_EXPIRED_FRESH_REJOIN / TERMINAL_524
@@ -5192,6 +5235,7 @@ this.room = room;
     this.recoveryEscalationGeneration += 1;
     this.seatExpiryRecoveryGeneration += 1;
     this.resumeProbeGeneration += 1;
+    this.revokeFreshRejoin();
     this.freshRejoinInFlight = false;
     this.manualReconnectInFlight = false;
     this.seatExpiryRecoveryRoom = undefined;
