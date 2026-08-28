@@ -1,3 +1,4 @@
+/* V1010543_VULCAN_EDGE_TRIGGER_AND_RESULT_TIMING: Vulcan cinematic reacts only to active-state edges; authoritative Finished winner no longer waits on stale alive Schema. */
 /* V1010542C_REMOVE_UNUSED_TELEMETRY_ROBUST: removed only unused v542 telemetry declarations; core 10-player optimizations preserved in their respective files. */
 /* V1010542_TEN_PLAYER_PREFLIGHT_SAFE_OPT: 10-player preflight - stationary fallback fast-path, pathological VFX cap, passive diagnostics. Reconnect/gameplay cadence unchanged. */
 /* V1010541_PAINT_CURSOR_PIXEL_CENTER_ALIGNMENT: desktop/finger paint preview targets the exact center of the texture pixel cell under the pointer. */
@@ -16024,23 +16025,41 @@ const ribbon =
                     this.startSniperTacticalBgm();
 
                     if (isOwner) {
+                        const wasActive =
+                            this.vulcanActive;
+
                         this.vulcanSupportCommitted = true;
                         this.vulcanActive = true;
 
                         this.hideMobileControlsForVulcanImmediate();
                         this.networkPlayerManager.setLocalMovementHardLocked(true);
-                        this.enterVulcanCinematic(true);
+
+                        /*
+                         * V1010543_VULCAN_EDGE_TRIGGER_AND_RESULT_TIMING
+                         * vulcan_state may legitimately be re-sent while active.
+                         * Enter the expensive cinematic only on false -> true,
+                         * exactly like the proven Sniper state path.
+                         */
+                        if (!wasActive) {
+                            this.enterVulcanCinematic(true);
+                        }
                     } else {
+                        const wasRemoteActive =
+                            this.remoteVulcanActiveSessionIds
+                                .has(state.sessionId);
+
                         this.remoteVulcanActiveSessionIds.add(state.sessionId);
 
                         /*
                          * If this Hider was ALREADY watching the Hunter when
-                         * Vulcan activates, switch immediately to the same
-                         * aerial/searchlight camera at the same cinematic moment.
+                         * Vulcan activates, switch immediately only on the
+                         * inactive -> active edge. Repeated state sync packets
+                         * must not replay the aerial transition.
                          */
                         if (
+                            !wasRemoteActive &&
                             this.spectatorSessionId ===
-                            state.sessionId
+                                state.sessionId
                         ) {
                             this.enterVulcanSpectatorView(
                                 state.sessionId,
@@ -49352,23 +49371,14 @@ if (
              * authoritative Hunter result, stale alive=true Schema must not
              * rewind Finished back into Hunt.
              */
-            if (
-                authoritativeWinner === 'hunters' &&
-                this.roundResultWinner !== 'hunters' &&
-                this.getAuthoritativeAliveHiderCount() > 0
-            ) {
-                console.warn(
-                    '[Color Hunt] Ignored inconsistent finished phase: alive Hiders remain',
-                    {
-                        aliveHiders:
-                            this.getAuthoritativeAliveHiderCount(),
-                    },
-                );
-
-                this.phase = 'hunt';
-                this.updateSurvivalHud();
-                return;
-            }
+            /*
+             * V1010543_VULCAN_EDGE_TRIGGER_AND_RESULT_TIMING
+             * state.winner + phase=finished are already terminal server
+             * authority. player.alive can trail that transition by one Schema
+             * patch, so never bounce Finished back to Hunt just to wait for it.
+             * This makes HUNTER victory and the losing client's LOSE presentation
+             * start from the same authoritative Finished transition.
+             */
 
             if (
                 authoritativeWinner === 'hunters' ||
