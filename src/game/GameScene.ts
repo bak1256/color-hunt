@@ -1,3 +1,5 @@
+/* V1010552D_HARDENED_POSE_TYPE_NARROW_FIX: narrow Hardened pose from generic GameObject to Phaser.Image before reading scaleX/scaleY. */
+/* V1010552C_HARDENED_MUSCLE_SCALE_CALM: Hardened pose stays ~1.3x normal character; pulse is relative +10/+12% and can never jump to native PNG scale. */
 /* V1010552B_HARDENED_TING_AUDIO_TYPE_FIX: narrow Phaser SoundManager before accessing WebAudio AudioContext for Hardened TING SFX. */
 /* V1010552_HIDER_HARDENED_SNIPER_CREATE_FIX: Hardened taunt + sniper single-shot + first-create cold-start fix. */
 /* V1010551_RECONNECT_AUTHORITY_SNIPER_BACKDROP_STABILITY: reconnect input waits for one authoritative Room/player/phase rebase; Sniper outside blur gets a stable compositor fallback and mask-write cache without changing scope geometry. */
@@ -1403,7 +1405,7 @@ private timerText!: Phaser.GameObjects.Text;
         const id=state.sessionId;if(!id)return; const p=this.networkPlayerManager.getPlayerPosition(id);
         if(!state.active){ this.hardenedEndsAtBySessionId.delete(id);this.hardenedNextPhraseAtBySessionId.delete(id);this.hardenedPhraseIndexBySessionId.delete(id);if(p)this.showHardenedSmoke(p.x,p.y);this.networkPlayerManager.setHiderHardenedVisual(id,false);if(id===multiplayerClient.getSessionId())this.networkPlayerManager.setLocalMovementHardLocked(false);this.updateHiderTauntHud();return; }
         const end=Date.now()+Math.max(0,state.endsAt-state.serverNow);this.hardenedEndsAtBySessionId.set(id,end);this.hardenedNextPhraseAtBySessionId.set(id,Date.now()+1700);this.hardenedPhraseIndexBySessionId.set(id,0);this.networkPlayerManager.setHiderHardenedVisual(id,true,state.pose,this.getHardenedTauntCopy().initial);if(p)this.showHardenedSmoke(p.x,p.y);
-        const pose=this.networkPlayerManager.getPlayerContainer(id)?.getByName('network-hider-hardened-pose'); if(pose){this.tweens.killTweensOf(pose);this.tweens.add({targets:pose,scaleX:1.045,scaleY:0.97,duration:220,yoyo:true,repeat:-1,ease:'Sine.InOut'});}
+        const pose=this.networkPlayerManager.getPlayerContainer(id)?.getByName('network-hider-hardened-pose') as Phaser.GameObjects.Image | undefined; if(pose){this.tweens.killTweensOf(pose);const baseScaleX=pose.scaleX;const baseScaleY=pose.scaleY;this.tweens.add({targets:pose,scaleX:baseScaleX*1.10,scaleY:baseScaleY*1.12,duration:420,hold:120,yoyo:true,repeat:-1,ease:'Sine.InOut'});}
         if(id===multiplayerClient.getSessionId())this.networkPlayerManager.setLocalMovementHardLocked(true);this.updateHiderTauntHud();
     }
 
