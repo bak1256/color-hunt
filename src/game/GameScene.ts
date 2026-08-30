@@ -1,3 +1,4 @@
+/* V1010553_HARDENED_5POSE_GAUGE_HIT_DRAIN_CLIENT */
 /* V1010552D_HARDENED_POSE_TYPE_NARROW_FIX: narrow Hardened pose from generic GameObject to Phaser.Image before reading scaleX/scaleY. */
 /* V1010552C_HARDENED_MUSCLE_SCALE_CALM: Hardened pose stays ~1.3x normal character; pulse is relative +10/+12% and can never jump to native PNG scale. */
 /* V1010552B_HARDENED_TING_AUDIO_TYPE_FIX: narrow Phaser SoundManager before accessing WebAudio AudioContext for Hardened TING SFX. */
@@ -1404,19 +1405,19 @@ private timerText!: Phaser.GameObjects.Text;
     private applyHardenedState(state:NetworkHiderHardenedState):void {
         const id=state.sessionId;if(!id)return; const p=this.networkPlayerManager.getPlayerPosition(id);
         if(!state.active){ this.hardenedEndsAtBySessionId.delete(id);this.hardenedNextPhraseAtBySessionId.delete(id);this.hardenedPhraseIndexBySessionId.delete(id);if(p)this.showHardenedSmoke(p.x,p.y);this.networkPlayerManager.setHiderHardenedVisual(id,false);if(id===multiplayerClient.getSessionId())this.networkPlayerManager.setLocalMovementHardLocked(false);this.updateHiderTauntHud();return; }
-        const end=Date.now()+Math.max(0,state.endsAt-state.serverNow);this.hardenedEndsAtBySessionId.set(id,end);this.hardenedNextPhraseAtBySessionId.set(id,Date.now()+1700);this.hardenedPhraseIndexBySessionId.set(id,0);this.networkPlayerManager.setHiderHardenedVisual(id,true,state.pose,this.getHardenedTauntCopy().initial);if(p)this.showHardenedSmoke(p.x,p.y);
+        const end=Date.now()+Math.max(0,state.endsAt-state.serverNow);this.hardenedEndsAtBySessionId.set(id,end);this.hardenedNextPhraseAtBySessionId.set(id,Date.now()+1700);this.hardenedPhraseIndexBySessionId.set(id,0);this.networkPlayerManager.setHiderHardenedVisual(id,true,state.pose,this.getHardenedTauntCopy().initial);this.networkPlayerManager.setHiderHardenedLabel(id,this.getHardenedTauntCopy().initial,true);if(p)this.showHardenedSmoke(p.x,p.y);
         const pose=this.networkPlayerManager.getPlayerContainer(id)?.getByName('network-hider-hardened-pose') as Phaser.GameObjects.Image | undefined; if(pose){this.tweens.killTweensOf(pose);const baseScaleX=pose.scaleX;const baseScaleY=pose.scaleY;this.tweens.add({targets:pose,scaleX:baseScaleX*1.10,scaleY:baseScaleY*1.12,duration:420,hold:120,yoyo:true,repeat:-1,ease:'Sine.InOut'});}
         if(id===multiplayerClient.getSessionId())this.networkPlayerManager.setLocalMovementHardLocked(true);this.updateHiderTauntHud();
     }
 
     private applyHardenedHit(event:NetworkHiderHardenedHit):void {
-        if(!this.hardenedEndsAtBySessionId.has(event.sessionId))return;this.networkPlayerManager.setHiderHardenedPose(event.sessionId,event.pose);this.networkPlayerManager.setHiderHardenedLabel(event.sessionId,'TING!!!');this.playHardenedTing();
+        if(!this.hardenedEndsAtBySessionId.has(event.sessionId))return;const localEnd=Date.now()+Math.max(0,event.endsAt-event.serverNow);this.hardenedEndsAtBySessionId.set(event.sessionId,localEnd);this.networkPlayerManager.setHiderHardenedPose(event.sessionId,event.pose);this.networkPlayerManager.setHiderHardenedLabel(event.sessionId,'TING!!!');this.networkPlayerManager.shakeHiderHardenedGauge(event.sessionId);this.playHardenedTing();
         const ring=this.add.circle(event.x,event.y,8,0xffffff,0).setStrokeStyle(3,0xffe66d,1).setDepth(260);const ting=this.add.text(event.x,event.y-18,'TING!',{fontFamily:'Arial Black, sans-serif',fontSize:'17px',color:'#ffffff',stroke:'#000000',strokeThickness:5}).setOrigin(0.5).setDepth(261);this.tweens.add({targets:[ring,ting],alpha:0,scale:1.7,y:'-=8',duration:260,onComplete:()=>{ring.destroy();ting.destroy();}});
         const container=this.networkPlayerManager.getPlayerContainer(event.sessionId);if(container){this.tweens.killTweensOf(container);const x=container.x;this.tweens.add({targets:container,x:x+2,duration:28,yoyo:true,repeat:3,onComplete:()=>{container.x=x;}});}
     }
 
     private updateHardenedStates():void {
-        const now=Date.now();const copy=this.getHardenedTauntCopy();const phrases=copy.phrases;for(const[id,end]of this.hardenedEndsAtBySessionId){const rem=Math.max(0,end-now);if(rem<=5000){this.networkPlayerManager.setHiderHardenedLabel(id,copy.muscleLoss(Math.max(1,Math.ceil(rem/1000))));continue;}const nextAt=this.hardenedNextPhraseAtBySessionId.get(id)??0;if(now>=nextAt){const prev=this.hardenedPhraseIndexBySessionId.get(id)??0;const next=(prev+1+Math.floor(Math.random()*Math.max(1,phrases.length-1)))%phrases.length;this.hardenedPhraseIndexBySessionId.set(id,next);this.hardenedNextPhraseAtBySessionId.set(id,now+1750+Math.random()*900);this.networkPlayerManager.setHiderHardenedLabel(id,phrases[next]);}}
+        const now=Date.now();const copy=this.getHardenedTauntCopy();const phrases=copy.phrases;for(const[id,end]of this.hardenedEndsAtBySessionId){const rem=Math.max(0,end-now);this.networkPlayerManager.setHiderHardenedGauge(id,rem,15000);if(rem<=5000){this.networkPlayerManager.setHiderHardenedLabel(id,copy.muscleLoss(Math.max(1,Math.ceil(rem/1000))));continue;}const nextAt=this.hardenedNextPhraseAtBySessionId.get(id)??0;if(now>=nextAt){const prev=this.hardenedPhraseIndexBySessionId.get(id)??0;const next=(prev+1+Math.floor(Math.random()*Math.max(1,phrases.length-1)))%phrases.length;this.hardenedPhraseIndexBySessionId.set(id,next);this.hardenedNextPhraseAtBySessionId.set(id,now+1750+Math.random()*900);this.networkPlayerManager.setHiderHardenedLabel(id,phrases[next]);}}
     }
 
     private clearAllHardenedVisuals():void {
@@ -8428,7 +8429,7 @@ private timerText!: Phaser.GameObjects.Text;
         this.load.audio('footstep', 'assets/audio/footstep.wav');
         this.load.audio('countdown-beep', 'assets/audio/countdown-beep.wav');
         this.load.audio('countdown-start', 'assets/audio/countdown-start.wav');
-        for (let pose = 1; pose <= 3; pose += 1) {
+        for (let pose = 1; pose <= 5; pose += 1) {
             this.load.image(`hider-hardened-pose-${pose}`, `/assets/hider-skills/pose${pose}.png`);
         }
 

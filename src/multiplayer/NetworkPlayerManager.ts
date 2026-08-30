@@ -1,3 +1,5 @@
+/* V1010553_HARDENED_5POSE_GAUGE_HIT_DRAIN_CLIENT */
+/* V1010552C_HARDENED_MUSCLE_SCALE_CALM: Hardened pose display footprint fixed to 104x156 (~1.3x the normal 80x120 Hider body). */
 /* V1010552_HIDER_HARDENED_VISUAL: Hardened pose replaces camouflage while active. */
 /* V1010542_TEN_PLAYER_PREFLIGHT_SAFE_OPT: stationary remote fallback updates are skipped; moving-player 15Hz transport/smoothing is untouched. */
 /* V1010541_PAINT_CURSOR_PIXEL_CENTER_ALIGNMENT: local paint uses containing pixel cell (floor), preserving top-left-origin seam-free raster stamps. */
@@ -2057,21 +2059,31 @@ export class NetworkPlayerManager {
     const body = container.getByName("network-hider-pixel-body") as Phaser.GameObjects.Image | null;
     let image = container.getByName("network-hider-hardened-pose") as Phaser.GameObjects.Image | null;
     let text = container.getByName("network-hider-hardened-label") as Phaser.GameObjects.Text | null;
-    if (!active) { image?.destroy(); text?.destroy(); if (view.alive) { body?.setVisible(true); view.paintLayer?.texture.setVisible(true); } return; }
+    if (!active) { image?.destroy(); text?.destroy(); (container.getByName("network-hider-hardened-gauge") as Phaser.GameObjects.Graphics | null)?.destroy(); (container.getByName("network-hider-hardened-gauge-text") as Phaser.GameObjects.Text | null)?.destroy(); if (view.alive) { body?.setVisible(true); view.paintLayer?.texture.setVisible(true); } return; }
     body?.setVisible(false); view.paintLayer?.texture.setVisible(false);
-    const key = `hider-hardened-pose-${Math.max(1, Math.min(3, Math.round(pose)))}`;
-    if (!image) { image = this.scene.add.image(0, 18, key).setOrigin(0.5, 0.75).setName("network-hider-hardened-pose").setDisplaySize(112,112); container.add(image); } else image.setTexture(key).setVisible(true);
+    const key = `hider-hardened-pose-${Math.max(1, Math.min(5, Math.round(pose)))}`;
+    if (!image) { image = this.scene.add.image(0, 18, key).setOrigin(0.5, 0.75).setName("network-hider-hardened-pose").setDisplaySize(104,156); container.add(image); } else image.setTexture(key).setVisible(true);
     if (!text) { text = this.scene.add.text(0,-72,label,{fontFamily:"Arial Black, sans-serif",fontSize:"15px",fontStyle:"bold",color:"#fff36d",stroke:"#000000",strokeThickness:5,align:"center"}).setOrigin(0.5,1).setName("network-hider-hardened-label"); container.add(text); }
-    text.setText(label).setVisible(true); container.bringToTop(image); container.bringToTop(text); container.bringToTop(view.nameText);
+    let gauge=container.getByName("network-hider-hardened-gauge") as Phaser.GameObjects.Graphics|null;if(!gauge){gauge=this.scene.add.graphics().setName("network-hider-hardened-gauge");container.add(gauge);}
+    let gaugeText=container.getByName("network-hider-hardened-gauge-text") as Phaser.GameObjects.Text|null;if(!gaugeText){gaugeText=this.scene.add.text(0,82,"15.0s",{fontFamily:"Arial Black, sans-serif",fontSize:"10px",color:"#ffffff",stroke:"#000000",strokeThickness:3}).setOrigin(0.5).setName("network-hider-hardened-gauge-text");container.add(gaugeText);}
+    text.setText(label).setFontSize(23).setVisible(true); this.setHiderHardenedGauge(sessionId,15000,15000); container.bringToTop(image); container.bringToTop(text); if(gauge)container.bringToTop(gauge); if(gaugeText)container.bringToTop(gaugeText); container.bringToTop(view.nameText);
   }
 
   setHiderHardenedPose(sessionId: string, pose: number): void {
     const image = this.players.get(sessionId)?.container.getByName("network-hider-hardened-pose") as Phaser.GameObjects.Image | null;
-    image?.setTexture(`hider-hardened-pose-${Math.max(1, Math.min(3, Math.round(pose)))}`);
+    image?.setTexture(`hider-hardened-pose-${Math.max(1, Math.min(5, Math.round(pose)))}`);
   }
 
-  setHiderHardenedLabel(sessionId: string, label: string): void {
-    const text = this.players.get(sessionId)?.container.getByName("network-hider-hardened-label") as Phaser.GameObjects.Text | null; text?.setText(label);
+  setHiderHardenedLabel(sessionId: string, label: string, emphasis = false): void {
+    const text=this.players.get(sessionId)?.container.getByName("network-hider-hardened-label") as Phaser.GameObjects.Text|null;text?.setText(label).setFontSize(emphasis?23:15);
+  }
+
+  setHiderHardenedGauge(sessionId:string,remainingMs:number,totalMs=15000):void {
+    const c=this.players.get(sessionId)?.container;if(!c)return;const q=c.getByName("network-hider-hardened-gauge") as Phaser.GameObjects.Graphics|null,t=c.getByName("network-hider-hardened-gauge-text") as Phaser.GameObjects.Text|null;if(!q||!t)return;const r=Phaser.Math.Clamp(remainingMs/Math.max(1,totalMs),0,1),w=78,h=8,x=-39,y=69;q.clear();q.fillStyle(0x000000,0.82).fillRoundedRect(x-2,y-2,w+4,h+4,4);q.fillStyle(0x252525,1).fillRoundedRect(x,y,w,h,3);const col=r>0.5?0x65f06d:r>0.25?0xffd54a:0xff5b5b;if(r>0)q.fillStyle(col,1).fillRoundedRect(x,y,Math.max(2,w*r),h,3);t.setText(`${Math.max(0,remainingMs/1000).toFixed(1)}s`);
+  }
+
+  shakeHiderHardenedGauge(sessionId:string):void {
+    const c=this.players.get(sessionId)?.container;if(!c)return;const q=c.getByName("network-hider-hardened-gauge") as Phaser.GameObjects.Graphics|null,t=c.getByName("network-hider-hardened-gauge-text") as Phaser.GameObjects.Text|null;for(const o of [q,t]){if(!o)continue;this.scene.tweens.killTweensOf(o);o.setX(0);this.scene.tweens.add({targets:o,x:4,duration:24,yoyo:true,repeat:4,onComplete:()=>o.setX(0)});}
   }
 
   getPlayerPosition(
