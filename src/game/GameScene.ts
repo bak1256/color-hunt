@@ -1,3 +1,4 @@
+/* V1010551_RECONNECT_AUTHORITY_SNIPER_BACKDROP_STABILITY: reconnect input waits for one authoritative Room/player/phase rebase; Sniper outside blur gets a stable compositor fallback and mask-write cache without changing scope geometry. */
 /* V1010550_TACTICAL_CHAT_HIDE_VULCAN_CANCEL_FULL_RESTORE: hide chat throughout local Sniper/Vulcan; restore it after cancel/end; Vulcan cancel now uses Sniper-equivalent 1.5s HUD unlock plus exact gameplay HUD scale normalization. */
 /* V1010549_VULCAN_CANCEL_SLIDE_HUD_RESTORE: Vulcan now mirrors v548 Sniper cancel slide UX; touch-down hides, release reveals, cancel restores normal Hunter HUD and syncs false. */
 /* V1010548_MOBILE_SNIPER_CANCEL_SLIDE_TOUCH_STATE: mobile Sniper cancel slides solely from touch-down/up state; clickable only while idle; canvas pointer-capture keeps optic drag continuous; cancel HUD settle lock hardened. */
@@ -1163,6 +1164,7 @@ export class GameScene extends Phaser.Scene {
     /* V1010387_SNIPER_SCOPE_CLIP_AND_OUTSIDE_BLUR */
     private sniperScopeClipDom?: HTMLDivElement;
     private sniperScopeBlurDom?: HTMLDivElement;
+    private sniperScopeLastAppliedMask = '';
     private sniperScopeLensShieldDom?: HTMLDivElement;
     private sniperScopeRackInBlackoutDom?: HTMLDivElement;
     /* V1010388_SNIPER_UI_PASS_THROUGH_PRIORITY_TIMER_FIXED_BUTTON */
@@ -2248,6 +2250,15 @@ private timerText!: Phaser.GameObjects.Text;
 
     private reconnectGameplayUnlockNotBefore =
         0;
+
+    /*
+     * V1010551_RECONNECT_AUTHORITY_SNIPER_BACKDROP_STABILITY / RECONNECT_AUTHORITY_LATCH
+     * Transport recovery is not enough: local movement stays locked until
+     * resyncGameplayAfterConnectionRecovery() has rebuilt the replacement
+     * Room/player/phase once and rebased local prediction.
+     */
+    private reconnectAuthoritativeResyncReady =
+        true;
 
     /*
      * V1010451G_TERMINAL_UI_BARRIER
@@ -14972,6 +14983,29 @@ const ribbon =
         this.hideLegacySinglePlayerActors();
 
         /*
+         * V1010551_RECONNECT_AUTHORITY_SNIPER_BACKDROP_STABILITY / AUTHORITATIVE_REBASE_COMPLETE
+         * This is the single authority handoff point for a recovered gameplay
+         * session. Clear stale local prediction before the input gate can open.
+         */
+        if (
+            authoritativePhase === 'hunt' ||
+            authoritativePhase === 'paint' ||
+            authoritativePhase === 'countdown'
+        ) {
+            this.networkPlayerManager
+                .resetLocalPredictionAfterRecovery();
+
+            this.reconnectAuthoritativeResyncReady =
+                true;
+
+            this.reconnectGameplayUnlockNotBefore =
+                Math.max(
+                    this.reconnectGameplayUnlockNotBefore,
+                    this.time.now + 120,
+                );
+        }
+
+        /*
          * V1010426B_RECONNECT_STORM_VISUAL_CONVERGENCE / CHEAP_FINAL_REFRESH
          * Full paint convergence already finished above.
          * Refresh only cheap phase/READY state here.
@@ -17104,6 +17138,11 @@ this.networkUnsubscribers.push(
                     this.reconnectGameplayLocked =
                         lockGameplayForDrop;
 
+                    if (lockGameplayForDrop) {
+                        this.reconnectAuthoritativeResyncReady =
+                            false;
+                    }
+
                     this.reconnectGameplayUnlockNotBefore =
                         lockGameplayForDrop
                             ? this.time.now + 250
@@ -17177,6 +17216,9 @@ this.networkUnsubscribers.push(
                      */
                     this.reconnectGameplayLocked =
                         true;
+
+                    this.reconnectAuthoritativeResyncReady =
+                        false;
 
                     this.reconnectGameplayUnlockNotBefore =
                         Math.max(
@@ -17262,6 +17304,8 @@ this.networkUnsubscribers.push(
                                 false;
                             this.reconnectGameplayUnlockNotBefore =
                                 0;
+                            this.reconnectAuthoritativeResyncReady =
+                                true;
 
                             this.updateLobbyUi();
                         },
@@ -25100,6 +25144,7 @@ this.networkUnsubscribers.push(
         }
 
         if (
+            !this.reconnectAuthoritativeResyncReady ||
             this.time.now <
                 this.reconnectGameplayUnlockNotBefore ||
             !multiplayerClient
@@ -62312,6 +62357,9 @@ const roomPlayers =
                 'none';
         }
 
+        this.sniperScopeLastAppliedMask =
+            '';
+
         if (this.sniperPriorityTimerDom) {
             this.sniperPriorityTimerDom.style.display =
                 'none';
@@ -63348,10 +63396,19 @@ const roomPlayers =
                     this.mobileControlsEnabled
                         ? 'blur(3px) brightness(0.70) saturate(0.80)'
                         : 'blur(7px) brightness(0.70) saturate(0.78)',
+                /*
+                 * V1010551_RECONNECT_AUTHORITY_SNIPER_BACKDROP_STABILITY / DESKTOP_BLUR_FALLBACK
+                 * If Chrome drops a backdrop-filter compositor frame, retain
+                 * the tactical dim instead of flashing the bright raw canvas.
+                 */
                 background:
                     this.mobileControlsEnabled
                         ? 'rgba(2,8,10,0.07)'
-                        : 'rgba(2,8,10,0.08)',
+                        : 'rgba(2,8,10,0.28)',
+                isolation:
+                    'isolate',
+                contain:
+                    'paint',
                 maskRepeat:
                     'no-repeat',
                 webkitMaskRepeat:
@@ -63373,8 +63430,13 @@ const roomPlayers =
                     'hidden',
                 webkitBackfaceVisibility:
                     'hidden',
+                /*
+                 * V1010551_RECONNECT_AUTHORITY_SNIPER_BACKDROP_STABILITY / MASK_ONLY_COMPOSITOR_HINT
+                 * backdrop-filter strength is static during Overwatch; only the
+                 * hole moves. Avoid repeatedly promoting/demoting filter state.
+                 */
                 willChange:
-                    'backdrop-filter, -webkit-backdrop-filter, mask-image, -webkit-mask-image',
+                    'mask-image, -webkit-mask-image',
             },
         );
 
@@ -64084,11 +64146,19 @@ const roomPlayers =
              *   so backdrop blur remains visible outside the optic.
              */
             if (this.mobileControlsEnabled) {
-                blurLayer.style.maskImage =
-                    scopeHoleMask;
+                if (
+                    this.sniperScopeLastAppliedMask !==
+                        scopeHoleMask
+                ) {
+                    blurLayer.style.maskImage =
+                        scopeHoleMask;
 
-                blurLayer.style.webkitMaskImage =
-                    scopeHoleMask;
+                    blurLayer.style.webkitMaskImage =
+                        scopeHoleMask;
+
+                    this.sniperScopeLastAppliedMask =
+                        scopeHoleMask;
+                }
 
                 blurLayer.style.setProperty(
                     'mask-mode',
@@ -64135,11 +64205,19 @@ const roomPlayers =
                     ) +
                     'px 100%)';
 
-                blurLayer.style.maskImage =
-                    desktopScopeHoleMask;
+                if (
+                    this.sniperScopeLastAppliedMask !==
+                        desktopScopeHoleMask
+                ) {
+                    blurLayer.style.maskImage =
+                        desktopScopeHoleMask;
 
-                blurLayer.style.webkitMaskImage =
-                    desktopScopeHoleMask;
+                    blurLayer.style.webkitMaskImage =
+                        desktopScopeHoleMask;
+
+                    this.sniperScopeLastAppliedMask =
+                        desktopScopeHoleMask;
+                }
 
                 blurLayer.style.removeProperty(
                     'mask-mode',
