@@ -1,3 +1,4 @@
+/* V1010554A_TRIPLE_TELEPORT_CLIENT: Random Taunt adds server-authoritative Triple Teleport + test button + victory-safe FX cleanup. */
 /* V1010553MN_TAUNT_UI_READABILITY_COMBINED: combined speech-bubble + Random Taunt button readability polish. */
 /* V1010553L_RANDOM_TAUNT_TIP_LANGUAGE_FIX: use imported getLanguage() helper for Random Taunt first-use tip. */
 /* V1010553K_RANDOM_TAUNT_FIRST_TIP: first-use random-taunt speech bubble; dismiss permanently on first activation; hidden from spectator and victory capture. */
@@ -138,6 +139,7 @@ import {
     type NetworkSniperFired,
     type NetworkHiderHardenedState,
     type NetworkHiderHardenedHit,
+    type NetworkHiderTripleTeleport,
     type NetworkVulcanState,
     type NetworkVulcanAim,
     type NetworkVulcanFired,
@@ -1279,6 +1281,9 @@ private timerText!: Phaser.GameObjects.Text;
     private hiderTauntTipBubble?: Phaser.GameObjects.Graphics;
     private hiderTauntTipTitle?: Phaser.GameObjects.Text;
     private hiderTauntTipBody?: Phaser.GameObjects.Text;
+    private hiderTripleTeleportTestButton?: Phaser.GameObjects.Text;
+    private tripleTeleportLocalActive=false;
+    private readonly tripleTeleportFx=new Set<Phaser.GameObjects.GameObject>();
     private readonly hardenedEndsAtBySessionId = new Map<string, number>();
     private readonly hardenedNextPhraseAtBySessionId = new Map<string, number>();
     private readonly hardenedPhraseIndexBySessionId = new Map<string, number>();
@@ -1327,6 +1332,7 @@ private timerText!: Phaser.GameObjects.Text;
     }
 
     private destroyHiderTauntHud(): void {
+        if(this.phase!=='hunt')this.clearTripleTeleportFx();
         this.hiderTauntButton?.destroy();
         this.hiderTauntButtonBody?.destroy();
         this.hiderTauntButtonShadow?.destroy();
@@ -1334,6 +1340,7 @@ private timerText!: Phaser.GameObjects.Text;
         this.hiderTauntTipBubble?.destroy();
         this.hiderTauntTipTitle?.destroy();
         this.hiderTauntTipBody?.destroy();
+        this.hiderTripleTeleportTestButton?.destroy();
         this.hiderTauntButton=undefined;
         this.hiderTauntButtonBody=undefined;
         this.hiderTauntButtonShadow=undefined;
@@ -1341,6 +1348,7 @@ private timerText!: Phaser.GameObjects.Text;
         this.hiderTauntTipBubble=undefined;
         this.hiderTauntTipTitle=undefined;
         this.hiderTauntTipBody=undefined;
+        this.hiderTripleTeleportTestButton=undefined;
     }
 
     private createHiderTauntHud(): void {
@@ -1445,6 +1453,17 @@ private timerText!: Phaser.GameObjects.Text;
         this.hiderTauntTipBubble=tipBubble;
         this.hiderTauntTipTitle=tipTitle;
         this.hiderTauntTipBody=tipBody;
+
+        const teleportTest=this.add.text(0,0,'TEST ⚡ 3단 순간이동',{
+            fontFamily:'Arial Black, sans-serif',fontSize:'10px',fontStyle:'bold',
+            color:'#dffcff',backgroundColor:'#15364d',padding:{x:8,y:5},
+            stroke:'#000000',strokeThickness:3
+        }).setOrigin(0.5).setDepth(3912).setInteractive({useHandCursor:true});
+        teleportTest.on('pointerup',()=>{
+            if(this.phase!=='hunt'||this.tripleTeleportLocalActive)return;
+            multiplayerClient.sendHiderTripleTeleportTest();
+        });
+        this.hiderTripleTeleportTestButton=teleportTest;
         this.updateHiderTauntHud();
     }
 
@@ -1480,6 +1499,7 @@ private timerText!: Phaser.GameObjects.Text;
         tipBubble?.setVisible(show);
         tipTitle?.setVisible(show);
         tipBody?.setVisible(show);
+        this.hiderTripleTeleportTestButton?.setVisible(show&&!this.tripleTeleportLocalActive);
 
         if(!show||!pos)return;
 
@@ -1504,6 +1524,8 @@ private timerText!: Phaser.GameObjects.Text;
             tipTitle.setPosition(cx,top+16);
             tipBody.setPosition(cx,top+38);
         }
+
+        this.hiderTripleTeleportTestButton?.setPosition(pos.x,pos.y+154);
     }
 
     private showHardenedSmoke(x:number,y:number):void {
@@ -1657,6 +1679,87 @@ private timerText!: Phaser.GameObjects.Text;
             );
         } catch {
             // TING SFX is cosmetic; gameplay must continue even if audio is unavailable.
+        }
+    }
+
+    /* V1010554A_TRIPLE_TELEPORT_CLIENT: pure-Phaser 3-step teleport FX; no generated image assets. */
+    private rememberTripleTeleportFx<T extends Phaser.GameObjects.GameObject>(obj:T):T{
+        obj.setName('hider-triple-teleport-fx');
+        this.tripleTeleportFx.add(obj);
+        obj.once(Phaser.GameObjects.Events.DESTROY,()=>this.tripleTeleportFx.delete(obj));
+        return obj;
+    }
+
+    private clearTripleTeleportFx():void{
+        for(const fx of [...this.tripleTeleportFx]){if(fx.active)fx.destroy();}
+        this.tripleTeleportFx.clear();
+        this.children.getChildren().filter((c)=>c.name==='hider-triple-teleport-fx').forEach((c)=>c.destroy());
+        const localId=multiplayerClient.getSessionId();
+        if(localId){
+            const c=this.networkPlayerManager.getPlayerContainer(localId);
+            if(c){this.tweens.killTweensOf(c);c.setAlpha(1).setScale(1).setAngle(0);}
+        }
+        if(this.tripleTeleportLocalActive){
+            this.tripleTeleportLocalActive=false;
+            this.networkPlayerManager.setLocalMovementHardLocked(false);
+        }
+    }
+
+    private showTripleTeleportTrail(event:NetworkHiderTripleTeleport):void{
+        if(this.phase!=='hunt'||this.victoryShowcaseCleanCaptureActive)return;
+        const dx=event.x-event.fromX,dy=event.y-event.fromY;
+        const trail=this.rememberTripleTeleportFx(this.add.graphics().setDepth(4388));
+        trail.lineStyle(9,0x7eefff,0.18);trail.lineBetween(event.fromX,event.fromY,event.x,event.y);
+        trail.lineStyle(3,0xffffff,0.75);trail.lineBetween(event.fromX,event.fromY,event.x,event.y);
+        const ghost=this.rememberTripleTeleportFx(this.add.graphics().setDepth(4389));
+        ghost.fillStyle(0xa9f7ff,0.28);ghost.fillCircle(event.fromX,event.fromY-18,13);ghost.fillRoundedRect(event.fromX-14,event.fromY-8,28,42,7);
+        const ring=this.rememberTripleTeleportFx(this.add.graphics().setDepth(4390));
+        ring.lineStyle(3,0xd8ffff,0.9);ring.strokeCircle(event.x,event.y,18);ring.strokeCircle(event.x,event.y,28);
+        const slash=this.rememberTripleTeleportFx(this.add.text(event.x,event.y-44,'슉!',{fontFamily:'Arial Black, sans-serif',fontSize:'16px',fontStyle:'bold',color:'#eaffff',stroke:'#06334a',strokeThickness:5}).setOrigin(0.5).setDepth(4391));
+        this.tweens.add({targets:[trail,ghost],alpha:0,duration:260,ease:'Cubic.Out',onComplete:()=>{trail.destroy();ghost.destroy();}});
+        this.tweens.add({targets:ring,angle:180,scale:1.65,alpha:0,duration:300,ease:'Cubic.Out',onComplete:()=>ring.destroy()});
+        this.tweens.add({targets:slash,y:slash.y-18,alpha:0,scale:1.18,duration:260,onComplete:()=>slash.destroy()});
+        void dx;void dy;
+    }
+
+    private applyTripleTeleport(event:NetworkHiderTripleTeleport):void{
+        if(!event.sessionId)return;
+        const isLocal=event.sessionId===multiplayerClient.getSessionId();
+        const container=this.networkPlayerManager.getPlayerContainer(event.sessionId);
+        if(event.stage==='cancel'){
+            if(container){this.tweens.killTweensOf(container);container.setAlpha(1).setScale(1).setAngle(0);}
+            if(isLocal){this.tripleTeleportLocalActive=false;this.networkPlayerManager.setLocalMovementHardLocked(false);this.updateHiderTauntHud();}
+            return;
+        }
+        if(this.phase!=='hunt')return;
+        if(event.stage==='start'){
+            if(isLocal){this.tripleTeleportLocalActive=true;this.networkPlayerManager.setLocalMovementHardLocked(true);this.updateHiderTauntHud();}
+            const startRing=this.rememberTripleTeleportFx(this.add.graphics().setDepth(4390));
+            startRing.lineStyle(4,0x91f5ff,0.95);startRing.strokeCircle(event.originX,event.originY,22);
+            this.tweens.add({targets:startRing,angle:360,scale:1.7,alpha:0,duration:330,onComplete:()=>startRing.destroy()});
+            return;
+        }
+        if(event.stage==='step'){
+            this.showTripleTeleportTrail(event);
+            if(container){this.tweens.killTweensOf(container);container.setAngle(-8);this.tweens.add({targets:container,angle:8,duration:55,yoyo:true,repeat:1,onComplete:()=>container.setAngle(0)});}
+            return;
+        }
+        if(event.stage==='vanish'){
+            this.showTripleTeleportTrail(event);
+            if(container){
+                this.tweens.killTweensOf(container);
+                this.tweens.add({targets:container,angle:360,scale:0.18,alpha:0,duration:260,ease:'Back.In'});
+            }
+            const poof=this.rememberTripleTeleportFx(this.add.text(event.x,event.y-28,'뿅!',{fontFamily:'Arial Black, sans-serif',fontSize:'20px',fontStyle:'bold',color:'#ffffff',stroke:'#184e68',strokeThickness:6}).setOrigin(0.5).setDepth(4392));
+            this.tweens.add({targets:poof,y:poof.y-20,scale:1.4,alpha:0,duration:360,onComplete:()=>poof.destroy()});
+            return;
+        }
+        if(event.stage==='return'){
+            if(container){this.tweens.killTweensOf(container);container.setPosition(event.originX,event.originY).setAngle(0).setScale(0.25).setAlpha(0);this.tweens.add({targets:container,scale:1,alpha:1,duration:180,ease:'Back.Out'});}
+            const ring=this.rememberTripleTeleportFx(this.add.graphics().setDepth(4390));
+            ring.lineStyle(4,0xffffff,0.95);ring.strokeCircle(event.originX,event.originY,10);ring.strokeCircle(event.originX,event.originY,20);
+            this.tweens.add({targets:ring,scale:1.9,alpha:0,duration:260,onComplete:()=>ring.destroy()});
+            if(isLocal){this.tripleTeleportLocalActive=false;this.networkPlayerManager.setLocalMovementHardLocked(false);this.updateHiderTauntHud();}
         }
     }
 
@@ -17267,6 +17370,7 @@ const localId =
 
         this.networkUnsubscribers.push(multiplayerClient.onHiderHardenedState((state: NetworkHiderHardenedState) => this.applyHardenedState(state)));
         this.networkUnsubscribers.push(multiplayerClient.onHiderHardenedHit((event: NetworkHiderHardenedHit) => this.applyHardenedHit(event)));
+        this.networkUnsubscribers.push(multiplayerClient.onHiderTripleTeleport((event: NetworkHiderTripleTeleport) => this.applyTripleTeleport(event)));
 
         this.networkUnsubscribers.push(
             multiplayerClient.onPhaseChanged(
@@ -46178,6 +46282,7 @@ this.networkUnsubscribers.push(
     ): Promise<HTMLImageElement> {
         /* V553G_HARDENED_CAPTURE_CLEAN */
         this.clearHardenedCaptureDebris();
+        this.clearTripleTeleportFx();
 
         /*
          * V521 POSTER_TACTICAL_SEAL:

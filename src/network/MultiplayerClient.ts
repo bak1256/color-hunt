@@ -1,3 +1,4 @@
+/* V1010554A_TRIPLE_TELEPORT_CLIENT: Random Taunt/Triple Teleport transport. */
 /* V1010553_HARDENED_5POSE_GAUGE_HIT_DRAIN_CLIENT */
 /* V1010552_HIDER_HARDENED_NETWORK: Hardened state/hit transport. */
 /* V1010551_SCHEMA_AUTHORITATIVE_PLAYER_PRESENCE: Schema owns live player presence; lobby_snapshot is recovery fallback only and cannot evict a live Schema player. */
@@ -110,6 +111,18 @@ export type NetworkHiderHardenedState = { sessionId: string; active: boolean; po
 export type NetworkHiderHardenedHit = { sessionId: string; x: number; y: number; pose: number; endsAt: number; serverNow: number; };
 export type HiderHardenedStateHandler = (state: NetworkHiderHardenedState) => void;
 export type HiderHardenedHitHandler = (event: NetworkHiderHardenedHit) => void;
+
+/* V1010554A_TRIPLE_TELEPORT_CLIENT */
+export type NetworkHiderTripleTeleport = {
+  sessionId: string;
+  stage: 'start' | 'step' | 'vanish' | 'return' | 'cancel';
+  step: number;
+  fromX: number; fromY: number;
+  x: number; y: number;
+  originX: number; originY: number;
+  serverNow: number;
+};
+export type HiderTripleTeleportHandler = (event: NetworkHiderTripleTeleport) => void;
 
 /* V1010507_TACTICAL_VULCAN_AIR_SUPPORT */
 export type NetworkVulcanState = {
@@ -1099,6 +1112,7 @@ this.phaseChangedHandlers.forEach(
 
   private readonly hiderHardenedStateHandlers = new Set<HiderHardenedStateHandler>();
   private readonly hiderHardenedHitHandlers = new Set<HiderHardenedHitHandler>();
+  private readonly hiderTripleTeleportHandlers = new Set<HiderTripleTeleportHandler>();
 
   private selectedSkill: PlayerSkillId =
     "paintball";
@@ -3732,6 +3746,15 @@ this.room = room;
         pose: Math.max(1, Math.min(5, Number(payload?.pose) || 1)), endsAt: Number(payload?.endsAt ?? 0), serverNow: Number(payload?.serverNow ?? Date.now()),
       }));
     });
+    room.onMessage<NetworkHiderTripleTeleport>("hider_triple_teleport", (payload) => {
+      const stage = payload?.stage === 'start' || payload?.stage === 'step' || payload?.stage === 'vanish' || payload?.stage === 'return' || payload?.stage === 'cancel'
+        ? payload.stage : 'cancel';
+      this.hiderTripleTeleportHandlers.forEach((handler) => handler({
+        sessionId:String(payload?.sessionId ?? ''), stage, step:Math.max(0,Math.min(3,Number(payload?.step)||0)),
+        fromX:Number(payload?.fromX ?? 0), fromY:Number(payload?.fromY ?? 0), x:Number(payload?.x ?? 0), y:Number(payload?.y ?? 0),
+        originX:Number(payload?.originX ?? 0), originY:Number(payload?.originY ?? 0), serverNow:Number(payload?.serverNow ?? Date.now()),
+      }));
+    });
 
     room.onMessage<{ skillId?: PlayerSkillId }>(
       "skill_state",
@@ -4663,13 +4686,21 @@ this.room = room;
 
   sendHiderHardenedTaunt(): void {
     if (!this.isGameplayTransportStable()) return;
-    this.room?.send("hider_hardened_taunt", {});
+    /* Random Taunt entry point: server authoritatively chooses Hardened or Triple Teleport. */
+    this.room?.send("hider_random_taunt", {});
+  }
+  sendHiderTripleTeleportTest(): void {
+    if (!this.isGameplayTransportStable()) return;
+    this.room?.send("hider_triple_teleport_test", {});
   }
   onHiderHardenedState(handler: HiderHardenedStateHandler): () => void {
     this.hiderHardenedStateHandlers.add(handler); return () => this.hiderHardenedStateHandlers.delete(handler);
   }
   onHiderHardenedHit(handler: HiderHardenedHitHandler): () => void {
     this.hiderHardenedHitHandlers.add(handler); return () => this.hiderHardenedHitHandlers.delete(handler);
+  }
+  onHiderTripleTeleport(handler: HiderTripleTeleportHandler): () => void {
+    this.hiderTripleTeleportHandlers.add(handler); return () => this.hiderTripleTeleportHandlers.delete(handler);
   }
 
   sendSkillSelection(
