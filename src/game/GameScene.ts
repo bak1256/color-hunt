@@ -1,3 +1,4 @@
+/* V1010555B_CLONE_DANCE_ASSIST_BGM_RANDOM_OWNER_CLIENT: FULL Paint-Assist organic camouflage + guaranteed disco resume/mix + random real-Hider dance slot restore. */
 /* V1010555A_CLONE_DANCE_TIMEREVENT_BUILD_FIX: Phaser TimerEvent has no .once(); one-shot clone-party timers remove themselves from the tracking Set inside callbacks. */
 /* V1010555_CLONE_DANCE_PARTY_CLIENT: 10 fully-camouflaged visual clones + synchronized dance/note/smoke/disco lifecycle + result hard cleanup. */
 /* V1010554J_TRIPLE_TELEPORT_ZERO_PAN_ZOOM: Triple Teleport camera freezes scrollX/Y exactly; zoom is the only animated camera property. */
@@ -1312,6 +1313,8 @@ private timerText!: Phaser.GameObjects.Text;
                 owner:Phaser.GameObjects.Container;
                 ownerX:number;
                 ownerY:number;
+                returnX:number;
+                returnY:number;
                 ownerBaseAngle:number;
                 ownerBaseScaleX:number;
                 ownerBaseScaleY:number;
@@ -1333,6 +1336,7 @@ private timerText!: Phaser.GameObjects.Text;
     private readonly cloneDancePartyTextureKeys=
         new Set<string>();
     private cloneDanceDiscoOscillators:OscillatorNode[]=[];
+    private cloneDanceDiscoStarting=false;
     private hiderRandomTauntSkillBusy=false;
 
     private setHiderRandomTauntSkillBusy(
@@ -2353,19 +2357,18 @@ private timerText!: Phaser.GameObjects.Text;
             maskCanvas.width=80;
             maskCanvas.height=120;
 
-            const context=
+            const mask=
                 maskCanvas.getContext(
                     '2d',
                     {
                         willReadFrequently:true,
                     },
                 );
+            if(!mask)return null;
 
-            if(!context)return null;
-
-            context.imageSmoothingEnabled=false;
-            context.clearRect(0,0,80,120);
-            context.drawImage(
+            mask.imageSmoothingEnabled=false;
+            mask.clearRect(0,0,80,120);
+            mask.drawImage(
                 source,
                 0,
                 0,
@@ -2373,74 +2376,329 @@ private timerText!: Phaser.GameObjects.Text;
                 120,
             );
 
-            /*
-             * "색칠 도움받기 - 다 해줘" equivalent for a visual clone:
-             * every visible character pixel receives the real map pixel hidden
-             * directly behind THAT clone's own world position.
-             */
-            const backgroundCanvas=
+            const canvas=
                 document.createElement(
                     'canvas',
                 );
-            backgroundCanvas.width=80;
-            backgroundCanvas.height=120;
+            canvas.width=80;
+            canvas.height=120;
 
-            const bg=
-                backgroundCanvas.getContext(
+            const ctx=
+                canvas.getContext(
                     '2d',
                     {
                         willReadFrequently:true,
                     },
                 );
-            if(!bg)return null;
+            if(!ctx)return null;
 
-            const image=
-                bg.createImageData(
-                    80,
-                    120,
+            ctx.imageSmoothingEnabled=false;
+
+            /*
+             * Match the real Hider base silhouette first.
+             * Paint Assist overlays paint onto this body rather than making
+             * unpainted gaps transparent.
+             */
+            ctx.drawImage(
+                source,
+                0,
+                0,
+                80,
+                120,
+            );
+
+            type AssistRgb={
+                r:number;
+                g:number;
+                b:number;
+            };
+
+            const colorDistance=(
+                a:AssistRgb,
+                b:AssistRgb,
+            ):number=>
+                Math.abs(a.r-b.r)+
+                Math.abs(a.g-b.g)+
+                Math.abs(a.b-b.b);
+
+            const quantizeChannel=(
+                value:number,
+            ):number=>
+                Phaser.Math.Clamp(
+                    Math.round(value/8)*8,
+                    0,
+                    255,
                 );
+
+            /*
+             * Stable clone-specific seed. Unlike Date.now(), every observer
+             * derives the same organic pattern for the same clone position.
+             */
+            let seedBase=
+                (
+                    Math.floor(worldX*31)+
+                    Math.floor(worldY*17)+
+                    index*2654435761
+                )>>>0;
+
+            for(let i=0;i<sessionId.length;i+=1){
+                seedBase=
+                    (
+                        Math.imul(
+                            seedBase^
+                            sessionId.charCodeAt(i),
+                            16777619,
+                        )
+                    )>>>0;
+            }
+
             const sampler=
                 this.createCurrentPaintBackgroundSampler();
+            const dotStep=2;
+            const edgeProbe=2;
 
-            for(let py=0;py<120;py+=1){
-                for(let px=0;px<80;px+=1){
-                    const rgb=
+            for(
+                let localY=2;
+                localY<=118;
+                localY+=dotStep
+            ){
+                for(
+                    let localX=2;
+                    localX<=78;
+                    localX+=dotStep
+                ){
+                    const sampleX=
+                        worldX+
+                        localX-
+                        40;
+                    const sampleY=
+                        worldY+
+                        localY-
+                        60;
+
+                    const centerColor=
                         this.samplePracticeBackgroundRgb(
                             sampler,
-                            worldX+
-                                px-
-                                40,
-                            worldY+
-                                py-
-                                60,
+                            sampleX,
+                            sampleY,
                         );
-                    const offset=
-                        (
-                            py*80+
-                            px
-                        )*4;
+                    const leftColor=
+                        this.samplePracticeBackgroundRgb(
+                            sampler,
+                            sampleX-edgeProbe,
+                            sampleY,
+                        );
+                    const rightColor=
+                        this.samplePracticeBackgroundRgb(
+                            sampler,
+                            sampleX+edgeProbe,
+                            sampleY,
+                        );
+                    const upColor=
+                        this.samplePracticeBackgroundRgb(
+                            sampler,
+                            sampleX,
+                            sampleY-edgeProbe,
+                        );
+                    const downColor=
+                        this.samplePracticeBackgroundRgb(
+                            sampler,
+                            sampleX,
+                            sampleY+edgeProbe,
+                        );
 
-                    image.data[offset]=rgb.r;
-                    image.data[offset+1]=rgb.g;
-                    image.data[offset+2]=rgb.b;
-                    image.data[offset+3]=255;
+                    const edgeStrength=
+                        Math.max(
+                            colorDistance(leftColor,rightColor),
+                            colorDistance(upColor,downColor),
+                            colorDistance(centerColor,leftColor),
+                            colorDistance(centerColor,rightColor),
+                            colorDistance(centerColor,upColor),
+                            colorDistance(centerColor,downColor),
+                        );
+
+                    /*
+                     * EXACT current FULL-assist density family:
+                     * base 26/35/43/52 * 3.20, cap 98%.
+                     */
+                    const baseKeepPercent=
+                        edgeStrength>=150
+                            ? 52
+                            : edgeStrength>=95
+                                ? 43
+                                : edgeStrength>=55
+                                    ? 35
+                                    : 26;
+
+                    const keepPercent=
+                        Phaser.Math.Clamp(
+                            Math.round(
+                                baseKeepPercent*
+                                3.20,
+                            ),
+                            6,
+                            98,
+                        );
+
+                    const blobCellSize=
+                        edgeStrength>=95
+                            ? 4
+                            : 6;
+                    const blobX=
+                        Math.floor(
+                            localX/
+                            blobCellSize,
+                        );
+                    const blobY=
+                        Math.floor(
+                            localY/
+                            blobCellSize,
+                        );
+
+                    const blobHash=
+                        (
+                            seedBase^
+                            Math.imul(
+                                blobX+31,
+                                73856093,
+                            )^
+                            Math.imul(
+                                blobY+47,
+                                19349663,
+                            )
+                        )>>>0;
+
+                    const detailHash=
+                        (
+                            seedBase^
+                            Math.imul(
+                                localX+101,
+                                83492791,
+                            )^
+                            Math.imul(
+                                localY+59,
+                                2654435761,
+                            )
+                        )>>>0;
+
+                    const keepCoherentPatch=
+                        blobHash%100<
+                        keepPercent;
+
+                    /*
+                     * Paint Assist level 4 FULL keeps all high-detail edge dots.
+                     */
+                    const keepFineDetail=
+                        edgeStrength>=95;
+
+                    if(
+                        !keepCoherentPatch &&
+                        !keepFineDetail
+                    ){
+                        continue;
+                    }
+
+                    const r=
+                        quantizeChannel(
+                            centerColor.r,
+                        );
+                    const g=
+                        quantizeChannel(
+                            centerColor.g,
+                        );
+                    const b=
+                        quantizeChannel(
+                            centerColor.b,
+                        );
+
+                    const baseOrganicSize=
+                        edgeStrength>=150
+                            ? 3+
+                                (
+                                    (
+                                        detailHash>>>
+                                        9
+                                    )%
+                                    2
+                                )
+                            : edgeStrength>=95
+                                ? 3+
+                                    (
+                                        (
+                                            detailHash>>>
+                                            9
+                                        )%
+                                        3
+                                    )
+                                : 4+
+                                    (
+                                        (
+                                            detailHash>>>
+                                            9
+                                        )%
+                                        3
+                                    );
+
+                    /*
+                     * Current "다 해줘" FULL presses the same organic dab +2px.
+                     */
+                    const size=
+                        Phaser.Math.Clamp(
+                            baseOrganicSize+2,
+                            2,
+                            8,
+                        );
+
+                    const jitterX=
+                        edgeStrength>=95
+                            ? 0
+                            : (
+                                (
+                                    detailHash>>>
+                                    13
+                                )%
+                                3
+                            )-1;
+                    const jitterY=
+                        edgeStrength>=95
+                            ? 0
+                            : (
+                                (
+                                    detailHash>>>
+                                    17
+                                )%
+                                3
+                            )-1;
+
+                    ctx.fillStyle=
+                        `rgb(${r},${g},${b})`;
+                    ctx.beginPath();
+                    ctx.arc(
+                        localX+jitterX,
+                        localY+jitterY,
+                        Math.max(
+                            1.5,
+                            size*0.5,
+                        ),
+                        0,
+                        Math.PI*2,
+                    );
+                    ctx.fill();
                 }
             }
 
-            bg.putImageData(
-                image,
+            /*
+             * Clip every organic dab to the exact authoritative Hider raster
+             * silhouette, identical to the normal paint geometry.
+             */
+            ctx.globalCompositeOperation=
+                'destination-in';
+            ctx.drawImage(
+                maskCanvas,
                 0,
                 0,
             );
-
-            context.globalCompositeOperation=
-                'source-in';
-            context.drawImage(
-                backgroundCanvas,
-                0,
-                0,
-            );
-            context.globalCompositeOperation=
+            ctx.globalCompositeOperation=
                 'source-over';
 
             const safeSession=
@@ -2452,18 +2710,23 @@ private timerText!: Phaser.GameObjects.Text;
                     .slice(0,24);
 
             const key=
-                `clone-dance-camo-${safeSession}-${index}-${Date.now()}-${Math.floor(Math.random()*1e6)}`;
+                `clone-dance-camo-fullassist-${safeSession}-${index}-${Date.now()}-${Math.floor(Math.random()*1e6)}`;
 
-            if(
-                this.textures.exists(key)
-            ){
+            if(this.textures.exists(key)){
                 this.textures.remove(key);
             }
 
             this.textures.addCanvas(
                 key,
-                maskCanvas,
+                canvas,
             );
+            this.textures
+                .get(key)
+                .setFilter(
+                    Phaser.Textures
+                        .FilterMode.NEAREST,
+                );
+
             this.cloneDancePartyTextureKeys.add(
                 key,
             );
@@ -2471,7 +2734,7 @@ private timerText!: Phaser.GameObjects.Text;
             return key;
         }catch(error){
             console.warn(
-                '[Color Hunt] clone dance camouflage texture failed',
+                '[Color Hunt] clone dance FULL-assist camouflage failed',
                 error,
             );
             return null;
@@ -2559,10 +2822,15 @@ private timerText!: Phaser.GameObjects.Text;
 
     private startCloneDanceDiscoBgm():void{
         if(
-            !this.audioUnlocked ||
             !this.bgmEnabled ||
+            this.sound.mute ||
+            (
+                typeof document!=='undefined' &&
+                document.hidden
+            ) ||
             this.cloneDancePartyRuntimes.size===0 ||
-            this.cloneDanceDiscoOscillators.length>0
+            this.cloneDanceDiscoOscillators.length>0 ||
+            this.cloneDanceDiscoStarting
         ){
             return;
         }
@@ -2571,155 +2839,267 @@ private timerText!: Phaser.GameObjects.Text;
             this.getComedyAudioContext();
         if(!ctx)return;
 
-        /*
-         * Highest music priority:
-         * normal Hunt/Paint/Lobby and tactical Sniper/Vulcan music are silent
-         * while any clone party is alive.
-         */
-        this.stopAllBgm();
+        this.cloneDanceDiscoStarting=true;
 
-        if(
-            this.sniperTacticalMusic?.isPlaying
-        ){
-            this.sniperTacticalMusic.stop();
-        }
-
-        const start=
-            ctx.currentTime+0.025;
-        const beat=60/128;
-        const total=10.2;
-
-        const scheduleTone=(
-            at:number,
-            hz:number,
-            duration:number,
-            volume:number,
-            type:OscillatorType,
-            endHz=hz,
-        ):void=>{
-            const osc=
-                ctx.createOscillator();
-            const gain=
-                ctx.createGain();
-
-            osc.type=type;
-            osc.frequency.setValueAtTime(
-                Math.max(35,hz),
-                at,
-            );
+        const begin=():void=>{
+            this.cloneDanceDiscoStarting=false;
 
             if(
-                Math.abs(endHz-hz)>0.1
+                !this.bgmEnabled ||
+                this.sound.mute ||
+                this.cloneDancePartyRuntimes.size===0 ||
+                this.roundResultWinner!==null ||
+                this.cloneDanceDiscoOscillators.length>0
             ){
-                osc.frequency.exponentialRampToValueAtTime(
-                    Math.max(35,endHz),
+                return;
+            }
+
+            /*
+             * Absolute BGM priority starts only once AudioContext is actually
+             * RUNNING, preventing the silent gap seen in v555.
+             */
+            this.stopAllBgm();
+
+            if(
+                this.sniperTacticalMusic?.isPlaying
+            ){
+                this.sniperTacticalMusic.stop();
+            }
+
+            const start=
+                ctx.currentTime+
+                0.035;
+            const beat=
+                60/
+                128;
+            const total=10.25;
+
+            const scheduleTone=(
+                at:number,
+                hz:number,
+                duration:number,
+                volume:number,
+                type:OscillatorType,
+                endHz=hz,
+            ):void=>{
+                const osc=
+                    ctx.createOscillator();
+                const gain=
+                    ctx.createGain();
+
+                osc.type=type;
+                osc.frequency.setValueAtTime(
+                    Math.max(35,hz),
+                    at,
+                );
+
+                if(
+                    Math.abs(endHz-hz)>
+                    0.1
+                ){
+                    osc.frequency.exponentialRampToValueAtTime(
+                        Math.max(35,endHz),
+                        at+duration,
+                    );
+                }
+
+                gain.gain.setValueAtTime(
+                    0.0001,
+                    at,
+                );
+                gain.gain.exponentialRampToValueAtTime(
+                    Math.max(
+                        0.0002,
+                        volume,
+                    ),
+                    at+0.012,
+                );
+                gain.gain.exponentialRampToValueAtTime(
+                    0.0001,
                     at+duration,
                 );
-            }
 
-            gain.gain.setValueAtTime(
-                0.0001,
-                at,
-            );
-            gain.gain.exponentialRampToValueAtTime(
-                Math.max(0.0002,volume),
-                at+0.012,
-            );
-            gain.gain.exponentialRampToValueAtTime(
-                0.0001,
-                at+duration,
-            );
+                osc.connect(gain);
+                gain.connect(ctx.destination);
 
-            osc.connect(gain);
-            gain.connect(ctx.destination);
-
-            osc.start(at);
-            osc.stop(at+duration+0.02);
-            this.cloneDanceDiscoOscillators.push(
-                osc,
-            );
-        };
-
-        const bass=[
-            110,
-            110,
-            146.83,
-            130.81,
-            110,
-            164.81,
-            146.83,
-            130.81,
-        ];
-
-        for(
-            let step=0;
-            step<Math.ceil(total/(beat/2));
-            step+=1
-        ){
-            const at=
-                start+
-                step*(beat/2);
-            if(at>start+total)break;
-
-            /* bright disco hat every eighth */
-            scheduleTone(
-                at,
-                4200,
-                0.055,
-                0.010,
-                'square',
-                2200,
-            );
-
-            if(step%2===0){
-                /* four-on-the-floor kick */
-                scheduleTone(
-                    at,
-                    125,
-                    0.15,
-                    0.045,
-                    'sine',
-                    46,
+                osc.start(at);
+                osc.stop(
+                    at+
+                    duration+
+                    0.025,
                 );
 
-                const note=
-                    bass[
-                        Math.floor(step/2)%
-                        bass.length
-                    ];
-                scheduleTone(
-                    at+0.025,
-                    note,
-                    0.28,
-                    0.026,
-                    'triangle',
-                    note*0.98,
+                this.cloneDanceDiscoOscillators.push(
+                    osc,
                 );
-            }else{
-                /* off-beat bright chord stab */
-                const chordRoot=
-                    bass[
-                        Math.floor(step/2)%
-                        bass.length
-                    ]*2;
+            };
 
-                [1,1.25,1.5]
-                    .forEach(
-                        (ratio)=>scheduleTone(
-                            at,
-                            chordRoot*ratio,
-                            0.13,
-                            0.010,
-                            'sawtooth',
+            const bass=[
+                110,
+                110,
+                146.83,
+                130.81,
+                110,
+                164.81,
+                146.83,
+                130.81,
+            ];
+
+            for(
+                let step=0;
+                step<
+                    Math.ceil(
+                        total/
+                        (
+                            beat/
+                            2
                         ),
                     );
+                step+=1
+            ){
+                const at=
+                    start+
+                    step*
+                    (
+                        beat/
+                        2
+                    );
+
+                if(
+                    at>
+                    start+total
+                )break;
+
+                /*
+                 * Louder bright disco hat.
+                 */
+                scheduleTone(
+                    at,
+                    4800,
+                    0.06,
+                    0.020,
+                    'square',
+                    2500,
+                );
+
+                if(step%2===0){
+                    /*
+                     * Four-on-the-floor kick + warm bass.
+                     */
+                    scheduleTone(
+                        at,
+                        145,
+                        0.17,
+                        0.085,
+                        'sine',
+                        46,
+                    );
+
+                    const note=
+                        bass[
+                            Math.floor(
+                                step/
+                                2
+                            )%
+                            bass.length
+                        ];
+
+                    scheduleTone(
+                        at+0.024,
+                        note,
+                        0.31,
+                        0.050,
+                        'triangle',
+                        note*0.98,
+                    );
+                }else{
+                    /*
+                     * Offbeat disco stab.
+                     */
+                    const chordRoot=
+                        bass[
+                            Math.floor(
+                                step/
+                                2
+                            )%
+                            bass.length
+                        ]*
+                        2;
+
+                    [
+                        1,
+                        1.25,
+                        1.5,
+                    ].forEach(
+                        (ratio)=>
+                            scheduleTone(
+                                at,
+                                chordRoot*
+                                    ratio,
+                                0.15,
+                                0.020,
+                                'sawtooth',
+                            ),
+                    );
+                }
+
+                /*
+                 * Tiny sparkling arpeggio so it reads as "party music", not
+                 * only kick/noise on phone speakers.
+                 */
+                if(step%4===2){
+                    const lead=
+                        bass[
+                            Math.floor(
+                                step/
+                                2
+                            )%
+                            bass.length
+                        ]*
+                        4;
+
+                    [
+                        1,
+                        1.25,
+                        1.5,
+                        2,
+                    ].forEach(
+                        (
+                            ratio,
+                            noteIndex,
+                        )=>
+                            scheduleTone(
+                                at+
+                                    noteIndex*
+                                    0.055,
+                                lead*
+                                    ratio,
+                                0.09,
+                                0.014,
+                                'triangle',
+                            ),
+                    );
+                }
             }
+        };
+
+        if(ctx.state==='running'){
+            begin();
+            return;
         }
+
+        void ctx
+            .resume()
+            .then(begin)
+            .catch(()=>{
+                this.cloneDanceDiscoStarting=false;
+            });
     }
 
     private stopCloneDanceDiscoBgm(
         restore=true,
     ):void{
+        this.cloneDanceDiscoStarting=false;
         this.cloneDanceDiscoOscillators
             .forEach(
                 (osc)=>{
@@ -2808,6 +3188,14 @@ private timerText!: Phaser.GameObjects.Text;
             owner,
             ownerX,
             ownerY,
+            returnX:
+                Number.isFinite(event.returnX)
+                    ? event.returnX
+                    : ownerX,
+            returnY:
+                Number.isFinite(event.returnY)
+                    ? event.returnY
+                    : ownerY,
             ownerBaseAngle:owner.angle,
             ownerBaseScaleX:owner.scaleX,
             ownerBaseScaleY:owner.scaleY,
@@ -3169,6 +3557,15 @@ private timerText!: Phaser.GameObjects.Text;
         /*
          * Every dancer stops on the SAME frame before any exit smoke begins.
          */
+        /*
+         * Dance stops at the RANDOM real-player slot, then smoke hides the
+         * snap back to the exact original hiding position.
+         */
+        const danceEndX=
+            runtime.owner.x;
+        const danceEndY=
+            runtime.owner.y;
+
         runtime.owner
             .setPosition(
                 runtime.ownerX,
@@ -3231,6 +3628,32 @@ private timerText!: Phaser.GameObjects.Text;
             this.updateHiderTauntHud();
         }
 
+        /*
+         * Rebase both visible and local-prediction coordinates BEFORE
+         * cinematic ownership is released.
+         */
+        this.networkPlayerManager
+            .setCinematicAuthoritativePosition(
+                sessionId,
+                runtime.returnX,
+                runtime.returnY,
+                true,
+            );
+
+        runtime.owner
+            .setPosition(
+                runtime.returnX,
+                runtime.returnY,
+            )
+            .setAngle(
+                runtime.ownerBaseAngle,
+            )
+            .setScale(
+                runtime.ownerBaseScaleX,
+                runtime.ownerBaseScaleY,
+            )
+            .setAlpha(1);
+
         this.cloneDancePartyRuntimes.delete(
             sessionId,
         );
@@ -3265,8 +3688,17 @@ private timerText!: Phaser.GameObjects.Text;
              * disappear in a very short smoke cascade.
              */
             this.showCloneDanceSmoke(
-                runtime.ownerX,
-                runtime.ownerY,
+                danceEndX,
+                danceEndY,
+            );
+
+            /*
+             * Small return puff makes the real Hider's reposition unreadable
+             * in the chaos without leaving any extra decoy behind.
+             */
+            this.showCloneDanceSmoke(
+                runtime.returnX,
+                runtime.returnY,
             );
 
             runtime.clones
@@ -3352,8 +3784,8 @@ private timerText!: Phaser.GameObjects.Text;
 
             runtime.owner
                 .setPosition(
-                    runtime.ownerX,
-                    runtime.ownerY,
+                    runtime.returnX,
+                    runtime.returnY,
                 )
                 .setAngle(
                     runtime.ownerBaseAngle,
@@ -3363,6 +3795,14 @@ private timerText!: Phaser.GameObjects.Text;
                     runtime.ownerBaseScaleY,
                 )
                 .setAlpha(1);
+
+            this.networkPlayerManager
+                .setCinematicAuthoritativePosition(
+                    sessionId,
+                    runtime.returnX,
+                    runtime.returnY,
+                    true,
+                );
 
             this.networkPlayerManager
                 .setCinematicTransformOwned(

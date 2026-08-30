@@ -1,3 +1,4 @@
+/* V1010555B_CLONE_DANCE_ASSIST_BGM_RANDOM_OWNER_CLIENT: Clone Dance payload separates random owner dance slot from exact pre-skill return position. */
 /* V1010555_CLONE_DANCE_PARTY_CLIENT: Clone Dance Party transport; Triple Teleport production TEST endpoint removed/replaced. */
 /* V1010554A_TRIPLE_TELEPORT_CLIENT: Random Taunt/Triple Teleport transport. */
 /* V1010553_HARDENED_5POSE_GAUGE_HIT_DRAIN_CLIENT */
@@ -136,8 +137,12 @@ export type NetworkHiderCloneDancePoint = {
 export type NetworkHiderCloneDanceParty = {
   sessionId: string;
   stage: 'start' | 'end' | 'cancel';
+  /* Current REAL Hider dance slot, chosen randomly among the formation. */
   originX: number;
   originY: number;
+  /* Exact pre-skill hiding position. */
+  returnX: number;
+  returnY: number;
   clones: NetworkHiderCloneDancePoint[];
   durationMs: number;
   endsAt: number;
@@ -3823,6 +3828,18 @@ this.room = room;
                   Number(payload?.originX ?? 0),
                 originY:
                   Number(payload?.originY ?? 0),
+                returnX:
+                  Number(
+                    payload?.returnX ??
+                    payload?.originX ??
+                    0
+                  ),
+                returnY:
+                  Number(
+                    payload?.returnY ??
+                    payload?.originY ??
+                    0
+                  ),
                 clones,
                 durationMs:
                   Math.max(
