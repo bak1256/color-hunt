@@ -1,3 +1,4 @@
+/* V1010554I_TRIPLE_TELEPORT_CAMERA_VISION_POSTPASS_OWNERSHIP: late Hider post-pass cannot override Triple Teleport fixed-center zoom or restore circular darkness. */
 /* V1010554H_TRIPLE_TELEPORT_GHOST_CAMERA_SOUND_POLISH: fixed-center small zoom-out, clean white/cyan afterimages, teleport SFX, stale-ghost cleanup. */
 /* V1010554G4_REMOVE_LEGACY_TAUNT_BUSY_FIELDS: remove stale BUSY-guard references to UI fields already deleted by current Random Taunt cleanup. */
 /* V1010554G3_TRIPLE_TELEPORT_MOTION_CAMERA_AUTHORITY_BUSY_UI_ROBUST_METHODS: true high-speed character motion, exact self-position rebase, fixed-origin zoom camera, clean victory capture. */
@@ -3181,6 +3182,62 @@ private timerText!: Phaser.GameObjects.Text;
     }
 
     private applyHiderSpectatorAndViewPostPass(): void {
+        /*
+         * V1010554I_TRIPLE_TELEPORT_CAMERA_VISION_POSTPASS_OWNERSHIP
+         *
+         * Triple Teleport owns the LOCAL Hider camera/vision for its whole
+         * cinematic. This method is a late post-pass, so returning here is
+         * essential: otherwise it can undo the zoom tween and redraw the
+         * circular darkness every frame.
+         *
+         * Victory capture remains higher priority and is intentionally allowed
+         * to pass through to its existing clean-capture barrier below.
+         */
+        if(
+            this.tripleTeleportLocalActive &&
+            !this.victoryShowcaseCleanCaptureActive &&
+            this.roundResultWinner===null &&
+            this.phase==='hunt'
+        ){
+            /*
+             * Do not touch camera zoom/scroll/follow here.
+             * startTripleTeleportLocalCamera() is the sole camera owner.
+             */
+            this.hiderVisionGraphics
+                ?.clear()
+                .setVisible(false);
+
+            this.hiderVisionOverlays
+                .forEach(
+                    (overlay)=>overlay
+                        .setVisible(false)
+                        .setAlpha(0),
+                );
+
+            this.heartbeatDangerOverlay
+                ?.setVisible(false)
+                .setAlpha(0);
+
+            this.heartbeatBorders
+                .forEach(
+                    (border)=>border
+                        .setVisible(false)
+                        .setAlpha(0),
+                );
+
+            /*
+             * Mobile MOVE remains hidden until the zoom-in restore completes.
+             */
+            this.resetMobileMoveControl();
+            this.mobileMoveBase
+                ?.setVisible(false);
+            this.mobileMoveKnob
+                ?.setVisible(false);
+            this.mobileMoveLabel
+                ?.setVisible(false);
+
+            return;
+        }
         /*
          * V1010452P_HIDER_VICTORY_PC_MOBILE_CAPTURE_PARITY
          *
