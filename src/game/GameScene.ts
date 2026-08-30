@@ -1,3 +1,4 @@
+/* V1010553I_REMOVE_HARDENED_TEST_BUTTON: remove development-only Hardened direct test UI; keep production random-taunt activation unchanged. */
 /* V1010553G_HARDENED_UI_CAPTURE_CLEANUP: compact rounded local-only taunt button; one strong taunt line; Hardened smoke/muscle excluded from victory capture. */
 /* V1010553F_HARDENED_POSE_CAST_SYNTAX_FIX: wrap optional-chained getByName expression before TypeScript 'as' cast. */
 /* V1010553E_HARDENED_REVEAL_UI_ROBUST: structure-based v553c-compatible patch; real button, huge smoke reveal, POOF+roar, overlay taunt/gauge, stronger -1s feedback. */
@@ -1272,14 +1273,12 @@ private timerText!: Phaser.GameObjects.Text;
     private hiderTauntButtonBody?: Phaser.GameObjects.Graphics;
     private hiderTauntButtonShadow?: Phaser.GameObjects.Graphics;
     private hiderTauntButtonHit?: Phaser.GameObjects.Zone;
-    private hiderHardenedTestButton?: Phaser.GameObjects.Text;
     private readonly hardenedEndsAtBySessionId = new Map<string, number>();
     private readonly hardenedNextPhraseAtBySessionId = new Map<string, number>();
     private readonly hardenedPhraseIndexBySessionId = new Map<string, number>();
     private getHardenedTauntCopy(): {
         warning: string;
         button: string;
-        testButton: string;
         initial: string;
         phrases: readonly string[];
         muscleLoss: (seconds: number) => string;
@@ -1289,7 +1288,6 @@ private timerText!: Phaser.GameObjects.Text;
             return {
                 warning: '⚠ 命がけのランダム挑発',
                 button: '😈 ランダム挑発',
-                testButton: 'TEST 💪 カチカチ化',
                 initial: '俺はカチカチだ!!!',
                 phrases: ['俺はカチカチだ!!!','FLEX~!!!!','さあ撃ってみろ!','これが筋肉だ!','TINGなんてかゆいぜ!'],
                 muscleLoss: (seconds) => `筋肉消失まであと${seconds}秒...`,
@@ -1299,7 +1297,6 @@ private timerText!: Phaser.GameObjects.Text;
             return {
                 warning: '⚠ LIFE-ON-THE-LINE RANDOM TAUNT',
                 button: '😈 RANDOM TAUNT',
-                testButton: 'TEST 💪 HARDEN UP',
                 initial: "I'M ROCK SOLID!!!",
                 phrases: ["I'M ROCK SOLID!!!",'FLEX~!!!!','COME ON, SHOOT ME!','THIS IS MUSCLE!','TING? THAT TICKLES!'],
                 muscleLoss: (seconds) => `MUSCLE LOSS IN ${seconds}...`,
@@ -1309,7 +1306,6 @@ private timerText!: Phaser.GameObjects.Text;
             return {
                 warning: '⚠ 赌命随机挑衅',
                 button: '😈 随机挑衅',
-                testButton: 'TEST 💪 硬起来',
                 initial: '我硬得很!!!',
                 phrases: ['我硬得很!!!','FLEX~!!!!','来啊，开枪啊!','这就是肌肉!','TING？挠痒痒而已!'],
                 muscleLoss: (seconds) => `肌肉流失还有${seconds}秒...`,
@@ -1318,7 +1314,6 @@ private timerText!: Phaser.GameObjects.Text;
         return {
             warning: '⚠ 목숨을 건 랜덤 도발',
             button: '😈 랜덤 도발',
-            testButton: 'TEST 💪 단단해지기',
             initial: '나는 단단하다!!!',
             phrases: ['나는 단단하다!!!','FLEX~!!!!','어디 한번 쏴봐!','이게 근육이다!','TING도 간지럽다!'],
             muscleLoss: (seconds) => `근손실 ${seconds}초 남음...`,
@@ -1331,13 +1326,11 @@ private timerText!: Phaser.GameObjects.Text;
         this.hiderTauntButtonBody?.destroy();
         this.hiderTauntButtonShadow?.destroy();
         this.hiderTauntButtonHit?.destroy();
-        this.hiderHardenedTestButton?.destroy();
         this.hiderTauntWarning=undefined;
         this.hiderTauntButton=undefined;
         this.hiderTauntButtonBody=undefined;
         this.hiderTauntButtonShadow=undefined;
         this.hiderTauntButtonHit=undefined;
-        this.hiderHardenedTestButton=undefined;
     }
 
     private createHiderTauntHud(): void {
@@ -1382,16 +1375,6 @@ private timerText!: Phaser.GameObjects.Text;
             align:'center'
         }).setOrigin(0.5).setDepth(3902);
 
-        const test=this.add.text(0,0,copy.testButton,{
-            fontFamily:'Arial Black, sans-serif',
-            fontSize:'10px',
-            color:'#b8f7ff',
-            backgroundColor:'#182d3fff',
-            padding:{x:7,y:5},
-            stroke:'#000000',
-            strokeThickness:2
-        }).setOrigin(0.5).setDepth(3901).setInteractive({useHandCursor:true});
-
         const activate=()=>{
             const id=multiplayerClient.getSessionId();
             if(!id||this.hardenedEndsAtBySessionId.has(id))return;
@@ -1402,29 +1385,27 @@ private timerText!: Phaser.GameObjects.Text;
         hit.on('pointerout',()=>{drawBody(false,false);button.setY(hit.y);});
         hit.on('pointerdown',()=>{drawBody(true,true);button.setY(hit.y+2);});
         hit.on('pointerup',()=>{drawBody(true,false);button.setY(hit.y);activate();});
-        test.on('pointerdown',activate);
 
         this.hiderTauntWarning=warning;
         this.hiderTauntButton=button;
         this.hiderTauntButtonBody=body;
         this.hiderTauntButtonShadow=shadow;
         this.hiderTauntButtonHit=hit;
-        this.hiderHardenedTestButton=test;
         this.updateHiderTauntHud();
     }
 
     private updateHiderTauntHud(): void {
         const w=this.hiderTauntWarning,b=this.hiderTauntButton;
         const body=this.hiderTauntButtonBody,shadow=this.hiderTauntButtonShadow;
-        const hit=this.hiderTauntButtonHit,t=this.hiderHardenedTestButton;
-        if(!w||!b||!body||!shadow||!hit||!t)return;
+        const hit=this.hiderTauntButtonHit;
+        if(!w||!b||!body||!shadow||!hit)return;
 
         const id=multiplayerClient.getSessionId();
         const local=multiplayerClient.getLocalPlayer();
         const pos=this.networkPlayerManager.getLocalPlayerPosition();
 
         // Local-Hider self view ONLY. TAB spectator view must never show
-        // the taunt warning/button/test controls.
+        // the taunt warning/button controls.
         const show=this.phase==='hunt'&&
             !this.spectatorSessionId&&
             Boolean(id&&local?.role==='hider'&&local.alive&&pos&&!this.hardenedEndsAtBySessionId.has(id));
@@ -1434,7 +1415,6 @@ private timerText!: Phaser.GameObjects.Text;
         body.setVisible(show);
         shadow.setVisible(show);
         hit.setVisible(show);
-        t.setVisible(show);
         if(!show||!pos)return;
 
         // Compact enough that the warning line remains clearly readable.
@@ -1443,7 +1423,6 @@ private timerText!: Phaser.GameObjects.Text;
         shadow.setPosition(pos.x,pos.y+76);
         hit.setPosition(pos.x,pos.y+72);
         b.setPosition(pos.x,pos.y+72);
-        t.setPosition(pos.x,pos.y+101);
     }
 
     private showHardenedSmoke(x:number,y:number):void {
