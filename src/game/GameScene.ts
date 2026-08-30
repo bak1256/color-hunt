@@ -1,3 +1,4 @@
+/* V1010554F_TRIPLE_TELEPORT_CINEMATIC_CAMERA: stable local wide camera + 1.5x slower readable Triple Teleport + victory-safe restore. */
 /* V1010554E_VULCAN_AUTHORITATIVE_ALL_VIEW_FX: one authoritative Vulcan visual stream for Hunter, Hider and TAB/shared views. */
 /* V1010554A_TRIPLE_TELEPORT_CLIENT: Random Taunt adds server-authoritative Triple Teleport + test button + victory-safe FX cleanup. */
 /* V1010553MN_TAUNT_UI_READABILITY_COMBINED: combined speech-bubble + Random Taunt button readability polish. */
@@ -1285,6 +1286,13 @@ private timerText!: Phaser.GameObjects.Text;
     private hiderTripleTeleportTestButton?: Phaser.GameObjects.Text;
     private tripleTeleportLocalActive=false;
     private readonly tripleTeleportFx=new Set<Phaser.GameObjects.GameObject>();
+    /* V1010554F_TRIPLE_TELEPORT_CINEMATIC_CAMERA: local Hider camera is temporarily owned by Triple Teleport. */
+    private tripleTeleportCameraSnapshot?: {
+        zoom:number;
+        scrollX:number;
+        scrollY:number;
+    };
+    private tripleTeleportCameraOwned=false;
     private readonly hardenedEndsAtBySessionId = new Map<string, number>();
     private readonly hardenedNextPhraseAtBySessionId = new Map<string, number>();
     private readonly hardenedPhraseIndexBySessionId = new Map<string, number>();
@@ -1684,6 +1692,162 @@ private timerText!: Phaser.GameObjects.Text;
     }
 
     /* V1010554A_TRIPLE_TELEPORT_CLIENT: pure-Phaser 3-step teleport FX; no generated image assets. */
+    private startTripleTeleportLocalCamera(
+        originX:number,
+        originY:number,
+    ):void{
+        if(
+            this.roundResultWinner!==null ||
+            this.victoryShowcaseCleanCaptureActive ||
+            this.phase!=='hunt'
+        ) return;
+
+        const camera=this.cameras.main;
+        this.tweens.killTweensOf(camera);
+
+        this.tripleTeleportCameraSnapshot={
+            zoom:camera.zoom,
+            scrollX:camera.scrollX,
+            scrollY:camera.scrollY,
+        };
+        this.tripleTeleportCameraOwned=true;
+
+        /*
+         * Must match current authoritative v554 server destinations.
+         * Clamp them exactly as the server does, then fit ALL positions with
+         * breathing room so 슉 → 슉 → 슉 can be watched from one fixed frame.
+         */
+        const points=[
+            {x:originX,y:originY},
+            {x:Phaser.Math.Clamp(originX+92,28,932),y:Phaser.Math.Clamp(originY-48,38,502)},
+            {x:Phaser.Math.Clamp(originX-78,28,932),y:Phaser.Math.Clamp(originY+62,38,502)},
+            {x:Phaser.Math.Clamp(originX+108,28,932),y:Phaser.Math.Clamp(originY+44,38,502)},
+        ];
+
+        const minX=Math.min(...points.map((p)=>p.x))-58;
+        const maxX=Math.max(...points.map((p)=>p.x))+58;
+        const minY=Math.min(...points.map((p)=>p.y))-54;
+        const maxY=Math.max(...points.map((p)=>p.y))+54;
+        const worldW=Math.max(220,maxX-minX);
+        const worldH=Math.max(160,maxY-minY);
+
+        const fitZoom=Phaser.Math.Clamp(
+            Math.min(
+                this.gameWidth/worldW,
+                this.gameHeight/worldH,
+            )*0.92,
+            1.35,
+            3.2,
+        );
+        const targetZoom=Math.min(camera.zoom,fitZoom);
+        const centerX=(minX+maxX)/2;
+        const centerY=(minY+maxY)/2;
+        const targetScrollX=centerX-this.gameWidth/(2*targetZoom);
+        const targetScrollY=centerY-this.gameHeight/(2*targetZoom);
+
+        camera
+            .stopFollow()
+            .removeBounds();
+
+        this.resetMobileMoveControl();
+        this.mobileMoveBase?.setVisible(false);
+        this.mobileMoveKnob?.setVisible(false);
+        this.mobileMoveLabel?.setVisible(false);
+
+        this.tweens.add({
+            targets:camera,
+            zoom:targetZoom,
+            scrollX:targetScrollX,
+            scrollY:targetScrollY,
+            duration:320,
+            ease:'Sine.easeInOut',
+            onUpdate:()=>this.applyFixedHudForZoom(camera.zoom),
+        });
+    }
+
+    private restoreTripleTeleportLocalCamera(
+        originX:number,
+        originY:number,
+        animate=true,
+    ):void{
+        const snapshot=this.tripleTeleportCameraSnapshot;
+        const camera=this.cameras.main;
+
+        this.tweens.killTweensOf(camera);
+
+        /*
+         * Victory/result owns the camera absolutely. Never start a gameplay
+         * restore tween underneath the clean victory-card capture.
+         */
+        if(
+            this.roundResultWinner!==null ||
+            this.victoryShowcaseCleanCaptureActive ||
+            this.phase!=='hunt'
+        ){
+            this.tripleTeleportCameraSnapshot=undefined;
+            this.tripleTeleportCameraOwned=false;
+            this.tripleTeleportLocalActive=false;
+            this.networkPlayerManager.setLocalMovementHardLocked(false);
+            this.resetMobileMoveControl();
+            return;
+        }
+
+        if(!snapshot){
+            this.tripleTeleportCameraOwned=false;
+            this.tripleTeleportLocalActive=false;
+            this.networkPlayerManager.setLocalMovementHardLocked(false);
+            this.resetMobileMoveControl();
+            this.ensureGameplayCameraFollow();
+            this.updateMobileControlVisibility();
+            this.updateHiderTauntHud();
+            return;
+        }
+
+        const zoom=snapshot.zoom;
+        const targetScrollX=originX-this.gameWidth/(2*zoom);
+        const targetScrollY=originY-this.gameHeight/(2*zoom);
+
+        camera
+            .stopFollow()
+            .removeBounds();
+
+        const finish=()=>{
+            this.tripleTeleportCameraSnapshot=undefined;
+            this.tripleTeleportCameraOwned=false;
+            this.tripleTeleportLocalActive=false;
+            this.networkPlayerManager.setLocalMovementHardLocked(false);
+            this.resetMobileMoveControl();
+
+            /*
+             * Normal Hider follow is re-established ONLY after camera recovery,
+             * so the mobile MOVE stick cannot return early.
+             */
+            this.ensureGameplayCameraFollow();
+            this.updateMobileControlVisibility();
+            this.updateHiderTauntHud();
+        };
+
+        if(!animate){
+            camera
+                .setZoom(zoom)
+                .setScroll(targetScrollX,targetScrollY);
+            this.applyFixedHudForZoom(zoom);
+            finish();
+            return;
+        }
+
+        this.tweens.add({
+            targets:camera,
+            zoom,
+            scrollX:targetScrollX,
+            scrollY:targetScrollY,
+            duration:460,
+            ease:'Sine.easeInOut',
+            onUpdate:()=>this.applyFixedHudForZoom(camera.zoom),
+            onComplete:finish,
+        });
+    }
+
     private rememberTripleTeleportFx<T extends Phaser.GameObjects.GameObject>(obj:T):T{
         obj.setName('hider-triple-teleport-fx');
         this.tripleTeleportFx.add(obj);
@@ -1692,75 +1856,315 @@ private timerText!: Phaser.GameObjects.Text;
     }
 
     private clearTripleTeleportFx():void{
-        for(const fx of [...this.tripleTeleportFx]){if(fx.active)fx.destroy();}
+        for(const fx of [...this.tripleTeleportFx]){
+            if(fx.active)fx.destroy();
+        }
         this.tripleTeleportFx.clear();
-        this.children.getChildren().filter((c)=>c.name==='hider-triple-teleport-fx').forEach((c)=>c.destroy());
+
+        this.children
+            .getChildren()
+            .filter((c)=>c.name==='hider-triple-teleport-fx')
+            .forEach((c)=>c.destroy());
+
         const localId=multiplayerClient.getSessionId();
         if(localId){
             const c=this.networkPlayerManager.getPlayerContainer(localId);
-            if(c){this.tweens.killTweensOf(c);c.setAlpha(1).setScale(1).setAngle(0);}
+            if(c){
+                this.tweens.killTweensOf(c);
+                c.setAlpha(1).setScale(1).setAngle(0);
+            }
         }
+
+        const camera=this.cameras.main;
+        this.tweens.killTweensOf(camera);
+
+        const snapshot=this.tripleTeleportCameraSnapshot;
+        const resultOwnsCamera=
+            this.roundResultWinner!==null ||
+            this.victoryShowcaseCleanCaptureActive ||
+            this.phase!=='hunt';
+
+        this.tripleTeleportCameraSnapshot=undefined;
+        this.tripleTeleportCameraOwned=false;
+
+        if(
+            snapshot &&
+            !resultOwnsCamera
+        ){
+            camera
+                .setZoom(snapshot.zoom)
+                .setScroll(snapshot.scrollX,snapshot.scrollY);
+            this.applyFixedHudForZoom(snapshot.zoom);
+        }
+
         if(this.tripleTeleportLocalActive){
             this.tripleTeleportLocalActive=false;
-            this.networkPlayerManager.setLocalMovementHardLocked(false);
+            this.networkPlayerManager
+                .setLocalMovementHardLocked(false);
+        }
+
+        this.resetMobileMoveControl();
+
+        /*
+         * Do not call camera follow while victory capture owns the frame.
+         */
+        if(!resultOwnsCamera){
+            this.ensureGameplayCameraFollow();
+            this.updateMobileControlVisibility();
         }
     }
 
     private showTripleTeleportTrail(event:NetworkHiderTripleTeleport):void{
         if(this.phase!=='hunt'||this.victoryShowcaseCleanCaptureActive)return;
-        const dx=event.x-event.fromX,dy=event.y-event.fromY;
+
         const trail=this.rememberTripleTeleportFx(this.add.graphics().setDepth(4388));
-        trail.lineStyle(9,0x7eefff,0.18);trail.lineBetween(event.fromX,event.fromY,event.x,event.y);
-        trail.lineStyle(3,0xffffff,0.75);trail.lineBetween(event.fromX,event.fromY,event.x,event.y);
+        trail.lineStyle(11,0x7eefff,0.20);
+        trail.lineBetween(event.fromX,event.fromY,event.x,event.y);
+        trail.lineStyle(4,0xffffff,0.82);
+        trail.lineBetween(event.fromX,event.fromY,event.x,event.y);
+
+        /*
+         * Two fading afterimages make each stop readable even while the actual
+         * player container is immediately reconciled to the server position.
+         */
         const ghost=this.rememberTripleTeleportFx(this.add.graphics().setDepth(4389));
-        ghost.fillStyle(0xa9f7ff,0.28);ghost.fillCircle(event.fromX,event.fromY-18,13);ghost.fillRoundedRect(event.fromX-14,event.fromY-8,28,42,7);
+        ghost.fillStyle(0xa9f7ff,0.34);
+        ghost.fillCircle(event.fromX,event.fromY-18,13);
+        ghost.fillRoundedRect(event.fromX-14,event.fromY-8,28,42,7);
+
+        const ghost2=this.rememberTripleTeleportFx(this.add.graphics().setDepth(4388));
+        ghost2.fillStyle(0x55dff7,0.18);
+        ghost2.fillCircle(
+            Phaser.Math.Linear(event.fromX,event.x,0.45),
+            Phaser.Math.Linear(event.fromY,event.y,0.45)-18,
+            12,
+        );
+        ghost2.fillRoundedRect(
+            Phaser.Math.Linear(event.fromX,event.x,0.45)-13,
+            Phaser.Math.Linear(event.fromY,event.y,0.45)-8,
+            26,
+            39,
+            7,
+        );
+
         const ring=this.rememberTripleTeleportFx(this.add.graphics().setDepth(4390));
-        ring.lineStyle(3,0xd8ffff,0.9);ring.strokeCircle(event.x,event.y,18);ring.strokeCircle(event.x,event.y,28);
-        const slash=this.rememberTripleTeleportFx(this.add.text(event.x,event.y-44,'슉!',{fontFamily:'Arial Black, sans-serif',fontSize:'16px',fontStyle:'bold',color:'#eaffff',stroke:'#06334a',strokeThickness:5}).setOrigin(0.5).setDepth(4391));
-        this.tweens.add({targets:[trail,ghost],alpha:0,duration:260,ease:'Cubic.Out',onComplete:()=>{trail.destroy();ghost.destroy();}});
-        this.tweens.add({targets:ring,angle:180,scale:1.65,alpha:0,duration:300,ease:'Cubic.Out',onComplete:()=>ring.destroy()});
-        this.tweens.add({targets:slash,y:slash.y-18,alpha:0,scale:1.18,duration:260,onComplete:()=>slash.destroy()});
-        void dx;void dy;
+        ring.lineStyle(3,0xd8ffff,0.94);
+        ring.strokeCircle(event.x,event.y,18);
+        ring.strokeCircle(event.x,event.y,29);
+
+        const slash=this.rememberTripleTeleportFx(
+            this.add.text(event.x,event.y-44,'슉!',{
+                fontFamily:'Arial Black, sans-serif',
+                fontSize:'17px',
+                fontStyle:'bold',
+                color:'#eaffff',
+                stroke:'#06334a',
+                strokeThickness:5,
+            }).setOrigin(0.5).setDepth(4391)
+        );
+
+        this.tweens.add({
+            targets:[trail,ghost,ghost2],
+            alpha:0,
+            duration:420,
+            ease:'Cubic.Out',
+            onComplete:()=>{trail.destroy();ghost.destroy();ghost2.destroy();},
+        });
+        this.tweens.add({
+            targets:ring,
+            angle:220,
+            scale:1.72,
+            alpha:0,
+            duration:460,
+            ease:'Cubic.Out',
+            onComplete:()=>ring.destroy(),
+        });
+        this.tweens.add({
+            targets:slash,
+            y:slash.y-19,
+            alpha:0,
+            scale:1.2,
+            duration:420,
+            ease:'Cubic.Out',
+            onComplete:()=>slash.destroy(),
+        });
     }
 
     private applyTripleTeleport(event:NetworkHiderTripleTeleport):void{
         if(!event.sessionId)return;
-        const isLocal=event.sessionId===multiplayerClient.getSessionId();
-        const container=this.networkPlayerManager.getPlayerContainer(event.sessionId);
+
+        const isLocal=
+            event.sessionId===
+            multiplayerClient.getSessionId();
+        const container=
+            this.networkPlayerManager.getPlayerContainer(event.sessionId);
+
         if(event.stage==='cancel'){
-            if(container){this.tweens.killTweensOf(container);container.setAlpha(1).setScale(1).setAngle(0);}
-            if(isLocal){this.tripleTeleportLocalActive=false;this.networkPlayerManager.setLocalMovementHardLocked(false);this.updateHiderTauntHud();}
-            return;
-        }
-        if(this.phase!=='hunt')return;
-        if(event.stage==='start'){
-            if(isLocal){this.tripleTeleportLocalActive=true;this.networkPlayerManager.setLocalMovementHardLocked(true);this.updateHiderTauntHud();}
-            const startRing=this.rememberTripleTeleportFx(this.add.graphics().setDepth(4390));
-            startRing.lineStyle(4,0x91f5ff,0.95);startRing.strokeCircle(event.originX,event.originY,22);
-            this.tweens.add({targets:startRing,angle:360,scale:1.7,alpha:0,duration:330,onComplete:()=>startRing.destroy()});
-            return;
-        }
-        if(event.stage==='step'){
-            this.showTripleTeleportTrail(event);
-            if(container){this.tweens.killTweensOf(container);container.setAngle(-8);this.tweens.add({targets:container,angle:8,duration:55,yoyo:true,repeat:1,onComplete:()=>container.setAngle(0)});}
-            return;
-        }
-        if(event.stage==='vanish'){
-            this.showTripleTeleportTrail(event);
             if(container){
                 this.tweens.killTweensOf(container);
-                this.tweens.add({targets:container,angle:360,scale:0.18,alpha:0,duration:260,ease:'Back.In'});
+                container
+                    .setAlpha(1)
+                    .setScale(1)
+                    .setAngle(0)
+                    .setPosition(event.x,event.y);
             }
-            const poof=this.rememberTripleTeleportFx(this.add.text(event.x,event.y-28,'뿅!',{fontFamily:'Arial Black, sans-serif',fontSize:'20px',fontStyle:'bold',color:'#ffffff',stroke:'#184e68',strokeThickness:6}).setOrigin(0.5).setDepth(4392));
-            this.tweens.add({targets:poof,y:poof.y-20,scale:1.4,alpha:0,duration:360,onComplete:()=>poof.destroy()});
+
+            if(isLocal){
+                /*
+                 * Keep control locked until the camera is safely back.
+                 */
+                this.restoreTripleTeleportLocalCamera(
+                    event.originX||event.x,
+                    event.originY||event.y,
+                    true,
+                );
+            }
             return;
         }
+
+        if(this.phase!=='hunt')return;
+
+        if(event.stage==='start'){
+            if(isLocal){
+                this.tripleTeleportLocalActive=true;
+                this.networkPlayerManager
+                    .setLocalMovementHardLocked(true);
+                this.startTripleTeleportLocalCamera(
+                    event.originX,
+                    event.originY,
+                );
+                this.updateHiderTauntHud();
+            }
+
+            const startRing=
+                this.rememberTripleTeleportFx(
+                    this.add.graphics().setDepth(4390)
+                );
+            startRing
+                .lineStyle(4,0x91f5ff,0.95)
+                .strokeCircle(event.originX,event.originY,22);
+
+            this.tweens.add({
+                targets:startRing,
+                angle:360,
+                scale:1.75,
+                alpha:0,
+                duration:430,
+                ease:'Cubic.Out',
+                onComplete:()=>startRing.destroy(),
+            });
+            return;
+        }
+
+        if(event.stage==='step'){
+            this.showTripleTeleportTrail(event);
+
+            if(container){
+                this.tweens.killTweensOf(container);
+                container.setAngle(-9);
+                this.tweens.add({
+                    targets:container,
+                    angle:9,
+                    duration:95,
+                    yoyo:true,
+                    repeat:1,
+                    ease:'Sine.easeInOut',
+                    onComplete:()=>container.setAngle(0),
+                });
+            }
+            return;
+        }
+
+        if(event.stage==='vanish'){
+            this.showTripleTeleportTrail(event);
+
+            if(container){
+                this.tweens.killTweensOf(container);
+                this.tweens.add({
+                    targets:container,
+                    angle:540,
+                    scale:0.12,
+                    alpha:0,
+                    duration:520,
+                    ease:'Back.In',
+                });
+            }
+
+            const poof=
+                this.rememberTripleTeleportFx(
+                    this.add.text(
+                        event.x,
+                        event.y-28,
+                        '뾰옹~!',
+                        {
+                            fontFamily:'Arial Black, sans-serif',
+                            fontSize:'21px',
+                            fontStyle:'bold',
+                            color:'#ffffff',
+                            stroke:'#184e68',
+                            strokeThickness:6,
+                        },
+                    ).setOrigin(0.5).setDepth(4392)
+                );
+
+            this.tweens.add({
+                targets:poof,
+                y:poof.y-25,
+                scale:1.55,
+                alpha:0,
+                duration:650,
+                ease:'Cubic.Out',
+                onComplete:()=>poof.destroy(),
+            });
+            return;
+        }
+
         if(event.stage==='return'){
-            if(container){this.tweens.killTweensOf(container);container.setPosition(event.originX,event.originY).setAngle(0).setScale(0.25).setAlpha(0);this.tweens.add({targets:container,scale:1,alpha:1,duration:180,ease:'Back.Out'});}
-            const ring=this.rememberTripleTeleportFx(this.add.graphics().setDepth(4390));
-            ring.lineStyle(4,0xffffff,0.95);ring.strokeCircle(event.originX,event.originY,10);ring.strokeCircle(event.originX,event.originY,20);
-            this.tweens.add({targets:ring,scale:1.9,alpha:0,duration:260,onComplete:()=>ring.destroy()});
-            if(isLocal){this.tripleTeleportLocalActive=false;this.networkPlayerManager.setLocalMovementHardLocked(false);this.updateHiderTauntHud();}
+            if(container){
+                this.tweens.killTweensOf(container);
+                container
+                    .setPosition(event.originX,event.originY)
+                    .setAngle(0)
+                    .setScale(0.20)
+                    .setAlpha(0);
+
+                this.tweens.add({
+                    targets:container,
+                    scale:1,
+                    alpha:1,
+                    duration:330,
+                    ease:'Back.Out',
+                });
+            }
+
+            const ring=
+                this.rememberTripleTeleportFx(
+                    this.add.graphics().setDepth(4390)
+                );
+            ring.lineStyle(4,0xffffff,0.95);
+            ring.strokeCircle(event.originX,event.originY,10);
+            ring.strokeCircle(event.originX,event.originY,21);
+
+            this.tweens.add({
+                targets:ring,
+                scale:2.05,
+                alpha:0,
+                duration:430,
+                ease:'Cubic.Out',
+                onComplete:()=>ring.destroy(),
+            });
+
+            if(isLocal){
+                /*
+                 * Do NOT unlock here. Camera first returns to the original
+                 * hiding viewpoint; MOVE joystick/input return on tween complete.
+                 */
+                this.restoreTripleTeleportLocalCamera(
+                    event.originX,
+                    event.originY,
+                    true,
+                );
+            }
         }
     }
 
@@ -8048,6 +8452,20 @@ private timerText!: Phaser.GameObjects.Text;
                         this.getMobileAimControlScreenY(),
                     ),
                 );
+        }
+    
+        /*
+         * V1010554F_TRIPLE_TELEPORT_CINEMATIC_CAMERA: only MOVE is suppressed for local Hider teleport.
+         * This runs after the generic visibility pass so it cannot resurrect.
+         */
+        if(
+            this.tripleTeleportLocalActive &&
+            this.networkPlayerManager.isLocalHider()
+        ){
+            this.resetMobileMoveControl();
+            this.mobileMoveBase?.setVisible(false);
+            this.mobileMoveKnob?.setVisible(false);
+            this.mobileMoveLabel?.setVisible(false);
         }
     }
 
@@ -45401,6 +45819,13 @@ this.networkUnsubscribers.push(
     }
 
     private ensureGameplayCameraFollow(): void {
+        /*
+         * V1010554F_TRIPLE_TELEPORT_CINEMATIC_CAMERA: Triple Teleport uses one stable wide shot.
+         * Never chase the Hider between authoritative teleport positions.
+         */
+        if(this.tripleTeleportCameraOwned){
+            return;
+        }
         /* V1010543_RESULT_CAMERA_CANCEL_HINT_HIDER_OUTLINE / RESULT_FULL_MAP_LOCK
          * Once the authoritative result exists, normal Hunt/sniper spectator
          * follow is forbidden from re-applying gameplay zoom. During the
