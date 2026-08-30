@@ -1,3 +1,4 @@
+/* V1010553A_HARDENED_SQUARE_POSE_ASPECT: all Hardened pose assets are normalized to a 1:1 transparent canvas; display at 156x156 so no pose is stretched. */
 /* V1010553_HARDENED_5POSE_GAUGE_HIT_DRAIN_CLIENT */
 /* V1010552C_HARDENED_MUSCLE_SCALE_CALM: Hardened pose display footprint fixed to 104x156 (~1.3x the normal 80x120 Hider body). */
 /* V1010552_HIDER_HARDENED_VISUAL: Hardened pose replaces camouflage while active. */
@@ -2062,7 +2063,7 @@ export class NetworkPlayerManager {
     if (!active) { image?.destroy(); text?.destroy(); (container.getByName("network-hider-hardened-gauge") as Phaser.GameObjects.Graphics | null)?.destroy(); (container.getByName("network-hider-hardened-gauge-text") as Phaser.GameObjects.Text | null)?.destroy(); if (view.alive) { body?.setVisible(true); view.paintLayer?.texture.setVisible(true); } return; }
     body?.setVisible(false); view.paintLayer?.texture.setVisible(false);
     const key = `hider-hardened-pose-${Math.max(1, Math.min(5, Math.round(pose)))}`;
-    if (!image) { image = this.scene.add.image(0, 18, key).setOrigin(0.5, 0.75).setName("network-hider-hardened-pose").setDisplaySize(104,156); container.add(image); } else image.setTexture(key).setVisible(true);
+    if (!image) { image = this.scene.add.image(0, 18, key).setOrigin(0.5, 0.75).setName("network-hider-hardened-pose").setDisplaySize(156,156); container.add(image); } else image.setTexture(key).setVisible(true);
     if (!text) { text = this.scene.add.text(0,-72,label,{fontFamily:"Arial Black, sans-serif",fontSize:"15px",fontStyle:"bold",color:"#fff36d",stroke:"#000000",strokeThickness:5,align:"center"}).setOrigin(0.5,1).setName("network-hider-hardened-label"); container.add(text); }
     let gauge=container.getByName("network-hider-hardened-gauge") as Phaser.GameObjects.Graphics|null;if(!gauge){gauge=this.scene.add.graphics().setName("network-hider-hardened-gauge");container.add(gauge);}
     let gaugeText=container.getByName("network-hider-hardened-gauge-text") as Phaser.GameObjects.Text|null;if(!gaugeText){gaugeText=this.scene.add.text(0,82,"15.0s",{fontFamily:"Arial Black, sans-serif",fontSize:"10px",color:"#ffffff",stroke:"#000000",strokeThickness:3}).setOrigin(0.5).setName("network-hider-hardened-gauge-text");container.add(gaugeText);}
