@@ -1,3 +1,4 @@
+/* V1010554J_TRIPLE_TELEPORT_ZERO_PAN_ZOOM: Triple Teleport camera freezes scrollX/Y exactly; zoom is the only animated camera property. */
 /* V1010554I_TRIPLE_TELEPORT_CAMERA_VISION_POSTPASS_OWNERSHIP: late Hider post-pass cannot override Triple Teleport fixed-center zoom or restore circular darkness. */
 /* V1010554H_TRIPLE_TELEPORT_GHOST_CAMERA_SOUND_POLISH: fixed-center small zoom-out, clean white/cyan afterimages, teleport SFX, stale-ghost cleanup. */
 /* V1010554G4_REMOVE_LEGACY_TAUNT_BUSY_FIELDS: remove stale BUSY-guard references to UI fields already deleted by current Random Taunt cleanup. */
@@ -1815,12 +1816,16 @@ private timerText!: Phaser.GameObjects.Text;
          * A small zoom-out only:
          * 1.65 -> ~1.39 on the usual Hunt camera.
          */
-        const fixedCenterX=
-            camera.scrollX+
-            this.gameWidth/(2*camera.zoom);
-        const fixedCenterY=
-            camera.scrollY+
-            this.gameHeight/(2*camera.zoom);
+        /*
+         * V1010554J_TRIPLE_TELEPORT_ZERO_PAN_ZOOM
+         * ZERO-PAN CAMERA:
+         * Freeze the exact current camera X/Y. Phaser zoom does not require
+         * scroll compensation to preserve the camera center.
+         */
+        const lockedScrollX=
+            camera.scrollX;
+        const lockedScrollY=
+            camera.scrollY;
 
         const targetZoom=
             Math.min(
@@ -1847,15 +1852,22 @@ private timerText!: Phaser.GameObjects.Text;
             ease:'Sine.easeInOut',
             onUpdate:()=>{
                 /*
-                 * Changing Phaser zoom changes visible world size.
-                 * Recalculate scroll every frame so the world point currently
-                 * at screen-center NEVER moves during the zoom animation.
+                 * Keep X/Y literally frozen. Only camera.zoom is allowed to
+                 * change, so the picture expands outward from the exact spot
+                 * the Hider was already viewing.
                  */
                 camera.setScroll(
-                    fixedCenterX-
-                        this.gameWidth/(2*camera.zoom),
-                    fixedCenterY-
-                        this.gameHeight/(2*camera.zoom),
+                    lockedScrollX,
+                    lockedScrollY,
+                );
+                this.applyFixedHudForZoom(
+                    camera.zoom,
+                );
+            },
+            onComplete:()=>{
+                camera.setScroll(
+                    lockedScrollX,
+                    lockedScrollY,
                 );
                 this.applyFixedHudForZoom(
                     camera.zoom,
