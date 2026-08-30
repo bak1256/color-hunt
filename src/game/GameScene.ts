@@ -1,3 +1,5 @@
+/* V1010554G4_REMOVE_LEGACY_TAUNT_BUSY_FIELDS: remove stale BUSY-guard references to UI fields already deleted by current Random Taunt cleanup. */
+/* V1010554G3_TRIPLE_TELEPORT_MOTION_CAMERA_AUTHORITY_BUSY_UI_ROBUST_METHODS: true high-speed character motion, exact self-position rebase, fixed-origin zoom camera, clean victory capture. */
 /* V1010554F_TRIPLE_TELEPORT_CINEMATIC_CAMERA: stable local wide camera + 1.5x slower readable Triple Teleport + victory-safe restore. */
 /* V1010554E_VULCAN_AUTHORITATIVE_ALL_VIEW_FX: one authoritative Vulcan visual stream for Hunter, Hider and TAB/shared views. */
 /* V1010554A_TRIPLE_TELEPORT_CLIENT: Random Taunt adds server-authoritative Triple Teleport + test button + victory-safe FX cleanup. */
@@ -1293,6 +1295,17 @@ private timerText!: Phaser.GameObjects.Text;
         scrollY:number;
     };
     private tripleTeleportCameraOwned=false;
+    private tripleTeleportLocalOrigin?: {x:number;y:number};
+    private readonly tripleTeleportActiveSessionIds=new Set<string>();
+    private hiderRandomTauntSkillBusy=false;
+
+    private setHiderRandomTauntSkillBusy(
+        busy:boolean,
+    ):void{
+        this.hiderRandomTauntSkillBusy=
+            Boolean(busy);
+        this.updateHiderTauntHud();
+    }
     private readonly hardenedEndsAtBySessionId = new Map<string, number>();
     private readonly hardenedNextPhraseAtBySessionId = new Map<string, number>();
     private readonly hardenedPhraseIndexBySessionId = new Map<string, number>();
@@ -1447,7 +1460,33 @@ private timerText!: Phaser.GameObjects.Text;
             const id=multiplayerClient.getSessionId();
             if(!id||this.hardenedEndsAtBySessionId.has(id))return;
             dismissTip();
+            this.setHiderRandomTauntSkillBusy(true);
             multiplayerClient.sendHiderHardenedTaunt();
+
+            /*
+             * Safety release only if the server rejected the request and no
+             * actual skill state arrived.
+             */
+            this.time.delayedCall(
+                1200,
+                ()=>{
+                    const localId=
+                        multiplayerClient.getSessionId();
+                    const hardenedActive=
+                        Boolean(
+                            localId &&
+                            this.hardenedEndsAtBySessionId.has(localId)
+                        );
+
+                    if(
+                        this.hiderRandomTauntSkillBusy &&
+                        !hardenedActive &&
+                        !this.tripleTeleportLocalActive
+                    ){
+                        this.setHiderRandomTauntSkillBusy(false);
+                    }
+                },
+            );
         };
 
         hit.on('pointerover',()=>drawBody(true,false));
@@ -1470,13 +1509,41 @@ private timerText!: Phaser.GameObjects.Text;
         }).setOrigin(0.5).setDepth(3912).setInteractive({useHandCursor:true});
         teleportTest.on('pointerup',()=>{
             if(this.phase!=='hunt'||this.tripleTeleportLocalActive)return;
+            this.setHiderRandomTauntSkillBusy(true);
             multiplayerClient.sendHiderTripleTeleportTest();
+
+            this.time.delayedCall(
+                1200,
+                ()=>{
+                    if(
+                        this.hiderRandomTauntSkillBusy &&
+                        !this.tripleTeleportLocalActive
+                    ){
+                        this.setHiderRandomTauntSkillBusy(false);
+                    }
+                },
+            );
         });
         this.hiderTripleTeleportTestButton=teleportTest;
         this.updateHiderTauntHud();
     }
 
     private updateHiderTauntHud(): void {
+        /*
+         * V1010554G2_RANDOM_TAUNT_BUSY_UI
+         * No Random Taunt UI may follow the Hider while a skill is running.
+         */
+        if(this.hiderRandomTauntSkillBusy){
+            this.hiderTauntButton?.setVisible(false);
+            this.hiderTauntButtonBody?.setVisible(false);
+            this.hiderTauntButtonShadow?.setVisible(false);
+            this.hiderTauntButtonHit?.setVisible(false);
+            this.hiderTauntTipBubble?.setVisible(false);
+            this.hiderTauntTipTitle?.setVisible(false);
+            this.hiderTauntTipBody?.setVisible(false);
+            this.hiderTripleTeleportTestButton?.setVisible(false);
+            return;
+        }
         const b=this.hiderTauntButton;
         const body=this.hiderTauntButtonBody;
         const shadow=this.hiderTauntButtonShadow;
@@ -1711,39 +1778,58 @@ private timerText!: Phaser.GameObjects.Text;
             scrollY:camera.scrollY,
         };
         this.tripleTeleportCameraOwned=true;
+        this.tripleTeleportLocalOrigin={
+            x:originX,
+            y:originY,
+        };
 
         /*
-         * Must match current authoritative v554 server destinations.
-         * Clamp them exactly as the server does, then fit ALL positions with
-         * breathing room so 슉 → 슉 → 슉 can be watched from one fixed frame.
+         * Hide the Hider's black circular-vision restriction IMMEDIATELY.
+         * updateHuntTension() is also guarded below, so it cannot redraw it.
          */
-        const points=[
-            {x:originX,y:originY},
-            {x:Phaser.Math.Clamp(originX+92,28,932),y:Phaser.Math.Clamp(originY-48,38,502)},
-            {x:Phaser.Math.Clamp(originX-78,28,932),y:Phaser.Math.Clamp(originY+62,38,502)},
-            {x:Phaser.Math.Clamp(originX+108,28,932),y:Phaser.Math.Clamp(originY+44,38,502)},
-        ];
+        this.hiderVisionGraphics
+            ?.clear()
+            .setVisible(false);
+        this.hiderVisionOverlays
+            .forEach(
+                (overlay)=>overlay
+                    .setVisible(false)
+                    .setAlpha(0),
+            );
+        this.heartbeatDangerOverlay
+            ?.setVisible(false)
+            .setAlpha(0);
+        this.heartbeatBorders
+            .forEach(
+                (border)=>border
+                    .setVisible(false)
+                    .setAlpha(0),
+            );
 
-        const minX=Math.min(...points.map((p)=>p.x))-58;
-        const maxX=Math.max(...points.map((p)=>p.x))+58;
-        const minY=Math.min(...points.map((p)=>p.y))-54;
-        const maxY=Math.max(...points.map((p)=>p.y))+54;
-        const worldW=Math.max(220,maxX-minX);
-        const worldH=Math.max(160,maxY-minY);
+        /*
+         * User requirement: zoom OUT "from where I am", not by recentering on
+         * the bounding-box midpoint. Keep the original hiding point at screen
+         * center for the entire sequence.
+         */
+        const targetZoom=
+            Phaser.Math.Clamp(
+                Math.min(
+                    camera.zoom*0.68,
+                    1.18,
+                ),
+                0.98,
+                Math.max(
+                    0.98,
+                    camera.zoom,
+                ),
+            );
 
-        const fitZoom=Phaser.Math.Clamp(
-            Math.min(
-                this.gameWidth/worldW,
-                this.gameHeight/worldH,
-            )*0.92,
-            1.35,
-            3.2,
-        );
-        const targetZoom=Math.min(camera.zoom,fitZoom);
-        const centerX=(minX+maxX)/2;
-        const centerY=(minY+maxY)/2;
-        const targetScrollX=centerX-this.gameWidth/(2*targetZoom);
-        const targetScrollY=centerY-this.gameHeight/(2*targetZoom);
+        const targetScrollX=
+            originX-
+            this.gameWidth/(2*targetZoom);
+        const targetScrollY=
+            originY-
+            this.gameHeight/(2*targetZoom);
 
         camera
             .stopFollow()
@@ -1759,7 +1845,7 @@ private timerText!: Phaser.GameObjects.Text;
             zoom:targetZoom,
             scrollX:targetScrollX,
             scrollY:targetScrollY,
-            duration:320,
+            duration:360,
             ease:'Sine.easeInOut',
             onUpdate:()=>this.applyFixedHudForZoom(camera.zoom),
         });
@@ -1772,21 +1858,38 @@ private timerText!: Phaser.GameObjects.Text;
     ):void{
         const snapshot=this.tripleTeleportCameraSnapshot;
         const camera=this.cameras.main;
-
         this.tweens.killTweensOf(camera);
 
         /*
-         * Victory/result owns the camera absolutely. Never start a gameplay
-         * restore tween underneath the clean victory-card capture.
+         * Victory/result camera is absolute owner. Position is still rebased to
+         * the exact original hiding point, but no gameplay camera tween may run.
          */
         if(
             this.roundResultWinner!==null ||
             this.victoryShowcaseCleanCaptureActive ||
             this.phase!=='hunt'
         ){
+            const localId=multiplayerClient.getSessionId();
+            if(localId){
+                this.networkPlayerManager
+                    .setCinematicAuthoritativePosition(
+                        localId,
+                        originX,
+                        originY,
+                        true,
+                    );
+                this.networkPlayerManager
+                    .setCinematicTransformOwned(
+                        localId,
+                        false,
+                    );
+            }
+
             this.tripleTeleportCameraSnapshot=undefined;
             this.tripleTeleportCameraOwned=false;
             this.tripleTeleportLocalActive=false;
+            this.tripleTeleportLocalOrigin=undefined;
+            this.hiderRandomTauntSkillBusy=false;
             this.networkPlayerManager.setLocalMovementHardLocked(false);
             this.resetMobileMoveControl();
             return;
@@ -1795,6 +1898,8 @@ private timerText!: Phaser.GameObjects.Text;
         if(!snapshot){
             this.tripleTeleportCameraOwned=false;
             this.tripleTeleportLocalActive=false;
+            this.tripleTeleportLocalOrigin=undefined;
+            this.hiderRandomTauntSkillBusy=false;
             this.networkPlayerManager.setLocalMovementHardLocked(false);
             this.resetMobileMoveControl();
             this.ensureGameplayCameraFollow();
@@ -1803,45 +1908,67 @@ private timerText!: Phaser.GameObjects.Text;
             return;
         }
 
-        const zoom=snapshot.zoom;
-        const targetScrollX=originX-this.gameWidth/(2*zoom);
-        const targetScrollY=originY-this.gameHeight/(2*zoom);
+        const finish=()=>{
+            const localId=multiplayerClient.getSessionId();
+
+            if(localId){
+                /*
+                 * One final hard rebase closes the local-prediction loop.
+                 * Remote observers and self-view now share the exact origin.
+                 */
+                this.networkPlayerManager
+                    .setCinematicAuthoritativePosition(
+                        localId,
+                        originX,
+                        originY,
+                        true,
+                    );
+                this.networkPlayerManager
+                    .setCinematicTransformOwned(
+                        localId,
+                        false,
+                    );
+            }
+
+            this.tripleTeleportCameraSnapshot=undefined;
+            this.tripleTeleportCameraOwned=false;
+            this.tripleTeleportLocalActive=false;
+            this.tripleTeleportLocalOrigin=undefined;
+            this.hiderRandomTauntSkillBusy=false;
+            this.networkPlayerManager.setLocalMovementHardLocked(false);
+            this.resetMobileMoveControl();
+
+            /*
+             * Re-enable normal Hider camera + vision only AFTER zoom-in ends.
+             */
+            this.ensureGameplayCameraFollow();
+            this.updateHuntTension(0);
+            this.updateMobileControlVisibility();
+            this.updateHiderTauntHud();
+        };
 
         camera
             .stopFollow()
             .removeBounds();
 
-        const finish=()=>{
-            this.tripleTeleportCameraSnapshot=undefined;
-            this.tripleTeleportCameraOwned=false;
-            this.tripleTeleportLocalActive=false;
-            this.networkPlayerManager.setLocalMovementHardLocked(false);
-            this.resetMobileMoveControl();
-
-            /*
-             * Normal Hider follow is re-established ONLY after camera recovery,
-             * so the mobile MOVE stick cannot return early.
-             */
-            this.ensureGameplayCameraFollow();
-            this.updateMobileControlVisibility();
-            this.updateHiderTauntHud();
-        };
-
         if(!animate){
             camera
-                .setZoom(zoom)
-                .setScroll(targetScrollX,targetScrollY);
-            this.applyFixedHudForZoom(zoom);
+                .setZoom(snapshot.zoom)
+                .setScroll(
+                    snapshot.scrollX,
+                    snapshot.scrollY,
+                );
+            this.applyFixedHudForZoom(snapshot.zoom);
             finish();
             return;
         }
 
         this.tweens.add({
             targets:camera,
-            zoom,
-            scrollX:targetScrollX,
-            scrollY:targetScrollY,
-            duration:460,
+            zoom:snapshot.zoom,
+            scrollX:snapshot.scrollX,
+            scrollY:snapshot.scrollY,
+            duration:480,
             ease:'Sine.easeInOut',
             onUpdate:()=>this.applyFixedHudForZoom(camera.zoom),
             onComplete:finish,
@@ -1863,39 +1990,77 @@ private timerText!: Phaser.GameObjects.Text;
 
         this.children
             .getChildren()
-            .filter((c)=>c.name==='hider-triple-teleport-fx')
-            .forEach((c)=>c.destroy());
-
-        const localId=multiplayerClient.getSessionId();
-        if(localId){
-            const c=this.networkPlayerManager.getPlayerContainer(localId);
-            if(c){
-                this.tweens.killTweensOf(c);
-                c.setAlpha(1).setScale(1).setAngle(0);
-            }
-        }
+            .filter(
+                (c)=>c.name===
+                    'hider-triple-teleport-fx',
+            )
+            .forEach(
+                (c)=>c.destroy(),
+            );
 
         const camera=this.cameras.main;
         this.tweens.killTweensOf(camera);
 
-        const snapshot=this.tripleTeleportCameraSnapshot;
-        const resultOwnsCamera=
-            this.roundResultWinner!==null ||
-            this.victoryShowcaseCleanCaptureActive ||
-            this.phase!=='hunt';
+        /*
+         * Release every remote/local cinematic transform owner.
+         */
+        for(
+            const sessionId of
+            [...this.tripleTeleportActiveSessionIds]
+        ){
+            const c=
+                this.networkPlayerManager
+                    .getPlayerContainer(
+                        sessionId,
+                    );
+            if(c){
+                this.tweens.killTweensOf(c);
+                c
+                    .setAngle(0)
+                    .setScale(1)
+                    .setAlpha(1);
+            }
+
+            this.networkPlayerManager
+                .setCinematicTransformOwned(
+                    sessionId,
+                    false,
+                );
+        }
+        this.tripleTeleportActiveSessionIds.clear();
+
+        const localId=
+            multiplayerClient.getSessionId();
+        const origin=
+            this.tripleTeleportLocalOrigin;
+
+        /*
+         * This is the critical victory-card fix:
+         * atomically rebase local prediction + rendered character to origin
+         * BEFORE captureVictoryFrameForRoleShowcase owns the camera.
+         */
+        if(
+            localId &&
+            origin
+        ){
+            this.networkPlayerManager
+                .setCinematicAuthoritativePosition(
+                    localId,
+                    origin.x,
+                    origin.y,
+                    true,
+                );
+            this.networkPlayerManager
+                .setCinematicTransformOwned(
+                    localId,
+                    false,
+                );
+        }
 
         this.tripleTeleportCameraSnapshot=undefined;
         this.tripleTeleportCameraOwned=false;
-
-        if(
-            snapshot &&
-            !resultOwnsCamera
-        ){
-            camera
-                .setZoom(snapshot.zoom)
-                .setScroll(snapshot.scrollX,snapshot.scrollY);
-            this.applyFixedHudForZoom(snapshot.zoom);
-        }
+        this.tripleTeleportLocalOrigin=undefined;
+        this.hiderRandomTauntSkillBusy=false;
 
         if(this.tripleTeleportLocalActive){
             this.tripleTeleportLocalActive=false;
@@ -1905,117 +2070,243 @@ private timerText!: Phaser.GameObjects.Text;
 
         this.resetMobileMoveControl();
 
-        /*
-         * Do not call camera follow while victory capture owns the frame.
-         */
+        const resultOwnsCamera=
+            this.roundResultWinner!==null ||
+            this.victoryShowcaseCleanCaptureActive ||
+            this.phase!=='hunt';
+
         if(!resultOwnsCamera){
             this.ensureGameplayCameraFollow();
+            this.updateHuntTension(0);
             this.updateMobileControlVisibility();
         }
     }
 
-    private showTripleTeleportTrail(event:NetworkHiderTripleTeleport):void{
-        if(this.phase!=='hunt'||this.victoryShowcaseCleanCaptureActive)return;
+    private spawnTripleTeleportAfterimage(
+        container:Phaser.GameObjects.Container,
+        x:number,
+        y:number,
+        alpha=0.34,
+    ):void{
+        if(
+            this.phase!=='hunt' ||
+            this.victoryShowcaseCleanCaptureActive ||
+            this.roundResultWinner!==null
+        ) return;
 
-        const trail=this.rememberTripleTeleportFx(this.add.graphics().setDepth(4388));
-        trail.lineStyle(11,0x7eefff,0.20);
-        trail.lineBetween(event.fromX,event.fromY,event.x,event.y);
-        trail.lineStyle(4,0xffffff,0.82);
-        trail.lineBetween(event.fromX,event.fromY,event.x,event.y);
+        const ghost=
+            this.rememberTripleTeleportFx(
+                this.add
+                    .renderTexture(
+                        x,
+                        y,
+                        116,
+                        154,
+                    )
+                    .setOrigin(0.5)
+                    .setDepth(4389)
+                    .setAlpha(alpha)
+                    .setName('hider-triple-teleport-fx'),
+            );
 
         /*
-         * Two fading afterimages make each stop readable even while the actual
-         * player container is immediately reconciled to the server position.
+         * Do not duplicate the player's name tag into the afterimage.
+         * Everything else—including the painted camouflage RenderTexture—is
+         * captured from the actual character container.
          */
-        const ghost=this.rememberTripleTeleportFx(this.add.graphics().setDepth(4389));
-        ghost.fillStyle(0xa9f7ff,0.34);
-        ghost.fillCircle(event.fromX,event.fromY-18,13);
-        ghost.fillRoundedRect(event.fromX-14,event.fromY-8,28,42,7);
+        const nameText=
+            container.getByName(
+                'network-player-name',
+            ) as Phaser.GameObjects.Text|null;
+        const oldNameVisible=
+            nameText?.visible ?? false;
 
-        const ghost2=this.rememberTripleTeleportFx(this.add.graphics().setDepth(4388));
-        ghost2.fillStyle(0x55dff7,0.18);
-        ghost2.fillCircle(
-            Phaser.Math.Linear(event.fromX,event.x,0.45),
-            Phaser.Math.Linear(event.fromY,event.y,0.45)-18,
-            12,
-        );
-        ghost2.fillRoundedRect(
-            Phaser.Math.Linear(event.fromX,event.x,0.45)-13,
-            Phaser.Math.Linear(event.fromY,event.y,0.45)-8,
-            26,
-            39,
-            7,
+        nameText?.setVisible(false);
+
+        ghost.draw(
+            container,
+            58,
+            77,
         );
 
-        const ring=this.rememberTripleTeleportFx(this.add.graphics().setDepth(4390));
-        ring.lineStyle(3,0xd8ffff,0.94);
-        ring.strokeCircle(event.x,event.y,18);
-        ring.strokeCircle(event.x,event.y,29);
-
-        const slash=this.rememberTripleTeleportFx(
-            this.add.text(event.x,event.y-44,'슉!',{
-                fontFamily:'Arial Black, sans-serif',
-                fontSize:'17px',
-                fontStyle:'bold',
-                color:'#eaffff',
-                stroke:'#06334a',
-                strokeThickness:5,
-            }).setOrigin(0.5).setDepth(4391)
+        nameText?.setVisible(
+            oldNameVisible,
         );
 
         this.tweens.add({
-            targets:[trail,ghost,ghost2],
+            targets:ghost,
             alpha:0,
-            duration:420,
-            ease:'Cubic.Out',
-            onComplete:()=>{trail.destroy();ghost.destroy();ghost2.destroy();},
-        });
-        this.tweens.add({
-            targets:ring,
-            angle:220,
-            scale:1.72,
-            alpha:0,
-            duration:460,
-            ease:'Cubic.Out',
-            onComplete:()=>ring.destroy(),
-        });
-        this.tweens.add({
-            targets:slash,
-            y:slash.y-19,
-            alpha:0,
-            scale:1.2,
-            duration:420,
-            ease:'Cubic.Out',
-            onComplete:()=>slash.destroy(),
+            scale:1.035,
+            duration:390,
+            ease:'Quad.Out',
+            onComplete:()=>ghost.destroy(),
         });
     }
 
-    private applyTripleTeleport(event:NetworkHiderTripleTeleport):void{
+    private animateTripleTeleportStep(
+        event:NetworkHiderTripleTeleport,
+        container:Phaser.GameObjects.Container,
+    ):void{
+        this.tweens.killTweensOf(container);
+
+        this.networkPlayerManager
+            .setCinematicAuthoritativePosition(
+                event.sessionId,
+                event.x,
+                event.y,
+                false,
+            );
+
+        container
+            .setPosition(
+                event.fromX,
+                event.fromY,
+            )
+            .setAngle(0)
+            .setScale(1)
+            .setAlpha(1);
+
+        this.spawnTripleTeleportAfterimage(
+            container,
+            event.fromX,
+            event.fromY,
+            0.38,
+        );
+
+        let lastGhostAt=-Infinity;
+
+        this.tweens.add({
+            targets:container,
+            x:event.x,
+            y:event.y,
+            duration:205,
+            ease:'Cubic.easeOut',
+            onUpdate:()=>{
+                const now=this.time.now;
+                if(now-lastGhostAt<55)return;
+                lastGhostAt=now;
+
+                this.spawnTripleTeleportAfterimage(
+                    container,
+                    container.x,
+                    container.y,
+                    0.27,
+                );
+            },
+            onComplete:()=>{
+                container
+                    .setPosition(
+                        event.x,
+                        event.y,
+                    )
+                    .setAngle(0)
+                    .setScale(1)
+                    .setAlpha(1);
+            },
+        });
+    }
+
+    private applyTripleTeleport(
+        event:NetworkHiderTripleTeleport,
+    ):void{
         if(!event.sessionId)return;
 
         const isLocal=
             event.sessionId===
             multiplayerClient.getSessionId();
         const container=
-            this.networkPlayerManager.getPlayerContainer(event.sessionId);
+            this.networkPlayerManager
+                .getPlayerContainer(
+                    event.sessionId,
+                );
 
-        if(event.stage==='cancel'){
-            if(container){
-                this.tweens.killTweensOf(container);
-                container
-                    .setAlpha(1)
-                    .setScale(1)
-                    .setAngle(0)
-                    .setPosition(event.x,event.y);
+        if(isLocal){
+            if(event.stage==='start'){
+                this.setHiderRandomTauntSkillBusy(true);
+            }else if(
+                event.stage==='return' ||
+                event.stage==='cancel'
+            ){
+                /*
+                 * Return/cancel owns the UI until camera restoration completes.
+                 * restoreTripleTeleportLocalCamera() clears local-active later,
+                 * so keep busy here and release in its finish path below.
+                 */
+                this.hiderRandomTauntSkillBusy=true;
+                this.updateHiderTauntHud();
             }
+        }
+
+        const originX=
+            Number.isFinite(event.originX)
+                ? event.originX
+                : event.x;
+        const originY=
+            Number.isFinite(event.originY)
+                ? event.originY
+                : event.y;
+
+        if(event.stage==='start'){
+            if(this.phase!=='hunt')return;
+
+            this.tripleTeleportActiveSessionIds
+                .add(event.sessionId);
+            this.networkPlayerManager
+                .setCinematicTransformOwned(
+                    event.sessionId,
+                    true,
+                );
+            this.networkPlayerManager
+                .setCinematicAuthoritativePosition(
+                    event.sessionId,
+                    originX,
+                    originY,
+                    true,
+                );
 
             if(isLocal){
-                /*
-                 * Keep control locked until the camera is safely back.
-                 */
+                this.tripleTeleportLocalActive=true;
+                this.tripleTeleportLocalOrigin={
+                    x:originX,
+                    y:originY,
+                };
+                this.networkPlayerManager
+                    .setLocalMovementHardLocked(true);
+                this.startTripleTeleportLocalCamera(
+                    originX,
+                    originY,
+                );
+                this.updateHiderTauntHud();
+            }
+            return;
+        }
+
+        if(event.stage==='cancel'){
+            this.tripleTeleportActiveSessionIds
+                .delete(event.sessionId);
+
+            if(container){
+                this.tweens.killTweensOf(container);
+            }
+
+            this.networkPlayerManager
+                .setCinematicAuthoritativePosition(
+                    event.sessionId,
+                    originX,
+                    originY,
+                    true,
+                );
+
+            if(!isLocal){
+                this.networkPlayerManager
+                    .setCinematicTransformOwned(
+                        event.sessionId,
+                        false,
+                    );
+            }else{
                 this.restoreTripleTeleportLocalCamera(
-                    event.originX||event.x,
-                    event.originY||event.y,
+                    originX,
+                    originY,
                     true,
                 );
             }
@@ -2024,144 +2315,167 @@ private timerText!: Phaser.GameObjects.Text;
 
         if(this.phase!=='hunt')return;
 
-        if(event.stage==='start'){
-            if(isLocal){
-                this.tripleTeleportLocalActive=true;
-                this.networkPlayerManager
-                    .setLocalMovementHardLocked(true);
-                this.startTripleTeleportLocalCamera(
-                    event.originX,
-                    event.originY,
-                );
-                this.updateHiderTauntHud();
-            }
-
-            const startRing=
-                this.rememberTripleTeleportFx(
-                    this.add.graphics().setDepth(4390)
-                );
-            startRing
-                .lineStyle(4,0x91f5ff,0.95)
-                .strokeCircle(event.originX,event.originY,22);
-
-            this.tweens.add({
-                targets:startRing,
-                angle:360,
-                scale:1.75,
-                alpha:0,
-                duration:430,
-                ease:'Cubic.Out',
-                onComplete:()=>startRing.destroy(),
-            });
-            return;
-        }
-
         if(event.stage==='step'){
-            this.showTripleTeleportTrail(event);
-
             if(container){
-                this.tweens.killTweensOf(container);
-                container.setAngle(-9);
-                this.tweens.add({
-                    targets:container,
-                    angle:9,
-                    duration:95,
-                    yoyo:true,
-                    repeat:1,
-                    ease:'Sine.easeInOut',
-                    onComplete:()=>container.setAngle(0),
-                });
+                this.animateTripleTeleportStep(
+                    event,
+                    container,
+                );
+            }else{
+                this.networkPlayerManager
+                    .setCinematicAuthoritativePosition(
+                        event.sessionId,
+                        event.x,
+                        event.y,
+                        false,
+                    );
             }
             return;
         }
 
         if(event.stage==='vanish'){
-            this.showTripleTeleportTrail(event);
+            if(!container)return;
 
-            if(container){
-                this.tweens.killTweensOf(container);
-                this.tweens.add({
-                    targets:container,
-                    angle:540,
-                    scale:0.12,
-                    alpha:0,
-                    duration:520,
-                    ease:'Back.In',
-                });
-            }
+            this.tweens.killTweensOf(container);
 
-            const poof=
-                this.rememberTripleTeleportFx(
-                    this.add.text(
-                        event.x,
-                        event.y-28,
-                        '뾰옹~!',
-                        {
-                            fontFamily:'Arial Black, sans-serif',
-                            fontSize:'21px',
-                            fontStyle:'bold',
-                            color:'#ffffff',
-                            stroke:'#184e68',
-                            strokeThickness:6,
-                        },
-                    ).setOrigin(0.5).setDepth(4392)
-                );
+            /*
+             * Third high-speed move already finished. NOW spin in place,
+             * then disappear with a centered pop—no floating "뿅" text jump.
+             */
+            container
+                .setPosition(
+                    event.x,
+                    event.y,
+                )
+                .setAlpha(1)
+                .setScale(1)
+                .setAngle(0);
+
+            this.spawnTripleTeleportAfterimage(
+                container,
+                event.x,
+                event.y,
+                0.30,
+            );
 
             this.tweens.add({
-                targets:poof,
-                y:poof.y-25,
-                scale:1.55,
-                alpha:0,
-                duration:650,
-                ease:'Cubic.Out',
-                onComplete:()=>poof.destroy(),
+                targets:container,
+                angle:540,
+                duration:410,
+                ease:'Cubic.easeIn',
+                onComplete:()=>{
+                    const pop=
+                        this.rememberTripleTeleportFx(
+                            this.add
+                                .circle(
+                                    event.x,
+                                    event.y,
+                                    13,
+                                    0xffffff,
+                                    0.92,
+                                )
+                                .setStrokeStyle(
+                                    4,
+                                    0x76edff,
+                                    1,
+                                )
+                                .setDepth(4392)
+                                .setName(
+                                    'hider-triple-teleport-fx',
+                                ),
+                        );
+
+                    const pop2=
+                        this.rememberTripleTeleportFx(
+                            this.add
+                                .circle(
+                                    event.x,
+                                    event.y,
+                                    23,
+                                )
+                                .setStrokeStyle(
+                                    3,
+                                    0xffffff,
+                                    0.82,
+                                )
+                                .setDepth(4391)
+                                .setName(
+                                    'hider-triple-teleport-fx',
+                                ),
+                        );
+
+                    container
+                        .setAngle(0)
+                        .setScale(0.12)
+                        .setAlpha(0);
+
+                    this.tweens.add({
+                        targets:pop,
+                        scale:2.35,
+                        alpha:0,
+                        duration:260,
+                        ease:'Cubic.Out',
+                        onComplete:()=>pop.destroy(),
+                    });
+
+                    this.tweens.add({
+                        targets:pop2,
+                        scale:2.0,
+                        alpha:0,
+                        duration:310,
+                        ease:'Cubic.Out',
+                        onComplete:()=>pop2.destroy(),
+                    });
+                },
             });
             return;
         }
 
         if(event.stage==='return'){
+            this.tripleTeleportActiveSessionIds
+                .delete(event.sessionId);
+
             if(container){
                 this.tweens.killTweensOf(container);
-                container
-                    .setPosition(event.originX,event.originY)
-                    .setAngle(0)
-                    .setScale(0.20)
-                    .setAlpha(0);
-
-                this.tweens.add({
-                    targets:container,
-                    scale:1,
-                    alpha:1,
-                    duration:330,
-                    ease:'Back.Out',
-                });
             }
 
-            const ring=
-                this.rememberTripleTeleportFx(
-                    this.add.graphics().setDepth(4390)
+            /*
+             * Exact original hiding coordinate first. This updates BOTH render
+             * and local prediction state before any camera/joystick unlock.
+             */
+            this.networkPlayerManager
+                .setCinematicAuthoritativePosition(
+                    event.sessionId,
+                    originX,
+                    originY,
+                    true,
                 );
-            ring.lineStyle(4,0xffffff,0.95);
-            ring.strokeCircle(event.originX,event.originY,10);
-            ring.strokeCircle(event.originX,event.originY,21);
 
-            this.tweens.add({
-                targets:ring,
-                scale:2.05,
-                alpha:0,
-                duration:430,
-                ease:'Cubic.Out',
-                onComplete:()=>ring.destroy(),
-            });
+            if(container){
+                container
+                    .setPosition(
+                        originX,
+                        originY,
+                    )
+                    .setAngle(0)
+                    .setScale(1)
+                    .setAlpha(1);
+            }
 
-            if(isLocal){
+            if(!isLocal){
+                this.networkPlayerManager
+                    .setCinematicTransformOwned(
+                        event.sessionId,
+                        false,
+                    );
+            }else{
                 /*
-                 * Do NOT unlock here. Camera first returns to the original
-                 * hiding viewpoint; MOVE joystick/input return on tween complete.
+                 * Camera zoom-in -> vision restriction returns -> MOVE joystick
+                 * returns -> movement unlock. In exactly that order.
                  */
                 this.restoreTripleTeleportLocalCamera(
-                    event.originX,
-                    event.originY,
+                    originX,
+                    originY,
                     true,
                 );
             }
@@ -2171,6 +2485,21 @@ private timerText!: Phaser.GameObjects.Text;
     private applyHardenedState(state:NetworkHiderHardenedState):void {
         const id=state.sessionId;
         if(!id)return;
+
+        if(
+            id===
+            multiplayerClient.getSessionId()
+        ){
+            /*
+             * When Hardened starts, Random Taunt UI disappears.
+             * When Hardened ends, it may return only if no other taunt skill
+             * currently owns the local Hider.
+             */
+            this.setHiderRandomTauntSkillBusy(
+                state.active ||
+                this.tripleTeleportLocalActive,
+            );
+        }
         const pos=this.networkPlayerManager.getPlayerPosition(id);
 
         if(!state.active){
@@ -42215,6 +42544,33 @@ this.networkUnsubscribers.push(
     private updateHuntTension(
         delta: number,
     ): void {
+        /*
+         * V1010554G3_TRIPLE_TELEPORT_MOTION_CAMERA_AUTHORITY_BUSY_UI_ROBUST_METHODS: Triple Teleport temporarily removes Hider vision restriction.
+         */
+        if(
+            this.tripleTeleportLocalActive &&
+            this.networkPlayerManager.isLocalHider()
+        ){
+            this.hiderVisionGraphics
+                ?.clear()
+                .setVisible(false);
+            this.hiderVisionOverlays
+                .forEach(
+                    (overlay)=>overlay
+                        .setVisible(false)
+                        .setAlpha(0),
+                );
+            this.heartbeatDangerOverlay
+                ?.setVisible(false)
+                .setAlpha(0);
+            this.heartbeatBorders
+                .forEach(
+                    (border)=>border
+                        .setVisible(false)
+                        .setAlpha(0),
+                );
+            return;
+        }
 
         /*
          * V1010451M4E_VICTORY_CLEAN_CAPTURE_UI_LOCK_ROBUST / HUNT_TENSION_LOCK

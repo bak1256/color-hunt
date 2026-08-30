@@ -1,3 +1,4 @@
+/* V1010554G3_TRIPLE_TELEPORT_MOTION_CAMERA_AUTHORITY_BUSY_UI_ROBUST_METHODS: cinematic transform ownership + local prediction rebase for server-owned Hider taunts. */
 /* V1010553J_HARDENED_FINAL_CLEANUP: no Hardened text overlay; below-foot 15s gauge with existing hit feedback preserved. */
 /* V1010553H_HARDENED_DEATH_LOBBY_BODY_RESTORE: restore hidden Hider body/paint even when Hardened ends after death, so Lobby reuse cannot stay invisible. */
 /* V1010553G_HARDENED_UI_CAPTURE_CLEANUP: stronger single Hardened taunt label kept above vision darkness. */
@@ -148,6 +149,77 @@ export class NetworkPlayerManager {
       [];
   }
 
+
+  /* V1010554G3_TRIPLE_TELEPORT_MOTION_CAMERA_AUTHORITY_BUSY_UI_ROBUST_METHODS
+   * While a server-owned cinematic moves a player, ordinary Schema
+   * reconciliation / remote smoothing must not fight the GameScene tween.
+   */
+  private readonly cinematicTransformOwnedSessionIds =
+    new Set<string>();
+
+  setCinematicTransformOwned(
+    sessionId: string,
+    owned: boolean,
+  ): void {
+    if (!sessionId) return;
+
+    if (owned) {
+      this.cinematicTransformOwnedSessionIds.add(
+        sessionId,
+      );
+    } else {
+      this.cinematicTransformOwnedSessionIds.delete(
+        sessionId,
+      );
+    }
+  }
+
+  setCinematicAuthoritativePosition(
+    sessionId: string,
+    x: number,
+    y: number,
+    renderNow = false,
+  ): void {
+    const view =
+      this.players.get(
+        sessionId,
+      );
+
+    if (!view) return;
+
+    view.targetX = x;
+    view.targetY = y;
+    view.savedX = x;
+    view.savedY = y;
+    view.movingUntil = 0;
+    view.huntFrozenX = undefined;
+    view.huntFrozenY = undefined;
+
+    if (
+      sessionId ===
+      this.getEffectiveLocalSessionId()
+    ) {
+      /*
+       * Critical: server-forced Triple Teleport coordinates become the local
+       * prediction origin too. This prevents self-view / victory-card drift.
+       */
+      this.localX = x;
+      this.localY = y;
+      this.localMovementInitialized = true;
+      this.localWasMoving = false;
+      this.lastLocalMoveInputAt = 0;
+      this.lastSendTime = this.scene.time.now;
+      this.recentSentPositions = [];
+    }
+
+    if (renderNow) {
+      this.setViewPosition(
+        view,
+        x,
+        y,
+      );
+    }
+  }
 
   private localX = 480;
   private localY = 270;
@@ -1157,6 +1229,30 @@ export class NetworkPlayerManager {
       }
     }
 
+    /*
+     * V1010554G3_TRIPLE_TELEPORT_MOTION_CAMERA_AUTHORITY_BUSY_UI_ROBUST_METHODS: Triple Teleport GameScene owns the rendered transform.
+     * Keep the latest server target, but never let normal local/remote
+     * reconciliation snap the actor during the cinematic.
+     */
+    if (
+      this.cinematicTransformOwnedSessionIds.has(
+        sessionId,
+      )
+    ) {
+      view.targetX = player.x;
+      view.targetY = player.y;
+
+      if (
+        sessionId ===
+        this.getEffectiveLocalSessionId()
+      ) {
+        this.localX = player.x;
+        this.localY = player.y;
+      }
+
+      return;
+    }
+
     if (
       sessionId ===
       this.getEffectiveLocalSessionId() &&
@@ -1318,6 +1414,9 @@ export class NetworkPlayerManager {
       sessionId,
     );
     this.activeLobbyPresetRenderSessions.delete(
+      sessionId,
+    );
+    this.cinematicTransformOwnedSessionIds.delete(
       sessionId,
     );
     this.players.delete(sessionId);
@@ -1666,6 +1765,18 @@ export class NetworkPlayerManager {
 
     this.players.forEach(
       (view, sessionId) => {
+        if (
+          this.cinematicTransformOwnedSessionIds.has(
+            sessionId,
+          )
+        ) {
+          this.syncPaintLayerPosition(
+            view,
+            true,
+          );
+          return;
+        }
+
         if (
           sessionId === localSessionId
         ) {
