@@ -1,3 +1,4 @@
+/* V1010548_MOBILE_SNIPER_CANCEL_SLIDE_TOUCH_STATE: mobile Sniper cancel slides solely from touch-down/up state; clickable only while idle; canvas pointer-capture keeps optic drag continuous; cancel HUD settle lock hardened. */
 /* V547B_SNIPER_CANCEL_DOM_NARROWING_FIX: keep the cancel DOM reference in a local const so TypeScript can safely narrow it before getBoundingClientRect(). */
 /* V1010547_MOBILE_SNIPER_CANCEL_PASS_THROUGH_FULL_HUD_UNLOCK: cancel DOM is visual-only/pass-through; canvas tap cancels; Sniper temporary mobile lock is released so normal Hunter HUD survives. */
 /* V1010546_MOBILE_SNIPER_CANCEL_SAFEZONE_HUD_RESTORE: mobile cancel hides near scope, never steals drag, stale active echoes are ignored, and normal Hunter HUD fully restores after cancel. */
@@ -1009,6 +1010,9 @@ export class GameScene extends Phaser.Scene {
     private sniperCancelButtonDom?: HTMLButtonElement;
     /* V1010546_MOBILE_SNIPER_CANCEL_SAFEZONE_HUD_RESTORE: a local cancel stays authoritative until server false arrives. */
     private sniperCancelAwaitingServerFalse = false;
+    /* V1010548_MOBILE_SNIPER_CANCEL_SLIDE_TOUCH_STATE: cancel button follows touch ownership, never scope proximity. */
+    private sniperCancelRevealNotBefore = 0;
+    private sniperCancelHudRestoreUntil = 0;
     private sniperCancelKey?: Phaser.Input.Keyboard.Key;
     /* V1010507_TACTICAL_VULCAN_AIR_SUPPORT */
     private vulcanActive = false;
@@ -5120,40 +5124,6 @@ private timerText!: Phaser.GameObjects.Text;
                  * hit tests so invisible joystick geometry can never create a
                  * dead zone inside the scope.
                  */
-                /* V1010547_MOBILE_SNIPER_CANCEL_PASS_THROUGH_FULL_HUD_UNLOCK / CANVAS_CANCEL_HIT_TEST
-                 * The DOM cancel control is pointer-events:none so dragging the
-                 * scope through it can NEVER interrupt the active pointer.
-                 * Only a NEW touch that starts inside the currently-visible
-                 * cancel rectangle cancels sniper mode.
-                 */
-                const sniperCancelButtonDom =
-                    this.sniperCancelButtonDom;
-
-                if (
-                    this.mobileControlsEnabled &&
-                    this.sniperActive &&
-                    this.sniperScopeInteractive &&
-                    sniperCancelButtonDom &&
-                    sniperCancelButtonDom.style.display !== 'none'
-                ) {
-                    const nativeCancelEvent =
-                        pointer.event as PointerEvent | undefined;
-                    const cancelRect =
-                        sniperCancelButtonDom.getBoundingClientRect();
-
-                    if (
-                        nativeCancelEvent &&
-                        nativeCancelEvent.clientX >= cancelRect.left &&
-                        nativeCancelEvent.clientX <= cancelRect.right &&
-                        nativeCancelEvent.clientY >= cancelRect.top &&
-                        nativeCancelEvent.clientY <= cancelRect.bottom
-                    ) {
-                        nativeCancelEvent.preventDefault?.();
-                        this.requestSniperCancel();
-                        return;
-                    }
-                }
-
                 if (
                     this.mobileControlsEnabled &&
                     this.sniperActive &&
@@ -5161,6 +5131,33 @@ private timerText!: Phaser.GameObjects.Text;
                 ) {
                     this.mobileSniperTouchPointerId =
                         pointer.id;
+
+                    /* V1010548_MOBILE_SNIPER_CANCEL_SLIDE_TOUCH_STATE / CAPTURE_AND_SLIDE_DOWN
+                     * The canvas owns this finger until release. Even while the
+                     * button is physically sliding away, crossing its old area
+                     * cannot steal pointermove from the scope.
+                     */
+                    const nativeSniperPointerEvent =
+                        pointer.event as PointerEvent | undefined;
+                    if (
+                        nativeSniperPointerEvent &&
+                        Number.isFinite(
+                            nativeSniperPointerEvent.pointerId,
+                        )
+                    ) {
+                        try {
+                            this.game.canvas.setPointerCapture(
+                                nativeSniperPointerEvent.pointerId,
+                            );
+                        } catch {
+                            // Older embedded WebViews may not support capture.
+                        }
+                    }
+
+                    this.sniperCancelRevealNotBefore =
+                        Number.POSITIVE_INFINITY;
+                    this.refreshSniperCancelUi();
+
                     this.mobileSniperTouchStartX =
                         pointer.x;
                     this.mobileSniperTouchStartY =
@@ -5651,6 +5648,17 @@ private timerText!: Phaser.GameObjects.Text;
 
                     this.mobileSniperTouchPointerId =
                         -1;
+
+                    /* V1010548_MOBILE_SNIPER_CANCEL_SLIDE_TOUCH_STATE / RELEASE_SLIDE_UP
+                     * Finger is physically up. Wait a fraction of a second, then
+                     * let the stable DOM control rise from below.
+                     */
+                    this.sniperCancelRevealNotBefore =
+                        this.time.now + 120;
+                    this.time.delayedCall(
+                        130,
+                        () => this.refreshSniperCancelUi(),
+                    );
 
                     this.mobileSniperTouchTravel =
                         0;
@@ -6788,6 +6796,23 @@ private timerText!: Phaser.GameObjects.Text;
     }
 
     private updateMobileControlVisibility(): void {
+
+        /* V1010548_MOBILE_SNIPER_CANCEL_SLIDE_TOUCH_STATE / CANCEL_SETTLE_UNLOCK
+         * A cancelled Sniper must look exactly like normal Hunt even while the
+         * server false ACK and old UI callbacks settle. This only clears the
+         * temporary support-commit lock; the one-use tactical latch is separate.
+         */
+        if (
+            this.phase === 'hunt' &&
+            this.time.now <
+                this.sniperCancelHudRestoreUntil &&
+            !this.sniperActive &&
+            !this.vulcanActive &&
+            !this.vulcanCinematicActive
+        ) {
+            this.vulcanSupportCommitted =
+                false;
+        }
 
         /*
          * V1010523B_VULCAN_MOBILE_VISIBILITY_HARD_GUARD
@@ -61089,7 +61114,12 @@ const roomPlayers =
                     position: 'fixed',
                     zIndex: '2147483647',
                     display: 'none',
-                    transform: 'translate(-50%, -50%)',
+                    left: '50%',
+                    top: '100%',
+                    opacity: '0',
+                    transform: 'translate(-50%, calc(-50% + 96px))',
+                    transition: 'transform 180ms cubic-bezier(.22,.8,.26,1), opacity 120ms ease',
+                    willChange: 'transform, opacity',
                     width: '176px',
                     height: '46px',
                     padding: '0 16px',
@@ -61274,55 +61304,49 @@ const roomPlayers =
             const cancelCenterY =
                 canvasRect.bottom - 72;
 
-            /* V1010546_MOBILE_SNIPER_CANCEL_SAFEZONE_HUD_RESTORE / CANCEL_SCOPE_SAFE_ZONE
-             * The DOM button must never cover or steal a sniper drag. Convert the
-             * logical scope center to browser pixels, then hide the button with a
-             * generous safety margin around its real 176x46 rectangle.
+            /* V1010548_MOBILE_SNIPER_CANCEL_SLIDE_TOUCH_STATE / TOUCH_ONLY_SLIDE
+             * No scope-position test. The button has exactly two physical states:
+             * - any active sniper finger => slide below the screen + no hit target
+             * - no sniper finger and cancel is legal => slide back up + clickable
+             * A tiny post-release delay prevents pointerup/tap noise from making it
+             * bounce on the same frame.
              */
-            const scopeClientX =
-                canvasRect.left +
-                this.sniperScopeScreenX *
-                    (canvasRect.width / this.gameWidth);
-            const scopeClientY =
-                canvasRect.top +
-                this.sniperScopeScreenY *
-                    (canvasRect.height / this.gameHeight);
-
-            const scopeNearCancel =
-                Math.abs(
-                    scopeClientX -
-                        cancelCenterX,
-                ) < 138 &&
-                Math.abs(
-                    scopeClientY -
-                        cancelCenterY,
-                ) < 96;
+            const sniperFingerDown =
+                this.mobileSniperTouchPointerId >= 0;
 
             const showMobileCancel =
                 canCancel &&
                 this.mobileControlsEnabled &&
-                !scopeNearCancel;
+                !sniperFingerDown &&
+                this.time.now >=
+                    this.sniperCancelRevealNotBefore;
 
             this.sniperCancelButtonDom.textContent =
                 mobileCancelLabel;
             this.sniperCancelButtonDom.style.left =
-                `${Math.round(cancelCenterX)}px`;
+                String(Math.round(cancelCenterX)) + 'px';
             this.sniperCancelButtonDom.style.top =
-                `${Math.round(cancelCenterY)}px`;
+                String(Math.round(cancelCenterY)) + 'px';
+
+            /* Keep one DOM node mounted. transform/opacity animate; display does not flicker. */
             this.sniperCancelButtonDom.style.display =
-                showMobileCancel
+                this.mobileControlsEnabled
                     ? 'block'
                     : 'none';
-            /* V1010547_MOBILE_SNIPER_CANCEL_PASS_THROUGH_FULL_HUD_UNLOCK / VISUAL_ONLY_CANCEL_DOM
-             * The cancel button is visual only. It must never become the DOM
-             * pointer target, otherwise an optic drag that crosses it loses
-             * pointermove events. A fresh POINTER_DOWN inside its rectangle is
-             * detected on the Phaser canvas instead.
-             */
+            this.sniperCancelButtonDom.style.transform =
+                showMobileCancel
+                    ? 'translate(-50%, -50%)'
+                    : 'translate(-50%, calc(-50% + 96px))';
+            this.sniperCancelButtonDom.style.opacity =
+                showMobileCancel
+                    ? '1'
+                    : '0';
             this.sniperCancelButtonDom.style.pointerEvents =
-                'none';
+                showMobileCancel
+                    ? 'auto'
+                    : 'none';
             this.sniperCancelButtonDom.disabled =
-                false;
+                !showMobileCancel;
         }
 
         if (this.sniperCancelButtonBg) {
@@ -61354,8 +61378,11 @@ const roomPlayers =
                 'none';
         }
         if (this.sniperCancelButtonDom) {
-            this.sniperCancelButtonDom.style.display =
-                'none';
+            /* V1010548_MOBILE_SNIPER_CANCEL_SLIDE_TOUCH_STATE / SLIDE_OUT_NOT_BLINK */
+            this.sniperCancelButtonDom.style.transform =
+                'translate(-50%, calc(-50% + 96px))';
+            this.sniperCancelButtonDom.style.opacity =
+                '0';
             this.sniperCancelButtonDom.style.pointerEvents =
                 'none';
             this.sniperCancelButtonDom.disabled =
@@ -61480,6 +61507,8 @@ const roomPlayers =
          * control lock so normal MOVE/AIM/FIRE/FART/HEAT/GAS can return.
          */
         this.vulcanSupportCommitted = false;
+        this.sniperCancelHudRestoreUntil =
+            this.time.now + 1_500;
 
         this.networkPlayerManager
             .setLocalHunterSpeedMultiplier(1);
