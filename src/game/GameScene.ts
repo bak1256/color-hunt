@@ -15968,6 +15968,9 @@ const ribbon =
                         this.remoteSniperAimBySessionId
                             .delete(state.sessionId);
                     }
+
+                    /* V1010544_GLOBAL_TACTICAL_BGM_REFCOUNT_SCOPE_1P3X: false from the final Hunter restores normal Hunt BGM for everyone. */
+                    this.syncTacticalBgmFromActiveSupports();
                 },
             ),
         );
@@ -16088,6 +16091,9 @@ const ribbon =
                         }
                     }
                 }
+
+                /* V1010544_GLOBAL_TACTICAL_BGM_REFCOUNT_SCOPE_1P3X: keep tactical music until the LAST Sniper/Vulcan user exits. */
+                this.syncTacticalBgmFromActiveSupports();
 
                 if (isOwner) {
                     this.sniperButton?.setVisible(false);
@@ -61106,14 +61112,7 @@ const roomPlayers =
 
         this.exitSniperCinematic();
 
-        const anotherTacticalSupportActive =
-            this.remoteSniperActiveSessionIds.size > 0 ||
-            this.remoteVulcanActiveSessionIds.size > 0 ||
-            this.vulcanActive;
-
-        if (!anotherTacticalSupportActive) {
-            this.stopSniperTacticalBgm(true);
-        }
+        this.syncTacticalBgmFromActiveSupports();
 
         if (this.practiceMode !== 'hunter') {
             multiplayerClient.sendSniperToggle(false);
@@ -61665,8 +61664,8 @@ const roomPlayers =
          */
         this.sniperScopeRadius =
             this.mobileControlsEnabled
-                ? 291
-                : 488;
+                ? 252
+                : 423;
 
         this.sniperScopeScreenX =
             this.gameWidth /
@@ -61968,6 +61967,30 @@ const roomPlayers =
         }
 
         this.startSniperHelicopterAudio();
+    }
+
+    /*
+     * V1010544_GLOBAL_TACTICAL_BGM_REFCOUNT_SCOPE_1P3X
+     * Tactical music is global to the match, not owned by the local Hunter.
+     * Keep it while ANY Hunter is using Sniper/Vulcan; restore Hunt music only
+     * after the final active tactical support ends or is cancelled.
+     */
+    private syncTacticalBgmFromActiveSupports(): void {
+        const anyTacticalSupportActive =
+            this.phase === 'hunt' &&
+            (
+                this.sniperActive ||
+                this.vulcanActive ||
+                this.remoteSniperActiveSessionIds.size > 0 ||
+                this.remoteVulcanActiveSessionIds.size > 0
+            );
+
+        if (anyTacticalSupportActive) {
+            this.startSniperTacticalBgm();
+            return;
+        }
+
+        this.stopSniperTacticalBgm(true);
     }
 
     private stopSniperTacticalBgm(
@@ -64035,10 +64058,10 @@ const roomPlayers =
             g.clear();
             g.setAlpha(0.70);
 
-            /* 58 -> 87 = exact 1.5x Hider spectator reticle buff. */
-            const radius = 87;
-            const outer = 108;
-            const inner = 27;
+            /* V1010544_GLOBAL_TACTICAL_BGM_REFCOUNT_SCOPE_1P3X: 58/72/18 base geometry -> approximately 1.3x. */
+            const radius = 75;
+            const outer = 94;
+            const inner = 23;
 
             g.fillStyle(0xff2436, 0.10);
             g.fillCircle(0, 0, radius);
@@ -64061,11 +64084,11 @@ const roomPlayers =
             g.lineBetween(0, inner, 0, outer);
 
             g.lineStyle(5, 0x050505, 1);
-            g.strokeCircle(0, 0, 15);
+            g.strokeCircle(0, 0, 13);
             g.lineStyle(2, 0xffd7dc, 1);
-            g.strokeCircle(0, 0, 11);
+            g.strokeCircle(0, 0, 9);
             g.fillStyle(0xff3348, 1);
-            g.fillCircle(0, 0, 5);
+            g.fillCircle(0, 0, 4);
         }
 
         /*
