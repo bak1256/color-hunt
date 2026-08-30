@@ -1,3 +1,4 @@
+/* V1010554E_VULCAN_AUTHORITATIVE_ALL_VIEW_FX: one authoritative Vulcan visual stream for Hunter, Hider and TAB/shared views. */
 /* V1010554A_TRIPLE_TELEPORT_CLIENT: Random Taunt adds server-authoritative Triple Teleport + test button + victory-safe FX cleanup. */
 /* V1010553MN_TAUNT_UI_READABILITY_COMBINED: combined speech-bubble + Random Taunt button readability polish. */
 /* V1010553L_RANDOM_TAUNT_TIP_LANGUAGE_FIX: use imported getLanguage() helper for Random Taunt first-use tip. */
@@ -17036,11 +17037,14 @@ const ribbon =
         this.networkUnsubscribers.push(
             multiplayerClient.onVulcanFired((shot: NetworkVulcanFired) => {
                 /*
-                 * V1010530F_VULCAN_AUTHORITATIVE_IMPACT_NO_GUESS
-                 * v530 server sends the REAL random impact coordinate.
-                 * Draw a compact impact directly at shot.x/y.
-                 * Do not feed bullet impacts back into vulcanTargetX/Y.
+                 * V1010554E_VULCAN_AUTHORITATIVE_ALL_VIEW_FX
+                 * Every client renders the exact same server-authoritative impact.
+                 * This intentionally has NO shooterId visibility gate:
+                 * firing Hunter, Hider self-view, and TAB/shared spectator all
+                 * see the same tracer and impact styling at shot.x / shot.y.
                  */
+                if (this.phase !== 'hunt') return;
+
                 const impactX =
                     Phaser.Math.Clamp(
                         shot.x,
@@ -17056,103 +17060,136 @@ const ribbon =
                     );
 
                 /*
-                 * V1010537_VULCAN_OWNER_AUTHORITATIVE_TRACER
-                 * v530f removed the local synthetic tracer to keep impacts
-                 * server-authoritative. Restore ONLY the firing Hunter's
-                 * straight tracer, at the exact authoritative shot.x/y.
-                 *
-                 * Hider self-view already has its passive shared tracer path,
-                 * so shooterId gating prevents double tracer rendering there.
+                 * Long deep-red tracer.
+                 * Keep the existing diagonal tactical feel, but make it much
+                 * easier to read in compressed Shorts/Reels footage.
                  */
-                if (
-                    shot.shooterId ===
-                    multiplayerClient.getSessionId()
-                ) {
-                    const ownerTracer =
-                        this.add
-                            .rectangle(
-                                impactX -
-                                    36,
-                                impactY -
-                                    8,
-                                Phaser.Math.Between(
-                                    36,
-                                    68,
-                                ),
-                                2,
-                                0xffcf54,
-                                0.96,
-                            )
-                            .setAngle(
-                                Phaser.Math.Between(
-                                    -24,
-                                    24,
-                                ),
-                            )
-                            .setDepth(
-                                25030,
-                            );
-
-                    this.vulcanImpactFx
-                        .add(
-                            ownerTracer,
+                const tracer =
+                    this.add
+                        .rectangle(
+                            impactX - 58,
+                            impactY - 8,
+                            Phaser.Math.Between(
+                                96,
+                                148,
+                            ),
+                            5,
+                            0xc90f22,
+                            1,
+                        )
+                        .setAngle(
+                            Phaser.Math.Between(
+                                -24,
+                                24,
+                            ),
+                        )
+                        .setDepth(
+                            25030,
                         );
 
-                    this.tweens.add({
-                        targets:
-                            ownerTracer,
-                        alpha:
-                            0,
-                        duration:
-                            135,
-                        ease:
-                            'Quad.Out',
-                        onComplete:
-                            () => {
-                                this.vulcanImpactFx
-                                    .delete(
-                                        ownerTracer,
-                                    );
+                /*
+                 * Bright inner hot line prevents the red tracer from disappearing
+                 * against dark/red map areas while keeping the overall projectile red.
+                 */
+                const tracerHot =
+                    this.add
+                        .rectangle(
+                            tracer.x,
+                            tracer.y,
+                            Math.max(
+                                58,
+                                tracer.width * 0.66,
+                            ),
+                            2,
+                            0xff5a3d,
+                            1,
+                        )
+                        .setAngle(
+                            tracer.angle,
+                        )
+                        .setDepth(
+                            25031,
+                        );
 
-                                ownerTracer
-                                    .destroy();
-                            },
-                    });
-                }
-
+                /*
+                 * Impact = solid deep-red center + unmistakable yellow perimeter.
+                 */
                 const impact =
                     this.add
                         .circle(
                             impactX,
                             impactY,
-                            7,
-                            0xffd166,
-                            0.96,
+                            11,
+                            0xd30f1f,
+                            1,
                         )
                         .setDepth(
-                            10035,
+                            25033,
                         );
 
                 impact.setStrokeStyle(
-                    3,
-                    0xff7a00,
-                    0.98,
+                    5,
+                    0xffef4f,
+                    1,
                 );
 
+                const impactOuter =
+                    this.add
+                        .circle(
+                            impactX,
+                            impactY,
+                            16,
+                        )
+                        .setStrokeStyle(
+                            3,
+                            0xffc928,
+                            0.95,
+                        )
+                        .setDepth(
+                            25032,
+                        );
+
+                this.vulcanImpactFx.add(tracer);
+                this.vulcanImpactFx.add(tracerHot);
+                this.vulcanImpactFx.add(impact);
+                this.vulcanImpactFx.add(impactOuter);
+
                 this.tweens.add({
-                    targets:
-                        impact,
-                    scale:
-                        1.65,
-                    alpha:
-                        0,
-                    duration:
-                        105,
-                    ease:
-                        'Quad.Out',
-                    onComplete:
-                        () =>
-                            impact.destroy(),
+                    targets: [tracer, tracerHot],
+                    alpha: 0,
+                    scaleX: 1.08,
+                    duration: 270,
+                    ease: 'Quad.Out',
+                    onComplete: () => {
+                        this.vulcanImpactFx.delete(tracer);
+                        this.vulcanImpactFx.delete(tracerHot);
+                        tracer.destroy();
+                        tracerHot.destroy();
+                    },
+                });
+
+                this.tweens.add({
+                    targets: impact,
+                    scale: 1.85,
+                    alpha: 0,
+                    duration: 260,
+                    ease: 'Quad.Out',
+                    onComplete: () => {
+                        this.vulcanImpactFx.delete(impact);
+                        impact.destroy();
+                    },
+                });
+
+                this.tweens.add({
+                    targets: impactOuter,
+                    scale: 2.15,
+                    alpha: 0,
+                    duration: 310,
+                    ease: 'Quad.Out',
+                    onComplete: () => {
+                        this.vulcanImpactFx.delete(impactOuter);
+                        impactOuter.destroy();
+                    },
                 });
 
             }),
@@ -67140,172 +67177,20 @@ const roomPlayers =
 
 
     private spawnVulcanPresentationImpact(
-        x: number,
-        y: number,
+        _x: number,
+        _y: number,
         withSound: boolean,
     ): void {
-        if (
-            withSound
-        ) {
+        /*
+         * V1010554E_VULCAN_AUTHORITATIVE_ALL_VIEW_FX
+         * Visuals now come only from server-authoritative vulcan_fired packets,
+         * identical on Hunter/Hider/TAB shared views.
+         * Keep this helper callable so existing Hider-self runtime paths remain
+         * structurally untouched. Only optional pulse sound is retained.
+         */
+        if (withSound) {
             this.playVulcanGunPulse();
         }
-
-        const px =
-            Phaser.Math.Clamp(
-                x +
-                    Phaser.Math.Between(
-                        -13,
-                        13,
-                    ),
-                0,
-                960,
-            );
-
-        const py =
-            Phaser.Math.Clamp(
-                y +
-                    Phaser.Math.Between(
-                        -9,
-                        9,
-                    ),
-                0,
-                540,
-            );
-
-        const flash =
-            this.add.circle(
-                px,
-                py,
-                Phaser.Math.Between(
-                    5,
-                    9,
-                ),
-                0xffa126,
-                0.98,
-            )
-                .setDepth(
-                    25009,
-                );
-
-        const ring =
-            this.add.circle(
-                px,
-                py,
-                5,
-            )
-                .setStrokeStyle(
-                    2,
-                    0xfff0a0,
-                    0.96,
-                )
-                .setDepth(
-                    25008,
-                );
-
-        const tracer =
-            this.add.rectangle(
-                px -
-                    18,
-                py -
-                    8,
-                Phaser.Math.Between(
-                    36,
-                    68,
-                ),
-                2,
-                0xffcf54,
-                0.92,
-            )
-                .setAngle(
-                    Phaser.Math.Between(
-                        -24,
-                        24,
-                    ),
-                )
-                .setDepth(
-                    25008,
-                );
-
-        this.vulcanImpactFx
-            .add(
-                flash,
-            );
-
-        this.vulcanImpactFx
-            .add(
-                ring,
-            );
-
-        this.vulcanImpactFx
-            .add(
-                tracer,
-            );
-
-        this.tweens.add({
-            targets:
-                flash,
-            alpha:
-                0,
-            scale:
-                2.2,
-            duration:
-                130,
-            onComplete:
-                () => {
-                    this.vulcanImpactFx
-                        .delete(
-                            flash,
-                        );
-
-                    flash.destroy();
-                },
-        });
-
-        this.tweens.add({
-            targets:
-                ring,
-            alpha:
-                0,
-            scale:
-                2.8,
-            duration:
-                180,
-            onComplete:
-                () => {
-                    this.vulcanImpactFx
-                        .delete(
-                            ring,
-                        );
-
-                    ring.destroy();
-                },
-        });
-
-        this.tweens.add({
-            targets:
-                tracer,
-            alpha:
-                0,
-            x:
-                tracer.x +
-                24,
-            duration:
-                95,
-            onComplete:
-                () => {
-                    this.vulcanImpactFx
-                        .delete(
-                            tracer,
-                        );
-
-                    tracer.destroy();
-                },
-        });
-
-        this.cameras.main.shake(
-            34,
-            0.0012,
-        );
     }
 
 
