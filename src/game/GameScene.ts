@@ -1,3 +1,4 @@
+/* V1010553C_HARDENED_TRANSFORM_BOOM_SMOKE_SCALE: louder transform/revert POOF, fuller smoke, no sparkles; muscle display reduced to ~1.1x normal. */
 /* V1010553_HARDENED_5POSE_GAUGE_HIT_DRAIN_CLIENT */
 /* V1010552D_HARDENED_POSE_TYPE_NARROW_FIX: narrow Hardened pose from generic GameObject to Phaser.Image before reading scaleX/scaleY. */
 /* V1010552C_HARDENED_MUSCLE_SCALE_CALM: Hardened pose stays ~1.3x normal character; pulse is relative +10/+12% and can never jump to native PNG scale. */
@@ -1344,7 +1345,33 @@ private timerText!: Phaser.GameObjects.Text;
     }
 
     private showHardenedSmoke(x:number,y:number):void {
-        for(let i=0;i<14;i+=1){ const a=Math.random()*Math.PI*2,d=18+Math.random()*28; const puff=this.add.circle(x,y,5+Math.random()*8,i%3===0?0xeef5ff:0xcbd3dd,0.8).setDepth(195); this.tweens.add({targets:puff,x:x+Math.cos(a)*d,y:y+Math.sin(a)*d,alpha:0,scale:1.8,duration:420+Math.random()*260,ease:'Cubic.Out',onComplete:()=>puff.destroy()}); }
+        // v553c: fuller transformation cloud; intentionally no sparkle layer.
+        for(let i=0;i<30;i+=1){
+            const a=Math.random()*Math.PI*2,d=28+Math.random()*54;
+            const puff=this.add.circle(x,y,7+Math.random()*12,i%4===0?0xffffff:(i%2===0?0xe5ebf2:0xbfc9d5),0.9).setDepth(195);
+            puff.setScale(0.7+Math.random()*0.45);
+            this.tweens.add({targets:puff,x:x+Math.cos(a)*d,y:y+Math.sin(a)*d,alpha:0,scale:2.6+Math.random()*1.1,duration:560+Math.random()*360,ease:'Cubic.Out',onComplete:()=>puff.destroy()});
+        }
+    }
+
+    private playHardenedTransformBoom():void {
+        if(this.time.now<this.suppressEffectsUntil)return;
+        try {
+            const ac=(this.sound as unknown as {context?:AudioContext}).context;if(!ac)return;
+            const now=ac.currentTime,master=ac.createGain();
+            master.gain.setValueAtTime(0.0001,now);
+            master.gain.exponentialRampToValueAtTime(0.34,now+0.008);
+            master.gain.exponentialRampToValueAtTime(0.0001,now+0.34);
+            master.connect(ac.destination);
+            const low=ac.createOscillator();low.type='sine';
+            low.frequency.setValueAtTime(150,now);low.frequency.exponentialRampToValueAtTime(48,now+0.30);
+            low.connect(master);low.start(now);low.stop(now+0.34);
+            const buffer=ac.createBuffer(1,Math.floor(ac.sampleRate*0.22),ac.sampleRate),data=buffer.getChannelData(0);
+            for(let i=0;i<data.length;i+=1)data[i]=(Math.random()*2-1)*Math.pow(1-i/data.length,2);
+            const noise=ac.createBufferSource(),filter=ac.createBiquadFilter();
+            noise.buffer=buffer;filter.type='lowpass';filter.frequency.value=900;
+            noise.connect(filter);filter.connect(master);noise.start(now);
+        } catch {}
     }
 
     private playHardenedTing():void {
@@ -1404,8 +1431,8 @@ private timerText!: Phaser.GameObjects.Text;
 
     private applyHardenedState(state:NetworkHiderHardenedState):void {
         const id=state.sessionId;if(!id)return; const p=this.networkPlayerManager.getPlayerPosition(id);
-        if(!state.active){ this.hardenedEndsAtBySessionId.delete(id);this.hardenedNextPhraseAtBySessionId.delete(id);this.hardenedPhraseIndexBySessionId.delete(id);if(p)this.showHardenedSmoke(p.x,p.y);this.networkPlayerManager.setHiderHardenedVisual(id,false);if(id===multiplayerClient.getSessionId())this.networkPlayerManager.setLocalMovementHardLocked(false);this.updateHiderTauntHud();return; }
-        const end=Date.now()+Math.max(0,state.endsAt-state.serverNow);this.hardenedEndsAtBySessionId.set(id,end);this.hardenedNextPhraseAtBySessionId.set(id,Date.now()+1700);this.hardenedPhraseIndexBySessionId.set(id,0);this.networkPlayerManager.setHiderHardenedVisual(id,true,state.pose,this.getHardenedTauntCopy().initial);this.networkPlayerManager.setHiderHardenedLabel(id,this.getHardenedTauntCopy().initial,true);if(p)this.showHardenedSmoke(p.x,p.y);
+        if(!state.active){ this.hardenedEndsAtBySessionId.delete(id);this.hardenedNextPhraseAtBySessionId.delete(id);this.hardenedPhraseIndexBySessionId.delete(id);if(p){this.playHardenedTransformBoom();this.showHardenedSmoke(p.x,p.y);}this.networkPlayerManager.setHiderHardenedVisual(id,false);if(id===multiplayerClient.getSessionId())this.networkPlayerManager.setLocalMovementHardLocked(false);this.updateHiderTauntHud();return; }
+        const end=Date.now()+Math.max(0,state.endsAt-state.serverNow);this.hardenedEndsAtBySessionId.set(id,end);this.hardenedNextPhraseAtBySessionId.set(id,Date.now()+1700);this.hardenedPhraseIndexBySessionId.set(id,0);this.networkPlayerManager.setHiderHardenedVisual(id,true,state.pose,this.getHardenedTauntCopy().initial);this.networkPlayerManager.setHiderHardenedLabel(id,this.getHardenedTauntCopy().initial,true);if(p){this.playHardenedTransformBoom();this.showHardenedSmoke(p.x,p.y);}
         const pose=this.networkPlayerManager.getPlayerContainer(id)?.getByName('network-hider-hardened-pose') as Phaser.GameObjects.Image | undefined; if(pose){this.tweens.killTweensOf(pose);const baseScaleX=pose.scaleX;const baseScaleY=pose.scaleY;this.tweens.add({targets:pose,scaleX:baseScaleX*1.10,scaleY:baseScaleY*1.12,duration:420,hold:120,yoyo:true,repeat:-1,ease:'Sine.InOut'});}
         if(id===multiplayerClient.getSessionId())this.networkPlayerManager.setLocalMovementHardLocked(true);this.updateHiderTauntHud();
     }
