@@ -1,3 +1,4 @@
+/* V1010553H_HARDENED_DEATH_LOBBY_BODY_RESTORE: restore hidden Hider body/paint even when Hardened ends after death, so Lobby reuse cannot stay invisible. */
 /* V1010553G_HARDENED_UI_CAPTURE_CLEANUP: stronger single Hardened taunt label kept above vision darkness. */
 /* V1010553E_HARDENED_REVEAL_UI_ROBUST: top-layer Hardened overlays + 132px aspect-safe pose + strong damage gauge feedback. */
 /* V1010553C_HARDENED_TRANSFORM_BOOM_SMOKE_SCALE: Hardened square pose display reduced 156 -> 132 while preserving 1:1 aspect ratio. */
@@ -2085,7 +2086,17 @@ export class NetworkPlayerManager {
       this.hardenedOverlayTextBySessionId.delete(sessionId);
       this.hardenedOverlayGaugeBySessionId.delete(sessionId);
       this.hardenedOverlayGaugeTextBySessionId.delete(sessionId);
-      if(view.alive){body?.setVisible(true);view.paintLayer?.texture.setVisible(true);}
+      /*
+       * v553h:
+       * A Hider can die while Hardened. In that case view.alive is false here,
+       * but the hidden child body/paint visibility still has to be restored
+       * before the same player is reused in Lobby.
+       *
+       * Dead Hunt visibility is still controlled by the parent/player alive
+       * state, so restoring the child layers here does not resurrect the Hider.
+       */
+      body?.setVisible(true);
+      view.paintLayer?.texture.setVisible(true);
       return;
     }
 
