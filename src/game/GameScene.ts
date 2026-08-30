@@ -1,3 +1,4 @@
+/* V1010549_VULCAN_CANCEL_SLIDE_HUD_RESTORE: Vulcan now mirrors v548 Sniper cancel slide UX; touch-down hides, release reveals, cancel restores normal Hunter HUD and syncs false. */
 /* V1010548_MOBILE_SNIPER_CANCEL_SLIDE_TOUCH_STATE: mobile Sniper cancel slides solely from touch-down/up state; clickable only while idle; canvas pointer-capture keeps optic drag continuous; cancel HUD settle lock hardened. */
 /* V547B_SNIPER_CANCEL_DOM_NARROWING_FIX: keep the cancel DOM reference in a local const so TypeScript can safely narrow it before getBoundingClientRect(). */
 /* V1010547_MOBILE_SNIPER_CANCEL_PASS_THROUGH_FULL_HUD_UNLOCK: cancel DOM is visual-only/pass-through; canvas tap cancels; Sniper temporary mobile lock is released so normal Hunter HUD survives. */
@@ -1035,6 +1036,10 @@ export class GameScene extends Phaser.Scene {
     private vulcanDomLastAimSentAt = 0;
 
     private vulcanSupportCommitted = false;
+    /* V1010549_VULCAN_CANCEL_SLIDE_HUD_RESTORE: Vulcan cancel mirrors the proven v548 Sniper mobile slide UX. */
+    private vulcanCancelButtonDom?: HTMLButtonElement;
+    private vulcanCancelRevealNotBefore = 0;
+    private vulcanCancelAwaitingServerFalse = false;
     private vulcanButton?: Phaser.GameObjects.Container;
     private vulcanButtonText?: Phaser.GameObjects.Text;
     private vulcanSpotlight?: Phaser.GameObjects.Graphics;
@@ -16135,6 +16140,23 @@ const ribbon =
                 const localId = multiplayerClient.getSessionId();
                 const isOwner = state.sessionId === localId;
 
+                /* V1010549_VULCAN_CANCEL_SLIDE_HUD_RESTORE: queued active=true must not resurrect a locally cancelled Vulcan. */
+                if (
+                    isOwner &&
+                    this.vulcanCancelAwaitingServerFalse &&
+                    state.active
+                ) {
+                    return;
+                }
+
+                if (
+                    isOwner &&
+                    this.vulcanCancelAwaitingServerFalse &&
+                    !state.active
+                ) {
+                    this.vulcanCancelAwaitingServerFalse = false;
+                }
+
                 if (state.active) {
                     /*
                      * V1010525C_GLOBAL_TACTICAL_BGM_MINIMAL
@@ -16189,8 +16211,20 @@ const ribbon =
                 } else {
                     if (isOwner) {
                         this.vulcanActive = false;
+                        this.vulcanSupportCommitted = false;
                         this.networkPlayerManager.setLocalMovementHardLocked(false);
                         this.exitVulcanCinematic();
+                        this.hideVulcanCancelUi();
+
+                        if (this.mobileControlsEnabled) {
+                            this.restoreNormalMobileHunterHudAfterSniperCancel();
+                            [0, 80, 220].forEach((delay) => {
+                                this.time.delayedCall(
+                                    delay,
+                                    () => this.restoreNormalMobileHunterHudAfterSniperCancel(),
+                                );
+                            });
+                        }
                     } else {
                         this.remoteVulcanActiveSessionIds.delete(state.sessionId);
                         this.remoteVulcanAimBySessionId.delete(state.sessionId);
@@ -65200,6 +65234,156 @@ const roomPlayers =
         });
     }
 
+    /* V1010549_VULCAN_CANCEL_SLIDE_HUD_RESTORE: DOM cancel sits above the Vulcan canvas/overlays and slides solely from finger state. */
+    private ensureVulcanCancelUi(): void {
+        if (this.vulcanCancelButtonDom || typeof document === 'undefined') {
+            return;
+        }
+
+        const cancel = document.createElement('button');
+        cancel.type = 'button';
+        cancel.className = 'colorhunt-vulcan-mobile-cancel';
+
+        Object.assign(cancel.style, {
+            position: 'fixed',
+            zIndex: '2147483647',
+            display: 'none',
+            left: '50%',
+            top: '100%',
+            opacity: '0',
+            transform: 'translate(-50%, calc(-50% + 96px))',
+            transition: 'transform 180ms cubic-bezier(.22,.8,.26,1), opacity 120ms ease',
+            willChange: 'transform, opacity',
+            width: '176px',
+            height: '46px',
+            padding: '0 16px',
+            border: '2px solid rgba(255,190,96,.98)',
+            borderRadius: '13px',
+            background: 'rgba(78,49,10,.98)',
+            color: '#ffffff',
+            fontFamily: 'Arial, sans-serif',
+            fontSize: '15px',
+            fontWeight: '900',
+            lineHeight: '1',
+            textAlign: 'center',
+            textShadow: '0 1px 2px rgba(30,16,2,.95)',
+            boxShadow: '0 5px 0 rgba(38,22,4,.55), 0 10px 24px rgba(0,0,0,.32)',
+            cursor: 'pointer',
+            userSelect: 'none',
+            WebkitUserSelect: 'none',
+            WebkitTapHighlightColor: 'transparent',
+            touchAction: 'manipulation',
+        });
+
+        cancel.addEventListener(
+            'pointerdown',
+            (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                this.requestVulcanCancel();
+            },
+            { passive: false },
+        );
+
+        document.body.appendChild(cancel);
+        this.vulcanCancelButtonDom = cancel;
+    }
+
+    private refreshVulcanCancelUi(): void {
+        this.ensureVulcanCancelUi();
+        const cancel = this.vulcanCancelButtonDom;
+        if (!cancel) return;
+
+        const canCancel =
+            this.phase === 'hunt' &&
+            this.vulcanActive &&
+            !this.vulcanCinematicActive;
+
+        const fingerDown = this.vulcanPointerHeld;
+        const show =
+            canCancel &&
+            this.mobileControlsEnabled &&
+            !fingerDown &&
+            this.time.now >= this.vulcanCancelRevealNotBefore;
+
+        const language = getLanguage();
+        cancel.textContent =
+            language === 'ja'
+                ? '✕ キャンセル'
+                : language === 'en'
+                    ? '✕ CANCEL'
+                    : language === 'zh'
+                        ? '✕ 取消'
+                        : '✕ 취소';
+
+        const rect = this.game.canvas.getBoundingClientRect();
+        cancel.style.left = String(Math.round(rect.left + rect.width / 2)) + 'px';
+        cancel.style.top = String(Math.round(rect.bottom - 72)) + 'px';
+        cancel.style.display = this.mobileControlsEnabled ? 'block' : 'none';
+        cancel.style.transform = show
+            ? 'translate(-50%, -50%)'
+            : 'translate(-50%, calc(-50% + 96px))';
+        cancel.style.opacity = show ? '1' : '0';
+        cancel.style.pointerEvents = show ? 'auto' : 'none';
+        cancel.disabled = !show;
+    }
+
+    private hideVulcanCancelUi(): void {
+        const cancel = this.vulcanCancelButtonDom;
+        if (!cancel) return;
+        cancel.style.transform = 'translate(-50%, calc(-50% + 96px))';
+        cancel.style.opacity = '0';
+        cancel.style.pointerEvents = 'none';
+        cancel.disabled = true;
+    }
+
+    private requestVulcanCancel(): void {
+        if (
+            this.phase !== 'hunt' ||
+            !this.vulcanActive ||
+            this.vulcanCinematicActive
+        ) {
+            return;
+        }
+
+        this.hideVulcanCancelUi();
+        this.vulcanCancelAwaitingServerFalse = this.practiceMode !== 'hunter';
+
+        if (this.vulcanFiring && this.practiceMode !== 'hunter') {
+            multiplayerClient.sendVulcanFireStop();
+        }
+
+        this.vulcanPointerHeld = false;
+        this.vulcanFiring = false;
+        this.vulcanActive = false;
+        this.vulcanSupportCommitted = false;
+        this.networkPlayerManager.setLocalHunterSpeedMultiplier(1);
+        this.networkPlayerManager.setLocalMovementHardLocked(false);
+        this.exitVulcanCinematic();
+
+        if (this.practiceMode !== 'hunter') {
+            multiplayerClient.sendVulcanToggle(false);
+        }
+
+        this.syncTacticalBgmFromActiveSupports();
+
+        if (this.mobileControlsEnabled) {
+            this.resetMobileMoveControl();
+            this.mobileAimPointerId = -1;
+            this.mobileFirePointerId = -1;
+            this.mobileFartPointerId = -1;
+            this.mobileTouchPoints.clear();
+
+            this.restoreNormalMobileHunterHudAfterSniperCancel();
+            [0, 80, 220].forEach((delay) => {
+                this.time.delayedCall(
+                    delay,
+                    () => this.restoreNormalMobileHunterHudAfterSniperCancel(),
+                );
+            });
+        }
+    }
+
     private enterVulcanCinematic(
         isOwner: boolean,
     ): void {
@@ -65221,6 +65405,9 @@ const roomPlayers =
 
         this.vulcanCinematicActive =
             true;
+
+        this.vulcanCancelRevealNotBefore = Number.POSITIVE_INFINITY;
+        this.hideVulcanCancelUi();
 
         this.vulcanSpectatorViewActive =
             false;
@@ -65687,6 +65874,13 @@ const roomPlayers =
                                                 this.vulcanCinematicActive =
                                                     false;
 
+                                                this.vulcanCancelRevealNotBefore =
+                                                    this.time.now + 120;
+                                                this.time.delayedCall(
+                                                    130,
+                                                    () => this.refreshVulcanCancelUi(),
+                                                );
+
                                                 if (
                                                     this.practiceMode !==
                                                     'hunter'
@@ -65830,6 +66024,7 @@ const roomPlayers =
                         }
 
                         this.updateVulcanAirSupport();
+                        this.refreshVulcanCancelUi();
                     },
             });
     }
@@ -65909,6 +66104,12 @@ const roomPlayers =
                     PointerEvent,
             ): void => {
                 if (
+                    event.target === this.vulcanCancelButtonDom
+                ) {
+                    return;
+                }
+
+                if (
                     event.button !==
                         0 ||
                     !this.vulcanActive ||
@@ -65968,6 +66169,9 @@ const roomPlayers =
                 this.vulcanPointerHeld =
                     true;
 
+                this.vulcanCancelRevealNotBefore = Number.POSITIVE_INFINITY;
+                this.refreshVulcanCancelUi();
+
                 this.vulcanFiring =
                     true;
 
@@ -66024,6 +66228,12 @@ const roomPlayers =
 
                 this.vulcanPointerHeld =
                     false;
+
+                this.vulcanCancelRevealNotBefore = this.time.now + 120;
+                this.time.delayedCall(
+                    130,
+                    () => this.refreshVulcanCancelUi(),
+                );
 
                 this.vulcanFiring =
                     false;
@@ -68212,6 +68422,7 @@ const roomPlayers =
         }
 
         this.vulcanCinematicActive = false;
+        this.hideVulcanCancelUi();
         this.vulcanDarkness?.clear().setVisible(false);
         this.vulcanSpotlight?.clear().setVisible(false);
         this.vulcanCooldownGraphics?.clear().setVisible(false);
