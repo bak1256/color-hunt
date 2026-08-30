@@ -1,3 +1,5 @@
+/* V547B_SNIPER_CANCEL_DOM_NARROWING_FIX: keep the cancel DOM reference in a local const so TypeScript can safely narrow it before getBoundingClientRect(). */
+/* V1010547_MOBILE_SNIPER_CANCEL_PASS_THROUGH_FULL_HUD_UNLOCK: cancel DOM is visual-only/pass-through; canvas tap cancels; Sniper temporary mobile lock is released so normal Hunter HUD survives. */
 /* V1010546_MOBILE_SNIPER_CANCEL_SAFEZONE_HUD_RESTORE: mobile cancel hides near scope, never steals drag, stale active echoes are ignored, and normal Hunter HUD fully restores after cancel. */
 /* V1010545_MOBILE_SNIPER_CANCEL_CONTROLS_HUNT_TOUCH: topmost mobile sniper cancel + full normal-control restore + live Hunt joystick hit-test + first-touch recovery. */
 /* V1010543_RESULT_CAMERA_CANCEL_HINT_HIDER_OUTLINE: DOM-top ESC hint; Finished full-map camera lock; capture-center-parity Hider outline. */
@@ -5118,6 +5120,40 @@ private timerText!: Phaser.GameObjects.Text;
                  * hit tests so invisible joystick geometry can never create a
                  * dead zone inside the scope.
                  */
+                /* V1010547_MOBILE_SNIPER_CANCEL_PASS_THROUGH_FULL_HUD_UNLOCK / CANVAS_CANCEL_HIT_TEST
+                 * The DOM cancel control is pointer-events:none so dragging the
+                 * scope through it can NEVER interrupt the active pointer.
+                 * Only a NEW touch that starts inside the currently-visible
+                 * cancel rectangle cancels sniper mode.
+                 */
+                const sniperCancelButtonDom =
+                    this.sniperCancelButtonDom;
+
+                if (
+                    this.mobileControlsEnabled &&
+                    this.sniperActive &&
+                    this.sniperScopeInteractive &&
+                    sniperCancelButtonDom &&
+                    sniperCancelButtonDom.style.display !== 'none'
+                ) {
+                    const nativeCancelEvent =
+                        pointer.event as PointerEvent | undefined;
+                    const cancelRect =
+                        sniperCancelButtonDom.getBoundingClientRect();
+
+                    if (
+                        nativeCancelEvent &&
+                        nativeCancelEvent.clientX >= cancelRect.left &&
+                        nativeCancelEvent.clientX <= cancelRect.right &&
+                        nativeCancelEvent.clientY >= cancelRect.top &&
+                        nativeCancelEvent.clientY <= cancelRect.bottom
+                    ) {
+                        nativeCancelEvent.preventDefault?.();
+                        this.requestSniperCancel();
+                        return;
+                    }
+                }
+
                 if (
                     this.mobileControlsEnabled &&
                     this.sniperActive &&
@@ -15947,6 +15983,16 @@ const ribbon =
                     if (state.sessionId === localId) {
                         const wasActive = this.sniperActive;
                         this.sniperActive = state.active;
+
+                        /* V1010547_MOBILE_SNIPER_CANCEL_PASS_THROUGH_FULL_HUD_UNLOCK / RELEASE_PREACK_MOBILE_LOCK
+                         * vulcanSupportCommitted is also used as the immediate
+                         * mobile pre-ACK lock when Sniper is tapped. Once the
+                         * authoritative Sniper state arrives, sniperActive owns
+                         * the lock. Leaving this true makes canMove permanently
+                         * false after cancel/shot and hides every normal HUD.
+                         */
+                        this.vulcanSupportCommitted =
+                            false;
 
                         if (
                             state.active
@@ -60206,6 +60252,8 @@ const roomPlayers =
                 ) {
                     this.sniperActive =
                         true;
+                    this.vulcanSupportCommitted =
+                        false;
                     this.sniperAvailable =
                         true;
                     this.sniperReadyAt =
@@ -61265,12 +61313,16 @@ const roomPlayers =
                 showMobileCancel
                     ? 'block'
                     : 'none';
+            /* V1010547_MOBILE_SNIPER_CANCEL_PASS_THROUGH_FULL_HUD_UNLOCK / VISUAL_ONLY_CANCEL_DOM
+             * The cancel button is visual only. It must never become the DOM
+             * pointer target, otherwise an optic drag that crosses it loses
+             * pointermove events. A fresh POINTER_DOWN inside its rectangle is
+             * detected on the Phaser canvas instead.
+             */
             this.sniperCancelButtonDom.style.pointerEvents =
-                showMobileCancel
-                    ? 'auto'
-                    : 'none';
+                'none';
             this.sniperCancelButtonDom.disabled =
-                !showMobileCancel;
+                false;
         }
 
         if (this.sniperCancelButtonBg) {
@@ -61377,6 +61429,22 @@ const roomPlayers =
             ?.setVisible(true);
         this.gun
             ?.setVisible(true);
+
+        /* V1010547_MOBILE_SNIPER_CANCEL_PASS_THROUGH_FULL_HUD_UNLOCK / FINAL_NORMAL_HUNT_UI_REASSERT
+         * Explicitly restore all mobile control objects after generic owners.
+         * This is intentionally after updateMobileControlVisibility(), so no
+         * same-call branch can immediately hide them again.
+         */
+        this.mobileMoveBase?.setVisible(true);
+        this.mobileMoveKnob?.setVisible(true);
+        this.mobileMoveLabel?.setVisible(true);
+        this.mobileAimBase?.setVisible(true);
+        this.mobileAimKnob?.setVisible(true);
+        this.mobileAimLabel?.setVisible(true);
+        this.mobileFireButton?.setVisible(true);
+        this.mobileFireLabel?.setVisible(true);
+        this.mobileFartButton?.setVisible(true);
+        this.mobileFartLabel?.setVisible(true);
     }
 
     private requestSniperCancel(): void {
@@ -61405,6 +61473,13 @@ const roomPlayers =
          */
         this.sniperActive = false;
         this.sniperAvailable = false;
+
+        /* V1010547_MOBILE_SNIPER_CANCEL_PASS_THROUGH_FULL_HUD_UNLOCK / CANCEL_UNLOCK_NORMAL_HUNT
+         * This flag is NOT the one-use tactical latch. The one-use rule stays
+         * in tacticalSupportChosenThisHunt. Clear only the temporary mobile
+         * control lock so normal MOVE/AIM/FIRE/FART/HEAT/GAS can return.
+         */
+        this.vulcanSupportCommitted = false;
 
         this.networkPlayerManager
             .setLocalHunterSpeedMultiplier(1);
