@@ -1,3 +1,4 @@
+/* V1010552_HIDER_HARDENED_VISUAL: Hardened pose replaces camouflage while active. */
 /* V1010542_TEN_PLAYER_PREFLIGHT_SAFE_OPT: stationary remote fallback updates are skipped; moving-player 15Hz transport/smoothing is untouched. */
 /* V1010541_PAINT_CURSOR_PIXEL_CENTER_ALIGNMENT: local paint uses containing pixel cell (floor), preserving top-left-origin seam-free raster stamps. */
 /* V1010528_ATOMIC_PAINT_HUNT_AND_VULCAN_SELFVIEW_PACKET_AUTHORITY: persistent local-Hider transition position lock across both normalize passes. */
@@ -2048,6 +2049,29 @@ export class NetworkPlayerManager {
             0.1,
             1,
           );
+  }
+
+  setHiderHardenedVisual(sessionId: string, active: boolean, pose = 1, label = ""): void {
+    const view = this.players.get(sessionId); if (!view || view.role !== "hider") return;
+    const container = view.container;
+    const body = container.getByName("network-hider-pixel-body") as Phaser.GameObjects.Image | null;
+    let image = container.getByName("network-hider-hardened-pose") as Phaser.GameObjects.Image | null;
+    let text = container.getByName("network-hider-hardened-label") as Phaser.GameObjects.Text | null;
+    if (!active) { image?.destroy(); text?.destroy(); if (view.alive) { body?.setVisible(true); view.paintLayer?.texture.setVisible(true); } return; }
+    body?.setVisible(false); view.paintLayer?.texture.setVisible(false);
+    const key = `hider-hardened-pose-${Math.max(1, Math.min(3, Math.round(pose)))}`;
+    if (!image) { image = this.scene.add.image(0, 18, key).setOrigin(0.5, 0.75).setName("network-hider-hardened-pose").setDisplaySize(112,112); container.add(image); } else image.setTexture(key).setVisible(true);
+    if (!text) { text = this.scene.add.text(0,-72,label,{fontFamily:"Arial Black, sans-serif",fontSize:"15px",fontStyle:"bold",color:"#fff36d",stroke:"#000000",strokeThickness:5,align:"center"}).setOrigin(0.5,1).setName("network-hider-hardened-label"); container.add(text); }
+    text.setText(label).setVisible(true); container.bringToTop(image); container.bringToTop(text); container.bringToTop(view.nameText);
+  }
+
+  setHiderHardenedPose(sessionId: string, pose: number): void {
+    const image = this.players.get(sessionId)?.container.getByName("network-hider-hardened-pose") as Phaser.GameObjects.Image | null;
+    image?.setTexture(`hider-hardened-pose-${Math.max(1, Math.min(3, Math.round(pose)))}`);
+  }
+
+  setHiderHardenedLabel(sessionId: string, label: string): void {
+    const text = this.players.get(sessionId)?.container.getByName("network-hider-hardened-label") as Phaser.GameObjects.Text | null; text?.setText(label);
   }
 
   getPlayerPosition(

@@ -1,3 +1,4 @@
+/* V1010552_HIDER_HARDENED_NETWORK: Hardened state/hit transport. */
 /* V1010551_SCHEMA_AUTHORITATIVE_PLAYER_PRESENCE: Schema owns live player presence; lobby_snapshot is recovery fallback only and cannot evict a live Schema player. */
 /* V1010548_FRESH_REJOIN_AUTHORITY_GATE: fresh Client creation requires explicit terminal authority; successful SDK recovery revokes it. */
 /* V1010547_SINGLE_RECONNECT_WINNER: exactly one reconnect path may become authoritative; late SDK/manual/fresh results are retired. */
@@ -102,6 +103,12 @@ export type NetworkSniperFired = {
 export type SniperStateHandler = (state: NetworkSniperState) => void;
 export type SniperAimHandler = (aim: NetworkSniperAim) => void;
 export type SniperFiredHandler = (shot: NetworkSniperFired) => void;
+
+/* V1010552_HIDER_RANDOM_TAUNT_HARDENED */
+export type NetworkHiderHardenedState = { sessionId: string; active: boolean; pose: number; endsAt: number; serverNow: number; };
+export type NetworkHiderHardenedHit = { sessionId: string; x: number; y: number; pose: number; serverNow: number; };
+export type HiderHardenedStateHandler = (state: NetworkHiderHardenedState) => void;
+export type HiderHardenedHitHandler = (event: NetworkHiderHardenedHit) => void;
 
 /* V1010507_TACTICAL_VULCAN_AIR_SUPPORT */
 export type NetworkVulcanState = {
@@ -1088,6 +1095,9 @@ this.phaseChangedHandlers.forEach(
 
   private readonly skillStateHandlers =
     new Set<SkillStateHandler>();
+
+  private readonly hiderHardenedStateHandlers = new Set<HiderHardenedStateHandler>();
+  private readonly hiderHardenedHitHandlers = new Set<HiderHardenedHitHandler>();
 
   private selectedSkill: PlayerSkillId =
     "paintball";
@@ -3708,6 +3718,20 @@ this.room = room;
       },
     );
 
+    room.onMessage<NetworkHiderHardenedState>("hider_hardened_state", (payload) => {
+      this.hiderHardenedStateHandlers.forEach((handler) => handler({
+        sessionId: String(payload?.sessionId ?? ""), active: Boolean(payload?.active),
+        pose: Math.max(1, Math.min(3, Number(payload?.pose) || 1)),
+        endsAt: Number(payload?.endsAt ?? 0), serverNow: Number(payload?.serverNow ?? Date.now()),
+      }));
+    });
+    room.onMessage<NetworkHiderHardenedHit>("hider_hardened_hit", (payload) => {
+      this.hiderHardenedHitHandlers.forEach((handler) => handler({
+        sessionId: String(payload?.sessionId ?? ""), x: Number(payload?.x ?? 0), y: Number(payload?.y ?? 0),
+        pose: Math.max(1, Math.min(3, Number(payload?.pose) || 1)), serverNow: Number(payload?.serverNow ?? Date.now()),
+      }));
+    });
+
     room.onMessage<{ skillId?: PlayerSkillId }>(
       "skill_state",
       (payload) => {
@@ -4634,6 +4658,17 @@ this.room = room;
 
   getLobbyReadyState(): LobbyReadyState {
     return this.lobbyReadyState;
+  }
+
+  sendHiderHardenedTaunt(): void {
+    if (!this.isGameplayTransportStable()) return;
+    this.room?.send("hider_hardened_taunt", {});
+  }
+  onHiderHardenedState(handler: HiderHardenedStateHandler): () => void {
+    this.hiderHardenedStateHandlers.add(handler); return () => this.hiderHardenedStateHandlers.delete(handler);
+  }
+  onHiderHardenedHit(handler: HiderHardenedHitHandler): () => void {
+    this.hiderHardenedHitHandlers.add(handler); return () => this.hiderHardenedHitHandlers.delete(handler);
   }
 
   sendSkillSelection(
