@@ -1,3 +1,4 @@
+/* V1010545_MOBILE_SNIPER_CANCEL_CONTROLS_HUNT_TOUCH: topmost mobile sniper cancel + full normal-control restore + live Hunt joystick hit-test + first-touch recovery. */
 /* V1010543_RESULT_CAMERA_CANCEL_HINT_HIDER_OUTLINE: DOM-top ESC hint; Finished full-map camera lock; capture-center-parity Hider outline. */
 /* V1010543_VULCAN_EDGE_TRIGGER_AND_RESULT_TIMING: Vulcan cinematic reacts only to active-state edges; authoritative Finished winner no longer waits on stale alive Schema. */
 /* V1010542C_REMOVE_UNUSED_TELEMETRY_ROBUST: removed only unused v542 telemetry declarations; core 10-player optimizations preserved in their respective files. */
@@ -1001,6 +1002,8 @@ export class GameScene extends Phaser.Scene {
     private sniperCancelButtonText?: Phaser.GameObjects.Text;
     private sniperCancelHintText?: Phaser.GameObjects.Text;
     private sniperCancelHintDom?: HTMLDivElement;
+    /* V1010545_MOBILE_SNIPER_CANCEL_CONTROLS_HUNT_TOUCH: mobile cancel must live above the sniper DOM blur compositor. */
+    private sniperCancelButtonDom?: HTMLButtonElement;
     private sniperCancelKey?: Phaser.Input.Keyboard.Key;
     /* V1010507_TACTICAL_VULCAN_AIR_SUPPORT */
     private vulcanActive = false;
@@ -5198,12 +5201,19 @@ private timerText!: Phaser.GameObjects.Text;
                     return;
                 }
 
+                /* V1010545_MOBILE_SNIPER_CANCEL_CONTROLS_HUNT_TOUCH / LIVE_MOVE_HIT_TEST
+                 * The visible MOVE stick changes Y by phase (Paint/Lobby 275, Hunt 350).
+                 * Using the creation-time moveY made the first Hunt touch miss the visible stick.
+                 */
+                const liveMoveY =
+                    getMoveY();
+
                 const moveDistance =
                     Phaser.Math.Distance.Between(
                         pointer.x,
                         pointer.y,
                         moveX,
-                        moveY,
+                        liveMoveY,
                     );
 
                 if (
@@ -49309,6 +49319,74 @@ const roomPlayers =
 
             this.startGameplayCamera();
 
+            /* V1010545_MOBILE_SNIPER_CANCEL_CONTROLS_HUNT_TOUCH / HUNT_FIRST_TOUCH_RECOVERY
+             * The Hunt handoff intentionally clears stale pointer ownership.
+             * If the player put a finger on MOVE during that exact handoff, Phaser
+             * can still report the real finger as down after our pointerId reset.
+             * Re-adopt that one physical MOVE touch on the next frame.
+             */
+            if (this.mobileControlsEnabled) {
+                this.time.delayedCall(
+                    0,
+                    () => {
+                        if (
+                            this.phase !== 'hunt' ||
+                            this.sniperActive ||
+                            this.vulcanActive
+                        ) {
+                            return;
+                        }
+
+                        this.updateMobileControlVisibility();
+
+                        if (this.mobileMovePointerId >= 0) {
+                            return;
+                        }
+
+                        const pointer =
+                            this.input.activePointer;
+
+                        if (
+                            !pointer ||
+                            !pointer.isDown ||
+                            !this.mobileMoveBase?.visible
+                        ) {
+                            return;
+                        }
+
+                        const moveDistance =
+                            Phaser.Math.Distance.Between(
+                                pointer.x,
+                                pointer.y,
+                                82,
+                                350,
+                            );
+
+                        if (
+                            moveDistance >
+                                this.mobileJoystickRadius * 1.8
+                        ) {
+                            return;
+                        }
+
+                        this.mobileMovePointerId =
+                            pointer.id;
+                        this.mobileTouchPoints.set(
+                            pointer.id,
+                            new Phaser.Math.Vector2(
+                                pointer.x,
+                                pointer.y,
+                            ),
+                        );
+                        this.updateMobileJoystick(
+                            'move',
+                            pointer.x,
+                            pointer.y,
+                        );
+                    },
+                );
+            }
+
             /*
              * V1010423_ATOMIC_HUNT_VISUAL_HANDOFF_RESTORE / NO_POST_HUNT_REPLAY_PULSE
              * Hunt inherits the final Paint RenderTextures unchanged.
@@ -60905,6 +60983,67 @@ const roomPlayers =
             this.sniperCancelHintDom = hint;
         }
 
+        /* V1010545_MOBILE_SNIPER_CANCEL_CONTROLS_HUNT_TOUCH / MOBILE_CANCEL_DOM_TOPMOST
+         * Sniper blur is a DOM layer above Phaser. The mobile cancel control must
+         * therefore also be DOM, exactly like the fixed desktop ESC hint.
+         */
+        if (!this.sniperCancelButtonDom) {
+            const cancel =
+                document.createElement('button');
+
+            cancel.type = 'button';
+            cancel.className =
+                'colorhunt-sniper-mobile-cancel';
+
+            Object.assign(
+                cancel.style,
+                {
+                    position: 'fixed',
+                    zIndex: '2147483647',
+                    display: 'none',
+                    transform: 'translate(-50%, -50%)',
+                    width: '176px',
+                    height: '46px',
+                    padding: '0 16px',
+                    border: '2px solid rgba(255,154,144,.98)',
+                    borderRadius: '13px',
+                    background: 'rgba(90,23,23,.98)',
+                    color: '#ffffff',
+                    fontFamily: 'Arial, sans-serif',
+                    fontSize: '15px',
+                    fontWeight: '900',
+                    lineHeight: '1',
+                    textAlign: 'center',
+                    textShadow: '0 1px 2px rgba(38,6,6,.95)',
+                    boxShadow: '0 5px 0 rgba(42,7,7,.55), 0 10px 24px rgba(0,0,0,.32)',
+                    cursor: 'pointer',
+                    userSelect: 'none',
+                    WebkitUserSelect: 'none',
+                    WebkitTapHighlightColor: 'transparent',
+                    touchAction: 'manipulation',
+                    filter: 'none',
+                    backdropFilter: 'none',
+                },
+            );
+
+            cancel.addEventListener(
+                'pointerdown',
+                (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    this.requestSniperCancel();
+                },
+                { passive: false },
+            );
+
+            document.body.appendChild(
+                cancel,
+            );
+
+            this.sniperCancelButtonDom =
+                cancel;
+        }
+
         if (!this.sniperCancelButton) {
             const buttonWidth = 176;
             const buttonHeight = 44;
@@ -61022,16 +61161,38 @@ const roomPlayers =
                     : 'none';
         }
 
+        const mobileCancelLabel =
+            language === 'ja'
+                ? '✕ キャンセル'
+                : language === 'en'
+                    ? '✕ CANCEL'
+                    : language === 'zh'
+                        ? '✕ 取消'
+                        : '✕ 취소';
+
         this.sniperCancelButtonText
             ?.setText(
-                language === 'ja'
-                    ? '✕ キャンセル'
-                    : language === 'en'
-                        ? '✕ CANCEL'
-                        : language === 'zh'
-                            ? '✕ 取消'
-                            : '✕ 취소',
+                mobileCancelLabel,
             );
+
+        if (this.sniperCancelButtonDom) {
+            const canvasRect =
+                this.game.canvas
+                    .getBoundingClientRect();
+
+            this.sniperCancelButtonDom.textContent =
+                mobileCancelLabel;
+            this.sniperCancelButtonDom.style.left =
+                `${Math.round(canvasRect.left + canvasRect.width / 2)}px`;
+            this.sniperCancelButtonDom.style.top =
+                `${Math.round(canvasRect.bottom - 72)}px`;
+            this.sniperCancelButtonDom.style.display =
+                canCancel && this.mobileControlsEnabled
+                    ? 'block'
+                    : 'none';
+            this.sniperCancelButtonDom.disabled =
+                !(canCancel && this.mobileControlsEnabled);
+        }
 
         if (this.sniperCancelButtonBg) {
             this.sniperCancelButtonBg.setFillStyle(
@@ -61041,30 +61202,16 @@ const roomPlayers =
         }
 
         if (this.sniperCancelButton) {
+            /* V1010545_MOBILE_SNIPER_CANCEL_CONTROLS_HUNT_TOUCH: legacy in-canvas cancel stays hidden; DOM button is authoritative. */
             this.sniperCancelButton
                 .setPosition(
                     this.gameWidth / 2,
                     this.gameHeight - 34,
                 )
-                .setVisible(
-                    canCancel &&
-                    this.mobileControlsEnabled,
-                );
+                .setVisible(false);
 
-            if (
-                canCancel &&
-                this.mobileControlsEnabled
-            ) {
-                if (this.sniperCancelButton.input) {
-                    this.sniperCancelButton.input.enabled = true;
-                } else {
-                    this.sniperCancelButton.setInteractive({
-                        useHandCursor: true,
-                    });
-                }
-            } else {
-                this.sniperCancelButton.disableInteractive();
-            }
+            this.sniperCancelButton
+                .disableInteractive();
         }
     }
 
@@ -61074,6 +61221,12 @@ const roomPlayers =
         if (this.sniperCancelHintDom) {
             this.sniperCancelHintDom.style.display =
                 'none';
+        }
+        if (this.sniperCancelButtonDom) {
+            this.sniperCancelButtonDom.style.display =
+                'none';
+            this.sniperCancelButtonDom.disabled =
+                true;
         }
         this.sniperCancelButton
             ?.disableInteractive()
@@ -61111,6 +61264,32 @@ const roomPlayers =
             .setLocalMovementHardLocked(false);
 
         this.exitSniperCinematic();
+
+        /* V1010545_MOBILE_SNIPER_CANCEL_CONTROLS_HUNT_TOUCH / CANCEL_RESTORE_NORMAL_MOBILE_HUNT
+         * enterSniperCinematic() explicitly hid MOVE/AIM/FIRE/FART.
+         * Re-run the authoritative normal Hunt visibility pass immediately,
+         * and once more next frame after camera/sniper teardown settles.
+         */
+        if (this.mobileControlsEnabled) {
+            this.resetMobileMoveControl();
+            this.mobileAimPointerId = -1;
+            this.mobileFirePointerId = -1;
+            this.mobileFartPointerId = -1;
+            this.mobileTouchPoints.clear();
+            this.updateMobileControlVisibility();
+
+            this.time.delayedCall(
+                0,
+                () => {
+                    if (
+                        this.phase === 'hunt' &&
+                        !this.sniperActive
+                    ) {
+                        this.updateMobileControlVisibility();
+                    }
+                },
+            );
+        }
 
         this.syncTacticalBgmFromActiveSupports();
 
