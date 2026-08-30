@@ -1,3 +1,4 @@
+/* V1010555F_CLONE_DANCE_FIXED_OWNER_BGM_RESUME_CLIENT: real Hider X/Y stays fixed; Disco restores exact prior BGM; victory-card cleanup barriers verified. */
 /* V1010555B_CLONE_DANCE_ASSIST_BGM_RANDOM_OWNER_CLIENT: FULL Paint-Assist organic camouflage + guaranteed disco resume/mix + random real-Hider dance slot restore. */
 /* V1010555A_CLONE_DANCE_TIMEREVENT_BUILD_FIX: Phaser TimerEvent has no .once(); one-shot clone-party timers remove themselves from the tracking Set inside callbacks. */
 /* V1010555_CLONE_DANCE_PARTY_CLIENT: 10 fully-camouflaged visual clones + synchronized dance/note/smoke/disco lifecycle + result hard cleanup. */
@@ -1337,6 +1338,13 @@ private timerText!: Phaser.GameObjects.Text;
         new Set<string>();
     private cloneDanceDiscoOscillators:OscillatorNode[]=[];
     private cloneDanceDiscoStarting=false;
+    private cloneDancePreviousBgmKind?:
+        | 'background'
+        | 'lobby'
+        | 'paint'
+        | 'hunt'
+        | 'tactical';
+    private cloneDancePreviousBgmSeek=0;
     private hiderRandomTauntSkillBusy=false;
 
     private setHiderRandomTauntSkillBusy(
@@ -2858,6 +2866,75 @@ private timerText!: Phaser.GameObjects.Text;
              * Absolute BGM priority starts only once AudioContext is actually
              * RUNNING, preventing the silent gap seen in v555.
              */
+            /*
+             * V1010555F_CLONE_DANCE_FIXED_OWNER_BGM_RESUME_CLIENT / SNAPSHOT_PREVIOUS_BGM
+             * Only the FIRST active party owns the snapshot. If another Hider
+             * starts a party while Disco is already running, do not overwrite it.
+             */
+            if(
+                this.cloneDancePreviousBgmKind===
+                undefined
+            ){
+                const candidates=[
+                    [
+                        'tactical',
+                        this.sniperTacticalMusic,
+                    ],
+                    [
+                        'hunt',
+                        this.huntMusic,
+                    ],
+                    [
+                        'paint',
+                        this.paintMusic,
+                    ],
+                    [
+                        'lobby',
+                        this.lobbyMusic,
+                    ],
+                    [
+                        'background',
+                        this.backgroundMusic,
+                    ],
+                ] as const;
+
+                for(
+                    const [
+                        kind,
+                        music,
+                    ] of candidates
+                ){
+                    if(
+                        !music?.isPlaying
+                    ){
+                        continue;
+                    }
+
+                    this.cloneDancePreviousBgmKind=
+                        kind;
+
+                    try{
+                        const seek=
+                            Number(
+                                (
+                                    music as
+                                        Phaser.Sound.WebAudioSound
+                                ).seek ??
+                                0,
+                            );
+
+                        this.cloneDancePreviousBgmSeek=
+                            Number.isFinite(seek)
+                                ? Math.max(0,seek)
+                                : 0;
+                    }catch{
+                        this.cloneDancePreviousBgmSeek=0;
+                    }
+
+                    break;
+                }
+            }
+
             this.stopAllBgm();
 
             if(
@@ -3100,6 +3177,7 @@ private timerText!: Phaser.GameObjects.Text;
         restore=true,
     ):void{
         this.cloneDanceDiscoStarting=false;
+
         this.cloneDanceDiscoOscillators
             .forEach(
                 (osc)=>{
@@ -3109,17 +3187,117 @@ private timerText!: Phaser.GameObjects.Text;
             );
         this.cloneDanceDiscoOscillators=[];
 
+        /*
+         * Another Hider's Dance Party is still alive: Disco remains the
+         * conceptual music owner, so do not restore normal BGM yet.
+         */
         if(
-            restore &&
-            this.cloneDancePartyRuntimes.size===0 &&
-            this.roundResultWinner===null
+            !restore ||
+            this.cloneDancePartyRuntimes.size>0
         ){
-            if(this.phase==='hunt'){
-                this.syncTacticalBgmFromActiveSupports();
-            }else{
-                this.syncPhaseMusic();
-            }
+            return;
         }
+
+        const previousKind=
+            this.cloneDancePreviousBgmKind;
+        const previousSeek=
+            this.cloneDancePreviousBgmSeek;
+
+        this.cloneDancePreviousBgmKind=
+            undefined;
+        this.cloneDancePreviousBgmSeek=0;
+
+        if(
+            this.roundResultWinner!==null ||
+            !this.bgmEnabled ||
+            this.sound.mute
+        ){
+            return;
+        }
+
+        /*
+         * Tactical support may have started/ended WHILE Disco was playing.
+         * Current tactical state has priority over the old snapshot.
+         */
+        const anyTacticalSupportActive=
+            this.phase==='hunt' &&
+            (
+                this.sniperActive ||
+                this.vulcanActive ||
+                this.remoteSniperActiveSessionIds.size>0 ||
+                this.remoteVulcanActiveSessionIds.size>0
+            );
+
+        if(anyTacticalSupportActive){
+            this.startSniperTacticalBgm();
+            return;
+        }
+
+        const previousMusic=
+            previousKind==='hunt'
+                ? this.huntMusic
+                : previousKind==='paint'
+                    ? this.paintMusic
+                    : previousKind==='lobby'
+                        ? this.lobbyMusic
+                        : previousKind==='background'
+                            ? this.backgroundMusic
+                            : undefined;
+
+        /*
+         * The normal case: resume EXACTLY the track that was flowing before
+         * the party, from (approximately) its previous playback position.
+         */
+        if(
+            previousMusic &&
+            previousKind!=='tactical'
+        ){
+            [
+                this.backgroundMusic,
+                this.lobbyMusic,
+                this.paintMusic,
+                this.huntMusic,
+            ].forEach(
+                (music)=>{
+                    if(
+                        music &&
+                        music!==previousMusic &&
+                        music.isPlaying
+                    ){
+                        music.stop();
+                    }
+                },
+            );
+
+            if(
+                !previousMusic.isPlaying
+            ){
+                previousMusic.play();
+            }
+
+            if(previousSeek>0){
+                try{
+                    (
+                        previousMusic as
+                            Phaser.Sound.WebAudioSound
+                    ).seek=
+                        previousSeek;
+                }catch{
+                    /*
+                     * HTML5/backend differences: playback itself is more
+                     * important than seek restoration.
+                     */
+                }
+            }
+
+            return;
+        }
+
+        /*
+         * If the pre-party source was tactical but that support ended during
+         * Disco (or no track was captured), restore the correct current phase.
+         */
+        this.syncPhaseMusic();
     }
 
     private startCloneDanceParty(
@@ -3345,18 +3523,14 @@ private timerText!: Phaser.GameObjects.Text;
                          * Real Hider: wild but position-safe dance.
                          */
                         owner
+                            /*
+                             * V1010555F_CLONE_DANCE_FIXED_OWNER_BGM_RESUME_CLIENT / OWNER_XY_ANCHOR
+                             * The REAL Hider never leaves the pre-skill world
+                             * coordinate. Only rotation/scale create the dance.
+                             */
                             .setPosition(
-                                ownerX+
-                                    Math.sin(
-                                        t*11.0+
-                                        0.4,
-                                    )*4,
-                                ownerY-
-                                    Math.abs(
-                                        Math.sin(
-                                            t*8.4,
-                                        ),
-                                    )*7,
+                                ownerX,
+                                ownerY,
                             )
                             .setAngle(
                                 Math.sin(
