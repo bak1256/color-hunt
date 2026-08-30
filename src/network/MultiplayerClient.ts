@@ -1,3 +1,4 @@
+/* V1010556_HIDER_LONG_SKILL_CANCEL_FIRST_GUIDE_CLIENT: Hider long-skill cancel transport. */
 /* V1010555B_CLONE_DANCE_ASSIST_BGM_RANDOM_OWNER_CLIENT: Clone Dance payload separates random owner dance slot from exact pre-skill return position. */
 /* V1010555_CLONE_DANCE_PARTY_CLIENT: Clone Dance Party transport; Triple Teleport production TEST endpoint removed/replaced. */
 /* V1010554A_TRIPLE_TELEPORT_CLIENT: Random Taunt/Triple Teleport transport. */
@@ -4781,6 +4782,12 @@ this.room = room;
 
   getLobbyReadyState(): LobbyReadyState {
     return this.lobbyReadyState;
+  }
+
+  /* V1010556_HIDER_LONG_SKILL_CANCEL_FIRST_GUIDE_CLIENT: server-authoritative cancel for Hardened / Clone Dance. */
+  sendHiderLongSkillCancel(): void {
+    if (!this.isGameplayTransportStable()) return;
+    this.room?.send("hider_long_skill_cancel", {});
   }
 
   sendHiderHardenedTaunt(): void {

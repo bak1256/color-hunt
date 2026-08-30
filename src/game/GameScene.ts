@@ -1,3 +1,4 @@
+/* V1010556_HIDER_LONG_SKILL_CANCEL_FIRST_GUIDE_CLIENT: ESC/mobile cancel for Hardened + Clone Dance; invincibility bubble; no-scroll two-role first guide. */
 /* V1010555G_REMOVE_CLONE_DANCE_TEST_BUTTON: temporary Clone Dance Party TEST button removed; production Random Taunt skill unchanged. */
 /* V1010555F_CLONE_DANCE_FIXED_OWNER_BGM_RESUME_CLIENT: real Hider X/Y stays fixed; Disco restores exact prior BGM; victory-card cleanup barriers verified. */
 /* V1010555B_CLONE_DANCE_ASSIST_BGM_RANDOM_OWNER_CLIENT: FULL Paint-Assist organic camouflage + guaranteed disco resume/mix + random real-Hider dance slot restore. */
@@ -1357,6 +1358,13 @@ private timerText!: Phaser.GameObjects.Text;
     private readonly hardenedEndsAtBySessionId = new Map<string, number>();
     private readonly hardenedNextPhraseAtBySessionId = new Map<string, number>();
     private readonly hardenedPhraseIndexBySessionId = new Map<string, number>();
+    /* V1010556_HIDER_LONG_SKILL_CANCEL_FIRST_GUIDE_CLIENT: Hardened invincibility callout + shared long-skill cancel UX. */
+    private readonly hardenedInvincibleHintBySessionId=
+        new Map<string,Phaser.GameObjects.Container>();
+    private hiderLongSkillCancelUi?:HTMLDivElement;
+    private hiderLongSkillCancelHint?:HTMLDivElement;
+    private hiderLongSkillCancelButton?:HTMLButtonElement;
+    private hiderLongSkillCancelKey?:Phaser.Input.Keyboard.Key;
     private getHardenedTauntCopy(): {
         warning: string;
         button: string;
@@ -1688,6 +1696,8 @@ private timerText!: Phaser.GameObjects.Text;
         this.hardenedNextPhraseAtBySessionId.clear();
         this.hardenedPhraseIndexBySessionId.clear();
         this.destroyHiderTauntHud();
+    
+        this.clearHardenedInvincibleHints();
     }
 
     private playHardenedTransformBoom():void {
@@ -4626,6 +4636,301 @@ private timerText!: Phaser.GameObjects.Text;
         }
     }
 
+    private getHardenedInvincibleHintCopy():string {
+        const language=getLanguage();
+        return language==='ja'
+            ? '🛡️ 一定時間 無敵！'
+            : language==='en'
+                ? '🛡️ INVINCIBLE for a short time!'
+                : language==='zh'
+                    ? '🛡️ 一段时间内无敌！'
+                    : '🛡️ 일정 시간 동안 무적!';
+    }
+
+    private clearHardenedInvincibleHints():void {
+        for(const bubble of this.hardenedInvincibleHintBySessionId.values()){
+            bubble.destroy(true);
+        }
+        this.hardenedInvincibleHintBySessionId.clear();
+    }
+
+    private setHardenedInvincibleHint(
+        sessionId:string,
+        active:boolean,
+    ):void {
+        const existing=this.hardenedInvincibleHintBySessionId.get(sessionId);
+        if(!active){
+            existing?.destroy(true);
+            this.hardenedInvincibleHintBySessionId.delete(sessionId);
+            return;
+        }
+
+        const pos=this.networkPlayerManager.getPlayerPosition(sessionId);
+        if(!pos)return;
+
+        if(existing){
+            existing.setPosition(pos.x,pos.y-57).setVisible(true);
+            return;
+        }
+
+        const label=this.add.text(
+            0,
+            -1,
+            this.getHardenedInvincibleHintCopy(),
+            {
+                fontFamily:'Arial Black, "Noto Sans KR", "Noto Sans JP", sans-serif',
+                fontSize:'11px',
+                fontStyle:'bold',
+                color:'#183b26',
+                stroke:'#ffffff',
+                strokeThickness:1,
+                align:'center',
+            },
+        ).setOrigin(0.5);
+
+        const width=Math.max(116,label.width+18);
+        const height=26;
+        const bg=this.add.graphics();
+        bg.fillStyle(0xf1ffe9,0.98);
+        bg.lineStyle(2,0x3e9c62,0.96);
+        bg.fillRoundedRect(-width/2,-height/2,width,height,8);
+        bg.strokeRoundedRect(-width/2,-height/2,width,height,8);
+        bg.fillStyle(0xf1ffe9,0.98);
+        bg.fillTriangle(-6,height/2-1,6,height/2-1,0,height/2+7);
+        bg.lineStyle(1,0x3e9c62,0.90);
+        bg.beginPath();
+        bg.moveTo(-6,height/2-1);
+        bg.lineTo(0,height/2+7);
+        bg.lineTo(6,height/2-1);
+        bg.strokePath();
+
+        const bubble=this.add.container(
+            pos.x,
+            pos.y-57,
+            [bg,label],
+        )
+            .setDepth(4405)
+            .setName('hardened-invincible-hint');
+
+        this.hardenedInvincibleHintBySessionId.set(sessionId,bubble);
+    }
+
+    private updateHardenedInvincibleHints():void {
+        for(const sessionId of this.hardenedEndsAtBySessionId.keys()){
+            if(!this.hardenedInvincibleHintBySessionId.has(sessionId)){
+                this.setHardenedInvincibleHint(sessionId,true);
+            }
+            const pos=this.networkPlayerManager.getPlayerPosition(sessionId);
+            const bubble=this.hardenedInvincibleHintBySessionId.get(sessionId);
+            if(pos&&bubble){
+                bubble.setPosition(pos.x,pos.y-57).setVisible(true);
+            }
+        }
+
+        for(const [sessionId,bubble] of [...this.hardenedInvincibleHintBySessionId.entries()]){
+            if(this.hardenedEndsAtBySessionId.has(sessionId))continue;
+            bubble.destroy(true);
+            this.hardenedInvincibleHintBySessionId.delete(sessionId);
+        }
+    }
+
+    private ensureHiderLongSkillCancelUi():void {
+        if(!this.hiderLongSkillCancelUi){
+            const root=document.createElement('div');
+            root.className='colorhunt-hider-long-skill-cancel-ui';
+            Object.assign(root.style,{
+                position:'fixed',
+                zIndex:'2147483647',
+                display:'none',
+                left:'50%',
+                bottom:'18px',
+                transform:'translateX(-50%)',
+                flexDirection:'column',
+                alignItems:'center',
+                gap:'7px',
+                pointerEvents:'none',
+                fontFamily:'Arial, "Noto Sans KR", "Noto Sans JP", sans-serif',
+            });
+
+            const hint=document.createElement('div');
+            Object.assign(hint.style,{
+                display:'none',
+                padding:'7px 12px',
+                borderRadius:'10px',
+                border:'1px solid rgba(255,185,185,.88)',
+                background:'rgba(34,8,8,.92)',
+                color:'#fff7f7',
+                fontSize:'14px',
+                fontWeight:'800',
+                lineHeight:'1.2',
+                whiteSpace:'nowrap',
+                textShadow:'0 1px 2px rgba(0,0,0,.9)',
+                boxShadow:'0 5px 16px rgba(0,0,0,.32)',
+                pointerEvents:'none',
+            });
+
+            const button=document.createElement('button');
+            button.type='button';
+            Object.assign(button.style,{
+                display:'none',
+                width:'176px',
+                height:'46px',
+                padding:'0 16px',
+                border:'2px solid rgba(255,154,144,.98)',
+                borderRadius:'13px',
+                background:'rgba(90,23,23,.98)',
+                color:'#ffffff',
+                fontFamily:'Arial, "Noto Sans KR", "Noto Sans JP", sans-serif',
+                fontSize:'15px',
+                fontWeight:'900',
+                lineHeight:'1',
+                textAlign:'center',
+                textShadow:'0 1px 2px rgba(38,6,6,.95)',
+                boxShadow:'0 5px 0 rgba(42,7,7,.55), 0 10px 24px rgba(0,0,0,.32)',
+                cursor:'pointer',
+                userSelect:'none',
+                WebkitUserSelect:'none',
+                WebkitTapHighlightColor:'transparent',
+                touchAction:'manipulation',
+                pointerEvents:'auto',
+            });
+            button.addEventListener('pointerdown',(event)=>{
+                event.preventDefault();
+                event.stopPropagation();
+                this.requestHiderLongSkillCancel();
+            });
+
+            root.append(hint,button);
+            document.body.appendChild(root);
+            this.hiderLongSkillCancelUi=root;
+            this.hiderLongSkillCancelHint=hint;
+            this.hiderLongSkillCancelButton=button;
+
+            this.events.once(Phaser.Scenes.Events.SHUTDOWN,()=>{
+                root.remove();
+                if(this.hiderLongSkillCancelUi===root){
+                    this.hiderLongSkillCancelUi=undefined;
+                    this.hiderLongSkillCancelHint=undefined;
+                    this.hiderLongSkillCancelButton=undefined;
+                }
+                this.clearHardenedInvincibleHints();
+            });
+        }
+
+        if(!this.hiderLongSkillCancelKey&&this.input.keyboard){
+            this.hiderLongSkillCancelKey=this.input.keyboard.addKey(
+                Phaser.Input.Keyboard.KeyCodes.ESC,
+            );
+            this.hiderLongSkillCancelKey.on('down',()=>{
+                const active=document.activeElement as HTMLElement|null;
+                if(
+                    active&&
+                    (
+                        active.tagName==='INPUT'||
+                        active.tagName==='TEXTAREA'||
+                        active.isContentEditable
+                    )
+                ){
+                    return;
+                }
+                this.requestHiderLongSkillCancel();
+            });
+        }
+    }
+
+    private requestHiderLongSkillCancel():void {
+        if(this.phase!=='hunt'||!multiplayerClient.isGameplayTransportStable())return;
+        const id=multiplayerClient.getSessionId();
+        const local=multiplayerClient.getLocalPlayer();
+        if(!id||local?.role!=='hider'||!local.alive)return;
+
+        const hardenedActive=this.hardenedEndsAtBySessionId.has(id);
+        const danceActive=this.cloneDancePartyRuntimes.has(id);
+        if(!hardenedActive&&!danceActive)return;
+
+        multiplayerClient.sendHiderLongSkillCancel();
+
+        /* Local presentation ends on the same input frame; server echo owns peers. */
+        if(hardenedActive){
+            const pos=this.networkPlayerManager.getPlayerPosition(id);
+            this.hardenedEndsAtBySessionId.delete(id);
+            this.hardenedNextPhraseAtBySessionId.delete(id);
+            this.hardenedPhraseIndexBySessionId.delete(id);
+            this.setHardenedInvincibleHint(id,false);
+            this.networkPlayerManager.setHiderHardenedGauge(id,0,15000);
+            this.networkPlayerManager.setHiderHardenedVisual(id,false);
+            this.networkPlayerManager.setLocalMovementHardLocked(false);
+            if(pos){
+                this.playHardenedTransformBoom();
+                this.showHardenedSmoke(pos.x,pos.y);
+            }
+        }
+
+        if(danceActive){
+            this.finishCloneDanceParty(id,false);
+        }
+
+        this.setHiderRandomTauntSkillBusy(false);
+        this.resetMobileMoveControl();
+        this.updateMobileControlVisibility();
+        this.updateHiderTauntHud();
+        this.syncHiderLongSkillCancelUi();
+    }
+
+    private syncHiderLongSkillCancelUi():void {
+        const id=multiplayerClient.getSessionId();
+        const local=multiplayerClient.getLocalPlayer();
+        const hardenedActive=Boolean(id&&this.hardenedEndsAtBySessionId.has(id));
+        const danceActive=Boolean(id&&this.cloneDancePartyRuntimes.has(id));
+        const active=
+            this.phase==='hunt'&&
+            Boolean(id)&&
+            local?.role==='hider'&&
+            Boolean(local.alive)&&
+            (hardenedActive||danceActive);
+
+        if(!active){
+            if(this.hiderLongSkillCancelUi)this.hiderLongSkillCancelUi.style.display='none';
+            return;
+        }
+
+        this.ensureHiderLongSkillCancelUi();
+        const root=this.hiderLongSkillCancelUi;
+        const hint=this.hiderLongSkillCancelHint;
+        const button=this.hiderLongSkillCancelButton;
+        if(!root||!hint||!button)return;
+
+        const language=getLanguage();
+        const skillName=hardenedActive
+            ? language==='ja'?'カチカチ化':language==='en'?'Harden Up':language==='zh'?'硬化':'단단해지기'
+            : language==='ja'?'分身ダンスパーティー':language==='en'?'Clone Dance Party':language==='zh'?'分身舞会':'그림자 분신 댄스파티';
+
+        hint.textContent=
+            language==='ja'
+                ? 'ESCで'+skillName+'をキャンセル'
+                : language==='en'
+                    ? 'Press ESC to cancel '+skillName
+                    : language==='zh'
+                        ? '按 ESC 取消'+skillName
+                        : 'ESC를 누르면 '+skillName+' 취소';
+
+        button.textContent=
+            language==='ja'
+                ? '✕ キャンセル'
+                : language==='en'
+                    ? '✕ CANCEL'
+                    : language==='zh'
+                        ? '✕ 取消'
+                        : '✕ 취소';
+
+        const canvasRect=this.game.canvas.getBoundingClientRect();
+        root.style.left=String(Math.round(canvasRect.left+canvasRect.width/2))+'px';
+        root.style.bottom=String(Math.max(14,Math.round(window.innerHeight-canvasRect.bottom+18)))+'px';
+        root.style.display='flex';
+        hint.style.display=this.mobileControlsEnabled?'none':'block';
+        button.style.display=this.mobileControlsEnabled?'block':'none';
+    }
+
     private applyHardenedState(state:NetworkHiderHardenedState):void {
         const id=state.sessionId;
         if(!id)return;
@@ -4645,13 +4950,15 @@ private timerText!: Phaser.GameObjects.Text;
             );
         }
         const pos=this.networkPlayerManager.getPlayerPosition(id);
+        const wasActive=this.hardenedEndsAtBySessionId.has(id);
 
         if(!state.active){
             this.hardenedEndsAtBySessionId.delete(id);
             this.hardenedNextPhraseAtBySessionId.delete(id);
             this.hardenedPhraseIndexBySessionId.delete(id);
+            this.setHardenedInvincibleHint(id,false);
 
-            if(pos){
+            if(wasActive&&pos){
                 this.playHardenedTransformBoom();
                 this.showHardenedSmoke(pos.x,pos.y);
             }
@@ -4671,6 +4978,7 @@ private timerText!: Phaser.GameObjects.Text;
         this.hardenedEndsAtBySessionId.set(id,end);
         this.hardenedNextPhraseAtBySessionId.set(id,Date.now()+1700);
         this.hardenedPhraseIndexBySessionId.set(id,0);
+        this.setHardenedInvincibleHint(id,true);
 
         this.networkPlayerManager.setHiderHardenedVisual(
             id,true,state.pose,this.getHardenedTauntCopy().initial
@@ -4765,10 +5073,14 @@ private timerText!: Phaser.GameObjects.Text;
             const rem=Math.max(0,end-now);
             this.networkPlayerManager.setHiderHardenedGauge(id,rem,15000);
         }
+    
+        this.updateHardenedInvincibleHints();
     }
 
     private clearAllHardenedVisuals():void {
         for(const id of this.hardenedEndsAtBySessionId.keys())this.networkPlayerManager.setHiderHardenedVisual(id,false);this.hardenedEndsAtBySessionId.clear();this.hardenedNextPhraseAtBySessionId.clear();this.hardenedPhraseIndexBySessionId.clear();if(this.networkPlayerManager.isLocalHider())this.networkPlayerManager.setLocalMovementHardLocked(false);this.destroyHiderTauntHud();
+    
+        this.clearHardenedInvincibleHints();
     }
 
     private destroyHiderSkillPicker(): void {
@@ -13206,6 +13518,7 @@ private timerText!: Phaser.GameObjects.Text;
     update(_: number, delta: number): void {
         this.updateHiderTauntHud();
         this.updateHardenedStates();
+        this.syncHiderLongSkillCancelUi();
         if (
             this.victoryCaptureCameraLockActive
         ) {
@@ -25812,18 +26125,185 @@ this.networkUnsubscribers.push(
     }
 
     private showFirstWaitingRoomGuide(): void {
-        const language = getLanguage();
-        const title = language === 'ja' ? '基本操作' : language === 'en' ? 'Basic controls' : language === 'zh' ? '基本操作' : '기본 조작';
-        const body = this.mobileControlsEnabled
-            ? language === 'ja' ? '画面のジョイスティックで移動します。\nまずは待機部屋で動いてみましょう！'
-                : language === 'en' ? 'Move with the on-screen joystick.\nTry moving around while you wait!'
-                    : language === 'zh' ? '使用屏幕上的虚拟摇杆移动。\n先在等待房间里试着移动一下吧！'
-                        : '화면의 조이스틱으로 이동해요.\n대기방에서 한번 움직여보세요!'
-            : language === 'ja' ? 'WASDキーで移動します。\nまずは待機部屋で動いてみましょう！'
-                : language === 'en' ? 'Move with the WASD keys.\nTry moving around while you wait!'
-                    : language === 'zh' ? '使用WASD键移动。\n先在等待房间里试着移动一下吧！'
-                        : 'WASD로 이동해요.\n대기방에서 한번 움직여보세요!';
-        this.showFirstPlayGuide('colorhunt-guide-waiting-v1', title, body);
+        if(typeof document==='undefined'||typeof window==='undefined')return;
+
+        const storageKey='colorhunt-guide-waiting-v1';
+        try{
+            if(window.localStorage.getItem(storageKey)==='1')return;
+        }catch{/* optional */}
+
+        document.querySelector('.colorhunt-first-play-guide')?.remove();
+
+        const language=getLanguage();
+        const copy=
+            language==='ja'
+                ? {
+                    title:'COLOR HUNT · かんたんゲーム説明',
+                    controls:this.mobileControlsEnabled?'🕹 画面のジョイスティックで移動':'⌨ WASDキーで移動',
+                    rule:'ハイダーは背景に似た色で体を塗って隠れ、ハンターは限られた時間と弾薬で擬態したハイダーを探す2Dかくれんぼゲームです。',
+                    hiderTitle:'🎨 HIDER · 塗って隠れる',
+                    hiderDesc:'周りの背景に似せてキャラクターを塗り、うまく隠れましょう。',
+                    hunterTitle:'🔦 HUNTER · 見つけて当てる',
+                    hunterDesc:'背景に隠れているプレイヤーを見つけて撃ちましょう。',
+                    ok:'確認',
+                }
+                : language==='en'
+                    ? {
+                        title:'COLOR HUNT · Quick Guide',
+                        controls:this.mobileControlsEnabled?'🕹 Move with the on-screen joystick':'⌨ Move with WASD',
+                        rule:'Hiders blend into the background and hide. Hunters must find and hit them before time runs out.',
+                        hiderTitle:'🎨 HIDER · Paint & Hide',
+                        hiderDesc:'Paint your character to match the surroundings and hide.',
+                        hunterTitle:'🔦 HUNTER · Find & Hit',
+                        hunterDesc:'Find the players hiding in the background and shoot them.',
+                        ok:'OK',
+                    }
+                    : language==='zh'
+                        ? {
+                            title:'COLOR HUNT · 简单游戏说明',
+                            controls:this.mobileControlsEnabled?'🕹 使用屏幕摇杆移动':'⌨ 使用 WASD 移动',
+                            rule:'躲藏者融入背景隐藏，猎人要在限定时间内找出并击中他们——这是一款2D捉迷藏游戏。',
+                            hiderTitle:'🎨 HIDER · 涂色并隐藏',
+                            hiderDesc:'把角色涂成和周围背景相似的颜色，隐藏起来吧！',
+                            hunterTitle:'🔦 HUNTER · 找到并击中',
+                            hunterDesc:'找出藏在背景中的玩家并射击！',
+                            ok:'确认',
+                        }
+                        : {
+                            title:'COLOR HUNT · 간단 게임 설명',
+                            controls:this.mobileControlsEnabled?'🕹 화면 조이스틱으로 이동':'⌨ WASD로 이동',
+                            rule:'하이더는 배경과 비슷한 색으로 몸을 칠해 숨고, 헌터는 제한된 시간과 탄약 안에 위장한 하이더를 찾아내는 2D 숨바꼭질 게임입니다.',
+                            hiderTitle:'🎨 HIDER · 칠하고 숨기',
+                            hiderDesc:'주변 배경과 비슷하게 캐릭터를 칠해 숨어보세요.',
+                            hunterTitle:'🔦 HUNTER · 찾아서 맞히기',
+                            hunterDesc:'배경에 숨어있는 플레이어를 찾아 쏘세요.',
+                            ok:'확인',
+                        };
+
+        const overlay=document.createElement('div');
+        overlay.className='colorhunt-first-play-guide colorhunt-first-overview-guide';
+        overlay.innerHTML=`
+            <style>
+                .colorhunt-first-overview-guide{
+                    position:fixed;inset:0;z-index:2147483200;
+                    display:flex;align-items:center;justify-content:center;
+                    box-sizing:border-box;padding:clamp(6px,1.5vh,14px);
+                    overflow:hidden;background:rgba(8,22,17,.38);
+                    backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)
+                }
+                .colorhunt-first-overview-card{
+                    width:min(960px,97vw);height:min(610px,94vh);
+                    max-width:97vw;max-height:94vh;overflow:hidden;
+                    box-sizing:border-box;padding:clamp(8px,1.8vh,18px);
+                    border:2px solid rgba(112,174,128,.92);border-radius:18px;
+                    background:rgba(248,252,244,.985);color:#203b2d;
+                    box-shadow:0 16px 44px rgba(0,0,0,.30);
+                    font-family:"Noto Sans KR","Noto Sans JP",Arial,sans-serif;
+                    display:grid;grid-template-rows:auto auto auto minmax(0,1fr) auto;
+                    gap:clamp(5px,1.2vh,10px)
+                }
+                .colorhunt-first-overview-title{
+                    text-align:center;font-size:clamp(15px,3.2vh,25px);
+                    line-height:1.08;font-weight:950
+                }
+                .colorhunt-first-overview-controls{
+                    justify-self:center;padding:clamp(4px,1vh,8px) clamp(10px,2vw,18px);
+                    border-radius:999px;background:#e7f6e7;border:1px solid #8ec99a;
+                    font-size:clamp(10px,2.1vh,15px);font-weight:900;line-height:1.15
+                }
+                .colorhunt-first-overview-rule{
+                    margin:0;text-align:center;font-size:clamp(9px,1.95vh,14px);
+                    line-height:1.25;font-weight:800;color:#365746
+                }
+                .colorhunt-first-overview-roles{
+                    min-height:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+                    gap:clamp(7px,1.6vw,14px);position:relative
+                }
+                .colorhunt-first-overview-roles::after{
+                    content:'VS';position:absolute;left:50%;top:9px;transform:translateX(-50%);
+                    z-index:2;padding:2px 5px;border-radius:999px;background:rgba(248,252,244,.96);
+                    color:#d87039;font-size:clamp(8px,1.7vh,12px);font-weight:950;line-height:1
+                }
+                .colorhunt-first-overview-role{
+                    min-width:0;min-height:0;overflow:hidden;border-radius:13px;
+                    border:1px solid rgba(79,128,94,.30);background:#fff;
+                    padding:clamp(5px,1.2vh,10px);box-sizing:border-box;
+                    display:grid;grid-template-rows:auto minmax(0,1fr) auto;
+                    gap:clamp(4px,.9vh,7px)
+                }
+                .colorhunt-first-overview-role h3{
+                    margin:0;text-align:center;font-size:clamp(11px,2.2vh,17px);
+                    line-height:1.1;font-weight:950;white-space:nowrap
+                }
+                .colorhunt-first-overview-role img{
+                    display:block;width:100%;height:100%;min-height:52px;
+                    max-height:clamp(76px,24vh,200px);object-fit:cover;object-position:center;
+                    border-radius:9px;border:1px solid rgba(0,0,0,.12);background:#17212a
+                }
+                .colorhunt-first-overview-role p{
+                    margin:0;text-align:center;font-size:clamp(8px,1.75vh,13px);
+                    line-height:1.22;font-weight:750;color:#425f50
+                }
+                .colorhunt-first-overview-ok{
+                    width:100%;height:clamp(31px,6vh,44px);border:0;border-radius:11px;
+                    background:linear-gradient(180deg,#55bd75,#3ca75f);color:#fff;
+                    font-size:clamp(11px,2.2vh,15px);font-weight:950;cursor:pointer;
+                    box-shadow:0 3px 0 rgba(33,116,63,.35)
+                }
+                @media (max-height:430px){
+                    .colorhunt-first-overview-card{border-radius:13px}
+                    .colorhunt-first-overview-rule{line-height:1.15}
+                    .colorhunt-first-overview-role{border-radius:10px}
+                }
+                @media (max-height:370px){
+                    .colorhunt-first-overview-guide{padding:4px}
+                    .colorhunt-first-overview-card{height:96vh;max-height:96vh;padding:5px;gap:3px}
+                    .colorhunt-first-overview-title{font-size:12px}
+                    .colorhunt-first-overview-controls{font-size:9px;padding:3px 8px}
+                    .colorhunt-first-overview-rule{font-size:8px;line-height:1.08}
+                    .colorhunt-first-overview-role{padding:3px;gap:2px}
+                    .colorhunt-first-overview-role h3{font-size:9px}
+                    .colorhunt-first-overview-role img{min-height:34px;max-height:none}
+                    .colorhunt-first-overview-role p{font-size:7px;line-height:1.08}
+                    .colorhunt-first-overview-ok{height:25px;font-size:10px}
+                    .colorhunt-first-overview-roles::after{top:5px;font-size:7px}
+                }
+                @media (max-width:680px){
+                    .colorhunt-first-overview-card{width:98vw;max-width:98vw}
+                    .colorhunt-first-overview-roles{gap:6px}
+                    .colorhunt-first-overview-role{padding:5px}
+                }
+            </style>
+            <div class="colorhunt-first-overview-card" role="dialog" aria-modal="true">
+                <div class="colorhunt-first-overview-title">🎮 ${copy.title}</div>
+                <div class="colorhunt-first-overview-controls">${copy.controls}</div>
+                <p class="colorhunt-first-overview-rule">${copy.rule}</p>
+                <div class="colorhunt-first-overview-roles">
+                    <section class="colorhunt-first-overview-role">
+                        <h3>${copy.hiderTitle}</h3>
+                        <img src="/assets/tutorial/first-guide-hider.webp" alt="Hider gameplay">
+                        <p>${copy.hiderDesc}</p>
+                    </section>
+                    <section class="colorhunt-first-overview-role">
+                        <h3>${copy.hunterTitle}</h3>
+                        <img src="/assets/tutorial/first-guide-hunter.webp" alt="Hunter gameplay">
+                        <p>${copy.hunterDesc}</p>
+                    </section>
+                </div>
+                <button class="colorhunt-first-overview-ok" type="button">${copy.ok}</button>
+            </div>
+        `;
+
+        const button=overlay.querySelector<HTMLButtonElement>('.colorhunt-first-overview-ok');
+        button?.addEventListener('click',()=>{
+            try{
+                window.localStorage.setItem(storageKey,'1');
+            }catch{/* optional */}
+            overlay.remove();
+        });
+
+        document.body.appendChild(overlay);
+        window.setTimeout(()=>button?.focus(),0);
     }
 
     private showFirstRoleGuide(): void {
