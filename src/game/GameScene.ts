@@ -1,3 +1,5 @@
+/* V1010553L_RANDOM_TAUNT_TIP_LANGUAGE_FIX: use imported getLanguage() helper for Random Taunt first-use tip. */
+/* V1010553K_RANDOM_TAUNT_FIRST_TIP: first-use random-taunt speech bubble; dismiss permanently on first activation; hidden from spectator and victory capture. */
 /* V1010553J_HARDENED_FINAL_CLEANUP: remove all Hardened/warning phrases; keep only compact Random Taunt button; gauge moved below feet. */
 /* V1010553I_REMOVE_HARDENED_TEST_BUTTON: remove development-only Hardened direct test UI; keep production random-taunt activation unchanged. */
 /* V1010553G_HARDENED_UI_CAPTURE_CLEANUP: compact rounded local-only taunt button; one strong taunt line; Hardened smoke/muscle excluded from victory capture. */
@@ -1273,6 +1275,9 @@ private timerText!: Phaser.GameObjects.Text;
     private hiderTauntButtonBody?: Phaser.GameObjects.Graphics;
     private hiderTauntButtonShadow?: Phaser.GameObjects.Graphics;
     private hiderTauntButtonHit?: Phaser.GameObjects.Zone;
+    private hiderTauntTipBubble?: Phaser.GameObjects.Graphics;
+    private hiderTauntTipTitle?: Phaser.GameObjects.Text;
+    private hiderTauntTipBody?: Phaser.GameObjects.Text;
     private readonly hardenedEndsAtBySessionId = new Map<string, number>();
     private readonly hardenedNextPhraseAtBySessionId = new Map<string, number>();
     private readonly hardenedPhraseIndexBySessionId = new Map<string, number>();
@@ -1325,10 +1330,16 @@ private timerText!: Phaser.GameObjects.Text;
         this.hiderTauntButtonBody?.destroy();
         this.hiderTauntButtonShadow?.destroy();
         this.hiderTauntButtonHit?.destroy();
+        this.hiderTauntTipBubble?.destroy();
+        this.hiderTauntTipTitle?.destroy();
+        this.hiderTauntTipBody?.destroy();
         this.hiderTauntButton=undefined;
         this.hiderTauntButtonBody=undefined;
         this.hiderTauntButtonShadow=undefined;
         this.hiderTauntButtonHit=undefined;
+        this.hiderTauntTipBubble=undefined;
+        this.hiderTauntTipTitle=undefined;
+        this.hiderTauntTipBody=undefined;
     }
 
     private createHiderTauntHud(): void {
@@ -1365,9 +1376,53 @@ private timerText!: Phaser.GameObjects.Text;
             align:'center'
         }).setOrigin(0.5).setDepth(3902);
 
+        let tipSeen=false;
+        try{tipSeen=localStorage.getItem('color-hunt-random-taunt-tip-seen-v1')==='1';}catch{}
+
+        let tipBubble:Phaser.GameObjects.Graphics|undefined;
+        let tipTitle:Phaser.GameObjects.Text|undefined;
+        let tipBody:Phaser.GameObjects.Text|undefined;
+
+        if(!tipSeen){
+            const lang=getLanguage();
+            const tip=lang==='ja'
+                ?{title:'命がけのランダム挑発！',body:'何が起こるかは誰にもわからない…'}
+                :lang==='en'
+                    ?{title:'A LIFE-ON-THE-LINE RANDOM TAUNT!',body:'Nobody knows what will happen…'}
+                    :lang==='zh'
+                        ?{title:'赌上性命的随机挑衅！',body:'谁也不知道会发生什么…'}
+                        :{title:'목숨을 건 랜덤 도발!',body:'무슨 일이 벌어질지는 아무도 모른다…'};
+
+            tipBubble=this.add.graphics().setDepth(3910);
+            tipTitle=this.add.text(0,0,tip.title,{
+                fontFamily:'Arial Black, sans-serif',
+                fontSize:'10px',fontStyle:'bold',
+                color:'#3b1721',
+                align:'center'
+            }).setOrigin(0.5).setDepth(3911);
+
+            tipBody=this.add.text(0,0,tip.body,{
+                fontFamily:'Arial, sans-serif',
+                fontSize:'9px',
+                color:'#4f4145',
+                align:'center'
+            }).setOrigin(0.5).setDepth(3911);
+        }
+
+        const dismissTip=()=>{
+            try{localStorage.setItem('color-hunt-random-taunt-tip-seen-v1','1');}catch{}
+            this.hiderTauntTipBubble?.destroy();
+            this.hiderTauntTipTitle?.destroy();
+            this.hiderTauntTipBody?.destroy();
+            this.hiderTauntTipBubble=undefined;
+            this.hiderTauntTipTitle=undefined;
+            this.hiderTauntTipBody=undefined;
+        };
+
         const activate=()=>{
             const id=multiplayerClient.getSessionId();
             if(!id||this.hardenedEndsAtBySessionId.has(id))return;
+            dismissTip();
             multiplayerClient.sendHiderHardenedTaunt();
         };
 
@@ -1380,6 +1435,9 @@ private timerText!: Phaser.GameObjects.Text;
         this.hiderTauntButtonBody=body;
         this.hiderTauntButtonShadow=shadow;
         this.hiderTauntButtonHit=hit;
+        this.hiderTauntTipBubble=tipBubble;
+        this.hiderTauntTipTitle=tipTitle;
+        this.hiderTauntTipBody=tipBody;
         this.updateHiderTauntHud();
     }
 
@@ -1408,12 +1466,37 @@ private timerText!: Phaser.GameObjects.Text;
         body.setVisible(show);
         shadow.setVisible(show);
         hit.setVisible(show);
+
+        const tipBubble=this.hiderTauntTipBubble;
+        const tipTitle=this.hiderTauntTipTitle;
+        const tipBody=this.hiderTauntTipBody;
+        tipBubble?.setVisible(show);
+        tipTitle?.setVisible(show);
+        tipBody?.setVisible(show);
+
         if(!show||!pos)return;
 
         body.setPosition(pos.x,pos.y+62);
         shadow.setPosition(pos.x,pos.y+66);
         hit.setPosition(pos.x,pos.y+62);
         b.setPosition(pos.x,pos.y+62);
+
+        if(tipBubble&&tipTitle&&tipBody){
+            const cx=pos.x;
+            const top=pos.y+88;
+            tipBubble.setPosition(cx,top);
+            tipBubble.clear();
+            tipBubble.fillStyle(0xfffbec,0.98);
+            tipBubble.lineStyle(2,0x3a2328,0.95);
+            tipBubble.fillRoundedRect(-92,0,184,48,10);
+            tipBubble.strokeRoundedRect(-92,0,184,48,10);
+            tipBubble.fillTriangle(-9,0,9,0,0,-9);
+            tipBubble.lineBetween(-9,0,0,-9);
+            tipBubble.lineBetween(0,-9,9,0);
+
+            tipTitle.setPosition(cx,top+14);
+            tipBody.setPosition(cx,top+33);
+        }
     }
 
     private showHardenedSmoke(x:number,y:number):void {
