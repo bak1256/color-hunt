@@ -1,3 +1,4 @@
+/* V1010555_CLONE_DANCE_PARTY_CLIENT: Clone Dance Party transport; Triple Teleport production TEST endpoint removed/replaced. */
 /* V1010554A_TRIPLE_TELEPORT_CLIENT: Random Taunt/Triple Teleport transport. */
 /* V1010553_HARDENED_5POSE_GAUGE_HIT_DRAIN_CLIENT */
 /* V1010552_HIDER_HARDENED_NETWORK: Hardened state/hit transport. */
@@ -123,6 +124,29 @@ export type NetworkHiderTripleTeleport = {
   serverNow: number;
 };
 export type HiderTripleTeleportHandler = (event: NetworkHiderTripleTeleport) => void;
+
+/* V1010555_CLONE_DANCE_PARTY_CLIENT: authoritative visual-decoy party payload. */
+export type NetworkHiderCloneDancePoint = {
+  x: number;
+  y: number;
+  spawnDelayMs: number;
+  phase: number;
+};
+
+export type NetworkHiderCloneDanceParty = {
+  sessionId: string;
+  stage: 'start' | 'end' | 'cancel';
+  originX: number;
+  originY: number;
+  clones: NetworkHiderCloneDancePoint[];
+  durationMs: number;
+  endsAt: number;
+  serverNow: number;
+};
+
+export type HiderCloneDancePartyHandler = (
+  event: NetworkHiderCloneDanceParty,
+) => void;
 
 /* V1010507_TACTICAL_VULCAN_AIR_SUPPORT */
 export type NetworkVulcanState = {
@@ -1113,6 +1137,8 @@ this.phaseChangedHandlers.forEach(
   private readonly hiderHardenedStateHandlers = new Set<HiderHardenedStateHandler>();
   private readonly hiderHardenedHitHandlers = new Set<HiderHardenedHitHandler>();
   private readonly hiderTripleTeleportHandlers = new Set<HiderTripleTeleportHandler>();
+  private readonly hiderCloneDancePartyHandlers =
+    new Set<HiderCloneDancePartyHandler>();
 
   private selectedSkill: PlayerSkillId =
     "paintball";
@@ -3756,6 +3782,62 @@ this.room = room;
       }));
     });
 
+    room.onMessage<NetworkHiderCloneDanceParty>(
+      "hider_clone_dance_party",
+      (payload) => {
+        const stage =
+          payload?.stage === 'start' ||
+          payload?.stage === 'end' ||
+          payload?.stage === 'cancel'
+            ? payload.stage
+            : 'cancel';
+
+        const clones =
+          Array.isArray(payload?.clones)
+            ? payload.clones
+                .slice(0, 10)
+                .map((point) => ({
+                  x: Number(point?.x ?? 0),
+                  y: Number(point?.y ?? 0),
+                  spawnDelayMs:
+                    Math.max(
+                      0,
+                      Math.min(
+                        1200,
+                        Number(point?.spawnDelayMs) || 0,
+                      ),
+                    ),
+                  phase:
+                    Number(point?.phase ?? 0),
+                }))
+            : [];
+
+        this.hiderCloneDancePartyHandlers
+          .forEach(
+            (handler) =>
+              handler({
+                sessionId:
+                  String(payload?.sessionId ?? ''),
+                stage,
+                originX:
+                  Number(payload?.originX ?? 0),
+                originY:
+                  Number(payload?.originY ?? 0),
+                clones,
+                durationMs:
+                  Math.max(
+                    0,
+                    Number(payload?.durationMs ?? 0),
+                  ),
+                endsAt:
+                  Number(payload?.endsAt ?? 0),
+                serverNow:
+                  Number(payload?.serverNow ?? Date.now()),
+              }),
+          );
+      },
+    );
+
     room.onMessage<{ skillId?: PlayerSkillId }>(
       "skill_state",
       (payload) => {
@@ -4689,9 +4771,9 @@ this.room = room;
     /* Random Taunt entry point: server authoritatively chooses Hardened or Triple Teleport. */
     this.room?.send("hider_random_taunt", {});
   }
-  sendHiderTripleTeleportTest(): void {
+  sendHiderCloneDanceTest(): void {
     if (!this.isGameplayTransportStable()) return;
-    this.room?.send("hider_triple_teleport_test", {});
+    this.room?.send("hider_clone_dance_test", {});
   }
   onHiderHardenedState(handler: HiderHardenedStateHandler): () => void {
     this.hiderHardenedStateHandlers.add(handler); return () => this.hiderHardenedStateHandlers.delete(handler);
@@ -4702,6 +4784,15 @@ this.room = room;
   onHiderTripleTeleport(handler: HiderTripleTeleportHandler): () => void {
     this.hiderTripleTeleportHandlers.add(handler); return () => this.hiderTripleTeleportHandlers.delete(handler);
   }
+  onHiderCloneDanceParty(
+    handler: HiderCloneDancePartyHandler,
+  ): () => void {
+    this.hiderCloneDancePartyHandlers.add(handler);
+    return () =>
+      this.hiderCloneDancePartyHandlers.delete(handler);
+  }
+
+
 
   sendSkillSelection(
     skillId: PlayerSkillId,

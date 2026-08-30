@@ -1,3 +1,5 @@
+/* V1010555A_CLONE_DANCE_TIMEREVENT_BUILD_FIX: Phaser TimerEvent has no .once(); one-shot clone-party timers remove themselves from the tracking Set inside callbacks. */
+/* V1010555_CLONE_DANCE_PARTY_CLIENT: 10 fully-camouflaged visual clones + synchronized dance/note/smoke/disco lifecycle + result hard cleanup. */
 /* V1010554J_TRIPLE_TELEPORT_ZERO_PAN_ZOOM: Triple Teleport camera freezes scrollX/Y exactly; zoom is the only animated camera property. */
 /* V1010554I_TRIPLE_TELEPORT_CAMERA_VISION_POSTPASS_OWNERSHIP: late Hider post-pass cannot override Triple Teleport fixed-center zoom or restore circular darkness. */
 /* V1010554H_TRIPLE_TELEPORT_GHOST_CAMERA_SOUND_POLISH: fixed-center small zoom-out, clean white/cyan afterimages, teleport SFX, stale-ghost cleanup. */
@@ -147,6 +149,7 @@ import {
     type NetworkHiderHardenedState,
     type NetworkHiderHardenedHit,
     type NetworkHiderTripleTeleport,
+    type NetworkHiderCloneDanceParty,
     type NetworkVulcanState,
     type NetworkVulcanAim,
     type NetworkVulcanFired,
@@ -1288,7 +1291,7 @@ private timerText!: Phaser.GameObjects.Text;
     private hiderTauntTipBubble?: Phaser.GameObjects.Graphics;
     private hiderTauntTipTitle?: Phaser.GameObjects.Text;
     private hiderTauntTipBody?: Phaser.GameObjects.Text;
-    private hiderTripleTeleportTestButton?: Phaser.GameObjects.Text;
+    private hiderCloneDanceTestButton?: Phaser.GameObjects.Text;
     private tripleTeleportLocalActive=false;
     private readonly tripleTeleportFx=new Set<Phaser.GameObjects.GameObject>();
     /* V1010554F_TRIPLE_TELEPORT_CINEMATIC_CAMERA: local Hider camera is temporarily owned by Triple Teleport. */
@@ -1300,6 +1303,36 @@ private timerText!: Phaser.GameObjects.Text;
     private tripleTeleportCameraOwned=false;
     private tripleTeleportLocalOrigin?: {x:number;y:number};
     private readonly tripleTeleportActiveSessionIds=new Set<string>();
+
+    /* V1010555_CLONE_DANCE_PARTY_CLIENT: all clone/music/note/smoke resources are explicitly tracked. */
+    private readonly cloneDancePartyRuntimes=
+        new Map<
+            string,
+            {
+                owner:Phaser.GameObjects.Container;
+                ownerX:number;
+                ownerY:number;
+                ownerBaseAngle:number;
+                ownerBaseScaleX:number;
+                ownerBaseScaleY:number;
+                clones:Array<{
+                    sprite:Phaser.GameObjects.Image;
+                    baseX:number;
+                    baseY:number;
+                    phase:number;
+                    textureKey:string;
+                }>;
+                danceTimer?:Phaser.Time.TimerEvent;
+                noteTimer?:Phaser.Time.TimerEvent;
+            }
+        >();
+    private readonly cloneDancePartyFx=
+        new Set<Phaser.GameObjects.GameObject>();
+    private readonly cloneDancePartyTimers=
+        new Set<Phaser.Time.TimerEvent>();
+    private readonly cloneDancePartyTextureKeys=
+        new Set<string>();
+    private cloneDanceDiscoOscillators:OscillatorNode[]=[];
     private hiderRandomTauntSkillBusy=false;
 
     private setHiderRandomTauntSkillBusy(
@@ -1357,6 +1390,13 @@ private timerText!: Phaser.GameObjects.Text;
     }
 
     private destroyHiderTauntHud(): void {
+        if(
+            this.phase!=='hunt'
+        ){
+            this.clearCloneDancePartyFx(
+                true,
+            );
+        }
         if(this.phase!=='hunt')this.clearTripleTeleportFx();
         this.hiderTauntButton?.destroy();
         this.hiderTauntButtonBody?.destroy();
@@ -1365,7 +1405,7 @@ private timerText!: Phaser.GameObjects.Text;
         this.hiderTauntTipBubble?.destroy();
         this.hiderTauntTipTitle?.destroy();
         this.hiderTauntTipBody?.destroy();
-        this.hiderTripleTeleportTestButton?.destroy();
+        this.hiderCloneDanceTestButton?.destroy();
         this.hiderTauntButton=undefined;
         this.hiderTauntButtonBody=undefined;
         this.hiderTauntButtonShadow=undefined;
@@ -1373,7 +1413,7 @@ private timerText!: Phaser.GameObjects.Text;
         this.hiderTauntTipBubble=undefined;
         this.hiderTauntTipTitle=undefined;
         this.hiderTauntTipBody=undefined;
-        this.hiderTripleTeleportTestButton=undefined;
+        this.hiderCloneDanceTestButton=undefined;
     }
 
     private createHiderTauntHud(): void {
@@ -1484,7 +1524,13 @@ private timerText!: Phaser.GameObjects.Text;
                     if(
                         this.hiderRandomTauntSkillBusy &&
                         !hardenedActive &&
-                        !this.tripleTeleportLocalActive
+                        !this.tripleTeleportLocalActive &&
+                        !(
+                            localId &&
+                            this.cloneDancePartyRuntimes.has(
+                                localId,
+                            )
+                        )
                     ){
                         this.setHiderRandomTauntSkillBusy(false);
                     }
@@ -1505,7 +1551,7 @@ private timerText!: Phaser.GameObjects.Text;
         this.hiderTauntTipTitle=tipTitle;
         this.hiderTauntTipBody=tipBody;
 
-        const teleportTest=this.add.text(0,0,'TEST ⚡ 3단 순간이동',{
+        const teleportTest=this.add.text(0,0,'TEST 🪩 분신댄스파티',{
             fontFamily:'Arial Black, sans-serif',fontSize:'10px',fontStyle:'bold',
             color:'#dffcff',backgroundColor:'#15364d',padding:{x:8,y:5},
             stroke:'#000000',strokeThickness:3
@@ -1513,21 +1559,27 @@ private timerText!: Phaser.GameObjects.Text;
         teleportTest.on('pointerup',()=>{
             if(this.phase!=='hunt'||this.tripleTeleportLocalActive)return;
             this.setHiderRandomTauntSkillBusy(true);
-            multiplayerClient.sendHiderTripleTeleportTest();
+            multiplayerClient.sendHiderCloneDanceTest();
 
             this.time.delayedCall(
                 1200,
                 ()=>{
                     if(
                         this.hiderRandomTauntSkillBusy &&
-                        !this.tripleTeleportLocalActive
+                        !this.tripleTeleportLocalActive &&
+                        !(
+                            multiplayerClient.getSessionId() &&
+                            this.cloneDancePartyRuntimes.has(
+                                multiplayerClient.getSessionId() ?? '',
+                            )
+                        )
                     ){
                         this.setHiderRandomTauntSkillBusy(false);
                     }
                 },
             );
         });
-        this.hiderTripleTeleportTestButton=teleportTest;
+        this.hiderCloneDanceTestButton=teleportTest;
         this.updateHiderTauntHud();
     }
 
@@ -1544,7 +1596,7 @@ private timerText!: Phaser.GameObjects.Text;
             this.hiderTauntTipBubble?.setVisible(false);
             this.hiderTauntTipTitle?.setVisible(false);
             this.hiderTauntTipBody?.setVisible(false);
-            this.hiderTripleTeleportTestButton?.setVisible(false);
+            this.hiderCloneDanceTestButton?.setVisible(false);
             return;
         }
         const b=this.hiderTauntButton;
@@ -1578,7 +1630,7 @@ private timerText!: Phaser.GameObjects.Text;
         tipBubble?.setVisible(show);
         tipTitle?.setVisible(show);
         tipBody?.setVisible(show);
-        this.hiderTripleTeleportTestButton?.setVisible(show&&!this.tripleTeleportLocalActive);
+        this.hiderCloneDanceTestButton?.setVisible(show&&!this.tripleTeleportLocalActive);
 
         if(!show||!pos)return;
 
@@ -1604,7 +1656,7 @@ private timerText!: Phaser.GameObjects.Text;
             tipBody.setPosition(cx,top+38);
         }
 
-        this.hiderTripleTeleportTestButton?.setPosition(pos.x,pos.y+154);
+        this.hiderCloneDanceTestButton?.setPosition(pos.x,pos.y+154);
     }
 
     private showHardenedSmoke(x:number,y:number):void {
@@ -2108,6 +2160,1303 @@ private timerText!: Phaser.GameObjects.Text;
             this.updateHuntTension(0);
             this.updateMobileControlVisibility();
         }
+    }
+
+    private rememberCloneDanceFx<
+        T extends Phaser.GameObjects.GameObject
+    >(object:T):T{
+        this.cloneDancePartyFx.add(object);
+        object.once(
+            Phaser.GameObjects.Events.DESTROY,
+            ()=>this.cloneDancePartyFx.delete(object),
+        );
+        return object;
+    }
+
+    private rememberCloneDanceTimer(
+        timer:Phaser.Time.TimerEvent,
+    ):Phaser.Time.TimerEvent{
+        this.cloneDancePartyTimers.add(timer);
+        return timer;
+    }
+
+    private playCloneDancePop(
+        x:number,
+        y:number,
+    ):void{
+        if(this.shouldSuppressOneShotAudio())return;
+
+        const ctx=this.getComedyAudioContext();
+        if(ctx){
+            const now=ctx.currentTime;
+            const osc=ctx.createOscillator();
+            const gain=ctx.createGain();
+
+            osc.type='triangle';
+            osc.frequency.setValueAtTime(210,now);
+            osc.frequency.exponentialRampToValueAtTime(
+                72,
+                now+0.16,
+            );
+
+            gain.gain.setValueAtTime(0.0001,now);
+            gain.gain.exponentialRampToValueAtTime(
+                0.035,
+                now+0.01,
+            );
+            gain.gain.exponentialRampToValueAtTime(
+                0.0001,
+                now+0.18,
+            );
+
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(now);
+            osc.stop(now+0.2);
+        }
+
+        const flash=this.rememberCloneDanceFx(
+            this.add
+                .circle(
+                    x,
+                    y,
+                    20,
+                    0xffffff,
+                    0.84,
+                )
+                .setDepth(4412)
+                .setName('clone-dance-party-fx'),
+        );
+
+        this.tweens.add({
+            targets:flash,
+            scale:2.5,
+            alpha:0,
+            duration:300,
+            ease:'Cubic.Out',
+            onComplete:()=>flash.destroy(),
+        });
+    }
+
+    private showCloneDanceSmoke(
+        x:number,
+        y:number,
+    ):void{
+        this.playCloneDancePop(x,y);
+
+        const core=this.rememberCloneDanceFx(
+            this.add
+                .circle(
+                    x,
+                    y,
+                    34,
+                    0xf8fbff,
+                    0.96,
+                )
+                .setDepth(4410)
+                .setName('clone-dance-party-fx'),
+        );
+
+        this.tweens.add({
+            targets:core,
+            scale:2.05,
+            alpha:0,
+            duration:480,
+            ease:'Quad.Out',
+            onComplete:()=>core.destroy(),
+        });
+
+        for(let i=0;i<9;i+=1){
+            const angle=
+                Math.random()*
+                Math.PI*
+                2;
+            const start=
+                5+
+                Math.random()*
+                18;
+            const travel=
+                28+
+                Math.random()*
+                52;
+
+            const puff=this.rememberCloneDanceFx(
+                this.add
+                    .circle(
+                        x+
+                            Math.cos(angle)*start,
+                        y+
+                            Math.sin(angle)*start,
+                        7+
+                            Math.random()*11,
+                        i%3===0
+                            ? 0xffffff
+                            : (
+                                i%2===0
+                                    ? 0xdbe7ee
+                                    : 0xb9c8d2
+                            ),
+                        0.92,
+                    )
+                    .setDepth(4411)
+                    .setName('clone-dance-party-fx'),
+            );
+
+            this.tweens.add({
+                targets:puff,
+                x:
+                    x+
+                    Math.cos(angle)*travel,
+                y:
+                    y+
+                    Math.sin(angle)*travel,
+                scale:
+                    1.7+
+                    Math.random()*1.2,
+                alpha:0,
+                duration:
+                    430+
+                    Math.random()*260,
+                ease:'Cubic.Out',
+                onComplete:()=>puff.destroy(),
+            });
+        }
+    }
+
+    private createCloneDanceCamouflageTexture(
+        sessionId:string,
+        index:number,
+        worldX:number,
+        worldY:number,
+    ):string|null{
+        if(
+            !this.textures.exists(
+                'network-hider-pixel-body',
+            )
+        ){
+            return null;
+        }
+
+        try{
+            const source=
+                this.textures
+                    .get(
+                        'network-hider-pixel-body',
+                    )
+                    .getSourceImage() as
+                        CanvasImageSource;
+
+            const maskCanvas=
+                document.createElement(
+                    'canvas',
+                );
+            maskCanvas.width=80;
+            maskCanvas.height=120;
+
+            const context=
+                maskCanvas.getContext(
+                    '2d',
+                    {
+                        willReadFrequently:true,
+                    },
+                );
+
+            if(!context)return null;
+
+            context.imageSmoothingEnabled=false;
+            context.clearRect(0,0,80,120);
+            context.drawImage(
+                source,
+                0,
+                0,
+                80,
+                120,
+            );
+
+            /*
+             * "색칠 도움받기 - 다 해줘" equivalent for a visual clone:
+             * every visible character pixel receives the real map pixel hidden
+             * directly behind THAT clone's own world position.
+             */
+            const backgroundCanvas=
+                document.createElement(
+                    'canvas',
+                );
+            backgroundCanvas.width=80;
+            backgroundCanvas.height=120;
+
+            const bg=
+                backgroundCanvas.getContext(
+                    '2d',
+                    {
+                        willReadFrequently:true,
+                    },
+                );
+            if(!bg)return null;
+
+            const image=
+                bg.createImageData(
+                    80,
+                    120,
+                );
+            const sampler=
+                this.createCurrentPaintBackgroundSampler();
+
+            for(let py=0;py<120;py+=1){
+                for(let px=0;px<80;px+=1){
+                    const rgb=
+                        this.samplePracticeBackgroundRgb(
+                            sampler,
+                            worldX+
+                                px-
+                                40,
+                            worldY+
+                                py-
+                                60,
+                        );
+                    const offset=
+                        (
+                            py*80+
+                            px
+                        )*4;
+
+                    image.data[offset]=rgb.r;
+                    image.data[offset+1]=rgb.g;
+                    image.data[offset+2]=rgb.b;
+                    image.data[offset+3]=255;
+                }
+            }
+
+            bg.putImageData(
+                image,
+                0,
+                0,
+            );
+
+            context.globalCompositeOperation=
+                'source-in';
+            context.drawImage(
+                backgroundCanvas,
+                0,
+                0,
+            );
+            context.globalCompositeOperation=
+                'source-over';
+
+            const safeSession=
+                sessionId
+                    .replace(
+                        /[^a-zA-Z0-9_-]/g,
+                        '',
+                    )
+                    .slice(0,24);
+
+            const key=
+                `clone-dance-camo-${safeSession}-${index}-${Date.now()}-${Math.floor(Math.random()*1e6)}`;
+
+            if(
+                this.textures.exists(key)
+            ){
+                this.textures.remove(key);
+            }
+
+            this.textures.addCanvas(
+                key,
+                maskCanvas,
+            );
+            this.cloneDancePartyTextureKeys.add(
+                key,
+            );
+
+            return key;
+        }catch(error){
+            console.warn(
+                '[Color Hunt] clone dance camouflage texture failed',
+                error,
+            );
+            return null;
+        }
+    }
+
+    private spawnCloneDanceNote(
+        x:number,
+        y:number,
+    ):void{
+        const glyphs=['♪','♫','♬','♩'];
+        const colors=[
+            '#fff06a',
+            '#ff78c8',
+            '#73efff',
+            '#aaff8a',
+            '#ffffff',
+        ];
+
+        const note=this.rememberCloneDanceFx(
+            this.add
+                .text(
+                    x+
+                        Phaser.Math.Between(
+                            -18,
+                            18,
+                        ),
+                    y-
+                        Phaser.Math.Between(
+                            32,
+                            55,
+                        ),
+                    Phaser.Utils.Array.GetRandom(
+                        glyphs,
+                    ),
+                    {
+                        fontFamily:
+                            'Arial Black, sans-serif',
+                        fontSize:
+                            `${Phaser.Math.Between(15,23)}px`,
+                        fontStyle:'bold',
+                        color:
+                            Phaser.Utils.Array.GetRandom(
+                                colors,
+                            ),
+                        stroke:'#14212e',
+                        strokeThickness:3,
+                    },
+                )
+                .setOrigin(0.5)
+                .setDepth(4420)
+                .setName('clone-dance-party-note'),
+        );
+
+        this.tweens.add({
+            targets:note,
+            y:
+                note.y-
+                Phaser.Math.Between(
+                    24,
+                    48,
+                ),
+            x:
+                note.x+
+                Phaser.Math.Between(
+                    -15,
+                    15,
+                ),
+            angle:
+                Phaser.Math.Between(
+                    -24,
+                    24,
+                ),
+            scale:
+                1.15+
+                Math.random()*0.4,
+            alpha:0,
+            duration:
+                700+
+                Math.random()*380,
+            ease:'Sine.easeOut',
+            onComplete:()=>note.destroy(),
+        });
+    }
+
+    private startCloneDanceDiscoBgm():void{
+        if(
+            !this.audioUnlocked ||
+            !this.bgmEnabled ||
+            this.cloneDancePartyRuntimes.size===0 ||
+            this.cloneDanceDiscoOscillators.length>0
+        ){
+            return;
+        }
+
+        const ctx=
+            this.getComedyAudioContext();
+        if(!ctx)return;
+
+        /*
+         * Highest music priority:
+         * normal Hunt/Paint/Lobby and tactical Sniper/Vulcan music are silent
+         * while any clone party is alive.
+         */
+        this.stopAllBgm();
+
+        if(
+            this.sniperTacticalMusic?.isPlaying
+        ){
+            this.sniperTacticalMusic.stop();
+        }
+
+        const start=
+            ctx.currentTime+0.025;
+        const beat=60/128;
+        const total=10.2;
+
+        const scheduleTone=(
+            at:number,
+            hz:number,
+            duration:number,
+            volume:number,
+            type:OscillatorType,
+            endHz=hz,
+        ):void=>{
+            const osc=
+                ctx.createOscillator();
+            const gain=
+                ctx.createGain();
+
+            osc.type=type;
+            osc.frequency.setValueAtTime(
+                Math.max(35,hz),
+                at,
+            );
+
+            if(
+                Math.abs(endHz-hz)>0.1
+            ){
+                osc.frequency.exponentialRampToValueAtTime(
+                    Math.max(35,endHz),
+                    at+duration,
+                );
+            }
+
+            gain.gain.setValueAtTime(
+                0.0001,
+                at,
+            );
+            gain.gain.exponentialRampToValueAtTime(
+                Math.max(0.0002,volume),
+                at+0.012,
+            );
+            gain.gain.exponentialRampToValueAtTime(
+                0.0001,
+                at+duration,
+            );
+
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+
+            osc.start(at);
+            osc.stop(at+duration+0.02);
+            this.cloneDanceDiscoOscillators.push(
+                osc,
+            );
+        };
+
+        const bass=[
+            110,
+            110,
+            146.83,
+            130.81,
+            110,
+            164.81,
+            146.83,
+            130.81,
+        ];
+
+        for(
+            let step=0;
+            step<Math.ceil(total/(beat/2));
+            step+=1
+        ){
+            const at=
+                start+
+                step*(beat/2);
+            if(at>start+total)break;
+
+            /* bright disco hat every eighth */
+            scheduleTone(
+                at,
+                4200,
+                0.055,
+                0.010,
+                'square',
+                2200,
+            );
+
+            if(step%2===0){
+                /* four-on-the-floor kick */
+                scheduleTone(
+                    at,
+                    125,
+                    0.15,
+                    0.045,
+                    'sine',
+                    46,
+                );
+
+                const note=
+                    bass[
+                        Math.floor(step/2)%
+                        bass.length
+                    ];
+                scheduleTone(
+                    at+0.025,
+                    note,
+                    0.28,
+                    0.026,
+                    'triangle',
+                    note*0.98,
+                );
+            }else{
+                /* off-beat bright chord stab */
+                const chordRoot=
+                    bass[
+                        Math.floor(step/2)%
+                        bass.length
+                    ]*2;
+
+                [1,1.25,1.5]
+                    .forEach(
+                        (ratio)=>scheduleTone(
+                            at,
+                            chordRoot*ratio,
+                            0.13,
+                            0.010,
+                            'sawtooth',
+                        ),
+                    );
+            }
+        }
+    }
+
+    private stopCloneDanceDiscoBgm(
+        restore=true,
+    ):void{
+        this.cloneDanceDiscoOscillators
+            .forEach(
+                (osc)=>{
+                    try{osc.stop();}catch{}
+                    try{osc.disconnect();}catch{}
+                },
+            );
+        this.cloneDanceDiscoOscillators=[];
+
+        if(
+            restore &&
+            this.cloneDancePartyRuntimes.size===0 &&
+            this.roundResultWinner===null
+        ){
+            if(this.phase==='hunt'){
+                this.syncTacticalBgmFromActiveSupports();
+            }else{
+                this.syncPhaseMusic();
+            }
+        }
+    }
+
+    private startCloneDanceParty(
+        event:NetworkHiderCloneDanceParty,
+    ):void{
+        if(
+            this.phase!=='hunt' ||
+            this.roundResultWinner!==null ||
+            this.victoryShowcaseCleanCaptureActive ||
+            event.clones.length===0
+        ){
+            return;
+        }
+
+        const owner=
+            this.networkPlayerManager
+                .getPlayerContainer(
+                    event.sessionId,
+                );
+        if(!owner)return;
+
+        /*
+         * If a duplicate/reconnect start arrives, clean only this owner's old
+         * runtime before rebuilding it.
+         */
+        if(
+            this.cloneDancePartyRuntimes.has(
+                event.sessionId,
+            )
+        ){
+            this.finishCloneDanceParty(
+                event.sessionId,
+                false,
+            );
+        }
+
+        const isLocal=
+            event.sessionId===
+            multiplayerClient.getSessionId();
+
+        this.networkPlayerManager
+            .setCinematicTransformOwned(
+                event.sessionId,
+                true,
+            );
+
+        const ownerX=
+            Number.isFinite(event.originX)
+                ? event.originX
+                : owner.x;
+        const ownerY=
+            Number.isFinite(event.originY)
+                ? event.originY
+                : owner.y;
+
+        owner
+            .setPosition(
+                ownerX,
+                ownerY,
+            )
+            .setAngle(0)
+            .setScale(1)
+            .setAlpha(1);
+
+        const runtime={
+            owner,
+            ownerX,
+            ownerY,
+            ownerBaseAngle:owner.angle,
+            ownerBaseScaleX:owner.scaleX,
+            ownerBaseScaleY:owner.scaleY,
+            clones:[] as Array<{
+                sprite:Phaser.GameObjects.Image;
+                baseX:number;
+                baseY:number;
+                phase:number;
+                textureKey:string;
+            }>,
+            danceTimer:undefined as
+                Phaser.Time.TimerEvent|undefined,
+            noteTimer:undefined as
+                Phaser.Time.TimerEvent|undefined,
+        };
+
+        this.cloneDancePartyRuntimes.set(
+            event.sessionId,
+            runtime,
+        );
+
+        if(isLocal){
+            this.networkPlayerManager
+                .setLocalMovementHardLocked(
+                    true,
+                );
+            this.setHiderRandomTauntSkillBusy(
+                true,
+            );
+            this.resetMobileMoveControl();
+            this.mobileMoveBase?.setVisible(false);
+            this.mobileMoveKnob?.setVisible(false);
+            this.mobileMoveLabel?.setVisible(false);
+        }
+
+        /*
+         * The real Hider joins the chaos too.
+         */
+        this.showCloneDanceSmoke(
+            ownerX,
+            ownerY,
+        );
+
+        event.clones
+            .slice(0,10)
+            .forEach(
+                (point,index)=>{
+                    const textureKey=
+                        this.createCloneDanceCamouflageTexture(
+                            event.sessionId,
+                            index,
+                            point.x,
+                            point.y,
+                        );
+
+                    if(!textureKey)return;
+
+                    const sprite=
+                        this.rememberCloneDanceFx(
+                            this.add
+                                .image(
+                                    point.x,
+                                    point.y,
+                                    textureKey,
+                                )
+                                .setOrigin(0.5)
+                                .setDepth(
+                                    4370+
+                                    index,
+                                )
+                                .setVisible(false)
+                                .setName(
+                                    'clone-dance-party-clone',
+                                ),
+                        );
+
+                    runtime.clones.push({
+                        sprite,
+                        baseX:point.x,
+                        baseY:point.y,
+                        phase:
+                            Number.isFinite(
+                                point.phase,
+                            )
+                                ? point.phase
+                                : Math.random()*
+                                    Math.PI*
+                                    2,
+                        textureKey,
+                    });
+
+                    const spawnTimer=
+                        this.rememberCloneDanceTimer(
+                            this.time.delayedCall(
+                                point.spawnDelayMs,
+                                ()=>{
+                                    this.cloneDancePartyTimers.delete(
+                                        spawnTimer,
+                                    );
+
+                                    if(
+                                        this.roundResultWinner!==null ||
+                                        !this.cloneDancePartyRuntimes.has(
+                                            event.sessionId,
+                                        )
+                                    ){
+                                        return;
+                                    }
+
+                                    this.showCloneDanceSmoke(
+                                        point.x,
+                                        point.y,
+                                    );
+                                    sprite
+                                        .setVisible(true)
+                                        .setAlpha(1)
+                                        .setScale(1)
+                                        .setAngle(0);
+                                },
+                            ),
+                        );
+
+                },
+            );
+
+        const danceTimer=
+            this.rememberCloneDanceTimer(
+                this.time.addEvent({
+                    delay:50,
+                    loop:true,
+                    callback:()=>{
+                        if(
+                            this.phase!=='hunt' ||
+                            this.roundResultWinner!==null ||
+                            !this.cloneDancePartyRuntimes.has(
+                                event.sessionId,
+                            )
+                        ){
+                            return;
+                        }
+
+                        const t=
+                            this.time.now*
+                            0.001;
+
+                        /*
+                         * Real Hider: wild but position-safe dance.
+                         */
+                        owner
+                            .setPosition(
+                                ownerX+
+                                    Math.sin(
+                                        t*11.0+
+                                        0.4,
+                                    )*4,
+                                ownerY-
+                                    Math.abs(
+                                        Math.sin(
+                                            t*8.4,
+                                        ),
+                                    )*7,
+                            )
+                            .setAngle(
+                                Math.sin(
+                                    t*9.2,
+                                )*13+
+                                Math.sin(
+                                    t*17.5,
+                                )*5,
+                            )
+                            .setScale(
+                                1+
+                                Math.sin(
+                                    t*12.2,
+                                )*0.055,
+                                1-
+                                Math.sin(
+                                    t*12.2,
+                                )*0.04,
+                            );
+
+                        runtime.clones
+                            .forEach(
+                                (
+                                    clone,
+                                    index,
+                                )=>{
+                                    if(
+                                        !clone.sprite.visible
+                                    )return;
+
+                                    const phase=
+                                        clone.phase;
+                                    const bounce=
+                                        Math.abs(
+                                            Math.sin(
+                                                t*
+                                                    (
+                                                        7.2+
+                                                        index*
+                                                            0.19
+                                                    )+
+                                                phase,
+                                            ),
+                                        );
+
+                                    clone.sprite
+                                        .setPosition(
+                                            clone.baseX+
+                                                Math.sin(
+                                                    t*
+                                                        (
+                                                            5.8+
+                                                            index*
+                                                                0.12
+                                                        )+
+                                                    phase,
+                                                )*
+                                                (
+                                                    3+
+                                                    index%3
+                                                ),
+                                            clone.baseY-
+                                                bounce*
+                                                (
+                                                    6+
+                                                    index%4
+                                                ),
+                                        )
+                                        .setAngle(
+                                            Math.sin(
+                                                t*
+                                                    (
+                                                        8.1+
+                                                        index*
+                                                            0.17
+                                                    )+
+                                                phase,
+                                            )*
+                                            (
+                                                12+
+                                                index%5
+                                            ),
+                                        )
+                                        .setScale(
+                                            1+
+                                                Math.sin(
+                                                    t*
+                                                        10.7+
+                                                    phase,
+                                                )*
+                                                0.065,
+                                            1-
+                                                Math.sin(
+                                                    t*
+                                                        10.7+
+                                                    phase,
+                                                )*
+                                                0.045,
+                                        );
+                                },
+                            );
+                    },
+                }),
+            );
+
+        runtime.danceTimer=danceTimer;
+
+        const noteTimer=
+            this.rememberCloneDanceTimer(
+                this.time.addEvent({
+                    delay:145,
+                    loop:true,
+                    callback:()=>{
+                        const active=
+                            this.cloneDancePartyRuntimes.get(
+                                event.sessionId,
+                            );
+                        if(
+                            !active ||
+                            this.roundResultWinner!==null
+                        )return;
+
+                        const candidates=[
+                            {
+                                x:active.owner.x,
+                                y:active.owner.y,
+                            },
+                            ...active.clones
+                                .filter(
+                                    (clone)=>
+                                        clone.sprite.visible,
+                                )
+                                .map(
+                                    (clone)=>({
+                                        x:clone.sprite.x,
+                                        y:clone.sprite.y,
+                                    }),
+                                ),
+                        ];
+
+                        if(candidates.length===0)return;
+
+                        const target=
+                            Phaser.Utils.Array.GetRandom(
+                                candidates,
+                            );
+
+                        this.spawnCloneDanceNote(
+                            target.x,
+                            target.y,
+                        );
+
+                        if(
+                            Math.random()<0.38
+                        ){
+                            const second=
+                                Phaser.Utils.Array.GetRandom(
+                                    candidates,
+                                );
+                            this.spawnCloneDanceNote(
+                                second.x,
+                                second.y,
+                            );
+                        }
+                    },
+                }),
+            );
+
+        runtime.noteTimer=noteTimer;
+
+        this.startCloneDanceDiscoBgm();
+    }
+
+    private finishCloneDanceParty(
+        sessionId:string,
+        withExitSmoke:boolean,
+    ):void{
+        const runtime=
+            this.cloneDancePartyRuntimes.get(
+                sessionId,
+            );
+        if(!runtime)return;
+
+        runtime.danceTimer?.remove(false);
+        runtime.noteTimer?.remove(false);
+
+        if(runtime.danceTimer){
+            this.cloneDancePartyTimers.delete(
+                runtime.danceTimer,
+            );
+        }
+        if(runtime.noteTimer){
+            this.cloneDancePartyTimers.delete(
+                runtime.noteTimer,
+            );
+        }
+
+        /*
+         * Every dancer stops on the SAME frame before any exit smoke begins.
+         */
+        runtime.owner
+            .setPosition(
+                runtime.ownerX,
+                runtime.ownerY,
+            )
+            .setAngle(
+                runtime.ownerBaseAngle,
+            )
+            .setScale(
+                runtime.ownerBaseScaleX,
+                runtime.ownerBaseScaleY,
+            )
+            .setAlpha(1);
+
+        runtime.clones.forEach(
+            (clone)=>{
+                clone.sprite
+                    .setPosition(
+                        clone.baseX,
+                        clone.baseY,
+                    )
+                    .setAngle(0)
+                    .setScale(1);
+            },
+        );
+
+        /*
+         * Notes vanish the instant the music/dance stops.
+         */
+        [...this.cloneDancePartyFx]
+            .filter(
+                (fx)=>
+                    fx.name===
+                    'clone-dance-party-note',
+            )
+            .forEach(
+                (fx)=>fx.destroy(),
+            );
+
+        this.networkPlayerManager
+            .setCinematicTransformOwned(
+                sessionId,
+                false,
+            );
+
+        const isLocal=
+            sessionId===
+            multiplayerClient.getSessionId();
+
+        if(isLocal){
+            this.networkPlayerManager
+                .setLocalMovementHardLocked(
+                    false,
+                );
+            this.setHiderRandomTauntSkillBusy(
+                false,
+            );
+            this.resetMobileMoveControl();
+            this.updateMobileControlVisibility();
+            this.updateHiderTauntHud();
+        }
+
+        this.cloneDancePartyRuntimes.delete(
+            sessionId,
+        );
+
+        const destroyClone=(
+            clone:typeof runtime.clones[number],
+        ):void=>{
+            if(
+                clone.sprite.active
+            ){
+                clone.sprite.destroy();
+            }
+
+            if(
+                this.textures.exists(
+                    clone.textureKey,
+                )
+            ){
+                this.textures.remove(
+                    clone.textureKey,
+                );
+            }
+
+            this.cloneDancePartyTextureKeys.delete(
+                clone.textureKey,
+            );
+        };
+
+        if(withExitSmoke){
+            /*
+             * 퍼-퍼-퍼-펑: dance stops together, then the ten visual clones
+             * disappear in a very short smoke cascade.
+             */
+            this.showCloneDanceSmoke(
+                runtime.ownerX,
+                runtime.ownerY,
+            );
+
+            runtime.clones
+                .forEach(
+                    (clone,index)=>{
+                        const timer=
+                            this.rememberCloneDanceTimer(
+                                this.time.delayedCall(
+                                    index*34,
+                                    ()=>{
+                                        this.cloneDancePartyTimers.delete(
+                                            timer,
+                                        );
+
+                                        if(
+                                            clone.sprite.active
+                                        ){
+                                            this.showCloneDanceSmoke(
+                                                clone.sprite.x,
+                                                clone.sprite.y,
+                                            );
+                                            clone.sprite.setVisible(
+                                                false,
+                                            );
+                                        }
+
+                                        const cleanupTimer=
+                                            this.rememberCloneDanceTimer(
+                                                this.time.delayedCall(
+                                                    430,
+                                                    ()=>{
+                                                        this.cloneDancePartyTimers.delete(
+                                                            cleanupTimer,
+                                                        );
+                                                        destroyClone(
+                                                            clone,
+                                                        );
+                                                    },
+                                                ),
+                                            );
+
+                                    },
+                                ),
+                            );
+
+                    },
+                );
+        }else{
+            runtime.clones.forEach(
+                destroyClone,
+            );
+        }
+
+        if(
+            this.cloneDancePartyRuntimes.size===0
+        ){
+            this.stopCloneDanceDiscoBgm(
+                true,
+            );
+        }
+    }
+
+    private clearCloneDancePartyFx(
+        forResult=true,
+    ):void{
+        /*
+         * HARD BARRIER used by victory/result capture.
+         * No exit animation is allowed here: every clone, note, smoke, timer,
+         * dance transform and disco oscillator disappears immediately.
+         */
+        for(
+            const sessionId of
+            [...this.cloneDancePartyRuntimes.keys()]
+        ){
+            const runtime=
+                this.cloneDancePartyRuntimes.get(
+                    sessionId,
+                );
+            if(!runtime)continue;
+
+            runtime.danceTimer?.remove(false);
+            runtime.noteTimer?.remove(false);
+
+            runtime.owner
+                .setPosition(
+                    runtime.ownerX,
+                    runtime.ownerY,
+                )
+                .setAngle(
+                    runtime.ownerBaseAngle,
+                )
+                .setScale(
+                    runtime.ownerBaseScaleX,
+                    runtime.ownerBaseScaleY,
+                )
+                .setAlpha(1);
+
+            this.networkPlayerManager
+                .setCinematicTransformOwned(
+                    sessionId,
+                    false,
+                );
+        }
+
+        this.cloneDancePartyRuntimes.clear();
+
+        for(
+            const timer of
+            [...this.cloneDancePartyTimers]
+        ){
+            timer.remove(false);
+        }
+        this.cloneDancePartyTimers.clear();
+
+        for(
+            const fx of
+            [...this.cloneDancePartyFx]
+        ){
+            if(fx.active)fx.destroy();
+        }
+        this.cloneDancePartyFx.clear();
+
+        for(
+            const key of
+            [...this.cloneDancePartyTextureKeys]
+        ){
+            if(this.textures.exists(key)){
+                this.textures.remove(key);
+            }
+        }
+        this.cloneDancePartyTextureKeys.clear();
+
+        this.stopCloneDanceDiscoBgm(
+            !forResult,
+        );
+
+        const localId=
+            multiplayerClient.getSessionId();
+        if(localId){
+            this.networkPlayerManager
+                .setCinematicTransformOwned(
+                    localId,
+                    false,
+                );
+        }
+
+        this.networkPlayerManager
+            .setLocalMovementHardLocked(
+                false,
+            );
+        this.hiderRandomTauntSkillBusy=false;
+        this.resetMobileMoveControl();
+
+        if(
+            !forResult &&
+            this.roundResultWinner===null
+        ){
+            this.updateMobileControlVisibility();
+            this.updateHiderTauntHud();
+        }
+    }
+
+    private applyCloneDanceParty(
+        event:NetworkHiderCloneDanceParty,
+    ):void{
+        if(!event.sessionId)return;
+
+        if(event.stage==='start'){
+            this.startCloneDanceParty(
+                event,
+            );
+            return;
+        }
+
+        if(event.stage==='end'){
+            this.finishCloneDanceParty(
+                event.sessionId,
+                true,
+            );
+            return;
+        }
+
+        /*
+         * cancel = death / victory / terminal safety.
+         * Absolutely no lingering exit smoke or notes.
+         */
+        this.finishCloneDanceParty(
+            event.sessionId,
+            false,
+        );
     }
 
     private spawnTripleTeleportAfterimage(
@@ -18425,6 +19774,12 @@ const localId =
         this.networkUnsubscribers.push(multiplayerClient.onHiderHardenedState((state: NetworkHiderHardenedState) => this.applyHardenedState(state)));
         this.networkUnsubscribers.push(multiplayerClient.onHiderHardenedHit((event: NetworkHiderHardenedHit) => this.applyHardenedHit(event)));
         this.networkUnsubscribers.push(multiplayerClient.onHiderTripleTeleport((event: NetworkHiderTripleTeleport) => this.applyTripleTeleport(event)));
+        this.networkUnsubscribers.push(
+            multiplayerClient.onHiderCloneDanceParty(
+                (event:NetworkHiderCloneDanceParty)=>
+                    this.applyCloneDanceParty(event),
+            ),
+        );
 
         this.networkUnsubscribers.push(
             multiplayerClient.onPhaseChanged(
@@ -45178,6 +46533,34 @@ this.networkUnsubscribers.push(
     }
 
     private syncPhaseMusic(): void {
+        /*
+         * V1010555_CLONE_DANCE_PARTY_CLIENT: Disco overrides every normal/tactical BGM while any
+         * Clone Dance Party is active.
+         */
+        if(
+            this.cloneDancePartyRuntimes.size>0
+        ){
+            this.stopAllBgm();
+
+            if(
+                this.sniperTacticalMusic?.isPlaying
+            ){
+                this.sniperTacticalMusic.stop();
+            }
+
+            if(
+                this.audioUnlocked &&
+                this.bgmEnabled
+            ){
+                this.startCloneDanceDiscoBgm();
+            }else{
+                this.stopCloneDanceDiscoBgm(
+                    false,
+                );
+            }
+
+            return;
+        }
 
         /*
          * V1010455L_FORCE_TACTICAL_BGM_TRANSITION
@@ -46790,6 +48173,14 @@ this.networkUnsubscribers.push(
 
         this.roundResultWinner = result.winner;
 
+        /*
+         * V1010555_CLONE_DANCE_PARTY_CLIENT / RESULT_HARD_BARRIER
+         * Victory judgement means the party ends NOW—not after the card starts.
+         */
+        this.clearCloneDancePartyFx(
+            true,
+        );
+
         /* V1010543_RESULT_CAMERA_CANCEL_HINT_HIDER_OUTLINE: normalize the visible Finished scene before any result UI/capture. */
         this.forceFinishedFullMapCamera();
         this.spectatorSessionId = '';
@@ -47371,6 +48762,9 @@ this.networkUnsubscribers.push(
         /* V553G_HARDENED_CAPTURE_CLEAN */
         this.clearHardenedCaptureDebris();
         this.clearTripleTeleportFx();
+        this.clearCloneDancePartyFx(
+            true,
+        );
 
         /*
          * V521 POSTER_TACTICAL_SEAL:
@@ -64226,6 +65620,21 @@ const roomPlayers =
          */
         this.sniperTacticalBgmActive =
             true;
+
+        /*
+         * Clone Dance Party music has absolute priority. Keep tactical state
+         * remembered, but do not let its audio cut into the disco.
+         */
+        if(
+            this.cloneDancePartyRuntimes.size>0
+        ){
+            if(
+                this.sniperTacticalMusic?.isPlaying
+            ){
+                this.sniperTacticalMusic.stop();
+            }
+            return;
+        }
 
         if (
             !this.audioUnlocked ||
