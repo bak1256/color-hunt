@@ -1,3 +1,4 @@
+/* V1010546_MOBILE_SNIPER_CANCEL_SAFEZONE_HUD_RESTORE: mobile cancel hides near scope, never steals drag, stale active echoes are ignored, and normal Hunter HUD fully restores after cancel. */
 /* V1010545_MOBILE_SNIPER_CANCEL_CONTROLS_HUNT_TOUCH: topmost mobile sniper cancel + full normal-control restore + live Hunt joystick hit-test + first-touch recovery. */
 /* V1010543_RESULT_CAMERA_CANCEL_HINT_HIDER_OUTLINE: DOM-top ESC hint; Finished full-map camera lock; capture-center-parity Hider outline. */
 /* V1010543_VULCAN_EDGE_TRIGGER_AND_RESULT_TIMING: Vulcan cinematic reacts only to active-state edges; authoritative Finished winner no longer waits on stale alive Schema. */
@@ -1004,6 +1005,8 @@ export class GameScene extends Phaser.Scene {
     private sniperCancelHintDom?: HTMLDivElement;
     /* V1010545_MOBILE_SNIPER_CANCEL_CONTROLS_HUNT_TOUCH: mobile cancel must live above the sniper DOM blur compositor. */
     private sniperCancelButtonDom?: HTMLButtonElement;
+    /* V1010546_MOBILE_SNIPER_CANCEL_SAFEZONE_HUD_RESTORE: a local cancel stays authoritative until server false arrives. */
+    private sniperCancelAwaitingServerFalse = false;
     private sniperCancelKey?: Phaser.Input.Keyboard.Key;
     /* V1010507_TACTICAL_VULCAN_AIR_SUPPORT */
     private vulcanActive = false;
@@ -15907,6 +15910,31 @@ const ribbon =
         this.networkUnsubscribers.push(
             multiplayerClient.onSniperState(
                 (state: NetworkSniperState) => {
+                    const localId = multiplayerClient.getSessionId();
+
+                    /* V1010546_MOBILE_SNIPER_CANCEL_SAFEZONE_HUD_RESTORE / IGNORE_STALE_LOCAL_ACTIVE_AFTER_CANCEL
+                     * A queued active=true echo can arrive after the player has
+                     * already pressed CANCEL. Do not let it resurrect sniperActive
+                     * and hide the normal mobile HUD while false acknowledgement is
+                     * still in flight.
+                     */
+                    if (
+                        state.sessionId === localId &&
+                        this.sniperCancelAwaitingServerFalse &&
+                        state.active
+                    ) {
+                        return;
+                    }
+
+                    if (
+                        state.sessionId === localId &&
+                        this.sniperCancelAwaitingServerFalse &&
+                        !state.active
+                    ) {
+                        this.sniperCancelAwaitingServerFalse =
+                            false;
+                    }
+
                     /*
                      * V1010458_SNIPER_CAMERA_SCOPE_LOCK_BGM
                      * Every client hears one global tactical late-game cue.
@@ -15916,7 +15944,6 @@ const ribbon =
                         this.startSniperTacticalBgm();
                     }
 
-                    const localId = multiplayerClient.getSessionId();
                     if (state.sessionId === localId) {
                         const wasActive = this.sniperActive;
                         this.sniperActive = state.active;
@@ -15944,6 +15971,19 @@ const ribbon =
                         }
 
                         this.refreshSniperSupportUi();
+
+                        if (!state.active) {
+                            this.restoreNormalMobileHunterHudAfterSniperCancel();
+                            [0, 80, 220].forEach(
+                                (delay) => {
+                                    this.time.delayedCall(
+                                        delay,
+                                        () =>
+                                            this.restoreNormalMobileHunterHudAfterSniperCancel(),
+                                    );
+                                },
+                            );
+                        }
                     }
                     if (
                         state.sessionId !== localId
@@ -61180,18 +61220,57 @@ const roomPlayers =
                 this.game.canvas
                     .getBoundingClientRect();
 
+            const cancelCenterX =
+                canvasRect.left +
+                canvasRect.width / 2;
+            const cancelCenterY =
+                canvasRect.bottom - 72;
+
+            /* V1010546_MOBILE_SNIPER_CANCEL_SAFEZONE_HUD_RESTORE / CANCEL_SCOPE_SAFE_ZONE
+             * The DOM button must never cover or steal a sniper drag. Convert the
+             * logical scope center to browser pixels, then hide the button with a
+             * generous safety margin around its real 176x46 rectangle.
+             */
+            const scopeClientX =
+                canvasRect.left +
+                this.sniperScopeScreenX *
+                    (canvasRect.width / this.gameWidth);
+            const scopeClientY =
+                canvasRect.top +
+                this.sniperScopeScreenY *
+                    (canvasRect.height / this.gameHeight);
+
+            const scopeNearCancel =
+                Math.abs(
+                    scopeClientX -
+                        cancelCenterX,
+                ) < 138 &&
+                Math.abs(
+                    scopeClientY -
+                        cancelCenterY,
+                ) < 96;
+
+            const showMobileCancel =
+                canCancel &&
+                this.mobileControlsEnabled &&
+                !scopeNearCancel;
+
             this.sniperCancelButtonDom.textContent =
                 mobileCancelLabel;
             this.sniperCancelButtonDom.style.left =
-                `${Math.round(canvasRect.left + canvasRect.width / 2)}px`;
+                `${Math.round(cancelCenterX)}px`;
             this.sniperCancelButtonDom.style.top =
-                `${Math.round(canvasRect.bottom - 72)}px`;
+                `${Math.round(cancelCenterY)}px`;
             this.sniperCancelButtonDom.style.display =
-                canCancel && this.mobileControlsEnabled
+                showMobileCancel
                     ? 'block'
                     : 'none';
+            this.sniperCancelButtonDom.style.pointerEvents =
+                showMobileCancel
+                    ? 'auto'
+                    : 'none';
             this.sniperCancelButtonDom.disabled =
-                !(canCancel && this.mobileControlsEnabled);
+                !showMobileCancel;
         }
 
         if (this.sniperCancelButtonBg) {
@@ -61225,12 +61304,79 @@ const roomPlayers =
         if (this.sniperCancelButtonDom) {
             this.sniperCancelButtonDom.style.display =
                 'none';
+            this.sniperCancelButtonDom.style.pointerEvents =
+                'none';
             this.sniperCancelButtonDom.disabled =
                 true;
         }
         this.sniperCancelButton
             ?.disableInteractive()
             .setVisible(false);
+    }
+
+    /* V1010546_MOBILE_SNIPER_CANCEL_SAFEZONE_HUD_RESTORE / RESTORE_NORMAL_MOBILE_HUNTER_HUD
+     * Sniper hides several UI families through independent systems:
+     * updateMobileControlVisibility(), updateSniperCinematicFrame(),
+     * updateWeaponHeatHud(), updateFartHud(), and applyTacticalSupportInputLock().
+     * Restore them through their normal owners after sniper teardown is settled.
+     */
+    private restoreNormalMobileHunterHudAfterSniperCancel(): void {
+        if (
+            !this.mobileControlsEnabled ||
+            this.phase !== 'hunt' ||
+            this.sniperActive ||
+            this.sniperCinematicActive ||
+            this.vulcanActive ||
+            this.vulcanCinematicActive
+        ) {
+            return;
+        }
+
+        const localRole =
+            multiplayerClient.getLocalPlayer()?.role ??
+            this.networkPlayerManager?.getLocalRole?.();
+
+        if (
+            localRole !== 'hunter' &&
+            this.practiceMode !== 'hunter'
+        ) {
+            return;
+        }
+
+        /* Tactical lock disabled FART interaction; visibility alone cannot undo it. */
+        if (this.mobileFartButton) {
+            if (this.mobileFartButton.input) {
+                this.mobileFartButton.input.enabled =
+                    true;
+            } else {
+                this.mobileFartButton.setInteractive({
+                    useHandCursor: true,
+                });
+            }
+        }
+
+        if (this.mobileFireButton) {
+            if (this.mobileFireButton.input) {
+                this.mobileFireButton.input.enabled =
+                    true;
+            } else {
+                this.mobileFireButton.setInteractive({
+                    useHandCursor: true,
+                });
+            }
+        }
+
+        this.updateMobileControlVisibility();
+        this.updateWeaponHeatHud();
+        this.updateFartHud();
+
+        /* Reassert the normal Hunter HUD after owners have recalculated legality. */
+        this.hunterWeaponHudContainer
+            ?.setVisible(true);
+        this.fartHudContainer
+            ?.setVisible(true);
+        this.gun
+            ?.setVisible(true);
     }
 
     private requestSniperCancel(): void {
@@ -61250,6 +61396,8 @@ const roomPlayers =
         this.hideSniperCancelUi();
         this.sniperButtonPressBlockUntil =
             Date.now() + 350;
+        this.sniperCancelAwaitingServerFalse =
+            this.practiceMode !== 'hunter';
 
         /*
          * Consume the ultimate permanently for this Hunt, but restore every
@@ -61265,10 +61413,10 @@ const roomPlayers =
 
         this.exitSniperCinematic();
 
-        /* V1010545_MOBILE_SNIPER_CANCEL_CONTROLS_HUNT_TOUCH / CANCEL_RESTORE_NORMAL_MOBILE_HUNT
-         * enterSniperCinematic() explicitly hid MOVE/AIM/FIRE/FART.
-         * Re-run the authoritative normal Hunt visibility pass immediately,
-         * and once more next frame after camera/sniper teardown settles.
+        /* V1010546_MOBILE_SNIPER_CANCEL_SAFEZONE_HUD_RESTORE / CANCEL_RESTORE_NORMAL_MOBILE_HUNT
+         * Reset old sniper touch ownership, then restore every normal Hunter HUD
+         * owner after the teardown frame. Repeating briefly absorbs DOM/Phaser
+         * ordering without leaving a permanent polling loop.
          */
         if (this.mobileControlsEnabled) {
             this.resetMobileMoveControl();
@@ -61276,17 +61424,16 @@ const roomPlayers =
             this.mobileFirePointerId = -1;
             this.mobileFartPointerId = -1;
             this.mobileTouchPoints.clear();
-            this.updateMobileControlVisibility();
 
-            this.time.delayedCall(
-                0,
-                () => {
-                    if (
-                        this.phase === 'hunt' &&
-                        !this.sniperActive
-                    ) {
-                        this.updateMobileControlVisibility();
-                    }
+            this.restoreNormalMobileHunterHudAfterSniperCancel();
+
+            [0, 80, 220].forEach(
+                (delay) => {
+                    this.time.delayedCall(
+                        delay,
+                        () =>
+                            this.restoreNormalMobileHunterHudAfterSniperCancel(),
+                    );
                 },
             );
         }
