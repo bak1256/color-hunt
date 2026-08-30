@@ -1,3 +1,4 @@
+/* V1010555G_REMOVE_CLONE_DANCE_TEST_BUTTON: temporary Clone Dance Party TEST button removed; production Random Taunt skill unchanged. */
 /* V1010555F_CLONE_DANCE_FIXED_OWNER_BGM_RESUME_CLIENT: real Hider X/Y stays fixed; Disco restores exact prior BGM; victory-card cleanup barriers verified. */
 /* V1010555B_CLONE_DANCE_ASSIST_BGM_RANDOM_OWNER_CLIENT: FULL Paint-Assist organic camouflage + guaranteed disco resume/mix + random real-Hider dance slot restore. */
 /* V1010555A_CLONE_DANCE_TIMEREVENT_BUILD_FIX: Phaser TimerEvent has no .once(); one-shot clone-party timers remove themselves from the tracking Set inside callbacks. */
@@ -1293,7 +1294,6 @@ private timerText!: Phaser.GameObjects.Text;
     private hiderTauntTipBubble?: Phaser.GameObjects.Graphics;
     private hiderTauntTipTitle?: Phaser.GameObjects.Text;
     private hiderTauntTipBody?: Phaser.GameObjects.Text;
-    private hiderCloneDanceTestButton?: Phaser.GameObjects.Text;
     private tripleTeleportLocalActive=false;
     private readonly tripleTeleportFx=new Set<Phaser.GameObjects.GameObject>();
     /* V1010554F_TRIPLE_TELEPORT_CINEMATIC_CAMERA: local Hider camera is temporarily owned by Triple Teleport. */
@@ -1417,7 +1417,6 @@ private timerText!: Phaser.GameObjects.Text;
         this.hiderTauntTipBubble?.destroy();
         this.hiderTauntTipTitle?.destroy();
         this.hiderTauntTipBody?.destroy();
-        this.hiderCloneDanceTestButton?.destroy();
         this.hiderTauntButton=undefined;
         this.hiderTauntButtonBody=undefined;
         this.hiderTauntButtonShadow=undefined;
@@ -1425,7 +1424,6 @@ private timerText!: Phaser.GameObjects.Text;
         this.hiderTauntTipBubble=undefined;
         this.hiderTauntTipTitle=undefined;
         this.hiderTauntTipBody=undefined;
-        this.hiderCloneDanceTestButton=undefined;
     }
 
     private createHiderTauntHud(): void {
@@ -1563,35 +1561,7 @@ private timerText!: Phaser.GameObjects.Text;
         this.hiderTauntTipTitle=tipTitle;
         this.hiderTauntTipBody=tipBody;
 
-        const teleportTest=this.add.text(0,0,'TEST 🪩 분신댄스파티',{
-            fontFamily:'Arial Black, sans-serif',fontSize:'10px',fontStyle:'bold',
-            color:'#dffcff',backgroundColor:'#15364d',padding:{x:8,y:5},
-            stroke:'#000000',strokeThickness:3
-        }).setOrigin(0.5).setDepth(3912).setInteractive({useHandCursor:true});
-        teleportTest.on('pointerup',()=>{
-            if(this.phase!=='hunt'||this.tripleTeleportLocalActive)return;
-            this.setHiderRandomTauntSkillBusy(true);
-            multiplayerClient.sendHiderCloneDanceTest();
 
-            this.time.delayedCall(
-                1200,
-                ()=>{
-                    if(
-                        this.hiderRandomTauntSkillBusy &&
-                        !this.tripleTeleportLocalActive &&
-                        !(
-                            multiplayerClient.getSessionId() &&
-                            this.cloneDancePartyRuntimes.has(
-                                multiplayerClient.getSessionId() ?? '',
-                            )
-                        )
-                    ){
-                        this.setHiderRandomTauntSkillBusy(false);
-                    }
-                },
-            );
-        });
-        this.hiderCloneDanceTestButton=teleportTest;
         this.updateHiderTauntHud();
     }
 
@@ -1608,7 +1578,6 @@ private timerText!: Phaser.GameObjects.Text;
             this.hiderTauntTipBubble?.setVisible(false);
             this.hiderTauntTipTitle?.setVisible(false);
             this.hiderTauntTipBody?.setVisible(false);
-            this.hiderCloneDanceTestButton?.setVisible(false);
             return;
         }
         const b=this.hiderTauntButton;
@@ -1642,7 +1611,6 @@ private timerText!: Phaser.GameObjects.Text;
         tipBubble?.setVisible(show);
         tipTitle?.setVisible(show);
         tipBody?.setVisible(show);
-        this.hiderCloneDanceTestButton?.setVisible(show&&!this.tripleTeleportLocalActive);
 
         if(!show||!pos)return;
 
@@ -1668,7 +1636,6 @@ private timerText!: Phaser.GameObjects.Text;
             tipBody.setPosition(cx,top+38);
         }
 
-        this.hiderCloneDanceTestButton?.setPosition(pos.x,pos.y+154);
     }
 
     private showHardenedSmoke(x:number,y:number):void {
