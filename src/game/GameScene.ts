@@ -1,3 +1,4 @@
+/* V1010543_RESULT_CAMERA_CANCEL_HINT_HIDER_OUTLINE: DOM-top ESC hint; Finished full-map camera lock; capture-center-parity Hider outline. */
 /* V1010543_VULCAN_EDGE_TRIGGER_AND_RESULT_TIMING: Vulcan cinematic reacts only to active-state edges; authoritative Finished winner no longer waits on stale alive Schema. */
 /* V1010542C_REMOVE_UNUSED_TELEMETRY_ROBUST: removed only unused v542 telemetry declarations; core 10-player optimizations preserved in their respective files. */
 /* V1010542_TEN_PLAYER_PREFLIGHT_SAFE_OPT: 10-player preflight - stationary fallback fast-path, pathological VFX cap, passive diagnostics. Reconnect/gameplay cadence unchanged. */
@@ -999,6 +1000,7 @@ export class GameScene extends Phaser.Scene {
     private sniperCancelButtonBg?: Phaser.GameObjects.Rectangle;
     private sniperCancelButtonText?: Phaser.GameObjects.Text;
     private sniperCancelHintText?: Phaser.GameObjects.Text;
+    private sniperCancelHintDom?: HTMLDivElement;
     private sniperCancelKey?: Phaser.Input.Keyboard.Key;
     /* V1010507_TACTICAL_VULCAN_AIR_SUPPORT */
     private vulcanActive = false;
@@ -44465,7 +44467,39 @@ this.networkUnsubscribers.push(
             .getLocalPlayerContainer();
     }
 
+    private forceFinishedFullMapCamera(): void {
+        const camera = this.cameras.main;
+
+        this.tweens.killTweensOf(camera);
+
+        camera
+            .setVisible(true)
+            .stopFollow()
+            .removeBounds()
+            .setSize(
+                this.gameWidth,
+                this.gameHeight,
+            )
+            .setZoom(1)
+            .setScroll(0, 0);
+
+        this.applyFixedHudForZoom(1);
+    }
+
     private ensureGameplayCameraFollow(): void {
+        /* V1010543_RESULT_CAMERA_CANCEL_HINT_HIDER_OUTLINE / RESULT_FULL_MAP_LOCK
+         * Once the authoritative result exists, normal Hunt/sniper spectator
+         * follow is forbidden from re-applying gameplay zoom. During the
+         * dedicated close-up victory-card capture we leave cameras untouched;
+         * immediately after capture this guard resumes the full-map result view.
+         */
+        if (this.roundResultWinner !== null) {
+            if (!this.victoryShowcaseCleanCaptureActive) {
+                this.forceFinishedFullMapCamera();
+            }
+            return;
+        }
+
         /*
          * V1010459_SNIPER_INDEPENDENT_OVERWATCH
          * Sniper support is a separate overwatch camera mode.
@@ -44790,6 +44824,17 @@ this.networkUnsubscribers.push(
         }
 
         this.roundResultWinner = result.winner;
+
+        /* V1010543_RESULT_CAMERA_CANCEL_HINT_HIDER_OUTLINE: normalize the visible Finished scene before any result UI/capture. */
+        this.forceFinishedFullMapCamera();
+        this.spectatorSessionId = '';
+        document
+            .querySelector(
+                '.colorhunt-sniper-spectator-status',
+            )
+            ?.remove();
+        this.sniperSpectatorStatusText
+            ?.setVisible(false);
 
 
         /*
@@ -46797,336 +46842,250 @@ const roomPlayers =
 
         if (!isHunter) {
             /*
- * V1010521K_RESCUE_AND_TRUE_HIDER_OUTLINE
- *
- * The real painted Hider already exists in the captured victory frame.
- * This block generates ONLY a one-pixel outside outline.
- */
-const outlineSessionId =
-    multiplayerClient
-        .getSessionId();
-
-if (
-    outlineSessionId
-) {
-    const paintedAvatar =
-        this.buildVictoryPaintedHiderCanvas(
-            outlineSessionId,
-        );
-
-    const avatarContext =
-        paintedAvatar.getContext(
-            '2d',
-        );
-
-    if (
-        avatarContext
-    ) {
-        const avatarPixels =
-            avatarContext.getImageData(
-                0,
-                0,
-                paintedAvatar.width,
-                paintedAvatar.height,
-            );
-
-        let minX =
-            paintedAvatar.width;
-
-        let minY =
-            paintedAvatar.height;
-
-        let maxX =
-            -1;
-
-        let maxY =
-            -1;
-
-        for (
-            let pixelY =
-                0;
-            pixelY <
-                paintedAvatar.height;
-            pixelY +=
-                1
-        ) {
-            for (
-                let pixelX =
-                    0;
-                pixelX <
-                    paintedAvatar.width;
-                pixelX +=
-                    1
-            ) {
-                const alphaIndex =
-                    (
-                        pixelY *
-                            paintedAvatar.width +
-                        pixelX
-                    ) *
-                        4 +
-                    3;
-
-                if (
-                    avatarPixels.data[
-                        alphaIndex
-                    ] ===
-                    0
-                ) {
-                    continue;
-                }
-
-                minX =
-                    Math.min(
-                        minX,
-                        pixelX,
-                    );
-
-                minY =
-                    Math.min(
-                        minY,
-                        pixelY,
-                    );
-
-                maxX =
-                    Math.max(
-                        maxX,
-                        pixelX,
-                    );
-
-                maxY =
-                    Math.max(
-                        maxY,
-                        pixelY,
-                    );
-            }
-        }
-
-        if (
-            maxX >=
-                minX &&
-            maxY >=
-                minY
-        ) {
-            /*
-             * Hider capture uses 4.9x.
-             * Poster then maps sourceW/sourceH into frameW/frameH.
+             * V1010543_RESULT_CAMERA_CANCEL_HINT_HIDER_OUTLINE / HIDER_OUTLINE_CAPTURE_CENTER_PARITY
+             *
+             * The old ring assumed the captured Hider body itself was exactly
+             * at the poster-frame center. The capture camera actually centers
+             * localTarget.getBounds(), which can differ slightly from the
+             * paint silhouette center. That produced the visible offset ring.
+             *
+             * Rebuild the same 1px outside ring, but transform it using the
+             * exact visual-bounds center + live paint-layer scale used by the
+             * canonical 4.9x victory capture.
              */
-            const captureZoom =
-                4.9;
+            const outlineSessionId =
+                multiplayerClient
+                    .getSessionId();
 
-            const avatarScaleX =
-                captureZoom *
-                frameW /
-                Math.max(
-                    1,
-                    sourceW,
-                );
-
-            const avatarScaleY =
-                captureZoom *
-                frameH /
-                Math.max(
-                    1,
-                    sourceH,
-                );
-
-            const renderedW =
-                paintedAvatar.width *
-                avatarScaleX;
-
-            const renderedH =
-                paintedAvatar.height *
-                avatarScaleY;
-
-            const alphaCenterX =
-                (
-                    minX +
-                    maxX +
-                    1
-                ) /
-                2;
-
-            const alphaCenterY =
-                (
-                    minY +
-                    maxY +
-                    1
-                ) /
-                2;
-
-            /*
-             * Victory capture camera centers the actual visual bounds.
-             * Align the alpha silhouette center to the poster frame center.
-             */
-            const drawX =
-                frameX +
-                frameW /
-                    2 -
-                alphaCenterX *
-                    avatarScaleX;
-
-            const drawY =
-                frameY +
-                frameH /
-                    2 -
-                alphaCenterY *
-                    avatarScaleY;
-
-            const whiteMask =
-                document.createElement(
-                    'canvas',
-                );
-
-            whiteMask.width =
-                paintedAvatar.width;
-
-            whiteMask.height =
-                paintedAvatar.height;
-
-            const whiteMaskContext =
-                whiteMask.getContext(
-                    '2d',
-                );
-
-            if (
-                whiteMaskContext
-            ) {
-                whiteMaskContext.drawImage(
-                    paintedAvatar,
-                    0,
-                    0,
-                );
-
-                whiteMaskContext.globalCompositeOperation =
-                    'source-in';
-
-                whiteMaskContext.fillStyle =
-                    '#ffffff';
-
-                whiteMaskContext.fillRect(
-                    0,
-                    0,
-                    whiteMask.width,
-                    whiteMask.height,
-                );
-
-                /*
-                 * Work at FINAL poster resolution.
-                 * ±1 therefore means exactly one output pixel.
-                 */
-                const pad =
-                    2;
-
-                const ringCanvas =
-                    document.createElement(
-                        'canvas',
+            if (outlineSessionId) {
+                const paintedAvatar =
+                    this.buildVictoryPaintedHiderCanvas(
+                        outlineSessionId,
                     );
+                const avatarContext =
+                    paintedAvatar.getContext('2d');
 
-                ringCanvas.width =
-                    Math.max(
-                        1,
-                        Math.ceil(
-                            renderedW,
-                        ) +
-                            pad *
-                                2,
-                    );
+                if (avatarContext) {
+                    const avatarPixels =
+                        avatarContext.getImageData(
+                            0,
+                            0,
+                            paintedAvatar.width,
+                            paintedAvatar.height,
+                        );
 
-                ringCanvas.height =
-                    Math.max(
-                        1,
-                        Math.ceil(
-                            renderedH,
-                        ) +
-                            pad *
-                                2,
-                    );
+                    let minX = paintedAvatar.width;
+                    let minY = paintedAvatar.height;
+                    let maxX = -1;
+                    let maxY = -1;
 
-                const ringContext =
-                    ringCanvas.getContext(
-                        '2d',
-                    );
+                    for (let pixelY = 0; pixelY < paintedAvatar.height; pixelY += 1) {
+                        for (let pixelX = 0; pixelX < paintedAvatar.width; pixelX += 1) {
+                            const alphaIndex =
+                                (pixelY * paintedAvatar.width + pixelX) * 4 + 3;
+                            if (avatarPixels.data[alphaIndex] === 0) continue;
+                            minX = Math.min(minX, pixelX);
+                            minY = Math.min(minY, pixelY);
+                            maxX = Math.max(maxX, pixelX);
+                            maxY = Math.max(maxY, pixelY);
+                        }
+                    }
 
-                if (
-                    ringContext
-                ) {
-                    ringContext.imageSmoothingEnabled =
-                        false;
+                    if (maxX >= minX && maxY >= minY) {
+                        const captureZoom = 4.9;
+                        const paintVisual =
+                            this.networkPlayerManager
+                                .getLocalPaintVisual();
+                        const localTarget =
+                            this.networkPlayerManager
+                                .getLocalPlayerContainer();
+                        const visualBounds =
+                            localTarget?.getBounds();
 
-                    const offsets = [
-                        [-1, -1],
-                        [0, -1],
-                        [1, -1],
-                        [-1, 0],
-                        [1, 0],
-                        [-1, 1],
-                        [0, 1],
-                        [1, 1],
-                    ] as const;
-
-                    offsets.forEach(
-                        (
-                            [
-                                offsetX,
-                                offsetY,
-                            ],
-                        ) => {
-                            ringContext.drawImage(
-                                whiteMask,
-                                pad +
-                                    offsetX,
-                                pad +
-                                    offsetY,
-                                renderedW,
-                                renderedH,
+                        const visualScaleX =
+                            Math.max(
+                                0.01,
+                                Math.abs(
+                                    paintVisual?.scaleX ?? 1,
+                                ),
                             );
-                        },
-                    );
+                        const visualScaleY =
+                            Math.max(
+                                0.01,
+                                Math.abs(
+                                    paintVisual?.scaleY ?? 1,
+                                ),
+                            );
 
-                    /*
-                     * Remove the complete body from the dilation.
-                     * Only the outside ring remains.
-                     */
-                    ringContext.globalCompositeOperation =
-                        'destination-out';
+                        const posterScaleX =
+                            frameW / Math.max(1, sourceW);
+                        const posterScaleY =
+                            frameH / Math.max(1, sourceH);
 
-                    ringContext.globalAlpha =
-                        1;
+                        const avatarScaleX =
+                            captureZoom *
+                            visualScaleX *
+                            posterScaleX;
+                        const avatarScaleY =
+                            captureZoom *
+                            visualScaleY *
+                            posterScaleY;
 
-                    ringContext.drawImage(
-                        whiteMask,
-                        pad,
-                        pad,
-                        renderedW,
-                        renderedH,
-                    );
+                        const renderedW =
+                            paintedAvatar.width * avatarScaleX;
+                        const renderedH =
+                            paintedAvatar.height * avatarScaleY;
 
-                    ringContext.globalCompositeOperation =
-                        'source-over';
+                        const alphaCenterX =
+                            (minX + maxX + 1) / 2;
+                        const alphaCenterY =
+                            (minY + maxY + 1) / 2;
 
-                    context.save();
+                        /*
+                         * Paint texture origin is canonical local (-40, -60).
+                         * Convert the silhouette alpha-center to world space,
+                         * then measure it from the exact capture-camera center.
+                         */
+                        const paintWorldX =
+                            paintVisual?.x ??
+                            localTarget?.x ??
+                            0;
+                        const paintWorldY =
+                            paintVisual?.y ??
+                            localTarget?.y ??
+                            0;
 
-                    context.globalAlpha =
-                        0.70;
+                        const bodyCenterWorldX =
+                            paintWorldX +
+                            (alphaCenterX - 40) *
+                                visualScaleX;
+                        const bodyCenterWorldY =
+                            paintWorldY +
+                            (alphaCenterY - 60) *
+                                visualScaleY;
 
-                    context.imageSmoothingEnabled =
-                        false;
+                        const captureCenterX =
+                            visualBounds &&
+                            Number.isFinite(visualBounds.centerX)
+                                ? visualBounds.centerX
+                                : bodyCenterWorldX;
+                        const captureCenterY =
+                            visualBounds &&
+                            Number.isFinite(visualBounds.centerY)
+                                ? visualBounds.centerY
+                                : bodyCenterWorldY;
 
-                    context.drawImage(
-                        ringCanvas,
-                        drawX -
-                            pad,
-                        drawY -
-                            pad,
-                    );
+                        const posterBodyOffsetX =
+                            (bodyCenterWorldX - captureCenterX) *
+                            captureZoom *
+                            posterScaleX;
+                        const posterBodyOffsetY =
+                            (bodyCenterWorldY - captureCenterY) *
+                            captureZoom *
+                            posterScaleY;
 
-                    context.restore();
+                        const drawX =
+                            frameX +
+                            frameW / 2 +
+                            posterBodyOffsetX -
+                            alphaCenterX * avatarScaleX;
+                        const drawY =
+                            frameY +
+                            frameH / 2 +
+                            posterBodyOffsetY -
+                            alphaCenterY * avatarScaleY;
+
+                        const whiteMask =
+                            document.createElement('canvas');
+                        whiteMask.width = paintedAvatar.width;
+                        whiteMask.height = paintedAvatar.height;
+
+                        const whiteMaskContext =
+                            whiteMask.getContext('2d');
+
+                        if (whiteMaskContext) {
+                            whiteMaskContext.drawImage(
+                                paintedAvatar,
+                                0,
+                                0,
+                            );
+                            whiteMaskContext.globalCompositeOperation =
+                                'source-in';
+                            whiteMaskContext.fillStyle = '#ffffff';
+                            whiteMaskContext.fillRect(
+                                0,
+                                0,
+                                whiteMask.width,
+                                whiteMask.height,
+                            );
+
+                            const pad = 2;
+                            const ringCanvas =
+                                document.createElement('canvas');
+                            ringCanvas.width =
+                                Math.max(
+                                    1,
+                                    Math.ceil(renderedW) + pad * 2,
+                                );
+                            ringCanvas.height =
+                                Math.max(
+                                    1,
+                                    Math.ceil(renderedH) + pad * 2,
+                                );
+
+                            const ringContext =
+                                ringCanvas.getContext('2d');
+
+                            if (ringContext) {
+                                ringContext.imageSmoothingEnabled = false;
+                                const offsets = [
+                                    [-1, -1],
+                                    [0, -1],
+                                    [1, -1],
+                                    [-1, 0],
+                                    [1, 0],
+                                    [-1, 1],
+                                    [0, 1],
+                                    [1, 1],
+                                ] as const;
+
+                                offsets.forEach(([offsetX, offsetY]) => {
+                                    ringContext.drawImage(
+                                        whiteMask,
+                                        pad + offsetX,
+                                        pad + offsetY,
+                                        renderedW,
+                                        renderedH,
+                                    );
+                                });
+
+                                ringContext.globalCompositeOperation =
+                                    'destination-out';
+                                ringContext.globalAlpha = 1;
+                                ringContext.drawImage(
+                                    whiteMask,
+                                    pad,
+                                    pad,
+                                    renderedW,
+                                    renderedH,
+                                );
+                                ringContext.globalCompositeOperation =
+                                    'source-over';
+
+                                context.save();
+                                context.globalAlpha = 0.70;
+                                context.imageSmoothingEnabled = false;
+                                context.drawImage(
+                                    ringCanvas,
+                                    Math.round(drawX - pad),
+                                    Math.round(drawY - pad),
+                                );
+                                context.restore();
+                            }
+                        }
+                    }
                 }
             }
-        }
-    }
-}
 
             const survivorX =
                 frameX +
@@ -60907,6 +60866,39 @@ if (
                     .setVisible(false);
         }
 
+        /* V1010543_RESULT_CAMERA_CANCEL_HINT_HIDER_OUTLINE / CANCEL_HINT_DOM_TOPMOST
+         * The outside-scope blur is a DOM compositor layered over Phaser.
+         * A Phaser Text can never rise above it, regardless of setDepth().
+         * Mirror the desktop ESC hint into a fixed DOM node at browser-top z.
+         */
+        if (!this.sniperCancelHintDom) {
+            const hint = document.createElement('div');
+            hint.className = 'colorhunt-sniper-cancel-hint';
+            Object.assign(hint.style, {
+                position: 'fixed',
+                zIndex: '2147483646',
+                display: 'none',
+                pointerEvents: 'none',
+                transform: 'translateX(-50%)',
+                padding: '7px 12px',
+                borderRadius: '10px',
+                border: '1px solid rgba(255,185,185,.88)',
+                background: 'rgba(34,8,8,.92)',
+                color: '#fff7f7',
+                fontFamily: 'Arial, sans-serif',
+                fontSize: '14px',
+                fontWeight: '800',
+                lineHeight: '1.2',
+                whiteSpace: 'nowrap',
+                textShadow: '0 1px 2px rgba(0,0,0,.9)',
+                boxShadow: '0 5px 16px rgba(0,0,0,.32)',
+                filter: 'none',
+                backdropFilter: 'none',
+            });
+            document.body.appendChild(hint);
+            this.sniperCancelHintDom = hint;
+        }
+
         if (!this.sniperCancelButton) {
             const buttonWidth = 176;
             const buttonHeight = 44;
@@ -60997,20 +60989,32 @@ if (
 
         const language = getLanguage();
 
+        /* DOM hint is authoritative on desktop; keep the old Phaser text hidden. */
         this.sniperCancelHintText
-            ?.setText(
+            ?.setVisible(false);
+
+        if (this.sniperCancelHintDom) {
+            this.sniperCancelHintDom.textContent =
                 language === 'ja'
                     ? 'ESCを押すと狙撃モードを解除'
                     : language === 'en'
                         ? 'Press ESC to cancel sniper mode'
                         : language === 'zh'
                             ? '按 ESC 取消狙击模式'
-                            : 'ESC를 누르면 저격 모드 취소',
-            )
-            .setVisible(
-                canCancel &&
-                !this.mobileControlsEnabled,
-            );
+                            : 'ESC를 누르면 저격 모드 취소';
+
+            const canvasRect =
+                this.game.canvas.getBoundingClientRect();
+
+            this.sniperCancelHintDom.style.left =
+                `${Math.round(canvasRect.left + canvasRect.width / 2)}px`;
+            this.sniperCancelHintDom.style.top =
+                `${Math.round(canvasRect.bottom - 44)}px`;
+            this.sniperCancelHintDom.style.display =
+                canCancel && !this.mobileControlsEnabled
+                    ? 'block'
+                    : 'none';
+        }
 
         this.sniperCancelButtonText
             ?.setText(
@@ -61061,6 +61065,10 @@ if (
     private hideSniperCancelUi(): void {
         this.sniperCancelHintText
             ?.setVisible(false);
+        if (this.sniperCancelHintDom) {
+            this.sniperCancelHintDom.style.display =
+                'none';
+        }
         this.sniperCancelButton
             ?.disableInteractive()
             .setVisible(false);
