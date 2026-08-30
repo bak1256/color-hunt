@@ -1,3 +1,4 @@
+/* V1010554H_TRIPLE_TELEPORT_GHOST_CAMERA_SOUND_POLISH: fixed-center small zoom-out, clean white/cyan afterimages, teleport SFX, stale-ghost cleanup. */
 /* V1010554G4_REMOVE_LEGACY_TAUNT_BUSY_FIELDS: remove stale BUSY-guard references to UI fields already deleted by current Random Taunt cleanup. */
 /* V1010554G3_TRIPLE_TELEPORT_MOTION_CAMERA_AUTHORITY_BUSY_UI_ROBUST_METHODS: true high-speed character motion, exact self-position rebase, fixed-origin zoom camera, clean victory capture. */
 /* V1010554F_TRIPLE_TELEPORT_CINEMATIC_CAMERA: stable local wide camera + 1.5x slower readable Triple Teleport + victory-safe restore. */
@@ -1784,8 +1785,7 @@ private timerText!: Phaser.GameObjects.Text;
         };
 
         /*
-         * Hide the Hider's black circular-vision restriction IMMEDIATELY.
-         * updateHuntTension() is also guarded below, so it cannot redraw it.
+         * Hide Hider darkness immediately.
          */
         this.hiderVisionGraphics
             ?.clear()
@@ -1807,29 +1807,28 @@ private timerText!: Phaser.GameObjects.Text;
             );
 
         /*
-         * User requirement: zoom OUT "from where I am", not by recentering on
-         * the bounding-box midpoint. Keep the original hiding point at screen
-         * center for the entire sequence.
+         * CRITICAL CAMERA RULE:
+         * Keep the CURRENT screen center exactly where it is.
+         * Do not recenter to originX/originY.
+         *
+         * A small zoom-out only:
+         * 1.65 -> ~1.39 on the usual Hunt camera.
          */
+        const fixedCenterX=
+            camera.scrollX+
+            this.gameWidth/(2*camera.zoom);
+        const fixedCenterY=
+            camera.scrollY+
+            this.gameHeight/(2*camera.zoom);
+
         const targetZoom=
-            Phaser.Math.Clamp(
-                Math.min(
-                    camera.zoom*0.68,
-                    1.18,
-                ),
-                0.98,
+            Math.min(
+                camera.zoom,
                 Math.max(
-                    0.98,
-                    camera.zoom,
+                    1.25,
+                    camera.zoom*0.84,
                 ),
             );
-
-        const targetScrollX=
-            originX-
-            this.gameWidth/(2*targetZoom);
-        const targetScrollY=
-            originY-
-            this.gameHeight/(2*targetZoom);
 
         camera
             .stopFollow()
@@ -1843,11 +1842,24 @@ private timerText!: Phaser.GameObjects.Text;
         this.tweens.add({
             targets:camera,
             zoom:targetZoom,
-            scrollX:targetScrollX,
-            scrollY:targetScrollY,
-            duration:360,
+            duration:330,
             ease:'Sine.easeInOut',
-            onUpdate:()=>this.applyFixedHudForZoom(camera.zoom),
+            onUpdate:()=>{
+                /*
+                 * Changing Phaser zoom changes visible world size.
+                 * Recalculate scroll every frame so the world point currently
+                 * at screen-center NEVER moves during the zoom animation.
+                 */
+                camera.setScroll(
+                    fixedCenterX-
+                        this.gameWidth/(2*camera.zoom),
+                    fixedCenterY-
+                        this.gameHeight/(2*camera.zoom),
+                );
+                this.applyFixedHudForZoom(
+                    camera.zoom,
+                );
+            },
         });
     }
 
@@ -1991,8 +2003,11 @@ private timerText!: Phaser.GameObjects.Text;
         this.children
             .getChildren()
             .filter(
-                (c)=>c.name===
-                    'hider-triple-teleport-fx',
+                (c)=>
+                    c.name===
+                        'hider-triple-teleport-fx' ||
+                    c.name===
+                        'hider-triple-teleport-afterimage',
             )
             .forEach(
                 (c)=>c.destroy(),
@@ -2083,7 +2098,7 @@ private timerText!: Phaser.GameObjects.Text;
     }
 
     private spawnTripleTeleportAfterimage(
-        container:Phaser.GameObjects.Container,
+        _container:Phaser.GameObjects.Container,
         x:number,
         y:number,
         alpha=0.34,
@@ -2094,53 +2109,178 @@ private timerText!: Phaser.GameObjects.Text;
             this.roundResultWinner!==null
         ) return;
 
+        if(
+            !this.textures.exists(
+                'network-hider-pixel-body',
+            )
+        ) return;
+
+        const useWhite=
+            Math.floor(
+                this.time.now/55,
+            )%2===0;
+
         const ghost=
             this.rememberTripleTeleportFx(
                 this.add
-                    .renderTexture(
+                    .image(
                         x,
                         y,
-                        116,
-                        154,
+                        'network-hider-pixel-body',
                     )
                     .setOrigin(0.5)
+                    .setTint(
+                        useWhite
+                            ? 0xffffff
+                            : 0x8eefff,
+                    )
+                    .setAlpha(
+                        Math.min(
+                            0.48,
+                            alpha,
+                        ),
+                    )
+                    .setBlendMode(
+                        Phaser.BlendModes.ADD,
+                    )
                     .setDepth(4389)
-                    .setAlpha(alpha)
-                    .setName('hider-triple-teleport-fx'),
+                    .setName(
+                        'hider-triple-teleport-afterimage',
+                    ),
             );
-
-        /*
-         * Do not duplicate the player's name tag into the afterimage.
-         * Everything else—including the painted camouflage RenderTexture—is
-         * captured from the actual character container.
-         */
-        const nameText=
-            container.getByName(
-                'network-player-name',
-            ) as Phaser.GameObjects.Text|null;
-        const oldNameVisible=
-            nameText?.visible ?? false;
-
-        nameText?.setVisible(false);
-
-        ghost.draw(
-            container,
-            58,
-            77,
-        );
-
-        nameText?.setVisible(
-            oldNameVisible,
-        );
 
         this.tweens.add({
             targets:ghost,
             alpha:0,
-            scale:1.035,
-            duration:390,
+            scale:1.06,
+            duration:360,
             ease:'Quad.Out',
-            onComplete:()=>ghost.destroy(),
+            onComplete:()=>{
+                this.tripleTeleportFx.delete(
+                    ghost,
+                );
+                ghost.destroy();
+            },
         });
+    }
+
+    private playTripleTeleportSfx(
+        kind:'dash'|'spinPop',
+    ):void{
+        if(
+            this.shouldSuppressOneShotAudio()
+        ) return;
+
+        const ctx=
+            this.getComedyAudioContext();
+        if(!ctx)return;
+
+        const now=ctx.currentTime;
+
+        const tone=(
+            startHz:number,
+            endHz:number,
+            duration:number,
+            gainValue:number,
+            startAt=now,
+            type:OscillatorType='sine',
+        ):void=>{
+            const osc=
+                ctx.createOscillator();
+            const gain=
+                ctx.createGain();
+
+            osc.type=type;
+            osc.frequency.setValueAtTime(
+                Math.max(30,startHz),
+                startAt,
+            );
+            osc.frequency.exponentialRampToValueAtTime(
+                Math.max(30,endHz),
+                startAt+duration,
+            );
+
+            gain.gain.setValueAtTime(
+                0.0001,
+                startAt,
+            );
+            gain.gain.exponentialRampToValueAtTime(
+                Math.max(0.0002,gainValue),
+                startAt+0.014,
+            );
+            gain.gain.exponentialRampToValueAtTime(
+                0.0001,
+                startAt+duration,
+            );
+
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(startAt);
+            osc.stop(startAt+duration+0.02);
+        };
+
+        if(kind==='dash'){
+            /*
+             * Air-cutting "슉".
+             */
+            tone(
+                1350,
+                260,
+                0.16,
+                0.055,
+                now,
+                'triangle',
+            );
+            tone(
+                760,
+                190,
+                0.12,
+                0.025,
+                now+0.015,
+                'sine',
+            );
+            return;
+        }
+
+        /*
+         * "휘리리리..." spin rise.
+         */
+        tone(
+            220,
+            1250,
+            0.38,
+            0.045,
+            now,
+            'sawtooth',
+        );
+        tone(
+            330,
+            1560,
+            0.34,
+            0.022,
+            now+0.035,
+            'triangle',
+        );
+
+        /*
+         * Centered "뾱!" pop right when the spin completes.
+         */
+        tone(
+            1180,
+            120,
+            0.20,
+            0.075,
+            now+0.39,
+            'sine',
+        );
+        tone(
+            520,
+            90,
+            0.15,
+            0.038,
+            now+0.40,
+            'square',
+        );
     }
 
     private animateTripleTeleportStep(
@@ -2166,11 +2306,15 @@ private timerText!: Phaser.GameObjects.Text;
             .setScale(1)
             .setAlpha(1);
 
+        this.playTripleTeleportSfx(
+            'dash',
+        );
+
         this.spawnTripleTeleportAfterimage(
             container,
             event.fromX,
             event.fromY,
-            0.38,
+            0.46,
         );
 
         let lastGhostAt=-Infinity;
@@ -2183,14 +2327,18 @@ private timerText!: Phaser.GameObjects.Text;
             ease:'Cubic.easeOut',
             onUpdate:()=>{
                 const now=this.time.now;
-                if(now-lastGhostAt<55)return;
+                if(
+                    now-lastGhostAt<
+                    42
+                )return;
+
                 lastGhostAt=now;
 
                 this.spawnTripleTeleportAfterimage(
                     container,
                     container.x,
                     container.y,
-                    0.27,
+                    0.34,
                 );
             },
             onComplete:()=>{
@@ -2249,6 +2397,33 @@ private timerText!: Phaser.GameObjects.Text;
         if(event.stage==='start'){
             if(this.phase!=='hunt')return;
 
+            /*
+             * A new cast must never inherit an old RenderTexture/ghost.
+             */
+            this.children
+                .getChildren()
+                .filter(
+                    (child)=>
+                        child.name===
+                            'hider-triple-teleport-afterimage' ||
+                        child.name===
+                            'hider-triple-teleport-fx',
+                )
+                .forEach(
+                    (child)=>child.destroy(),
+                );
+
+            for(
+                const fx of
+                [...this.tripleTeleportFx]
+            ){
+                if(!fx.active){
+                    this.tripleTeleportFx.delete(
+                        fx,
+                    );
+                }
+            }
+
             this.tripleTeleportActiveSessionIds
                 .add(event.sessionId);
             this.networkPlayerManager
@@ -2282,6 +2457,17 @@ private timerText!: Phaser.GameObjects.Text;
         }
 
         if(event.stage==='cancel'){
+            this.children
+                .getChildren()
+                .filter(
+                    (child)=>
+                        child.name===
+                            'hider-triple-teleport-afterimage',
+                )
+                .forEach(
+                    (child)=>child.destroy(),
+                );
+
             this.tripleTeleportActiveSessionIds
                 .delete(event.sessionId);
 
@@ -2335,6 +2521,10 @@ private timerText!: Phaser.GameObjects.Text;
 
         if(event.stage==='vanish'){
             if(!container)return;
+
+            this.playTripleTeleportSfx(
+                'spinPop',
+            );
 
             this.tweens.killTweensOf(container);
 
@@ -2432,6 +2622,17 @@ private timerText!: Phaser.GameObjects.Text;
         }
 
         if(event.stage==='return'){
+            this.children
+                .getChildren()
+                .filter(
+                    (child)=>
+                        child.name===
+                            'hider-triple-teleport-afterimage',
+                )
+                .forEach(
+                    (child)=>child.destroy(),
+                );
+
             this.tripleTeleportActiveSessionIds
                 .delete(event.sessionId);
 
