@@ -1,3 +1,4 @@
+/* V1010550_TACTICAL_CHAT_HIDE_VULCAN_CANCEL_FULL_RESTORE: hide chat throughout local Sniper/Vulcan; restore it after cancel/end; Vulcan cancel now uses Sniper-equivalent 1.5s HUD unlock plus exact gameplay HUD scale normalization. */
 /* V1010549_VULCAN_CANCEL_SLIDE_HUD_RESTORE: Vulcan now mirrors v548 Sniper cancel slide UX; touch-down hides, release reveals, cancel restores normal Hunter HUD and syncs false. */
 /* V1010548_MOBILE_SNIPER_CANCEL_SLIDE_TOUCH_STATE: mobile Sniper cancel slides solely from touch-down/up state; clickable only while idle; canvas pointer-capture keeps optic drag continuous; cancel HUD settle lock hardened. */
 /* V547B_SNIPER_CANCEL_DOM_NARROWING_FIX: keep the cancel DOM reference in a local const so TypeScript can safely narrow it before getBoundingClientRect(). */
@@ -10798,6 +10799,20 @@ private timerText!: Phaser.GameObjects.Text;
 
     private showChatUi(): void {
         /*
+         * V1010550_TACTICAL_CHAT_HIDE_VULCAN_CANCEL_FULL_RESTORE / CHAT_HARD_HIDE
+         * Local Sniper/Vulcan owns the whole combat screen on PC and mobile.
+         * Chat callbacks may arrive while the ultimate is running, so guard the
+         * single show entry point rather than only hiding chat once on entry.
+         */
+        if (
+            this.phase === 'hunt' &&
+            this.isTacticalSupportInputLocked()
+        ) {
+            this.hideChatUi(false);
+            return;
+        }
+
+        /*
          * V1010452O2_STALE_CHAT_MOBILE_READY_EXACT
          * Room chat is valid only while this scene owns a connected room.
          * In particular, a late history/message callback from an already-started
@@ -10834,6 +10849,21 @@ private timerText!: Phaser.GameObjects.Text;
     
         this.followNewestChatMessage();
 }
+
+    private hideChatForLocalTacticalSupport(): void {
+        this.hideChatUi(false);
+    }
+
+    private restoreChatAfterLocalTacticalSupport(): void {
+        if (
+            this.phase !== 'hunt' ||
+            this.isTacticalSupportInputLocked()
+        ) {
+            return;
+        }
+
+        this.showChatUi();
+    }
 
     private hideChatUi(
         clear = false,
@@ -16143,8 +16173,15 @@ const ribbon =
                 /* V1010549_VULCAN_CANCEL_SLIDE_HUD_RESTORE: queued active=true must not resurrect a locally cancelled Vulcan. */
                 if (
                     isOwner &&
-                    this.vulcanCancelAwaitingServerFalse &&
-                    state.active
+                    state.active &&
+                    (
+                        this.vulcanCancelAwaitingServerFalse ||
+                        (
+                            !this.vulcanActive &&
+                            this.time.now <
+                                this.sniperCancelHudRestoreUntil
+                        )
+                    )
                 ) {
                     return;
                 }
@@ -16212,19 +16249,26 @@ const ribbon =
                     if (isOwner) {
                         this.vulcanActive = false;
                         this.vulcanSupportCommitted = false;
+                        this.sniperCancelHudRestoreUntil =
+                            Math.max(
+                                this.sniperCancelHudRestoreUntil,
+                                this.time.now + 1_500,
+                            );
                         this.networkPlayerManager.setLocalMovementHardLocked(false);
                         this.exitVulcanCinematic();
                         this.hideVulcanCancelUi();
 
                         if (this.mobileControlsEnabled) {
                             this.restoreNormalMobileHunterHudAfterSniperCancel();
-                            [0, 80, 220].forEach((delay) => {
+                            [0, 80, 220, 500, 900, 1400].forEach((delay) => {
                                 this.time.delayedCall(
                                     delay,
                                     () => this.restoreNormalMobileHunterHudAfterSniperCancel(),
                                 );
                             });
                         }
+
+                        this.restoreChatAfterLocalTacticalSupport();
                     } else {
                         this.remoteVulcanActiveSessionIds.delete(state.sessionId);
                         this.remoteVulcanAimBySessionId.delete(state.sessionId);
@@ -61456,6 +61500,18 @@ const roomPlayers =
             return;
         }
 
+        /*
+         * V1010550_TACTICAL_CHAT_HIDE_VULCAN_CANCEL_FULL_RESTORE / NORMAL_HUNT_TRANSFORM
+         * Vulcan changes main-camera zoom while fixed HUD objects are inverse-scaled.
+         * Put camera + every fixed-HUD base transform back onto the exact normal
+         * Hunt zoom before recalculating visibility/positions.
+         */
+        this.vulcanSupportCommitted = false;
+        this.cameras.main.setRotation(0);
+        this.cameras.main.setZoom(this.gameplayCameraZoom);
+        this.applyFixedHudForZoom(this.gameplayCameraZoom);
+        this.ensureGameplayCameraFollow();
+
         /* Tactical lock disabled FART interaction; visibility alone cannot undo it. */
         if (this.mobileFartButton) {
             if (this.mobileFartButton.input) {
@@ -61587,6 +61643,7 @@ const roomPlayers =
 
     private enterSniperCinematic(): void {
         this.applyTacticalSupportInputLock();
+        this.hideChatForLocalTacticalSupport();
 
 
         /*
@@ -62322,6 +62379,8 @@ const roomPlayers =
             this.controlsHelpButton.style.userSelect = '';
             this.controlsHelpButton.tabIndex = 0;
         }
+
+        this.restoreChatAfterLocalTacticalSupport();
 
         this.sniperScopeStripCameras
             .forEach(
@@ -65357,6 +65416,14 @@ const roomPlayers =
         this.vulcanFiring = false;
         this.vulcanActive = false;
         this.vulcanSupportCommitted = false;
+
+        /*
+         * V1010550_TACTICAL_CHAT_HIDE_VULCAN_CANCEL_FULL_RESTORE / VULCAN_CANCEL_SETTLE
+         * Same proven post-cancel protection as Sniper.
+         */
+        this.sniperCancelHudRestoreUntil =
+            this.time.now + 1_500;
+
         this.networkPlayerManager.setLocalHunterSpeedMultiplier(1);
         this.networkPlayerManager.setLocalMovementHardLocked(false);
         this.exitVulcanCinematic();
@@ -65375,13 +65442,15 @@ const roomPlayers =
             this.mobileTouchPoints.clear();
 
             this.restoreNormalMobileHunterHudAfterSniperCancel();
-            [0, 80, 220].forEach((delay) => {
+            [0, 80, 220, 500, 900, 1400].forEach((delay) => {
                 this.time.delayedCall(
                     delay,
                     () => this.restoreNormalMobileHunterHudAfterSniperCancel(),
                 );
             });
         }
+
+        this.restoreChatAfterLocalTacticalSupport();
     }
 
     private enterVulcanCinematic(
@@ -65405,6 +65474,8 @@ const roomPlayers =
 
         this.vulcanCinematicActive =
             true;
+
+        this.hideChatForLocalTacticalSupport();
 
         this.vulcanCancelRevealNotBefore = Number.POSITIVE_INFINITY;
         this.hideVulcanCancelUi();
@@ -68437,8 +68508,22 @@ const roomPlayers =
         this.vulcanHelicopter = undefined;
         this.sniperHelicopterSound?.stop();
         this.cameras.main.setRotation(this.vulcanSavedCameraRotation);
-        this.cameras.main.setZoom(this.vulcanSavedCameraZoom);
+
+        if (this.phase === 'hunt') {
+            this.cameras.main.setZoom(this.gameplayCameraZoom);
+            this.applyFixedHudForZoom(this.gameplayCameraZoom);
+        } else {
+            this.cameras.main.setZoom(this.vulcanSavedCameraZoom);
+        }
+
         this.ensureGameplayCameraFollow();
+
+        /*
+         * V1010550_TACTICAL_CHAT_HIDE_VULCAN_CANCEL_FULL_RESTORE / CHAT_RESTORE
+         * exit is shared by cancel and authoritative support end.
+         */
+        this.restoreChatAfterLocalTacticalSupport();
+
         if (this.phase === 'hunt') {
             const localRole = multiplayerClient.getLocalPlayer()?.role ?? this.networkPlayerManager?.getLocalRole?.();
             if (localRole === 'hunter' || this.practiceMode === 'hunter') {
