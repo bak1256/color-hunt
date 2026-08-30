@@ -1,3 +1,4 @@
+/* V1010553MN_TAUNT_UI_READABILITY_COMBINED: combined speech-bubble + Random Taunt button readability polish. */
 /* V1010553L_RANDOM_TAUNT_TIP_LANGUAGE_FIX: use imported getLanguage() helper for Random Taunt first-use tip. */
 /* V1010553K_RANDOM_TAUNT_FIRST_TIP: first-use random-taunt speech bubble; dismiss permanently on first activation; hidden from spectator and victory capture. */
 /* V1010553J_HARDENED_FINAL_CLEANUP: remove all Hardened/warning phrases; keep only compact Random Taunt button; gauge moved below feet. */
@@ -1355,24 +1356,25 @@ private timerText!: Phaser.GameObjects.Text;
         const body=this.add.graphics().setDepth(3901);
         const drawBody=(hover=false,pressed=false)=>{
             body.clear();
-            body.fillStyle(hover?0xd8465f:0xb72d47,1);
-            body.fillRoundedRect(-54,-14+(pressed?2:0),108,28,14);
-            body.lineStyle(2,0xffdf83,1);
-            body.strokeRoundedRect(-54,-14+(pressed?2:0),108,28,14);
+            body.fillStyle(hover?0xe64b67:0xc92f4d,1);
+            body.fillRoundedRect(-58,-15+(pressed?2:0),116,30,15);
+            body.lineStyle(3,0xffefb0,1);
+            body.strokeRoundedRect(-58,-15+(pressed?2:0),116,30,15);
         };
         drawBody();
 
-        const hit=this.add.zone(0,0,108,28)
+        const hit=this.add.zone(0,0,116,30)
             .setDepth(3903)
             .setInteractive({useHandCursor:true});
 
         const button=this.add.text(0,0,copy.button,{
             fontFamily:'Arial Black, sans-serif',
-            fontSize:'11px',
+            fontSize:'13px',
             fontStyle:'bold',
             color:'#ffffff',
-            stroke:'#52101e',
-            strokeThickness:3,
+            stroke:'#3a0913',
+            strokeThickness:4,
+            shadow:{offsetX:0,offsetY:1,color:'#180308',blur:0,stroke:true,fill:true},
             align:'center'
         }).setOrigin(0.5).setDepth(3902);
 
@@ -1396,15 +1398,20 @@ private timerText!: Phaser.GameObjects.Text;
             tipBubble=this.add.graphics().setDepth(3910);
             tipTitle=this.add.text(0,0,tip.title,{
                 fontFamily:'Arial Black, sans-serif',
-                fontSize:'10px',fontStyle:'bold',
-                color:'#3b1721',
+                fontSize:'12px',fontStyle:'bold',
+                color:'#241016',
+                stroke:'#fff8e7',
+                strokeThickness:2,
                 align:'center'
             }).setOrigin(0.5).setDepth(3911);
 
             tipBody=this.add.text(0,0,tip.body,{
                 fontFamily:'Arial, sans-serif',
-                fontSize:'9px',
-                color:'#4f4145',
+                fontSize:'11px',
+                fontStyle:'bold',
+                color:'#30272a',
+                stroke:'#fff8e7',
+                strokeThickness:1,
                 align:'center'
             }).setOrigin(0.5).setDepth(3911);
         }
@@ -1486,16 +1493,16 @@ private timerText!: Phaser.GameObjects.Text;
             const top=pos.y+88;
             tipBubble.setPosition(cx,top);
             tipBubble.clear();
-            tipBubble.fillStyle(0xfffbec,0.98);
-            tipBubble.lineStyle(2,0x3a2328,0.95);
-            tipBubble.fillRoundedRect(-92,0,184,48,10);
-            tipBubble.strokeRoundedRect(-92,0,184,48,10);
+            tipBubble.fillStyle(0xfffbec,1);
+            tipBubble.lineStyle(3,0x2c171d,1);
+            tipBubble.fillRoundedRect(-104,0,208,56,11);
+            tipBubble.strokeRoundedRect(-104,0,208,56,11);
             tipBubble.fillTriangle(-9,0,9,0,0,-9);
             tipBubble.lineBetween(-9,0,0,-9);
             tipBubble.lineBetween(0,-9,9,0);
 
-            tipTitle.setPosition(cx,top+14);
-            tipBody.setPosition(cx,top+33);
+            tipTitle.setPosition(cx,top+16);
+            tipBody.setPosition(cx,top+38);
         }
     }
 
