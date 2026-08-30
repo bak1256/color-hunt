@@ -1,3 +1,5 @@
+/* V1010553F_HARDENED_POSE_CAST_SYNTAX_FIX: wrap optional-chained getByName expression before TypeScript 'as' cast. */
+/* V1010553E_HARDENED_REVEAL_UI_ROBUST: structure-based v553c-compatible patch; real button, huge smoke reveal, POOF+roar, overlay taunt/gauge, stronger -1s feedback. */
 /* V1010553C_HARDENED_TRANSFORM_BOOM_SMOKE_SCALE: louder transform/revert POOF, fuller smoke, no sparkles; muscle display reduced to ~1.1x normal. */
 /* V1010553_HARDENED_5POSE_GAUGE_HIT_DRAIN_CLIENT */
 /* V1010552D_HARDENED_POSE_TYPE_NARROW_FIX: narrow Hardened pose from generic GameObject to Phaser.Image before reading scaleX/scaleY. */
@@ -1266,6 +1268,8 @@ private timerText!: Phaser.GameObjects.Text;
 
     private hiderTauntWarning?: Phaser.GameObjects.Text;
     private hiderTauntButton?: Phaser.GameObjects.Text;
+    private hiderTauntButtonBody?: Phaser.GameObjects.Rectangle;
+    private hiderTauntButtonShadow?: Phaser.GameObjects.Rectangle;
     private hiderHardenedTestButton?: Phaser.GameObjects.Text;
     private readonly hardenedEndsAtBySessionId = new Map<string, number>();
     private readonly hardenedNextPhraseAtBySessionId = new Map<string, number>();
@@ -1320,37 +1324,127 @@ private timerText!: Phaser.GameObjects.Text;
     }
 
     private destroyHiderTauntHud(): void {
-        this.hiderTauntWarning?.destroy(); this.hiderTauntButton?.destroy(); this.hiderHardenedTestButton?.destroy();
-        this.hiderTauntWarning = undefined; this.hiderTauntButton = undefined; this.hiderHardenedTestButton = undefined;
+        this.hiderTauntWarning?.destroy();
+        this.hiderTauntButton?.destroy();
+        this.hiderTauntButtonBody?.destroy();
+        this.hiderTauntButtonShadow?.destroy();
+        this.hiderHardenedTestButton?.destroy();
+        this.hiderTauntWarning=undefined;
+        this.hiderTauntButton=undefined;
+        this.hiderTauntButtonBody=undefined;
+        this.hiderTauntButtonShadow=undefined;
+        this.hiderHardenedTestButton=undefined;
     }
 
     private createHiderTauntHud(): void {
         this.destroyHiderTauntHud();
-        if (this.phase !== 'hunt' || !this.isMultiplayerSession() || !this.networkPlayerManager.isLocalHider()) return;
+        if(this.phase!=='hunt'||!this.isMultiplayerSession()||!this.networkPlayerManager.isLocalHider())return;
         const copy=this.getHardenedTauntCopy();
-        const warning=this.add.text(0,0,copy.warning,{fontFamily:'Arial Black, sans-serif',fontSize:'11px',color:'#ffdf79',stroke:'#000000',strokeThickness:3,align:'center'}).setOrigin(0.5).setDepth(3900);
-        const button=this.add.text(0,0,copy.button,{fontFamily:'Arial Black, sans-serif',fontSize:'13px',color:'#ffffff',backgroundColor:'#ad263cff',padding:{x:9,y:6},stroke:'#000000',strokeThickness:2}).setOrigin(0.5).setDepth(3901).setInteractive({useHandCursor:true});
-        const test=this.add.text(0,0,copy.testButton,{fontFamily:'Arial Black, sans-serif',fontSize:'10px',color:'#b8f7ff',backgroundColor:'#182d3fff',padding:{x:7,y:5},stroke:'#000000',strokeThickness:2}).setOrigin(0.5).setDepth(3901).setInteractive({useHandCursor:true});
-        const activate=()=>{ const id=multiplayerClient.getSessionId(); if (!id || this.hardenedEndsAtBySessionId.has(id)) return; multiplayerClient.sendHiderHardenedTaunt(); };
-        button.on('pointerdown',activate); test.on('pointerdown',activate);
-        this.hiderTauntWarning=warning; this.hiderTauntButton=button; this.hiderHardenedTestButton=test; this.updateHiderTauntHud();
+
+        const warning=this.add.text(0,0,copy.warning,{
+            fontFamily:'Arial Black, sans-serif',fontSize:'11px',
+            color:'#ffdf79',stroke:'#000000',strokeThickness:3,align:'center'
+        }).setOrigin(0.5).setDepth(3900);
+
+        const shadow=this.add.rectangle(0,4,148,42,0x21060c,0.98)
+            .setStrokeStyle(3,0x000000,1).setDepth(3900);
+
+        const body=this.add.rectangle(0,0,148,42,0xb72d47,1)
+            .setStrokeStyle(3,0xffdf83,1).setDepth(3901)
+            .setInteractive({useHandCursor:true});
+
+        const button=this.add.text(0,0,copy.button,{
+            fontFamily:'Arial Black, sans-serif',fontSize:'13px',fontStyle:'bold',
+            color:'#ffffff',stroke:'#52101e',strokeThickness:3,align:'center'
+        }).setOrigin(0.5).setDepth(3902);
+
+        const test=this.add.text(0,0,copy.testButton,{
+            fontFamily:'Arial Black, sans-serif',fontSize:'10px',
+            color:'#b8f7ff',backgroundColor:'#182d3fff',
+            padding:{x:7,y:5},stroke:'#000000',strokeThickness:2
+        }).setOrigin(0.5).setDepth(3901).setInteractive({useHandCursor:true});
+
+        const activate=()=>{
+            const id=multiplayerClient.getSessionId();
+            if(!id||this.hardenedEndsAtBySessionId.has(id))return;
+            multiplayerClient.sendHiderHardenedTaunt();
+        };
+
+        body.on('pointerover',()=>body.setFillStyle(0xd6405a,1));
+        body.on('pointerout',()=>{
+            body.setFillStyle(0xb72d47,1);
+            body.setScale(1);button.setScale(1);
+        });
+        body.on('pointerdown',()=>{
+            body.setScale(0.96);button.setScale(0.96);
+        });
+        body.on('pointerup',()=>{
+            body.setScale(1);button.setScale(1);activate();
+        });
+        test.on('pointerdown',activate);
+
+        this.hiderTauntWarning=warning;
+        this.hiderTauntButton=button;
+        this.hiderTauntButtonBody=body;
+        this.hiderTauntButtonShadow=shadow;
+        this.hiderHardenedTestButton=test;
+        this.updateHiderTauntHud();
     }
 
     private updateHiderTauntHud(): void {
-        const w=this.hiderTauntWarning,b=this.hiderTauntButton,t=this.hiderHardenedTestButton; if(!w||!b||!t)return;
-        const id=multiplayerClient.getSessionId(); const local=multiplayerClient.getLocalPlayer(); const p=this.networkPlayerManager.getLocalPlayerPosition();
-        const show=this.phase==='hunt'&&Boolean(id&&local?.role==='hider'&&local.alive&&p&&!this.hardenedEndsAtBySessionId.has(id));
-        w.setVisible(show); b.setVisible(show); t.setVisible(show); if(!show||!p)return;
-        w.setPosition(p.x,p.y+51); b.setPosition(p.x,p.y+69); t.setPosition(p.x,p.y+92);
+        const w=this.hiderTauntWarning,b=this.hiderTauntButton;
+        const body=this.hiderTauntButtonBody,shadow=this.hiderTauntButtonShadow;
+        const t=this.hiderHardenedTestButton;
+        if(!w||!b||!body||!shadow||!t)return;
+
+        const id=multiplayerClient.getSessionId();
+        const local=multiplayerClient.getLocalPlayer();
+        const pos=this.networkPlayerManager.getLocalPlayerPosition();
+        const show=this.phase==='hunt'&&Boolean(
+            id&&local?.role==='hider'&&local.alive&&pos&&!this.hardenedEndsAtBySessionId.has(id)
+        );
+
+        w.setVisible(show);b.setVisible(show);body.setVisible(show);shadow.setVisible(show);t.setVisible(show);
+        if(!show||!pos)return;
+
+        w.setPosition(pos.x,pos.y+48);
+        body.setPosition(pos.x,pos.y+74);
+        shadow.setPosition(pos.x,pos.y+78);
+        b.setPosition(pos.x,pos.y+74);
+        t.setPosition(pos.x,pos.y+108);
     }
 
     private showHardenedSmoke(x:number,y:number):void {
-        // v553c: fuller transformation cloud; intentionally no sparkle layer.
-        for(let i=0;i<30;i+=1){
-            const a=Math.random()*Math.PI*2,d=28+Math.random()*54;
-            const puff=this.add.circle(x,y,7+Math.random()*12,i%4===0?0xffffff:(i%2===0?0xe5ebf2:0xbfc9d5),0.9).setDepth(195);
-            puff.setScale(0.7+Math.random()*0.45);
-            this.tweens.add({targets:puff,x:x+Math.cos(a)*d,y:y+Math.sin(a)*d,alpha:0,scale:2.6+Math.random()*1.1,duration:560+Math.random()*360,ease:'Cubic.Out',onComplete:()=>puff.destroy()});
+        const core=this.add.circle(x,y,68,0xf7f8fa,0.99).setDepth(4305);
+        this.tweens.add({
+            targets:core,alpha:0,scale:2.15,duration:720,ease:'Quad.Out',
+            onComplete:()=>core.destroy()
+        });
+
+        for(let i=0;i<58;i+=1){
+            const a=Math.random()*Math.PI*2;
+            const start=5+Math.random()*34;
+            const travel=48+Math.random()*92;
+            const puff=this.add.circle(
+                x+Math.cos(a)*start,
+                y+Math.sin(a)*start,
+                12+Math.random()*21,
+                i%5===0?0xffffff:(i%2===0?0xe7ecf2:0xc4ced8),
+                0.97
+            ).setDepth(4306);
+
+            puff.setScale(0.9+Math.random()*0.7);
+            this.tweens.add({
+                targets:puff,
+                x:x+Math.cos(a)*travel,
+                y:y+Math.sin(a)*travel,
+                alpha:0,
+                scale:3.2+Math.random()*1.8,
+                duration:820+Math.random()*470,
+                delay:Math.random()*80,
+                ease:'Cubic.Out',
+                onComplete:()=>puff.destroy()
+            });
         }
     }
 
@@ -1372,6 +1466,33 @@ private timerText!: Phaser.GameObjects.Text;
             noise.buffer=buffer;filter.type='lowpass';filter.frequency.value=900;
             noise.connect(filter);filter.connect(master);noise.start(now);
         } catch {}
+    }
+
+
+    private playHardenedRoar():void {
+        if(this.time.now<this.suppressEffectsUntil)return;
+        try{
+            const ac=(this.sound as unknown as {context?:AudioContext}).context;if(!ac)return;
+            const now=ac.currentTime+0.06;
+            const gain=ac.createGain(),filter=ac.createBiquadFilter();
+            gain.gain.setValueAtTime(0.0001,now);
+            gain.gain.exponentialRampToValueAtTime(0.24,now+0.05);
+            gain.gain.setValueAtTime(0.19,now+0.36);
+            gain.gain.exponentialRampToValueAtTime(0.0001,now+0.90);
+            filter.type='lowpass';filter.frequency.value=760;filter.Q.value=2.1;
+            gain.connect(filter);filter.connect(ac.destination);
+
+            const voice=ac.createOscillator();voice.type='sawtooth';
+            voice.frequency.setValueAtTime(116,now);
+            voice.frequency.linearRampToValueAtTime(154,now+0.22);
+            voice.frequency.linearRampToValueAtTime(90,now+0.82);
+            voice.connect(gain);voice.start(now);voice.stop(now+0.92);
+
+            const vib=ac.createOscillator(),vg=ac.createGain();
+            vib.frequency.value=16;vg.gain.value=11;
+            vib.connect(vg);vg.connect(voice.frequency);
+            vib.start(now);vib.stop(now+0.92);
+        }catch{}
     }
 
     private playHardenedTing():void {
@@ -1430,11 +1551,80 @@ private timerText!: Phaser.GameObjects.Text;
     }
 
     private applyHardenedState(state:NetworkHiderHardenedState):void {
-        const id=state.sessionId;if(!id)return; const p=this.networkPlayerManager.getPlayerPosition(id);
-        if(!state.active){ this.hardenedEndsAtBySessionId.delete(id);this.hardenedNextPhraseAtBySessionId.delete(id);this.hardenedPhraseIndexBySessionId.delete(id);if(p){this.playHardenedTransformBoom();this.showHardenedSmoke(p.x,p.y);}this.networkPlayerManager.setHiderHardenedVisual(id,false);if(id===multiplayerClient.getSessionId())this.networkPlayerManager.setLocalMovementHardLocked(false);this.updateHiderTauntHud();return; }
-        const end=Date.now()+Math.max(0,state.endsAt-state.serverNow);this.hardenedEndsAtBySessionId.set(id,end);this.hardenedNextPhraseAtBySessionId.set(id,Date.now()+1700);this.hardenedPhraseIndexBySessionId.set(id,0);this.networkPlayerManager.setHiderHardenedVisual(id,true,state.pose,this.getHardenedTauntCopy().initial);this.networkPlayerManager.setHiderHardenedLabel(id,this.getHardenedTauntCopy().initial,true);if(p){this.playHardenedTransformBoom();this.showHardenedSmoke(p.x,p.y);}
-        const pose=this.networkPlayerManager.getPlayerContainer(id)?.getByName('network-hider-hardened-pose') as Phaser.GameObjects.Image | undefined; if(pose){this.tweens.killTweensOf(pose);const baseScaleX=pose.scaleX;const baseScaleY=pose.scaleY;this.tweens.add({targets:pose,scaleX:baseScaleX*1.10,scaleY:baseScaleY*1.12,duration:420,hold:120,yoyo:true,repeat:-1,ease:'Sine.InOut'});}
-        if(id===multiplayerClient.getSessionId())this.networkPlayerManager.setLocalMovementHardLocked(true);this.updateHiderTauntHud();
+        const id=state.sessionId;
+        if(!id)return;
+        const pos=this.networkPlayerManager.getPlayerPosition(id);
+
+        if(!state.active){
+            this.hardenedEndsAtBySessionId.delete(id);
+            this.hardenedNextPhraseAtBySessionId.delete(id);
+            this.hardenedPhraseIndexBySessionId.delete(id);
+
+            if(pos){
+                this.playHardenedTransformBoom();
+                this.showHardenedSmoke(pos.x,pos.y);
+            }
+
+            this.time.delayedCall(190,()=>{
+                this.networkPlayerManager.setHiderHardenedVisual(id,false);
+            });
+
+            if(id===multiplayerClient.getSessionId())
+                this.networkPlayerManager.setLocalMovementHardLocked(false);
+
+            this.updateHiderTauntHud();
+            return;
+        }
+
+        const end=Date.now()+Math.max(0,state.endsAt-state.serverNow);
+        this.hardenedEndsAtBySessionId.set(id,end);
+        this.hardenedNextPhraseAtBySessionId.set(id,Date.now()+1700);
+        this.hardenedPhraseIndexBySessionId.set(id,0);
+
+        this.networkPlayerManager.setHiderHardenedVisual(
+            id,true,state.pose,this.getHardenedTauntCopy().initial
+        );
+        this.networkPlayerManager.setHiderHardenedLabel(
+            id,this.getHardenedTauntCopy().initial,true
+        );
+
+        const pose=(
+            this.networkPlayerManager
+                .getPlayerContainer(id)
+                ?.getByName('network-hider-hardened-pose')
+        ) as Phaser.GameObjects.Image | undefined;
+
+        if(pose){
+            this.tweens.killTweensOf(pose);
+            const baseScaleX=pose.scaleX,baseScaleY=pose.scaleY;
+            pose.setAlpha(0);
+
+            this.time.delayedCall(410,()=>{
+                if(!pose.active)return;
+                pose.setAlpha(1);
+                this.tweens.add({
+                    targets:pose,
+                    scaleX:baseScaleX*1.10,
+                    scaleY:baseScaleY*1.12,
+                    duration:420,
+                    hold:120,
+                    yoyo:true,
+                    repeat:-1,
+                    ease:'Sine.InOut'
+                });
+            });
+        }
+
+        if(pos){
+            this.playHardenedTransformBoom();
+            this.playHardenedRoar();
+            this.showHardenedSmoke(pos.x,pos.y);
+        }
+
+        if(id===multiplayerClient.getSessionId())
+            this.networkPlayerManager.setLocalMovementHardLocked(true);
+
+        this.updateHiderTauntHud();
     }
 
     private applyHardenedHit(event:NetworkHiderHardenedHit):void {

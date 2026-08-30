@@ -1,3 +1,4 @@
+/* V1010553E_HARDENED_REVEAL_UI_ROBUST: top-layer Hardened overlays + 132px aspect-safe pose + strong damage gauge feedback. */
 /* V1010553C_HARDENED_TRANSFORM_BOOM_SMOKE_SCALE: Hardened square pose display reduced 156 -> 132 while preserving 1:1 aspect ratio. */
 /* V1010553A_HARDENED_SQUARE_POSE_ASPECT: all Hardened pose assets are normalized to a 1:1 transparent canvas; display at 156x156 so no pose is stretched. */
 /* V1010553_HARDENED_5POSE_GAUGE_HIT_DRAIN_CLIENT */
@@ -72,6 +73,13 @@ export class NetworkPlayerManager {
 
   private readonly players =
     new Map<string, NetworkPlayerView>();
+
+  private readonly hardenedOverlayTextBySessionId =
+    new Map<string, Phaser.GameObjects.Text>();
+  private readonly hardenedOverlayGaugeBySessionId =
+    new Map<string, Phaser.GameObjects.Graphics>();
+  private readonly hardenedOverlayGaugeTextBySessionId =
+    new Map<string, Phaser.GameObjects.Text>();
 
   /*
    * v0.10.10.134 Practice Ground:
@@ -228,6 +236,13 @@ export class NetworkPlayerManager {
     });
 
     this.players.clear();
+
+    this.hardenedOverlayTextBySessionId.forEach((o)=>o.destroy());
+    this.hardenedOverlayGaugeBySessionId.forEach((o)=>o.destroy());
+    this.hardenedOverlayGaugeTextBySessionId.forEach((o)=>o.destroy());
+    this.hardenedOverlayTextBySessionId.clear();
+    this.hardenedOverlayGaugeBySessionId.clear();
+    this.hardenedOverlayGaugeTextBySessionId.clear();
 
     this.practicePaintTextureKeys.forEach(
       (textureKey) => {
@@ -2056,36 +2071,190 @@ export class NetworkPlayerManager {
   }
 
   setHiderHardenedVisual(sessionId: string, active: boolean, pose = 1, label = ""): void {
-    const view = this.players.get(sessionId); if (!view || view.role !== "hider") return;
-    const container = view.container;
-    const body = container.getByName("network-hider-pixel-body") as Phaser.GameObjects.Image | null;
-    let image = container.getByName("network-hider-hardened-pose") as Phaser.GameObjects.Image | null;
-    let text = container.getByName("network-hider-hardened-label") as Phaser.GameObjects.Text | null;
-    if (!active) { image?.destroy(); text?.destroy(); (container.getByName("network-hider-hardened-gauge") as Phaser.GameObjects.Graphics | null)?.destroy(); (container.getByName("network-hider-hardened-gauge-text") as Phaser.GameObjects.Text | null)?.destroy(); if (view.alive) { body?.setVisible(true); view.paintLayer?.texture.setVisible(true); } return; }
-    body?.setVisible(false); view.paintLayer?.texture.setVisible(false);
-    const key = `hider-hardened-pose-${Math.max(1, Math.min(5, Math.round(pose)))}`;
-    if (!image) { image = this.scene.add.image(0, 18, key).setOrigin(0.5, 0.75).setName("network-hider-hardened-pose").setDisplaySize(132,132); container.add(image); } else image.setTexture(key).setVisible(true);
-    if (!text) { text = this.scene.add.text(0,-72,label,{fontFamily:"Arial Black, sans-serif",fontSize:"15px",fontStyle:"bold",color:"#fff36d",stroke:"#000000",strokeThickness:5,align:"center"}).setOrigin(0.5,1).setName("network-hider-hardened-label"); container.add(text); }
-    let gauge=container.getByName("network-hider-hardened-gauge") as Phaser.GameObjects.Graphics|null;if(!gauge){gauge=this.scene.add.graphics().setName("network-hider-hardened-gauge");container.add(gauge);}
-    let gaugeText=container.getByName("network-hider-hardened-gauge-text") as Phaser.GameObjects.Text|null;if(!gaugeText){gaugeText=this.scene.add.text(0,82,"15.0s",{fontFamily:"Arial Black, sans-serif",fontSize:"10px",color:"#ffffff",stroke:"#000000",strokeThickness:3}).setOrigin(0.5).setName("network-hider-hardened-gauge-text");container.add(gaugeText);}
-    text.setText(label).setFontSize(23).setVisible(true); this.setHiderHardenedGauge(sessionId,15000,15000); container.bringToTop(image); container.bringToTop(text); if(gauge)container.bringToTop(gauge); if(gaugeText)container.bringToTop(gaugeText); container.bringToTop(view.nameText);
+    const view=this.players.get(sessionId);if(!view||view.role!=="hider")return;
+    const container=view.container;
+    const body=container.getByName("network-hider-pixel-body") as Phaser.GameObjects.Image|null;
+    let image=container.getByName("network-hider-hardened-pose") as Phaser.GameObjects.Image|null;
+
+    if(!active){
+      image?.destroy();
+      this.hardenedOverlayTextBySessionId.get(sessionId)?.destroy();
+      this.hardenedOverlayGaugeBySessionId.get(sessionId)?.destroy();
+      this.hardenedOverlayGaugeTextBySessionId.get(sessionId)?.destroy();
+      this.hardenedOverlayTextBySessionId.delete(sessionId);
+      this.hardenedOverlayGaugeBySessionId.delete(sessionId);
+      this.hardenedOverlayGaugeTextBySessionId.delete(sessionId);
+      if(view.alive){body?.setVisible(true);view.paintLayer?.texture.setVisible(true);}
+      return;
+    }
+
+    body?.setVisible(false);view.paintLayer?.texture.setVisible(false);
+    const key=`hider-hardened-pose-${Math.max(1,Math.min(5,Math.round(pose)))}`;
+
+    if(!image){
+      image=this.scene.add.image(0,18,key)
+        .setOrigin(0.5,0.75)
+        .setName("network-hider-hardened-pose")
+        .setDisplaySize(132,132);
+      container.add(image);
+    }else{
+      image.setTexture(key).setVisible(true);
+    }
+
+    let text=this.hardenedOverlayTextBySessionId.get(sessionId);
+    if(!text){
+      text=this.scene.add.text(container.x,container.y-120,label,{
+        fontFamily:"Arial Black, sans-serif",
+        fontSize:"15px",fontStyle:"bold",
+        color:"#fff36d",stroke:"#000000",strokeThickness:6,
+        align:"center"
+      }).setOrigin(0.5,1).setDepth(4402);
+      this.hardenedOverlayTextBySessionId.set(sessionId,text);
+    }
+
+    let gauge=this.hardenedOverlayGaugeBySessionId.get(sessionId);
+    if(!gauge){
+      gauge=this.scene.add.graphics().setDepth(4400);
+      this.hardenedOverlayGaugeBySessionId.set(sessionId,gauge);
+    }
+
+    let gaugeText=this.hardenedOverlayGaugeTextBySessionId.get(sessionId);
+    if(!gaugeText){
+      gaugeText=this.scene.add.text(container.x,container.y-78,"15.0s",{
+        fontFamily:"Arial Black, sans-serif",
+        fontSize:"11px",fontStyle:"bold",
+        color:"#ffffff",stroke:"#000000",strokeThickness:4
+      }).setOrigin(0.5).setDepth(4401);
+      this.hardenedOverlayGaugeTextBySessionId.set(sessionId,gaugeText);
+    }
+
+    text.setText(label).setFontSize(23).setVisible(true);
+    this.setHiderHardenedGauge(sessionId,15000,15000);
   }
 
   setHiderHardenedPose(sessionId: string, pose: number): void {
-    const image = this.players.get(sessionId)?.container.getByName("network-hider-hardened-pose") as Phaser.GameObjects.Image | null;
-    image?.setTexture(`hider-hardened-pose-${Math.max(1, Math.min(5, Math.round(pose)))}`);
+    const image=this.players.get(sessionId)?.container
+      .getByName("network-hider-hardened-pose") as Phaser.GameObjects.Image|null;
+    image?.setTexture(
+      `hider-hardened-pose-${Math.max(1,Math.min(5,Math.round(pose)))}`
+    );
   }
 
   setHiderHardenedLabel(sessionId: string, label: string, emphasis = false): void {
-    const text=this.players.get(sessionId)?.container.getByName("network-hider-hardened-label") as Phaser.GameObjects.Text|null;text?.setText(label).setFontSize(emphasis?23:15);
+    const view=this.players.get(sessionId);
+    const text=this.hardenedOverlayTextBySessionId.get(sessionId);
+    if(!view||!text)return;
+    text.setPosition(view.container.x,view.container.y-120)
+      .setText(label)
+      .setFontSize(emphasis?23:15)
+      .setVisible(true);
   }
 
   setHiderHardenedGauge(sessionId:string,remainingMs:number,totalMs=15000):void {
-    const c=this.players.get(sessionId)?.container;if(!c)return;const q=c.getByName("network-hider-hardened-gauge") as Phaser.GameObjects.Graphics|null,t=c.getByName("network-hider-hardened-gauge-text") as Phaser.GameObjects.Text|null;if(!q||!t)return;const r=Phaser.Math.Clamp(remainingMs/Math.max(1,totalMs),0,1),w=78,h=8,x=-39,y=69;q.clear();q.fillStyle(0x000000,0.82).fillRoundedRect(x-2,y-2,w+4,h+4,4);q.fillStyle(0x252525,1).fillRoundedRect(x,y,w,h,3);const col=r>0.5?0x65f06d:r>0.25?0xffd54a:0xff5b5b;if(r>0)q.fillStyle(col,1).fillRoundedRect(x,y,Math.max(2,w*r),h,3);t.setText(`${Math.max(0,remainingMs/1000).toFixed(1)}s`);
+    const view=this.players.get(sessionId);
+    const gauge=this.hardenedOverlayGaugeBySessionId.get(sessionId);
+    const gaugeText=this.hardenedOverlayGaugeTextBySessionId.get(sessionId);
+    const label=this.hardenedOverlayTextBySessionId.get(sessionId);
+    if(!view||!gauge||!gaugeText)return;
+
+    const now=this.scene.time.now;
+    const shakeUntil=Number(gauge.getData("shakeUntil")??0);
+    const hitUntil=Number(gauge.getData("hitUntil")??0);
+    const shaking=now<shakeUntil;
+
+    const intensity=shaking
+      ?Math.max(1,8*((shakeUntil-now)/340))
+      :0;
+
+    const jitterX=shaking?Math.sin(now*0.18)*intensity:0;
+    const jitterY=shaking?Math.cos(now*0.23)*intensity*0.45:0;
+
+    const cx=view.container.x+jitterX;
+    const cy=view.container.y-84+jitterY;
+    const ratio=Phaser.Math.Clamp(
+      remainingMs/Math.max(1,totalMs),0,1
+    );
+
+    const w=88,h=10,x=-44;
+
+    gauge.setPosition(cx,cy);
+    gauge.clear();
+    gauge.fillStyle(0x000000,0.94)
+      .fillRoundedRect(x-3,-3,w+6,h+6,5);
+    gauge.fillStyle(0x20242a,1)
+      .fillRoundedRect(x,0,w,h,4);
+
+    const col=ratio>0.5?0x65f06d:ratio>0.25?0xffd54a:0xff5252;
+    const fillW=Math.max(0,w*ratio);
+
+    if(fillW>0)
+      gauge.fillStyle(col,1)
+        .fillRoundedRect(x,0,Math.max(2,fillW),h,4);
+
+    if(now<hitUntil){
+      const damageW=w*(1000/Math.max(1,totalMs));
+      const ghostX=x+fillW;
+      const ghostW=Math.max(2,Math.min(damageW,w-fillW));
+      if(ghostW>0)
+        gauge.fillStyle(0xff2525,1)
+          .fillRoundedRect(ghostX,0,ghostW,h,3);
+
+      gauge.lineStyle(2,0xffffff,0.95)
+        .strokeRoundedRect(x-1,-1,w+2,h+2,4);
+    }
+
+    gaugeText
+      .setPosition(cx,cy-11)
+      .setColor(now<hitUntil?"#ff4a4a":"#ffffff")
+      .setText(`${Math.max(0,remainingMs/1000).toFixed(1)}s`);
+
+    label?.setPosition(
+      view.container.x,
+      view.container.y-120
+    );
   }
 
   shakeHiderHardenedGauge(sessionId:string):void {
-    const c=this.players.get(sessionId)?.container;if(!c)return;const q=c.getByName("network-hider-hardened-gauge") as Phaser.GameObjects.Graphics|null,t=c.getByName("network-hider-hardened-gauge-text") as Phaser.GameObjects.Text|null;for(const o of [q,t]){if(!o)continue;this.scene.tweens.killTweensOf(o);o.setX(0);this.scene.tweens.add({targets:o,x:4,duration:24,yoyo:true,repeat:4,onComplete:()=>o.setX(0)});}
+    const view=this.players.get(sessionId);
+    const gauge=this.hardenedOverlayGaugeBySessionId.get(sessionId);
+    const gaugeText=this.hardenedOverlayGaugeTextBySessionId.get(sessionId);
+    if(!view||!gauge||!gaugeText)return;
+
+    const now=this.scene.time.now;
+    gauge.setData("shakeUntil",now+340);
+    gauge.setData("hitUntil",now+320);
+
+    const damage=this.scene.add.text(
+      view.container.x+50,
+      view.container.y-94,
+      "-1.0s",
+      {
+        fontFamily:"Arial Black, sans-serif",
+        fontSize:"15px",fontStyle:"bold",
+        color:"#ff3636",
+        stroke:"#000000",strokeThickness:5
+      }
+    ).setOrigin(0,0.5).setDepth(4403);
+
+    this.scene.tweens.add({
+      targets:damage,
+      y:damage.y-21,
+      x:damage.x+7,
+      alpha:0,
+      scale:1.22,
+      duration:440,
+      ease:"Cubic.Out",
+      onComplete:()=>damage.destroy()
+    });
+
+    this.scene.tweens.killTweensOf(gaugeText);
+    gaugeText.setScale(1.28);
+    this.scene.tweens.add({
+      targets:gaugeText,
+      scale:1,
+      duration:190,
+      ease:"Back.Out"
+    });
   }
 
   getPlayerPosition(
