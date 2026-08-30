@@ -1,3 +1,4 @@
+/* V1010553J_HARDENED_FINAL_CLEANUP: no Hardened text overlay; below-foot 15s gauge with existing hit feedback preserved. */
 /* V1010553H_HARDENED_DEATH_LOBBY_BODY_RESTORE: restore hidden Hider body/paint even when Hardened ends after death, so Lobby reuse cannot stay invisible. */
 /* V1010553G_HARDENED_UI_CAPTURE_CLEANUP: stronger single Hardened taunt label kept above vision darkness. */
 /* V1010553E_HARDENED_REVEAL_UI_ROBUST: top-layer Hardened overlays + 132px aspect-safe pose + strong damage gauge feedback. */
@@ -2073,36 +2074,35 @@ export class NetworkPlayerManager {
   }
 
   setHiderHardenedVisual(sessionId: string, active: boolean, pose = 1, label = ""): void {
-    const view=this.players.get(sessionId);if(!view||view.role!=="hider")return;
+    void label;
+    const view=this.players.get(sessionId);
+    if(!view||view.role!=="hider")return;
+
     const container=view.container;
     const body=container.getByName("network-hider-pixel-body") as Phaser.GameObjects.Image|null;
     let image=container.getByName("network-hider-hardened-pose") as Phaser.GameObjects.Image|null;
 
+    // Any old phrase overlay from earlier builds is forcibly removed.
+    this.hardenedOverlayTextBySessionId?.get(sessionId)?.destroy();
+    this.hardenedOverlayTextBySessionId?.delete(sessionId);
+
     if(!active){
       image?.destroy();
-      this.hardenedOverlayTextBySessionId.get(sessionId)?.destroy();
-      this.hardenedOverlayGaugeBySessionId.get(sessionId)?.destroy();
-      this.hardenedOverlayGaugeTextBySessionId.get(sessionId)?.destroy();
-      this.hardenedOverlayTextBySessionId.delete(sessionId);
-      this.hardenedOverlayGaugeBySessionId.delete(sessionId);
-      this.hardenedOverlayGaugeTextBySessionId.delete(sessionId);
-      /*
-       * v553h:
-       * A Hider can die while Hardened. In that case view.alive is false here,
-       * but the hidden child body/paint visibility still has to be restored
-       * before the same player is reused in Lobby.
-       *
-       * Dead Hunt visibility is still controlled by the parent/player alive
-       * state, so restoring the child layers here does not resurrect the Hider.
-       */
+      this.hardenedOverlayGaugeBySessionId?.get(sessionId)?.destroy();
+      this.hardenedOverlayGaugeTextBySessionId?.get(sessionId)?.destroy();
+      this.hardenedOverlayGaugeBySessionId?.delete(sessionId);
+      this.hardenedOverlayGaugeTextBySessionId?.delete(sessionId);
+
+      // v553h behavior: restore child layers even if the Hider died while Hardened.
       body?.setVisible(true);
       view.paintLayer?.texture.setVisible(true);
       return;
     }
 
-    body?.setVisible(false);view.paintLayer?.texture.setVisible(false);
-    const key=`hider-hardened-pose-${Math.max(1,Math.min(5,Math.round(pose)))}`;
+    body?.setVisible(false);
+    view.paintLayer?.texture.setVisible(false);
 
+    const key=`hider-hardened-pose-${Math.max(1,Math.min(5,Math.round(pose)))}`;
     if(!image){
       image=this.scene.add.image(0,18,key)
         .setOrigin(0.5,0.75)
@@ -2113,17 +2113,6 @@ export class NetworkPlayerManager {
       image.setTexture(key).setVisible(true);
     }
 
-    let text=this.hardenedOverlayTextBySessionId.get(sessionId);
-    if(!text){
-      text=this.scene.add.text(container.x,container.y-120,label,{
-        fontFamily:"Arial Black, sans-serif",
-        fontSize:"15px",fontStyle:"bold",
-        color:"#fff36d",stroke:"#000000",strokeThickness:6,
-        align:"center"
-      }).setOrigin(0.5,1).setDepth(4402);
-      this.hardenedOverlayTextBySessionId.set(sessionId,text);
-    }
-
     let gauge=this.hardenedOverlayGaugeBySessionId.get(sessionId);
     if(!gauge){
       gauge=this.scene.add.graphics().setDepth(4400);
@@ -2132,15 +2121,17 @@ export class NetworkPlayerManager {
 
     let gaugeText=this.hardenedOverlayGaugeTextBySessionId.get(sessionId);
     if(!gaugeText){
-      gaugeText=this.scene.add.text(container.x,container.y-78,"15.0s",{
+      gaugeText=this.scene.add.text(container.x,container.y+82,"15.0s",{
         fontFamily:"Arial Black, sans-serif",
-        fontSize:"11px",fontStyle:"bold",
-        color:"#ffffff",stroke:"#000000",strokeThickness:4
+        fontSize:"10px",
+        fontStyle:"bold",
+        color:"#ffffff",
+        stroke:"#000000",
+        strokeThickness:3
       }).setOrigin(0.5).setDepth(4401);
       this.hardenedOverlayGaugeTextBySessionId.set(sessionId,gaugeText);
     }
 
-    text.setText(label).setFontSize(23).setVisible(true);
     this.setHiderHardenedGauge(sessionId,15000,15000);
   }
 
@@ -2153,23 +2144,17 @@ export class NetworkPlayerManager {
   }
 
   setHiderHardenedLabel(sessionId: string, label: string, emphasis = false): void {
-    const view=this.players.get(sessionId);
-    const text=this.hardenedOverlayTextBySessionId.get(sessionId);
-    if(!view||!text)return;
-    text
-      .setPosition(view.container.x,view.container.y-126)
-      .setText(label)
-      .setFontSize(emphasis?26:16)
-      .setStroke("#000000",7)
-      .setDepth(4402)
-      .setVisible(true);
+    void label;
+    void emphasis;
+    const text=this.hardenedOverlayTextBySessionId?.get(sessionId);
+    text?.destroy();
+    this.hardenedOverlayTextBySessionId?.delete(sessionId);
   }
 
   setHiderHardenedGauge(sessionId:string,remainingMs:number,totalMs=15000):void {
     const view=this.players.get(sessionId);
     const gauge=this.hardenedOverlayGaugeBySessionId.get(sessionId);
     const gaugeText=this.hardenedOverlayGaugeTextBySessionId.get(sessionId);
-    const label=this.hardenedOverlayTextBySessionId.get(sessionId);
     if(!view||!gauge||!gaugeText)return;
 
     const now=this.scene.time.now;
@@ -2182,15 +2167,17 @@ export class NetworkPlayerManager {
       :0;
 
     const jitterX=shaking?Math.sin(now*0.18)*intensity:0;
-    const jitterY=shaking?Math.cos(now*0.23)*intensity*0.45:0;
+    const jitterY=shaking?Math.cos(now*0.23)*intensity*0.40:0;
 
+    // Foot position: muscle sprite bottom is around +51, so +66 leaves a small gap.
     const cx=view.container.x+jitterX;
-    const cy=view.container.y-84+jitterY;
+    const cy=view.container.y+66+jitterY;
+
     const ratio=Phaser.Math.Clamp(
       remainingMs/Math.max(1,totalMs),0,1
     );
 
-    const w=88,h=10,x=-44;
+    const w=82,h=9,x=-41;
 
     gauge.setPosition(cx,cy);
     gauge.clear();
@@ -2202,31 +2189,27 @@ export class NetworkPlayerManager {
     const col=ratio>0.5?0x65f06d:ratio>0.25?0xffd54a:0xff5252;
     const fillW=Math.max(0,w*ratio);
 
-    if(fillW>0)
+    if(fillW>0){
       gauge.fillStyle(col,1)
         .fillRoundedRect(x,0,Math.max(2,fillW),h,4);
+    }
 
     if(now<hitUntil){
       const damageW=w*(1000/Math.max(1,totalMs));
       const ghostX=x+fillW;
       const ghostW=Math.max(2,Math.min(damageW,w-fillW));
-      if(ghostW>0)
+      if(ghostW>0){
         gauge.fillStyle(0xff2525,1)
           .fillRoundedRect(ghostX,0,ghostW,h,3);
-
+      }
       gauge.lineStyle(2,0xffffff,0.95)
         .strokeRoundedRect(x-1,-1,w+2,h+2,4);
     }
 
     gaugeText
-      .setPosition(cx,cy-11)
+      .setPosition(cx,cy+17)
       .setColor(now<hitUntil?"#ff4a4a":"#ffffff")
       .setText(`${Math.max(0,remainingMs/1000).toFixed(1)}s`);
-
-    label?.setPosition(
-      view.container.x,
-      view.container.y-120
-    );
   }
 
   shakeHiderHardenedGauge(sessionId:string):void {
@@ -2240,34 +2223,36 @@ export class NetworkPlayerManager {
     gauge.setData("hitUntil",now+320);
 
     const damage=this.scene.add.text(
-      view.container.x+50,
-      view.container.y-94,
+      view.container.x+46,
+      view.container.y+61,
       "-1.0s",
       {
         fontFamily:"Arial Black, sans-serif",
-        fontSize:"15px",fontStyle:"bold",
+        fontSize:"14px",
+        fontStyle:"bold",
         color:"#ff3636",
-        stroke:"#000000",strokeThickness:5
+        stroke:"#000000",
+        strokeThickness:4
       }
     ).setOrigin(0,0.5).setDepth(4403);
 
     this.scene.tweens.add({
       targets:damage,
-      y:damage.y-21,
-      x:damage.x+7,
+      y:damage.y-20,
+      x:damage.x+6,
       alpha:0,
-      scale:1.22,
-      duration:440,
+      scale:1.18,
+      duration:420,
       ease:"Cubic.Out",
       onComplete:()=>damage.destroy()
     });
 
     this.scene.tweens.killTweensOf(gaugeText);
-    gaugeText.setScale(1.28);
+    gaugeText.setScale(1.22);
     this.scene.tweens.add({
       targets:gaugeText,
       scale:1,
-      duration:190,
+      duration:180,
       ease:"Back.Out"
     });
   }

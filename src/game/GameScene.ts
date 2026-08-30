@@ -1,3 +1,4 @@
+/* V1010553J_HARDENED_FINAL_CLEANUP: remove all Hardened/warning phrases; keep only compact Random Taunt button; gauge moved below feet. */
 /* V1010553I_REMOVE_HARDENED_TEST_BUTTON: remove development-only Hardened direct test UI; keep production random-taunt activation unchanged. */
 /* V1010553G_HARDENED_UI_CAPTURE_CLEANUP: compact rounded local-only taunt button; one strong taunt line; Hardened smoke/muscle excluded from victory capture. */
 /* V1010553F_HARDENED_POSE_CAST_SYNTAX_FIX: wrap optional-chained getByName expression before TypeScript 'as' cast. */
@@ -1268,7 +1269,6 @@ private timerText!: Phaser.GameObjects.Text;
     private selectedHiderSkill: 'paintball' | 'laser' = 'paintball';
     private hiderSkillPickerDom?: HTMLDivElement;
 
-    private hiderTauntWarning?: Phaser.GameObjects.Text;
     private hiderTauntButton?: Phaser.GameObjects.Text;
     private hiderTauntButtonBody?: Phaser.GameObjects.Graphics;
     private hiderTauntButtonShadow?: Phaser.GameObjects.Graphics;
@@ -1321,12 +1321,10 @@ private timerText!: Phaser.GameObjects.Text;
     }
 
     private destroyHiderTauntHud(): void {
-        this.hiderTauntWarning?.destroy();
         this.hiderTauntButton?.destroy();
         this.hiderTauntButtonBody?.destroy();
         this.hiderTauntButtonShadow?.destroy();
         this.hiderTauntButtonHit?.destroy();
-        this.hiderTauntWarning=undefined;
         this.hiderTauntButton=undefined;
         this.hiderTauntButtonBody=undefined;
         this.hiderTauntButtonShadow=undefined;
@@ -1336,38 +1334,30 @@ private timerText!: Phaser.GameObjects.Text;
     private createHiderTauntHud(): void {
         this.destroyHiderTauntHud();
         if(this.phase!=='hunt'||!this.isMultiplayerSession()||!this.networkPlayerManager.isLocalHider())return;
-        const copy=this.getHardenedTauntCopy();
 
-        const warning=this.add.text(0,0,copy.warning,{
-            fontFamily:'Arial Black, sans-serif',
-            fontSize:'11px',
-            color:'#ffdf79',
-            stroke:'#000000',
-            strokeThickness:3,
-            align:'center'
-        }).setOrigin(0.5).setDepth(3900);
+        const copy=this.getHardenedTauntCopy();
 
         const shadow=this.add.graphics().setDepth(3900);
         shadow.fillStyle(0x24070d,0.96);
-        shadow.fillRoundedRect(-58,-13,116,30,15);
+        shadow.fillRoundedRect(-54,-12,108,28,14);
 
         const body=this.add.graphics().setDepth(3901);
         const drawBody=(hover=false,pressed=false)=>{
             body.clear();
             body.fillStyle(hover?0xd8465f:0xb72d47,1);
-            body.fillRoundedRect(-58,-15+(pressed?2:0),116,30,15);
+            body.fillRoundedRect(-54,-14+(pressed?2:0),108,28,14);
             body.lineStyle(2,0xffdf83,1);
-            body.strokeRoundedRect(-58,-15+(pressed?2:0),116,30,15);
+            body.strokeRoundedRect(-54,-14+(pressed?2:0),108,28,14);
         };
         drawBody();
 
-        const hit=this.add.zone(0,0,116,30)
+        const hit=this.add.zone(0,0,108,28)
             .setDepth(3903)
             .setInteractive({useHandCursor:true});
 
         const button=this.add.text(0,0,copy.button,{
             fontFamily:'Arial Black, sans-serif',
-            fontSize:'12px',
+            fontSize:'11px',
             fontStyle:'bold',
             color:'#ffffff',
             stroke:'#52101e',
@@ -1386,7 +1376,6 @@ private timerText!: Phaser.GameObjects.Text;
         hit.on('pointerdown',()=>{drawBody(true,true);button.setY(hit.y+2);});
         hit.on('pointerup',()=>{drawBody(true,false);button.setY(hit.y);activate();});
 
-        this.hiderTauntWarning=warning;
         this.hiderTauntButton=button;
         this.hiderTauntButtonBody=body;
         this.hiderTauntButtonShadow=shadow;
@@ -1395,34 +1384,36 @@ private timerText!: Phaser.GameObjects.Text;
     }
 
     private updateHiderTauntHud(): void {
-        const w=this.hiderTauntWarning,b=this.hiderTauntButton;
-        const body=this.hiderTauntButtonBody,shadow=this.hiderTauntButtonShadow;
+        const b=this.hiderTauntButton;
+        const body=this.hiderTauntButtonBody;
+        const shadow=this.hiderTauntButtonShadow;
         const hit=this.hiderTauntButtonHit;
-        if(!w||!b||!body||!shadow||!hit)return;
+        if(!b||!body||!shadow||!hit)return;
 
         const id=multiplayerClient.getSessionId();
         const local=multiplayerClient.getLocalPlayer();
         const pos=this.networkPlayerManager.getLocalPlayerPosition();
 
-        // Local-Hider self view ONLY. TAB spectator view must never show
-        // the taunt warning/button controls.
-        const show=this.phase==='hunt'&&
-            !this.spectatorSessionId&&
-            Boolean(id&&local?.role==='hider'&&local.alive&&pos&&!this.hardenedEndsAtBySessionId.has(id));
+        const show=this.phase==='hunt' &&
+            !this.spectatorSessionId &&
+            Boolean(
+                id &&
+                local?.role==='hider' &&
+                local.alive &&
+                pos &&
+                !this.hardenedEndsAtBySessionId.has(id)
+            );
 
-        w.setVisible(show);
         b.setVisible(show);
         body.setVisible(show);
         shadow.setVisible(show);
         hit.setVisible(show);
         if(!show||!pos)return;
 
-        // Compact enough that the warning line remains clearly readable.
-        w.setPosition(pos.x,pos.y+46);
-        body.setPosition(pos.x,pos.y+72);
-        shadow.setPosition(pos.x,pos.y+76);
-        hit.setPosition(pos.x,pos.y+72);
-        b.setPosition(pos.x,pos.y+72);
+        body.setPosition(pos.x,pos.y+62);
+        shadow.setPosition(pos.x,pos.y+66);
+        hit.setPosition(pos.x,pos.y+62);
+        b.setPosition(pos.x,pos.y+62);
     }
 
     private showHardenedSmoke(x:number,y:number):void {
@@ -1613,9 +1604,7 @@ private timerText!: Phaser.GameObjects.Text;
         this.networkPlayerManager.setHiderHardenedVisual(
             id,true,state.pose,this.getHardenedTauntCopy().initial
         );
-        this.networkPlayerManager.setHiderHardenedLabel(
-            id,this.getHardenedTauntCopy().initial,true
-        );
+        
 
         const pose=(
             this.networkPlayerManager
@@ -1661,11 +1650,7 @@ private timerText!: Phaser.GameObjects.Text;
         const localEnd=Date.now()+Math.max(0,event.endsAt-event.serverNow);
         this.hardenedEndsAtBySessionId.set(event.sessionId,localEnd);
         this.networkPlayerManager.setHiderHardenedPose(event.sessionId,event.pose);
-        this.networkPlayerManager.setHiderHardenedLabel(
-            event.sessionId,
-            this.getHardenedTauntCopy().initial,
-            true
-        );
+        
         this.networkPlayerManager.shakeHiderHardenedGauge(event.sessionId);
         this.playHardenedTing();
 
@@ -1705,12 +1690,9 @@ private timerText!: Phaser.GameObjects.Text;
 
     private updateHardenedStates():void {
         const now=Date.now();
-        const initial=this.getHardenedTauntCopy().initial;
         for(const[id,end]of this.hardenedEndsAtBySessionId){
             const rem=Math.max(0,end-now);
             this.networkPlayerManager.setHiderHardenedGauge(id,rem,15000);
-            // Keep one strong identity line for the whole transformation.
-            this.networkPlayerManager.setHiderHardenedLabel(id,initial,true);
         }
     }
 
