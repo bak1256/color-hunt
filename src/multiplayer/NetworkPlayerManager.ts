@@ -1,3 +1,4 @@
+/* V1010553G_HARDENED_UI_CAPTURE_CLEANUP: stronger single Hardened taunt label kept above vision darkness. */
 /* V1010553E_HARDENED_REVEAL_UI_ROBUST: top-layer Hardened overlays + 132px aspect-safe pose + strong damage gauge feedback. */
 /* V1010553C_HARDENED_TRANSFORM_BOOM_SMOKE_SCALE: Hardened square pose display reduced 156 -> 132 while preserving 1:1 aspect ratio. */
 /* V1010553A_HARDENED_SQUARE_POSE_ASPECT: all Hardened pose assets are normalized to a 1:1 transparent canvas; display at 156x156 so no pose is stretched. */
@@ -2144,9 +2145,12 @@ export class NetworkPlayerManager {
     const view=this.players.get(sessionId);
     const text=this.hardenedOverlayTextBySessionId.get(sessionId);
     if(!view||!text)return;
-    text.setPosition(view.container.x,view.container.y-120)
+    text
+      .setPosition(view.container.x,view.container.y-126)
       .setText(label)
-      .setFontSize(emphasis?23:15)
+      .setFontSize(emphasis?26:16)
+      .setStroke("#000000",7)
+      .setDepth(4402)
       .setVisible(true);
   }
 

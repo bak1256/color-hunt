@@ -1,3 +1,4 @@
+/* V1010553G_HARDENED_UI_CAPTURE_CLEANUP: compact rounded local-only taunt button; one strong taunt line; Hardened smoke/muscle excluded from victory capture. */
 /* V1010553F_HARDENED_POSE_CAST_SYNTAX_FIX: wrap optional-chained getByName expression before TypeScript 'as' cast. */
 /* V1010553E_HARDENED_REVEAL_UI_ROBUST: structure-based v553c-compatible patch; real button, huge smoke reveal, POOF+roar, overlay taunt/gauge, stronger -1s feedback. */
 /* V1010553C_HARDENED_TRANSFORM_BOOM_SMOKE_SCALE: louder transform/revert POOF, fuller smoke, no sparkles; muscle display reduced to ~1.1x normal. */
@@ -1268,8 +1269,9 @@ private timerText!: Phaser.GameObjects.Text;
 
     private hiderTauntWarning?: Phaser.GameObjects.Text;
     private hiderTauntButton?: Phaser.GameObjects.Text;
-    private hiderTauntButtonBody?: Phaser.GameObjects.Rectangle;
-    private hiderTauntButtonShadow?: Phaser.GameObjects.Rectangle;
+    private hiderTauntButtonBody?: Phaser.GameObjects.Graphics;
+    private hiderTauntButtonShadow?: Phaser.GameObjects.Graphics;
+    private hiderTauntButtonHit?: Phaser.GameObjects.Zone;
     private hiderHardenedTestButton?: Phaser.GameObjects.Text;
     private readonly hardenedEndsAtBySessionId = new Map<string, number>();
     private readonly hardenedNextPhraseAtBySessionId = new Map<string, number>();
@@ -1328,11 +1330,13 @@ private timerText!: Phaser.GameObjects.Text;
         this.hiderTauntButton?.destroy();
         this.hiderTauntButtonBody?.destroy();
         this.hiderTauntButtonShadow?.destroy();
+        this.hiderTauntButtonHit?.destroy();
         this.hiderHardenedTestButton?.destroy();
         this.hiderTauntWarning=undefined;
         this.hiderTauntButton=undefined;
         this.hiderTauntButtonBody=undefined;
         this.hiderTauntButtonShadow=undefined;
+        this.hiderTauntButtonHit=undefined;
         this.hiderHardenedTestButton=undefined;
     }
 
@@ -1342,26 +1346,50 @@ private timerText!: Phaser.GameObjects.Text;
         const copy=this.getHardenedTauntCopy();
 
         const warning=this.add.text(0,0,copy.warning,{
-            fontFamily:'Arial Black, sans-serif',fontSize:'11px',
-            color:'#ffdf79',stroke:'#000000',strokeThickness:3,align:'center'
+            fontFamily:'Arial Black, sans-serif',
+            fontSize:'11px',
+            color:'#ffdf79',
+            stroke:'#000000',
+            strokeThickness:3,
+            align:'center'
         }).setOrigin(0.5).setDepth(3900);
 
-        const shadow=this.add.rectangle(0,4,148,42,0x21060c,0.98)
-            .setStrokeStyle(3,0x000000,1).setDepth(3900);
+        const shadow=this.add.graphics().setDepth(3900);
+        shadow.fillStyle(0x24070d,0.96);
+        shadow.fillRoundedRect(-58,-13,116,30,15);
 
-        const body=this.add.rectangle(0,0,148,42,0xb72d47,1)
-            .setStrokeStyle(3,0xffdf83,1).setDepth(3901)
+        const body=this.add.graphics().setDepth(3901);
+        const drawBody=(hover=false,pressed=false)=>{
+            body.clear();
+            body.fillStyle(hover?0xd8465f:0xb72d47,1);
+            body.fillRoundedRect(-58,-15+(pressed?2:0),116,30,15);
+            body.lineStyle(2,0xffdf83,1);
+            body.strokeRoundedRect(-58,-15+(pressed?2:0),116,30,15);
+        };
+        drawBody();
+
+        const hit=this.add.zone(0,0,116,30)
+            .setDepth(3903)
             .setInteractive({useHandCursor:true});
 
         const button=this.add.text(0,0,copy.button,{
-            fontFamily:'Arial Black, sans-serif',fontSize:'13px',fontStyle:'bold',
-            color:'#ffffff',stroke:'#52101e',strokeThickness:3,align:'center'
+            fontFamily:'Arial Black, sans-serif',
+            fontSize:'12px',
+            fontStyle:'bold',
+            color:'#ffffff',
+            stroke:'#52101e',
+            strokeThickness:3,
+            align:'center'
         }).setOrigin(0.5).setDepth(3902);
 
         const test=this.add.text(0,0,copy.testButton,{
-            fontFamily:'Arial Black, sans-serif',fontSize:'10px',
-            color:'#b8f7ff',backgroundColor:'#182d3fff',
-            padding:{x:7,y:5},stroke:'#000000',strokeThickness:2
+            fontFamily:'Arial Black, sans-serif',
+            fontSize:'10px',
+            color:'#b8f7ff',
+            backgroundColor:'#182d3fff',
+            padding:{x:7,y:5},
+            stroke:'#000000',
+            strokeThickness:2
         }).setOrigin(0.5).setDepth(3901).setInteractive({useHandCursor:true});
 
         const activate=()=>{
@@ -1370,23 +1398,17 @@ private timerText!: Phaser.GameObjects.Text;
             multiplayerClient.sendHiderHardenedTaunt();
         };
 
-        body.on('pointerover',()=>body.setFillStyle(0xd6405a,1));
-        body.on('pointerout',()=>{
-            body.setFillStyle(0xb72d47,1);
-            body.setScale(1);button.setScale(1);
-        });
-        body.on('pointerdown',()=>{
-            body.setScale(0.96);button.setScale(0.96);
-        });
-        body.on('pointerup',()=>{
-            body.setScale(1);button.setScale(1);activate();
-        });
+        hit.on('pointerover',()=>drawBody(true,false));
+        hit.on('pointerout',()=>{drawBody(false,false);button.setY(hit.y);});
+        hit.on('pointerdown',()=>{drawBody(true,true);button.setY(hit.y+2);});
+        hit.on('pointerup',()=>{drawBody(true,false);button.setY(hit.y);activate();});
         test.on('pointerdown',activate);
 
         this.hiderTauntWarning=warning;
         this.hiderTauntButton=button;
         this.hiderTauntButtonBody=body;
         this.hiderTauntButtonShadow=shadow;
+        this.hiderTauntButtonHit=hit;
         this.hiderHardenedTestButton=test;
         this.updateHiderTauntHud();
     }
@@ -1394,28 +1416,38 @@ private timerText!: Phaser.GameObjects.Text;
     private updateHiderTauntHud(): void {
         const w=this.hiderTauntWarning,b=this.hiderTauntButton;
         const body=this.hiderTauntButtonBody,shadow=this.hiderTauntButtonShadow;
-        const t=this.hiderHardenedTestButton;
-        if(!w||!b||!body||!shadow||!t)return;
+        const hit=this.hiderTauntButtonHit,t=this.hiderHardenedTestButton;
+        if(!w||!b||!body||!shadow||!hit||!t)return;
 
         const id=multiplayerClient.getSessionId();
         const local=multiplayerClient.getLocalPlayer();
         const pos=this.networkPlayerManager.getLocalPlayerPosition();
-        const show=this.phase==='hunt'&&Boolean(
-            id&&local?.role==='hider'&&local.alive&&pos&&!this.hardenedEndsAtBySessionId.has(id)
-        );
 
-        w.setVisible(show);b.setVisible(show);body.setVisible(show);shadow.setVisible(show);t.setVisible(show);
+        // Local-Hider self view ONLY. TAB spectator view must never show
+        // the taunt warning/button/test controls.
+        const show=this.phase==='hunt'&&
+            !this.spectatorSessionId&&
+            Boolean(id&&local?.role==='hider'&&local.alive&&pos&&!this.hardenedEndsAtBySessionId.has(id));
+
+        w.setVisible(show);
+        b.setVisible(show);
+        body.setVisible(show);
+        shadow.setVisible(show);
+        hit.setVisible(show);
+        t.setVisible(show);
         if(!show||!pos)return;
 
-        w.setPosition(pos.x,pos.y+48);
-        body.setPosition(pos.x,pos.y+74);
-        shadow.setPosition(pos.x,pos.y+78);
-        b.setPosition(pos.x,pos.y+74);
-        t.setPosition(pos.x,pos.y+108);
+        // Compact enough that the warning line remains clearly readable.
+        w.setPosition(pos.x,pos.y+46);
+        body.setPosition(pos.x,pos.y+72);
+        shadow.setPosition(pos.x,pos.y+76);
+        hit.setPosition(pos.x,pos.y+72);
+        b.setPosition(pos.x,pos.y+72);
+        t.setPosition(pos.x,pos.y+101);
     }
 
     private showHardenedSmoke(x:number,y:number):void {
-        const core=this.add.circle(x,y,68,0xf7f8fa,0.99).setDepth(4305);
+        const core=this.add.circle(x,y,68,0xf7f8fa,0.99).setDepth(4305).setName("hardened-transform-smoke");
         this.tweens.add({
             targets:core,alpha:0,scale:2.15,duration:720,ease:'Quad.Out',
             onComplete:()=>core.destroy()
@@ -1431,7 +1463,7 @@ private timerText!: Phaser.GameObjects.Text;
                 12+Math.random()*21,
                 i%5===0?0xffffff:(i%2===0?0xe7ecf2:0xc4ced8),
                 0.97
-            ).setDepth(4306);
+            ).setDepth(4306).setName("hardened-transform-smoke");
 
             puff.setScale(0.9+Math.random()*0.7);
             this.tweens.add({
@@ -1446,6 +1478,24 @@ private timerText!: Phaser.GameObjects.Text;
                 onComplete:()=>puff.destroy()
             });
         }
+    }
+
+    private clearHardenedCaptureDebris():void {
+        // Victory/social capture must contain the original Hider camouflage only.
+        // Remove any transform/revert smoke still fading on the exact capture frame.
+        this.children.getChildren()
+            .filter((child)=>child.name==="hardened-transform-smoke")
+            .forEach((child)=>child.destroy());
+
+        // Finished/result capture no longer needs the temporary muscle presentation.
+        // This restores the original Hider body/paint and removes taunt/gauge overlays.
+        for(const id of [...this.hardenedEndsAtBySessionId.keys()]){
+            this.networkPlayerManager.setHiderHardenedVisual(id,false);
+        }
+        this.hardenedEndsAtBySessionId.clear();
+        this.hardenedNextPhraseAtBySessionId.clear();
+        this.hardenedPhraseIndexBySessionId.clear();
+        this.destroyHiderTauntHud();
     }
 
     private playHardenedTransformBoom():void {
@@ -1628,13 +1678,61 @@ private timerText!: Phaser.GameObjects.Text;
     }
 
     private applyHardenedHit(event:NetworkHiderHardenedHit):void {
-        if(!this.hardenedEndsAtBySessionId.has(event.sessionId))return;const localEnd=Date.now()+Math.max(0,event.endsAt-event.serverNow);this.hardenedEndsAtBySessionId.set(event.sessionId,localEnd);this.networkPlayerManager.setHiderHardenedPose(event.sessionId,event.pose);this.networkPlayerManager.setHiderHardenedLabel(event.sessionId,'TING!!!');this.networkPlayerManager.shakeHiderHardenedGauge(event.sessionId);this.playHardenedTing();
-        const ring=this.add.circle(event.x,event.y,8,0xffffff,0).setStrokeStyle(3,0xffe66d,1).setDepth(260);const ting=this.add.text(event.x,event.y-18,'TING!',{fontFamily:'Arial Black, sans-serif',fontSize:'17px',color:'#ffffff',stroke:'#000000',strokeThickness:5}).setOrigin(0.5).setDepth(261);this.tweens.add({targets:[ring,ting],alpha:0,scale:1.7,y:'-=8',duration:260,onComplete:()=>{ring.destroy();ting.destroy();}});
-        const container=this.networkPlayerManager.getPlayerContainer(event.sessionId);if(container){this.tweens.killTweensOf(container);const x=container.x;this.tweens.add({targets:container,x:x+2,duration:28,yoyo:true,repeat:3,onComplete:()=>{container.x=x;}});}
+        if(!this.hardenedEndsAtBySessionId.has(event.sessionId))return;
+        const localEnd=Date.now()+Math.max(0,event.endsAt-event.serverNow);
+        this.hardenedEndsAtBySessionId.set(event.sessionId,localEnd);
+        this.networkPlayerManager.setHiderHardenedPose(event.sessionId,event.pose);
+        this.networkPlayerManager.setHiderHardenedLabel(
+            event.sessionId,
+            this.getHardenedTauntCopy().initial,
+            true
+        );
+        this.networkPlayerManager.shakeHiderHardenedGauge(event.sessionId);
+        this.playHardenedTing();
+
+        const ring=this.add.circle(event.x,event.y,8,0xffffff,0)
+            .setStrokeStyle(3,0xffe66d,1).setDepth(260);
+        const ting=this.add.text(event.x,event.y-18,'TING!',{
+            fontFamily:'Arial Black, sans-serif',
+            fontSize:'17px',
+            color:'#ffffff',
+            stroke:'#000000',
+            strokeThickness:5
+        }).setOrigin(0.5).setDepth(261);
+
+        this.tweens.add({
+            targets:[ring,ting],
+            alpha:0,
+            scale:1.7,
+            y:'-=8',
+            duration:260,
+            onComplete:()=>{ring.destroy();ting.destroy();}
+        });
+
+        const container=this.networkPlayerManager.getPlayerContainer(event.sessionId);
+        if(container){
+            this.tweens.killTweensOf(container);
+            const x=container.x;
+            this.tweens.add({
+                targets:container,
+                x:x+2,
+                duration:28,
+                yoyo:true,
+                repeat:3,
+                onComplete:()=>{container.x=x;}
+            });
+        }
     }
 
     private updateHardenedStates():void {
-        const now=Date.now();const copy=this.getHardenedTauntCopy();const phrases=copy.phrases;for(const[id,end]of this.hardenedEndsAtBySessionId){const rem=Math.max(0,end-now);this.networkPlayerManager.setHiderHardenedGauge(id,rem,15000);if(rem<=5000){this.networkPlayerManager.setHiderHardenedLabel(id,copy.muscleLoss(Math.max(1,Math.ceil(rem/1000))));continue;}const nextAt=this.hardenedNextPhraseAtBySessionId.get(id)??0;if(now>=nextAt){const prev=this.hardenedPhraseIndexBySessionId.get(id)??0;const next=(prev+1+Math.floor(Math.random()*Math.max(1,phrases.length-1)))%phrases.length;this.hardenedPhraseIndexBySessionId.set(id,next);this.hardenedNextPhraseAtBySessionId.set(id,now+1750+Math.random()*900);this.networkPlayerManager.setHiderHardenedLabel(id,phrases[next]);}}
+        const now=Date.now();
+        const initial=this.getHardenedTauntCopy().initial;
+        for(const[id,end]of this.hardenedEndsAtBySessionId){
+            const rem=Math.max(0,end-now);
+            this.networkPlayerManager.setHiderHardenedGauge(id,rem,15000);
+            // Keep one strong identity line for the whole transformation.
+            this.networkPlayerManager.setHiderHardenedLabel(id,initial,true);
+        }
     }
 
     private clearAllHardenedVisuals():void {
@@ -46027,6 +46125,9 @@ this.networkUnsubscribers.push(
     private async captureVictoryFrameForRoleShowcase(
         result: NetworkRoundResult,
     ): Promise<HTMLImageElement> {
+        /* V553G_HARDENED_CAPTURE_CLEAN */
+        this.clearHardenedCaptureDebris();
+
         /*
          * V521 POSTER_TACTICAL_SEAL:
          * no spotlight/darkness/orbit/scope may be present in the source frame.
