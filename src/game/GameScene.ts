@@ -1,3 +1,5 @@
+/* V1010552B_HARDENED_TING_AUDIO_TYPE_FIX: narrow Phaser SoundManager before accessing WebAudio AudioContext for Hardened TING SFX. */
+/* V1010552_HIDER_HARDENED_SNIPER_CREATE_FIX: Hardened taunt + sniper single-shot + first-create cold-start fix. */
 /* V1010551_RECONNECT_AUTHORITY_SNIPER_BACKDROP_STABILITY: reconnect input waits for one authoritative Room/player/phase rebase; Sniper outside blur gets a stable compositor fallback and mask-write cache without changing scope geometry. */
 /* V1010550_TACTICAL_CHAT_HIDE_VULCAN_CANCEL_FULL_RESTORE: hide chat throughout local Sniper/Vulcan; restore it after cancel/end; Vulcan cancel now uses Sniper-equivalent 1.5s HUD unlock plus exact gameplay HUD scale normalization. */
 /* V1010549_VULCAN_CANCEL_SLIDE_HUD_RESTORE: Vulcan now mirrors v548 Sniper cancel slide UX; touch-down hides, release reveals, cancel restores normal Hunter HUD and syncs false. */
@@ -122,6 +124,8 @@ import {
     type NetworkSniperState,
     type NetworkSniperAim,
     type NetworkSniperFired,
+    type NetworkHiderHardenedState,
+    type NetworkHiderHardenedHit,
     type NetworkVulcanState,
     type NetworkVulcanAim,
     type NetworkVulcanFired,
@@ -1255,6 +1259,167 @@ private timerText!: Phaser.GameObjects.Text;
     /* V1010452_HIDER_SKILL_PICKER: reusable Hider skill picker foundation. */
     private selectedHiderSkill: 'paintball' | 'laser' = 'paintball';
     private hiderSkillPickerDom?: HTMLDivElement;
+
+    private hiderTauntWarning?: Phaser.GameObjects.Text;
+    private hiderTauntButton?: Phaser.GameObjects.Text;
+    private hiderHardenedTestButton?: Phaser.GameObjects.Text;
+    private readonly hardenedEndsAtBySessionId = new Map<string, number>();
+    private readonly hardenedNextPhraseAtBySessionId = new Map<string, number>();
+    private readonly hardenedPhraseIndexBySessionId = new Map<string, number>();
+    private getHardenedTauntCopy(): {
+        warning: string;
+        button: string;
+        testButton: string;
+        initial: string;
+        phrases: readonly string[];
+        muscleLoss: (seconds: number) => string;
+    } {
+        const language = getLanguage();
+        if (language === 'ja') {
+            return {
+                warning: '⚠ 命がけのランダム挑発',
+                button: '😈 ランダム挑発',
+                testButton: 'TEST 💪 カチカチ化',
+                initial: '俺はカチカチだ!!!',
+                phrases: ['俺はカチカチだ!!!','FLEX~!!!!','さあ撃ってみろ!','これが筋肉だ!','TINGなんてかゆいぜ!'],
+                muscleLoss: (seconds) => `筋肉消失まであと${seconds}秒...`,
+            };
+        }
+        if (language === 'en') {
+            return {
+                warning: '⚠ LIFE-ON-THE-LINE RANDOM TAUNT',
+                button: '😈 RANDOM TAUNT',
+                testButton: 'TEST 💪 HARDEN UP',
+                initial: "I'M ROCK SOLID!!!",
+                phrases: ["I'M ROCK SOLID!!!",'FLEX~!!!!','COME ON, SHOOT ME!','THIS IS MUSCLE!','TING? THAT TICKLES!'],
+                muscleLoss: (seconds) => `MUSCLE LOSS IN ${seconds}...`,
+            };
+        }
+        if (language === 'zh') {
+            return {
+                warning: '⚠ 赌命随机挑衅',
+                button: '😈 随机挑衅',
+                testButton: 'TEST 💪 硬起来',
+                initial: '我硬得很!!!',
+                phrases: ['我硬得很!!!','FLEX~!!!!','来啊，开枪啊!','这就是肌肉!','TING？挠痒痒而已!'],
+                muscleLoss: (seconds) => `肌肉流失还有${seconds}秒...`,
+            };
+        }
+        return {
+            warning: '⚠ 목숨을 건 랜덤 도발',
+            button: '😈 랜덤 도발',
+            testButton: 'TEST 💪 단단해지기',
+            initial: '나는 단단하다!!!',
+            phrases: ['나는 단단하다!!!','FLEX~!!!!','어디 한번 쏴봐!','이게 근육이다!','TING도 간지럽다!'],
+            muscleLoss: (seconds) => `근손실 ${seconds}초 남음...`,
+        };
+    }
+
+    private destroyHiderTauntHud(): void {
+        this.hiderTauntWarning?.destroy(); this.hiderTauntButton?.destroy(); this.hiderHardenedTestButton?.destroy();
+        this.hiderTauntWarning = undefined; this.hiderTauntButton = undefined; this.hiderHardenedTestButton = undefined;
+    }
+
+    private createHiderTauntHud(): void {
+        this.destroyHiderTauntHud();
+        if (this.phase !== 'hunt' || !this.isMultiplayerSession() || !this.networkPlayerManager.isLocalHider()) return;
+        const copy=this.getHardenedTauntCopy();
+        const warning=this.add.text(0,0,copy.warning,{fontFamily:'Arial Black, sans-serif',fontSize:'11px',color:'#ffdf79',stroke:'#000000',strokeThickness:3,align:'center'}).setOrigin(0.5).setDepth(3900);
+        const button=this.add.text(0,0,copy.button,{fontFamily:'Arial Black, sans-serif',fontSize:'13px',color:'#ffffff',backgroundColor:'#ad263cff',padding:{x:9,y:6},stroke:'#000000',strokeThickness:2}).setOrigin(0.5).setDepth(3901).setInteractive({useHandCursor:true});
+        const test=this.add.text(0,0,copy.testButton,{fontFamily:'Arial Black, sans-serif',fontSize:'10px',color:'#b8f7ff',backgroundColor:'#182d3fff',padding:{x:7,y:5},stroke:'#000000',strokeThickness:2}).setOrigin(0.5).setDepth(3901).setInteractive({useHandCursor:true});
+        const activate=()=>{ const id=multiplayerClient.getSessionId(); if (!id || this.hardenedEndsAtBySessionId.has(id)) return; multiplayerClient.sendHiderHardenedTaunt(); };
+        button.on('pointerdown',activate); test.on('pointerdown',activate);
+        this.hiderTauntWarning=warning; this.hiderTauntButton=button; this.hiderHardenedTestButton=test; this.updateHiderTauntHud();
+    }
+
+    private updateHiderTauntHud(): void {
+        const w=this.hiderTauntWarning,b=this.hiderTauntButton,t=this.hiderHardenedTestButton; if(!w||!b||!t)return;
+        const id=multiplayerClient.getSessionId(); const local=multiplayerClient.getLocalPlayer(); const p=this.networkPlayerManager.getLocalPlayerPosition();
+        const show=this.phase==='hunt'&&Boolean(id&&local?.role==='hider'&&local.alive&&p&&!this.hardenedEndsAtBySessionId.has(id));
+        w.setVisible(show); b.setVisible(show); t.setVisible(show); if(!show||!p)return;
+        w.setPosition(p.x,p.y+51); b.setPosition(p.x,p.y+69); t.setPosition(p.x,p.y+92);
+    }
+
+    private showHardenedSmoke(x:number,y:number):void {
+        for(let i=0;i<14;i+=1){ const a=Math.random()*Math.PI*2,d=18+Math.random()*28; const puff=this.add.circle(x,y,5+Math.random()*8,i%3===0?0xeef5ff:0xcbd3dd,0.8).setDepth(195); this.tweens.add({targets:puff,x:x+Math.cos(a)*d,y:y+Math.sin(a)*d,alpha:0,scale:1.8,duration:420+Math.random()*260,ease:'Cubic.Out',onComplete:()=>puff.destroy()}); }
+    }
+
+    private playHardenedTing():void {
+        if(this.time.now<this.suppressEffectsUntil)return;
+        /*
+         * V1010552B_HARDENED_TING_AUDIO_TYPE_FIX
+         * Phaser.Sound.SoundManager is a union of WebAudio / HTML5Audio / NoAudio.
+         * Only WebAudio exposes AudioContext, so narrow at runtime before access.
+         */
+        try {
+            const soundManager = this.sound;
+
+            if (!('context' in soundManager)) {
+                return;
+            }
+
+            const ac =
+                soundManager.context as AudioContext;
+            const oscillator =
+                ac.createOscillator();
+            const gain =
+                ac.createGain();
+
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(
+                1320,
+                ac.currentTime,
+            );
+            oscillator.frequency.exponentialRampToValueAtTime(
+                780,
+                ac.currentTime + 0.075,
+            );
+
+            gain.gain.setValueAtTime(
+                0.0001,
+                ac.currentTime,
+            );
+            gain.gain.exponentialRampToValueAtTime(
+                0.16,
+                ac.currentTime + 0.006,
+            );
+            gain.gain.exponentialRampToValueAtTime(
+                0.0001,
+                ac.currentTime + 0.11,
+            );
+
+            oscillator.connect(gain);
+            gain.connect(ac.destination);
+            oscillator.start();
+            oscillator.stop(
+                ac.currentTime + 0.12,
+            );
+        } catch {
+            // TING SFX is cosmetic; gameplay must continue even if audio is unavailable.
+        }
+    }
+
+    private applyHardenedState(state:NetworkHiderHardenedState):void {
+        const id=state.sessionId;if(!id)return; const p=this.networkPlayerManager.getPlayerPosition(id);
+        if(!state.active){ this.hardenedEndsAtBySessionId.delete(id);this.hardenedNextPhraseAtBySessionId.delete(id);this.hardenedPhraseIndexBySessionId.delete(id);if(p)this.showHardenedSmoke(p.x,p.y);this.networkPlayerManager.setHiderHardenedVisual(id,false);if(id===multiplayerClient.getSessionId())this.networkPlayerManager.setLocalMovementHardLocked(false);this.updateHiderTauntHud();return; }
+        const end=Date.now()+Math.max(0,state.endsAt-state.serverNow);this.hardenedEndsAtBySessionId.set(id,end);this.hardenedNextPhraseAtBySessionId.set(id,Date.now()+1700);this.hardenedPhraseIndexBySessionId.set(id,0);this.networkPlayerManager.setHiderHardenedVisual(id,true,state.pose,this.getHardenedTauntCopy().initial);if(p)this.showHardenedSmoke(p.x,p.y);
+        const pose=this.networkPlayerManager.getPlayerContainer(id)?.getByName('network-hider-hardened-pose'); if(pose){this.tweens.killTweensOf(pose);this.tweens.add({targets:pose,scaleX:1.045,scaleY:0.97,duration:220,yoyo:true,repeat:-1,ease:'Sine.InOut'});}
+        if(id===multiplayerClient.getSessionId())this.networkPlayerManager.setLocalMovementHardLocked(true);this.updateHiderTauntHud();
+    }
+
+    private applyHardenedHit(event:NetworkHiderHardenedHit):void {
+        if(!this.hardenedEndsAtBySessionId.has(event.sessionId))return;this.networkPlayerManager.setHiderHardenedPose(event.sessionId,event.pose);this.networkPlayerManager.setHiderHardenedLabel(event.sessionId,'TING!!!');this.playHardenedTing();
+        const ring=this.add.circle(event.x,event.y,8,0xffffff,0).setStrokeStyle(3,0xffe66d,1).setDepth(260);const ting=this.add.text(event.x,event.y-18,'TING!',{fontFamily:'Arial Black, sans-serif',fontSize:'17px',color:'#ffffff',stroke:'#000000',strokeThickness:5}).setOrigin(0.5).setDepth(261);this.tweens.add({targets:[ring,ting],alpha:0,scale:1.7,y:'-=8',duration:260,onComplete:()=>{ring.destroy();ting.destroy();}});
+        const container=this.networkPlayerManager.getPlayerContainer(event.sessionId);if(container){this.tweens.killTweensOf(container);const x=container.x;this.tweens.add({targets:container,x:x+2,duration:28,yoyo:true,repeat:3,onComplete:()=>{container.x=x;}});}
+    }
+
+    private updateHardenedStates():void {
+        const now=Date.now();const copy=this.getHardenedTauntCopy();const phrases=copy.phrases;for(const[id,end]of this.hardenedEndsAtBySessionId){const rem=Math.max(0,end-now);if(rem<=5000){this.networkPlayerManager.setHiderHardenedLabel(id,copy.muscleLoss(Math.max(1,Math.ceil(rem/1000))));continue;}const nextAt=this.hardenedNextPhraseAtBySessionId.get(id)??0;if(now>=nextAt){const prev=this.hardenedPhraseIndexBySessionId.get(id)??0;const next=(prev+1+Math.floor(Math.random()*Math.max(1,phrases.length-1)))%phrases.length;this.hardenedPhraseIndexBySessionId.set(id,next);this.hardenedNextPhraseAtBySessionId.set(id,now+1750+Math.random()*900);this.networkPlayerManager.setHiderHardenedLabel(id,phrases[next]);}}
+    }
+
+    private clearAllHardenedVisuals():void {
+        for(const id of this.hardenedEndsAtBySessionId.keys())this.networkPlayerManager.setHiderHardenedVisual(id,false);this.hardenedEndsAtBySessionId.clear();this.hardenedNextPhraseAtBySessionId.clear();this.hardenedPhraseIndexBySessionId.clear();if(this.networkPlayerManager.isLocalHider())this.networkPlayerManager.setLocalMovementHardLocked(false);this.destroyHiderTauntHud();
+    }
 
     private destroyHiderSkillPicker(): void {
         this.hiderSkillPickerDom?.remove();
@@ -8261,6 +8426,10 @@ private timerText!: Phaser.GameObjects.Text;
         this.load.audio('footstep', 'assets/audio/footstep.wav');
         this.load.audio('countdown-beep', 'assets/audio/countdown-beep.wav');
         this.load.audio('countdown-start', 'assets/audio/countdown-start.wav');
+        for (let pose = 1; pose <= 3; pose += 1) {
+            this.load.image(`hider-hardened-pose-${pose}`, `/assets/hider-skills/pose${pose}.png`);
+        }
+
         this.load.image(
             'forest-background',
             '/assets/backgrounds/forest-01.png',
@@ -8373,30 +8542,9 @@ private timerText!: Phaser.GameObjects.Text;
                             pending.password,
                     });
 
-            const createTimeout =
-                new Promise<never>(
-                    (
-                        _resolve,
-                        reject,
-                    ) => {
-                        window.setTimeout(
-                            () => {
-                                reject(
-                                    new Error(
-                                        'V1010371_ROOM_CREATE_RECOVERY: room create timed out after 12s',
-                                    ),
-                                );
-                            },
-                            12_000,
-                        );
-                    },
-                );
-
+            /* V1010552_FIRST_ROOM_CREATE_COLD_START_FIX: let Colyseus own cold-start create lifecycle. */
             const room =
-                await Promise.race([
-                    createPromise,
-                    createTimeout,
-                ]);
+                await createPromise;
 
             if (
                 operationSerial !== undefined &&
@@ -9636,6 +9784,8 @@ private timerText!: Phaser.GameObjects.Text;
     }
 
     update(_: number, delta: number): void {
+        this.updateHiderTauntHud();
+        this.updateHardenedStates();
         if (
             this.victoryCaptureCameraLockActive
         ) {
@@ -16189,7 +16339,8 @@ const ribbon =
                     }
 
                     if (shot.shooterId === multiplayerClient.getSessionId()) {
-                        this.sniperReadyAt = shot.readyAt;
+                        const remainingReloadMs = Math.max(0, Number(shot.readyAt) - Number(shot.serverNow));
+                        this.sniperReadyAt = Math.max(this.sniperReadyAt, Date.now() + remainingReloadMs);
                     }
                     if (Number.isFinite(shot.x) && Number.isFinite(shot.y)) {
                         this.showSniperImpact(shot);
@@ -16744,6 +16895,9 @@ const localId =
                 },
             ),
         );
+
+        this.networkUnsubscribers.push(multiplayerClient.onHiderHardenedState((state: NetworkHiderHardenedState) => this.applyHardenedState(state)));
+        this.networkUnsubscribers.push(multiplayerClient.onHiderHardenedHit((event: NetworkHiderHardenedHit) => this.applyHardenedHit(event)));
 
         this.networkUnsubscribers.push(
             multiplayerClient.onPhaseChanged(
@@ -48826,6 +48980,7 @@ const roomPlayers =
                     '.colorhunt-main-hunt-intro',
                 )
                 ?.remove();
+            this.clearAllHardenedVisuals();
         }
 
         this.phaseExpiredSince = 0;
@@ -61050,14 +61205,15 @@ const roomPlayers =
                 }
             }
         } else {
+            /* V1010552_SNIPER_SINGLE_SHOT_CLOCK_SAFE: latch before network send. */
+            this.sniperReadyAt = now + 2000;
             multiplayerClient.sendSniperFire(
                 this.sniperAimWorldX,
                 this.sniperAimWorldY,
             );
         }
 
-        this.sniperReadyAt =
-            now + 2000;
+        if (this.practiceMode === 'hunter') this.sniperReadyAt = now + 2000;
 
         this.playProceduralSniperShot();
 
@@ -73504,6 +73660,10 @@ this.weaponHeat =
          * immediately after Hunt becomes authoritative so GAS 0% is visible.
          */
         this.updateFartHud();
+
+        if (this.isMultiplayerSession() && this.networkPlayerManager.isLocalHider()) {
+            this.createHiderTauntHud();
+        }
 
         if (this.isMultiplayerSession()) {
             /*
