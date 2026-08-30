@@ -188,6 +188,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010542_SNIPER_CANCEL_SCOPE_SMOOTH_LOADING: ESC/mobile cancel after sniper cinematic; 1.5x optics; smooth Hider spectator scope; calm LOADING dots. */
     /* V1010452O2_STALE_CHAT_MOBILE_READY_EXACT */
     /* V1010452N3_RESTORE_HIDER_CORE_PC_MOBILE_PARITY */
     /* V1010452N_SEAL_HIDER_BATTLE_SKILLS_RESTORE_VISION */
@@ -994,6 +995,11 @@ export class GameScene extends Phaser.Scene {
     private sniperButton?: Phaser.GameObjects.Container;
     private sniperButtonBg?: Phaser.GameObjects.Rectangle;
     private sniperButtonText?: Phaser.GameObjects.Text;
+    private sniperCancelButton?: Phaser.GameObjects.Container;
+    private sniperCancelButtonBg?: Phaser.GameObjects.Rectangle;
+    private sniperCancelButtonText?: Phaser.GameObjects.Text;
+    private sniperCancelHintText?: Phaser.GameObjects.Text;
+    private sniperCancelKey?: Phaser.Input.Keyboard.Key;
     /* V1010507_TACTICAL_VULCAN_AIR_SUPPORT */
     private vulcanActive = false;
     private tacticalSupportChosenThisHunt = false;
@@ -5450,23 +5456,16 @@ private timerText!: Phaser.GameObjects.Text;
                             this.gameHeight,
                         );
 
-                    const sniperWorld =
-                        this.cameras.main
-                            .getWorldPoint(
-                                this.sniperScopeScreenX,
-                                this.sniperScopeScreenY,
-                            );
-
                     this.sniperAimWorldX =
                         Phaser.Math.Clamp(
-                            sniperWorld.x,
+                            this.sniperScopeScreenX,
                             0,
                             this.gameWidth,
                         );
 
                     this.sniperAimWorldY =
                         Phaser.Math.Clamp(
-                            sniperWorld.y,
+                            this.sniperScopeScreenY,
                             0,
                             this.gameHeight,
                         );
@@ -7990,7 +7989,7 @@ private timerText!: Phaser.GameObjects.Text;
             this.add.text(
                 this.gameWidth / 2,
                 this.gameHeight / 2 - 20,
-                'LOADING...',
+                'LOADING.',
                 {
                     fontFamily:
                         'Arial, sans-serif',
@@ -8046,7 +8045,21 @@ private timerText!: Phaser.GameObjects.Text;
                 .setDepth(100002)
                 .setScrollFactor(0);
 
-        let loadingPulse = 0;
+        let loadingPulse = 1;
+        const loadingPulseTimer = window.setInterval(
+            () => {
+                loadingPulse =
+                    loadingPulse >= 3
+                        ? 1
+                        : loadingPulse + 1;
+
+                loadingText.setText(
+                    'LOADING' +
+                    '.'.repeat(loadingPulse),
+                );
+            },
+            450,
+        );
 
         this.load.on(
             'progress',
@@ -8076,29 +8089,10 @@ private timerText!: Phaser.GameObjects.Text;
             },
         );
 
-        this.load.on(
-            'fileprogress',
-            () => {
-                loadingPulse =
-                    (
-                        loadingPulse +
-                        1
-                    ) % 4;
-
-                loadingText.setText(
-                    'LOADING' +
-                    '.'.repeat(
-                        loadingPulse === 0
-                            ? 3
-                            : loadingPulse,
-                    ),
-                );
-            },
-        );
-
         this.load.once(
             'complete',
             () => {
+                window.clearInterval(loadingPulseTimer);
                 loadingBg.destroy();
                 loadingText.destroy();
                 loadingSubtext.destroy();
@@ -60646,21 +60640,21 @@ if (
                 this.gameHeight,
             );
 
-        const world =
-            pointer.positionToCamera(
-                this.cameras.main,
-            ) as Phaser.Math.Vector2;
-
+        /*
+         * Interactive sniper runs on the full-map camera (zoom 1 / scroll 0).
+         * Use the scope's own screen position as authoritative world aim so the
+         * reticle can reach x=0..gameWidth and y=0..gameHeight exactly.
+         */
         this.sniperAimWorldX =
             Phaser.Math.Clamp(
-                world.x,
+                this.sniperScopeScreenX,
                 0,
                 this.gameWidth,
             );
 
         this.sniperAimWorldY =
             Phaser.Math.Clamp(
-                world.y,
+                this.sniperScopeScreenY,
                 0,
                 this.gameHeight,
             );
@@ -60889,6 +60883,237 @@ if (
     }
 
     /* RESTORE_SNIPER_EXACT_E43DCB5_LOCAL_SUBSYSTEM: exact local sniper subsystem restored from git e43dcb5. */
+    private ensureSniperCancelUi(): void {
+        if (!this.sniperCancelHintText) {
+            this.sniperCancelHintText =
+                this.add.text(
+                    this.gameWidth / 2,
+                    this.gameHeight - 22,
+                    '',
+                    {
+                        fontFamily: 'Arial, sans-serif',
+                        fontSize: '16px',
+                        fontStyle: 'bold',
+                        color: '#fff4f4',
+                        backgroundColor: 'rgba(30,8,8,.84)',
+                        padding: { x: 12, y: 7 },
+                        stroke: '#1b0505',
+                        strokeThickness: 2,
+                    },
+                )
+                    .setOrigin(0.5)
+                    .setScrollFactor(0)
+                    .setDepth(25120)
+                    .setVisible(false);
+        }
+
+        if (!this.sniperCancelButton) {
+            const buttonWidth = 176;
+            const buttonHeight = 44;
+            const bg =
+                this.add.rectangle(
+                    0,
+                    0,
+                    buttonWidth,
+                    buttonHeight,
+                    0x5a1717,
+                    0.98,
+                )
+                    .setStrokeStyle(
+                        2,
+                        0xff9a90,
+                        0.98,
+                    );
+
+            const label =
+                this.add.text(
+                    0,
+                    0,
+                    '✕ 취소',
+                    {
+                        fontFamily: 'Arial, sans-serif',
+                        fontSize: '15px',
+                        fontStyle: 'bold',
+                        color: '#ffffff',
+                        stroke: '#260606',
+                        strokeThickness: 2,
+                    },
+                )
+                    .setOrigin(0.5);
+
+            const button =
+                this.add.container(
+                    this.gameWidth / 2,
+                    this.gameHeight - 34,
+                    [bg, label],
+                )
+                    .setDepth(25120)
+                    .setScrollFactor(0)
+                    .setSize(
+                        buttonWidth,
+                        buttonHeight,
+                    )
+                    .setInteractive({
+                        useHandCursor: true,
+                    })
+                    .setVisible(false);
+
+            button.on(
+                'pointerdown',
+                (pointer: Phaser.Input.Pointer) => {
+                    pointer.event?.preventDefault?.();
+                    pointer.event?.stopPropagation?.();
+                    this.requestSniperCancel();
+                },
+            );
+
+            this.sniperCancelButton = button;
+            this.sniperCancelButtonBg = bg;
+            this.sniperCancelButtonText = label;
+        }
+
+        if (!this.sniperCancelKey && this.input.keyboard) {
+            this.sniperCancelKey =
+                this.input.keyboard.addKey(
+                    Phaser.Input.Keyboard.KeyCodes.ESC,
+                );
+
+            this.sniperCancelKey.on(
+                'down',
+                () => {
+                    this.requestSniperCancel();
+                },
+            );
+        }
+    }
+
+    private refreshSniperCancelUi(): void {
+        this.ensureSniperCancelUi();
+
+        const canCancel =
+            this.phase === 'hunt' &&
+            this.sniperActive &&
+            this.sniperScopeInteractive;
+
+        const language = getLanguage();
+
+        this.sniperCancelHintText
+            ?.setText(
+                language === 'ja'
+                    ? 'ESCを押すと狙撃モードを解除'
+                    : language === 'en'
+                        ? 'Press ESC to cancel sniper mode'
+                        : language === 'zh'
+                            ? '按 ESC 取消狙击模式'
+                            : 'ESC를 누르면 저격 모드 취소',
+            )
+            .setVisible(
+                canCancel &&
+                !this.mobileControlsEnabled,
+            );
+
+        this.sniperCancelButtonText
+            ?.setText(
+                language === 'ja'
+                    ? '✕ キャンセル'
+                    : language === 'en'
+                        ? '✕ CANCEL'
+                        : language === 'zh'
+                            ? '✕ 取消'
+                            : '✕ 취소',
+            );
+
+        if (this.sniperCancelButtonBg) {
+            this.sniperCancelButtonBg.setFillStyle(
+                0x5a1717,
+                0.98,
+            );
+        }
+
+        if (this.sniperCancelButton) {
+            this.sniperCancelButton
+                .setPosition(
+                    this.gameWidth / 2,
+                    this.gameHeight - 34,
+                )
+                .setVisible(
+                    canCancel &&
+                    this.mobileControlsEnabled,
+                );
+
+            if (
+                canCancel &&
+                this.mobileControlsEnabled
+            ) {
+                if (this.sniperCancelButton.input) {
+                    this.sniperCancelButton.input.enabled = true;
+                } else {
+                    this.sniperCancelButton.setInteractive({
+                        useHandCursor: true,
+                    });
+                }
+            } else {
+                this.sniperCancelButton.disableInteractive();
+            }
+        }
+    }
+
+    private hideSniperCancelUi(): void {
+        this.sniperCancelHintText
+            ?.setVisible(false);
+        this.sniperCancelButton
+            ?.disableInteractive()
+            .setVisible(false);
+    }
+
+    private requestSniperCancel(): void {
+        /*
+         * Cinematic is deliberately NOT cancellable.
+         * The cancel contract begins only after the physical scope rack-in has
+         * completed and sniperScopeInteractive becomes true.
+         */
+        if (
+            this.phase !== 'hunt' ||
+            !this.sniperActive ||
+            !this.sniperScopeInteractive
+        ) {
+            return;
+        }
+
+        this.hideSniperCancelUi();
+        this.sniperButtonPressBlockUntil =
+            Date.now() + 350;
+
+        /*
+         * Consume the ultimate permanently for this Hunt, but restore every
+         * normal Hunter control/vision path immediately.
+         */
+        this.sniperActive = false;
+        this.sniperAvailable = false;
+
+        this.networkPlayerManager
+            .setLocalHunterSpeedMultiplier(1);
+        this.networkPlayerManager
+            .setLocalMovementHardLocked(false);
+
+        this.exitSniperCinematic();
+
+        const anotherTacticalSupportActive =
+            this.remoteSniperActiveSessionIds.size > 0 ||
+            this.remoteVulcanActiveSessionIds.size > 0 ||
+            this.vulcanActive;
+
+        if (!anotherTacticalSupportActive) {
+            this.stopSniperTacticalBgm(true);
+        }
+
+        if (this.practiceMode !== 'hunter') {
+            multiplayerClient.sendSniperToggle(false);
+        }
+
+        this.refreshSniperSupportUi();
+    }
+
     private enterSniperCinematic(): void {
         this.applyTacticalSupportInputLock();
 
@@ -61432,8 +61657,8 @@ if (
          */
         this.sniperScopeRadius =
             this.mobileControlsEnabled
-                ? 194
-                : 325;
+                ? 291
+                : 488;
 
         this.sniperScopeScreenX =
             this.gameWidth /
@@ -61526,6 +61751,7 @@ if (
     }
 
     private exitSniperCinematic(): void {
+        this.hideSniperCancelUi();
         if (!this.sniperCinematicActive) return;
         this.sniperCinematicActive = false;
         this.sniperScopeInteractive = false;
@@ -63730,205 +63956,123 @@ if (
     private drawRemoteSniperScope(
         aim: NetworkSniperAim,
     ): void {
-        /*
-         * V1010501E_NEXT_ROUND_SNIPER_SPECTATOR_HARD_RESET / LATE_SNIPER_AIM_PACKET_GUARD
-         *
-         * A delayed sniper_aim from the just-finished round may arrive while
-         * Lobby/Paint/Countdown is already active. Ignore it completely.
-         */
         if (this.phase !== 'hunt') {
             return;
         }
 
-        /*
-         * V1010500_PAINT_BUBBLE_VICTORY_FONT_SNIPER_SPECTATE / REMOTE_SCOPE_CAMERA_TARGET
-         * The same authoritative sniper_aim that draws the reticle also drives
-         * the Hider spectator camera.
-         */
         if (
-            Number.isFinite(aim.x) &&
-            Number.isFinite(aim.y)
+            !Number.isFinite(aim.x) ||
+            !Number.isFinite(aim.y)
         ) {
+            return;
+        }
+
+        const clampedX =
+            Phaser.Math.Clamp(
+                aim.x,
+                0,
+                this.gameWidth,
+            );
+        const clampedY =
+            Phaser.Math.Clamp(
+                aim.y,
+                0,
+                this.gameHeight,
+            );
+
+        let displayAim =
+            this.remoteSniperAimBySessionId
+                .get(aim.sessionId);
+
+        if (!displayAim) {
+            displayAim = {
+                x: clampedX,
+                y: clampedY,
+            };
             this.remoteSniperAimBySessionId
                 .set(
                     aim.sessionId,
-                    {
-                        x: aim.x,
-                        y: aim.y,
-                    },
+                    displayAim,
                 );
+        } else {
+            this.tweens.killTweensOf(displayAim);
+            this.tweens.add({
+                targets: displayAim,
+                x: clampedX,
+                y: clampedY,
+                duration: 115,
+                ease: 'Sine.easeOut',
+            });
         }
 
         let g =
             this.remoteSniperScopes
-                .get(
-                    aim.sessionId,
-                );
+                .get(aim.sessionId);
 
         if (!g) {
             g =
                 this.add.graphics()
-                    .setDepth(1190);
+                    .setDepth(1190)
+                    .setPosition(
+                        displayAim.x,
+                        displayAim.y,
+                    );
 
             this.remoteSniperScopes
                 .set(
                     aim.sessionId,
                     g,
                 );
+
+            g.clear();
+            g.setAlpha(0.70);
+
+            /* 58 -> 87 = exact 1.5x Hider spectator reticle buff. */
+            const radius = 87;
+            const outer = 108;
+            const inner = 27;
+
+            g.fillStyle(0xff2436, 0.10);
+            g.fillCircle(0, 0, radius);
+
+            g.lineStyle(7, 0x050505, 1);
+            g.strokeCircle(0, 0, radius + 3);
+            g.lineStyle(4, 0xff3348, 1);
+            g.strokeCircle(0, 0, radius);
+
+            g.lineStyle(7, 0x050505, 1);
+            g.lineBetween(-outer, 0, -inner, 0);
+            g.lineBetween(inner, 0, outer, 0);
+            g.lineBetween(0, -outer, 0, -inner);
+            g.lineBetween(0, inner, 0, outer);
+
+            g.lineStyle(3, 0xff3348, 1);
+            g.lineBetween(-outer, 0, -inner, 0);
+            g.lineBetween(inner, 0, outer, 0);
+            g.lineBetween(0, -outer, 0, -inner);
+            g.lineBetween(0, inner, 0, outer);
+
+            g.lineStyle(5, 0x050505, 1);
+            g.strokeCircle(0, 0, 15);
+            g.lineStyle(2, 0xffd7dc, 1);
+            g.strokeCircle(0, 0, 11);
+            g.fillStyle(0xff3348, 1);
+            g.fillCircle(0, 0, 5);
         }
 
-        g.clear();
-        g.setAlpha(0.70);
-
-        const radius =
-            58;
-
-        const outer =
-            72;
-
-        const inner =
-            18;
-
-        g.fillStyle(
-            0xff2436,
-            0.10,
-        );
-
-        g.fillCircle(
-            aim.x,
-            aim.y,
-            radius,
-        );
-
-        g.lineStyle(
-            7,
-            0x050505,
-            1,
-        );
-
-        g.strokeCircle(
-            aim.x,
-            aim.y,
-            radius + 2,
-        );
-
-        g.lineStyle(
-            4,
-            0xff3348,
-            1,
-        );
-
-        g.strokeCircle(
-            aim.x,
-            aim.y,
-            radius,
-        );
-
         /*
-         * Black backing + red crosshair.
+         * Packets arrive much slower than render frames. Tween the displayed
+         * reticle to each new authoritative aim so Hiders see continuous motion
+         * rather than packet-by-packet stepping.
          */
-        g.lineStyle(
-            7,
-            0x050505,
-            1,
-        );
-
-        g.lineBetween(
-            aim.x - outer,
-            aim.y,
-            aim.x - inner,
-            aim.y,
-        );
-
-        g.lineBetween(
-            aim.x + inner,
-            aim.y,
-            aim.x + outer,
-            aim.y,
-        );
-
-        g.lineBetween(
-            aim.x,
-            aim.y - outer,
-            aim.x,
-            aim.y - inner,
-        );
-
-        g.lineBetween(
-            aim.x,
-            aim.y + inner,
-            aim.x,
-            aim.y + outer,
-        );
-
-        g.lineStyle(
-            3,
-            0xff3348,
-            1,
-        );
-
-        g.lineBetween(
-            aim.x - outer,
-            aim.y,
-            aim.x - inner,
-            aim.y,
-        );
-
-        g.lineBetween(
-            aim.x + inner,
-            aim.y,
-            aim.x + outer,
-            aim.y,
-        );
-
-        g.lineBetween(
-            aim.x,
-            aim.y - outer,
-            aim.x,
-            aim.y - inner,
-        );
-
-        g.lineBetween(
-            aim.x,
-            aim.y + inner,
-            aim.x,
-            aim.y + outer,
-        );
-
-        g.lineStyle(
-            5,
-            0x050505,
-            1,
-        );
-
-        g.strokeCircle(
-            aim.x,
-            aim.y,
-            10,
-        );
-
-        g.lineStyle(
-            2,
-            0xffd7dc,
-            1,
-        );
-
-        g.strokeCircle(
-            aim.x,
-            aim.y,
-            7,
-        );
-
-        g.fillStyle(
-            0xff3348,
-            1,
-        );
-
-        g.fillCircle(
-            aim.x,
-            aim.y,
-            3,
-        );
+        this.tweens.killTweensOf(g);
+        this.tweens.add({
+            targets: g,
+            x: clampedX,
+            y: clampedY,
+            duration: 115,
+            ease: 'Sine.easeOut',
+        });
     }
         /* V1010479B_ROBUST_LOBBY_ASSIST_SNIPER scope-alpha-confirmed */
 
@@ -64078,6 +64222,8 @@ if (
             .setLocalMovementHardLocked(
                 true,
             );
+
+        this.refreshSniperCancelUi();
 
         /*
          * V1010455B_SNIPER_PC_MOBILE_RENDER_SPLIT_SAFE
