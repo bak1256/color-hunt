@@ -1,3 +1,4 @@
+/* V1010557B_TAUNT_UI_CANCEL_GUIDE_POLISH_CLIENT_SOURCEWIDE: robust spectator gate; smoke cancel parity, no-repeat-friendly UI, right-side cancel/tip, Hardened hint below gauge, Triple Teleport spectator cleanup, tight first guide. */
 /* V1010556_HIDER_LONG_SKILL_CANCEL_FIRST_GUIDE_CLIENT: ESC/mobile cancel for Hardened + Clone Dance; invincibility bubble; no-scroll two-role first guide. */
 /* V1010555G_REMOVE_CLONE_DANCE_TEST_BUTTON: temporary Clone Dance Party TEST button removed; production Random Taunt skill unchanged. */
 /* V1010555F_CLONE_DANCE_FIXED_OWNER_BGM_RESUME_CLIENT: real Hider X/Y stays fixed; Disco restores exact prior BGM; victory-card cleanup barriers verified. */
@@ -1628,20 +1629,48 @@ private timerText!: Phaser.GameObjects.Text;
         b.setPosition(pos.x,pos.y+62);
 
         if(tipBubble&&tipTitle&&tipBody){
-            const cx=pos.x;
-            const top=pos.y+88;
-            tipBubble.setPosition(cx,top);
-            tipBubble.clear();
-            tipBubble.fillStyle(0xfffbec,1);
-            tipBubble.lineStyle(3,0x2c171d,1);
-            tipBubble.fillRoundedRect(-104,0,208,56,11);
-            tipBubble.strokeRoundedRect(-104,0,208,56,11);
-            tipBubble.fillTriangle(-9,0,9,0,0,-9);
-            tipBubble.lineBetween(-9,0,0,-9);
-            tipBubble.lineBetween(0,-9,9,0);
+            if(this.mobileControlsEnabled){
+                const view=this.cameras.main.worldView;
+                const desiredRight=pos.x+155;
+                const useRight=desiredRight+112<=view.right-6;
+                const cx=useRight?desiredRight:pos.x-155;
+                const cy=pos.y+42;
 
-            tipTitle.setPosition(cx,top+16);
-            tipBody.setPosition(cx,top+38);
+                tipBubble.setPosition(cx,cy);
+                tipBubble.clear();
+                tipBubble.fillStyle(0xfffbec,1);
+                tipBubble.lineStyle(3,0x2c171d,1);
+                tipBubble.fillRoundedRect(-104,-28,208,56,11);
+                tipBubble.strokeRoundedRect(-104,-28,208,56,11);
+
+                /* Side tail points back toward the Random Taunt button/Hider. */
+                if(useRight){
+                    tipBubble.fillTriangle(-104,-9,-104,9,-119,0);
+                    tipBubble.lineBetween(-104,-9,-119,0);
+                    tipBubble.lineBetween(-119,0,-104,9);
+                }else{
+                    tipBubble.fillTriangle(104,-9,104,9,119,0);
+                    tipBubble.lineBetween(104,-9,119,0);
+                    tipBubble.lineBetween(119,0,104,9);
+                }
+
+                tipTitle.setPosition(cx,cy-11);
+                tipBody.setPosition(cx,cy+12);
+            }else{
+                const cx=pos.x;
+                const top=pos.y+88;
+                tipBubble.setPosition(cx,top);
+                tipBubble.clear();
+                tipBubble.fillStyle(0xfffbec,1);
+                tipBubble.lineStyle(3,0x2c171d,1);
+                tipBubble.fillRoundedRect(-104,0,208,56,11);
+                tipBubble.strokeRoundedRect(-104,0,208,56,11);
+                tipBubble.fillTriangle(-9,0,9,0,0,-9);
+                tipBubble.lineBetween(-9,0,0,-9);
+                tipBubble.lineBetween(0,-9,9,0);
+                tipTitle.setPosition(cx,top+16);
+                tipBody.setPosition(cx,top+38);
+            }
         }
 
     }
@@ -4669,7 +4698,7 @@ private timerText!: Phaser.GameObjects.Text;
         if(!pos)return;
 
         if(existing){
-            existing.setPosition(pos.x,pos.y-57).setVisible(true);
+            existing.setPosition(pos.x,pos.y+116).setVisible(true);
             return;
         }
 
@@ -4695,18 +4724,19 @@ private timerText!: Phaser.GameObjects.Text;
         bg.lineStyle(2,0x3e9c62,0.96);
         bg.fillRoundedRect(-width/2,-height/2,width,height,8);
         bg.strokeRoundedRect(-width/2,-height/2,width,height,8);
+        /* v557: bubble is BELOW the gauge, so the tail points UP. */
         bg.fillStyle(0xf1ffe9,0.98);
-        bg.fillTriangle(-6,height/2-1,6,height/2-1,0,height/2+7);
+        bg.fillTriangle(-7,-height/2+1,7,-height/2+1,0,-height/2-8);
         bg.lineStyle(1,0x3e9c62,0.90);
         bg.beginPath();
-        bg.moveTo(-6,height/2-1);
-        bg.lineTo(0,height/2+7);
-        bg.lineTo(6,height/2-1);
+        bg.moveTo(-7,-height/2+1);
+        bg.lineTo(0,-height/2-8);
+        bg.lineTo(7,-height/2+1);
         bg.strokePath();
 
         const bubble=this.add.container(
             pos.x,
-            pos.y-57,
+            pos.y+116,
             [bg,label],
         )
             .setDepth(4405)
@@ -4723,7 +4753,7 @@ private timerText!: Phaser.GameObjects.Text;
             const pos=this.networkPlayerManager.getPlayerPosition(sessionId);
             const bubble=this.hardenedInvincibleHintBySessionId.get(sessionId);
             if(pos&&bubble){
-                bubble.setPosition(pos.x,pos.y-57).setVisible(true);
+                bubble.setPosition(pos.x,pos.y+116).setVisible(true);
             }
         }
 
@@ -4743,31 +4773,49 @@ private timerText!: Phaser.GameObjects.Text;
                 zIndex:'2147483647',
                 display:'none',
                 left:'50%',
-                bottom:'18px',
-                transform:'translateX(-50%)',
-                flexDirection:'column',
+                top:'50%',
+                transform:'translate(-50%,-50%)',
                 alignItems:'center',
-                gap:'7px',
+                justifyContent:'center',
                 pointerEvents:'none',
                 fontFamily:'Arial, "Noto Sans KR", "Noto Sans JP", sans-serif',
             });
 
             const hint=document.createElement('div');
             Object.assign(hint.style,{
+                position:'relative',
                 display:'none',
-                padding:'7px 12px',
-                borderRadius:'10px',
-                border:'1px solid rgba(255,185,185,.88)',
-                background:'rgba(34,8,8,.92)',
-                color:'#fff7f7',
-                fontSize:'14px',
-                fontWeight:'800',
-                lineHeight:'1.2',
+                padding:'10px 15px',
+                borderRadius:'12px',
+                border:'2px solid rgba(91,35,35,.96)',
+                background:'rgba(255,248,242,.98)',
+                color:'#3b1717',
+                fontSize:'17px',
+                fontWeight:'950',
+                lineHeight:'1.15',
                 whiteSpace:'nowrap',
-                textShadow:'0 1px 2px rgba(0,0,0,.9)',
-                boxShadow:'0 5px 16px rgba(0,0,0,.32)',
+                textShadow:'0 1px 0 rgba(255,255,255,.75)',
+                boxShadow:'0 6px 18px rgba(0,0,0,.28)',
                 pointerEvents:'none',
             });
+
+            const hintText=document.createElement('span');
+            hintText.dataset.hiderCancelText='1';
+            const hintTail=document.createElement('span');
+            hintTail.dataset.hiderCancelTail='1';
+            Object.assign(hintTail.style,{
+                position:'absolute',
+                left:'-8px',
+                top:'50%',
+                width:'14px',
+                height:'14px',
+                transform:'translateY(-50%) rotate(45deg)',
+                background:'rgba(255,248,242,.98)',
+                borderLeft:'2px solid rgba(91,35,35,.96)',
+                borderBottom:'2px solid rgba(91,35,35,.96)',
+                boxSizing:'border-box',
+            });
+            hint.append(hintText,hintTail);
 
             const button=document.createElement('button');
             button.type='button';
@@ -4867,7 +4915,7 @@ private timerText!: Phaser.GameObjects.Text;
         }
 
         if(danceActive){
-            this.finishCloneDanceParty(id,false);
+            this.finishCloneDanceParty(id,true);
         }
 
         this.setHiderRandomTauntSkillBusy(false);
@@ -4901,18 +4949,16 @@ private timerText!: Phaser.GameObjects.Text;
         if(!root||!hint||!button)return;
 
         const language=getLanguage();
-        const skillName=hardenedActive
-            ? language==='ja'?'カチカチ化':language==='en'?'Harden Up':language==='zh'?'硬化':'단단해지기'
-            : language==='ja'?'分身ダンスパーティー':language==='en'?'Clone Dance Party':language==='zh'?'分身舞会':'그림자 분신 댄스파티';
-
-        hint.textContent=
+        const desktopCopy=
             language==='ja'
-                ? 'ESCで'+skillName+'をキャンセル'
+                ? 'ESCで挑発キャンセル'
                 : language==='en'
-                    ? 'Press ESC to cancel '+skillName
+                    ? 'ESC: cancel taunt'
                     : language==='zh'
-                        ? '按 ESC 取消'+skillName
-                        : 'ESC를 누르면 '+skillName+' 취소';
+                        ? 'ESC取消挑衅'
+                        : 'ESC로 도발 취소';
+        const hintText=hint.querySelector<HTMLElement>('[data-hider-cancel-text]');
+        if(hintText)hintText.textContent=desktopCopy;
 
         button.textContent=
             language==='ja'
@@ -4923,9 +4969,66 @@ private timerText!: Phaser.GameObjects.Text;
                         ? '✕ 取消'
                         : '✕ 취소';
 
+        const pos=this.networkPlayerManager.getLocalPlayerPosition();
         const canvasRect=this.game.canvas.getBoundingClientRect();
-        root.style.left=String(Math.round(canvasRect.left+canvasRect.width/2))+'px';
-        root.style.bottom=String(Math.max(14,Math.round(window.innerHeight-canvasRect.bottom+18)))+'px';
+        if(!pos||canvasRect.width<=0||canvasRect.height<=0){
+            root.style.display='none';
+            return;
+        }
+
+        const camera=this.cameras.main;
+        const worldView=camera.worldView;
+        const gameScreenX=
+            camera.x+
+            (pos.x-worldView.x)*camera.zoom;
+        const gameScreenY=
+            camera.y+
+            (pos.y-worldView.y)*camera.zoom;
+
+        /* v557: both desktop hint and mobile button prefer the Hider's RIGHT. */
+        const offsetX=this.mobileControlsEnabled?166:150;
+        const offsetY=this.mobileControlsEnabled?34:8;
+        const halfWidth=this.mobileControlsEnabled?92:105;
+        const halfHeight=this.mobileControlsEnabled?28:26;
+        const desiredRight=gameScreenX+offsetX;
+        const hasRightRoom=desiredRight+halfWidth<=this.gameWidth-8;
+        const desiredX=hasRightRoom?desiredRight:gameScreenX-offsetX;
+        const anchorX=Phaser.Math.Clamp(
+            desiredX,
+            halfWidth+8,
+            this.gameWidth-halfWidth-8,
+        );
+        const anchorY=Phaser.Math.Clamp(
+            gameScreenY+offsetY,
+            halfHeight+8,
+            this.gameHeight-halfHeight-8,
+        );
+
+        /* Desktop hint tail always points back toward the Hider. */
+        const tail=hint.querySelector<HTMLElement>('[data-hider-cancel-tail]');
+        if(tail){
+            if(hasRightRoom){
+                tail.style.left='-8px';
+                tail.style.right='auto';
+                tail.style.borderLeft='2px solid rgba(91,35,35,.96)';
+                tail.style.borderBottom='2px solid rgba(91,35,35,.96)';
+                tail.style.borderRight='0';
+                tail.style.borderTop='0';
+            }else{
+                tail.style.left='auto';
+                tail.style.right='-8px';
+                tail.style.borderLeft='0';
+                tail.style.borderBottom='0';
+                tail.style.borderRight='2px solid rgba(91,35,35,.96)';
+                tail.style.borderTop='2px solid rgba(91,35,35,.96)';
+            }
+        }
+
+        root.style.left=
+            String(Math.round(canvasRect.left+(anchorX/this.gameWidth)*canvasRect.width))+'px';
+        root.style.top=
+            String(Math.round(canvasRect.top+(anchorY/this.gameHeight)*canvasRect.height))+'px';
+        root.style.bottom='auto';
         root.style.display='flex';
         hint.style.display=this.mobileControlsEnabled?'none':'block';
         button.style.display=this.mobileControlsEnabled?'block':'none';
@@ -5482,6 +5585,15 @@ private timerText!: Phaser.GameObjects.Text;
             /*
              * Mobile MOVE remains hidden until the zoom-in restore completes.
              */
+            /* v557: no legacy mobile view-switch UI may survive Triple Teleport. */
+            this.spectatorMobileButtonFrame
+                ?.clear()
+                .setVisible(false);
+            this.spectatorButton
+                ?.setVisible(false);
+            this.spectatorStatusText
+                ?.setVisible(false);
+
             this.resetMobileMoveControl();
             this.mobileMoveBase
                 ?.setVisible(false);
@@ -5580,6 +5692,20 @@ private timerText!: Phaser.GameObjects.Text;
             return;
         }
 
+        const suppressSpectatorForTaunt=
+            this.mobileControlsEnabled&&
+            this.hiderRandomTauntSkillBusy;
+
+        if(suppressSpectatorForTaunt){
+            this.spectatorMobileButtonFrame
+                ?.clear()
+                .setVisible(false);
+            this.spectatorButton
+                ?.setVisible(false);
+            this.spectatorStatusText
+                ?.setVisible(false);
+        }
+
         const spectating =
             Boolean(
                 this.spectatorSessionId,
@@ -5604,7 +5730,7 @@ private timerText!: Phaser.GameObjects.Text;
 
             frame
                 .clear()
-                .setVisible(true);
+                .setVisible(!suppressSpectatorForTaunt);
 
             frame.fillStyle(
                 0x3d9ed1,
@@ -5649,7 +5775,7 @@ private timerText!: Phaser.GameObjects.Text;
                         40,
                     )
                     .setFontSize(16)
-                    .setVisible(true);
+                    .setVisible(!suppressSpectatorForTaunt);
 
                 this.setFixedHudScreenPosition(
                     this.spectatorButton,
@@ -10848,7 +10974,9 @@ private timerText!: Phaser.GameObjects.Text;
         const showSpectatorButton =
             inRoomForSpectator &&
             this.phase === 'hunt' &&
-            roleForSpectator === 'hider';
+            roleForSpectator === 'hider' &&
+    !this.hiderRandomTauntSkillBusy &&
+    !this.tripleTeleportLocalActive;
 
         this.spectatorButton
             ?.setText(
@@ -26192,7 +26320,7 @@ this.networkUnsubscribers.push(
                     backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)
                 }
                 .colorhunt-first-overview-card{
-                    width:min(960px,97vw);height:min(610px,94vh);
+                    width:min(960px,97vw);height:auto;
                     max-width:97vw;max-height:94vh;overflow:hidden;
                     box-sizing:border-box;padding:clamp(8px,1.8vh,18px);
                     border:2px solid rgba(112,174,128,.92);border-radius:18px;
@@ -26217,7 +26345,7 @@ this.networkUnsubscribers.push(
                 }
                 .colorhunt-first-overview-roles{
                     min-height:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);
-                    gap:clamp(7px,1.6vw,14px);position:relative
+                    gap:clamp(7px,1.6vw,14px);position:relative;align-items:start
                 }
                 .colorhunt-first-overview-roles::after{
                     content:'VS';position:absolute;left:50%;top:9px;transform:translateX(-50%);
@@ -26225,10 +26353,10 @@ this.networkUnsubscribers.push(
                     color:#d87039;font-size:clamp(8px,1.7vh,12px);font-weight:950;line-height:1
                 }
                 .colorhunt-first-overview-role{
-                    min-width:0;min-height:0;overflow:hidden;border-radius:13px;
+                    min-width:0;min-height:0;align-self:start;overflow:hidden;border-radius:13px;
                     border:1px solid rgba(79,128,94,.30);background:#fff;
                     padding:clamp(5px,1.2vh,10px);box-sizing:border-box;
-                    display:grid;grid-template-rows:auto minmax(0,1fr) auto;
+                    display:grid;grid-template-rows:auto auto auto;align-content:start;
                     gap:clamp(4px,.9vh,7px)
                 }
                 .colorhunt-first-overview-role h3{
@@ -26236,8 +26364,8 @@ this.networkUnsubscribers.push(
                     line-height:1.1;font-weight:950;white-space:nowrap
                 }
                 .colorhunt-first-overview-role img{
-                    display:block;width:100%;height:100%;min-height:52px;
-                    max-height:clamp(76px,24vh,200px);object-fit:cover;object-position:center;
+                    display:block;width:100%;height:clamp(76px,24vh,200px);min-height:52px;
+                    max-height:none;object-fit:cover;object-position:center;
                     border-radius:9px;border:1px solid rgba(0,0,0,.12);background:#17212a
                 }
                 .colorhunt-first-overview-role p{
@@ -26257,7 +26385,7 @@ this.networkUnsubscribers.push(
                 }
                 @media (max-height:370px){
                     .colorhunt-first-overview-guide{padding:4px}
-                    .colorhunt-first-overview-card{height:96vh;max-height:96vh;padding:5px;gap:3px}
+                    .colorhunt-first-overview-card{height:auto;max-height:96vh;padding:5px;gap:3px}
                     .colorhunt-first-overview-title{font-size:12px}
                     .colorhunt-first-overview-controls{font-size:9px;padding:3px 8px}
                     .colorhunt-first-overview-rule{font-size:8px;line-height:1.08}
