@@ -232,6 +232,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010560_RECONNECT_STORM_HUNTER_FAST_UNLOCK_CLIENT: Hunter Hunt reconnect no longer waits on full paint replay; successful authority rebase unlocks movement immediately. */
     /* V1010559_CHAT_HISTORY_BATCH_IME_SUBMIT_GUARD_CLIENT: batch chat-history DOM rebuild + IME-safe/local duplicate submit guard. */
     /* V1010542_SNIPER_CANCEL_SCOPE_SMOOTH_LOADING: ESC/mobile cancel after sniper cinematic; 1.5x optics; smooth Hider spectator scope; calm LOADING dots. */
     /* V1010452O2_STALE_CHAT_MOBILE_READY_EXACT */
@@ -19216,9 +19217,29 @@ const ribbon =
         const authoritativeEndsAt =
             multiplayerClient.getPhaseEndsAt();
 
+        /*
+         * V1010560_RECONNECT_STORM_HUNTER_FAST_UNLOCK_CLIENT / HUNTER_HUNT_PAINT_BARRIER_BYPASS
+         * Live logs showed the SAME Hunter session reconnecting every ~2s.
+         * Hunter movement must not wait on a huge round_paint_state replay.
+         * Hider/Paint recovery keeps the original strict convergence.
+         */
+        const localHunterInHunt =
+            authoritativePhase === 'hunt' &&
+            localPlayer?.role === 'hunter';
+
         const phaseNeedsPaintConvergence =
             authoritativePhase === 'paint' ||
-            authoritativePhase === 'hunt';
+            (
+                authoritativePhase === 'hunt' &&
+                !localHunterInHunt
+            );
+
+        if (localHunterInHunt) {
+            this.recoveryPaintSnapshotPending =
+                false;
+            this.recoveryPaintSnapshotDeadline =
+                0;
+        }
 
         if (
             phaseNeedsPaintConvergence &&
@@ -19336,6 +19357,25 @@ const ribbon =
                     this.reconnectGameplayUnlockNotBefore,
                     this.time.now + 120,
                 );
+
+            /*
+             * V1010560_RECONNECT_STORM_HUNTER_FAST_UNLOCK_CLIENT / AUTHORITATIVE_HUNTER_FAST_UNLOCK
+             * Room/player/phase authority and prediction rebase are complete.
+             * If the current transport is healthy, release only the reconnect
+             * gate now. Tactical skill locks remain independent.
+             */
+            if (
+                localHunterInHunt &&
+                multiplayerClient
+                    .isGameplayTransportStable()
+            ) {
+                this.reconnectGameplayLocked =
+                    false;
+                this.reconnectGameplayUnlockNotBefore =
+                    0;
+                this.input.enabled =
+                    true;
+            }
         }
 
         /*
@@ -21603,17 +21643,42 @@ this.networkUnsubscribers.push(
                         );
 
                     /*
-                     * V1010367_CLIENT_RECONNECT_SNAPSHOT_CONVERGENCE / RECOVERY_START
-                     *
-                     * Role/phase alone is insufficient. Ask for authoritative
-                     * paint first and let resyncGameplay... wait until it arrives.
+                     * V1010560_RECONNECT_STORM_HUNTER_FAST_UNLOCK_CLIENT / RECOVERY_START_ROLE_AWARE
+                     * A Hunter already in Hunt resumes from Room/player/phase
+                     * authority without blocking on the large Paint snapshot.
                      */
-                    if (
+                    const recoveryPhase =
+                        multiplayerClient.getPhase();
+
+                    const recoveryRole =
+                        multiplayerClient
+                            .getLocalPlayer()
+                            ?.role ??
+                        (
+                            this.networkPlayerManager
+                                ?.isLocalHunter()
+                                ? 'hunter'
+                                : this.networkPlayerManager
+                                    ?.isLocalHider()
+                                    ? 'hider'
+                                    : undefined
+                        );
+
+                    const localHunterHuntRecovery =
+                        recoveryPhase === 'hunt' &&
+                        recoveryRole === 'hunter';
+
+                    if (localHunterHuntRecovery) {
+                        this.recoveryPaintSnapshotPending =
+                            false;
+                        this.recoveryPaintSnapshotDeadline =
+                            0;
+                    } else if (
                         this.phase === 'paint' ||
                         this.phase === 'hunt' ||
                         this.phase === 'countdown' ||
-                        multiplayerClient.getPhase() === 'paint' ||
-                        multiplayerClient.getPhase() === 'hunt'
+                        recoveryPhase === 'paint' ||
+                        recoveryPhase === 'hunt'
                     ) {
                         this.recoveryPaintSnapshotPending =
                             true;

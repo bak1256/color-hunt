@@ -508,6 +508,7 @@ export type SkillStateHandler = (
 ) => void;
 
 export class MultiplayerClient {
+  /* V1010560_RECONNECT_STORM_LIGHT_RECOVERY_NETDIAG_CLIENT: lightweight same-session recovery + persistent reconnect diagnostics. */
   /* V1010433_RESTORE_819_SINGLE_RECOVERY_OWNER: restore 8/19 single reconnect owner; terminal 524 handoff is serialized. */
   /* V1010426B_RECONNECT_STORM_VISUAL_CONVERGENCE: old reconnect stability contracts restored without recovery fanout. */
   /* V1010374_RESTORE_LOBBY_READY_CLIENT_API: restore authoritative lobby READY client contract without touching reconnect/gameplay transport. */
@@ -843,6 +844,48 @@ this.phaseChangedHandlers.forEach(
   private lastDiagAimSentAt = 0;
   private lastDiagFireSentAt = 0;
 
+  /*
+   * V1010560_RECONNECT_STORM_LIGHT_RECOVERY_NETDIAG_CLIENT / PERSISTENT_DIAGNOSTICS
+   * Local-only bounded ring. DevTools helper: __COLOR_HUNT_NETDIAG__()
+   */
+  private readonly reconnectDiagStorageKey =
+    "color-hunt-netdiag-v560";
+
+  getReconnectDiagnostics(): unknown[] {
+    try {
+      if (typeof localStorage === "undefined") return [];
+      const parsed = JSON.parse(
+        localStorage.getItem(this.reconnectDiagStorageKey) ?? "[]",
+      );
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  private recordReconnectDiagnostic(
+    kind: "drop" | "reconnect",
+    payload: Record<string, unknown>,
+  ): void {
+    try {
+      const entries = this.getReconnectDiagnostics();
+      entries.push({
+        kind,
+        at: new Date().toISOString(),
+        ...payload,
+      });
+      const bounded = entries.slice(-80);
+      if (typeof localStorage !== "undefined") {
+        localStorage.setItem(
+          this.reconnectDiagStorageKey,
+          JSON.stringify(bounded),
+        );
+      }
+    } catch {
+      // Diagnostics must never affect gameplay.
+    }
+  }
+
   private connectionIssueNotified = false;
 
   /*
@@ -1164,6 +1207,14 @@ this.phaseChangedHandlers.forEach(
 
     this.client =
       new Client(this.serverUrl);
+
+    /* V1010560_RECONNECT_STORM_LIGHT_RECOVERY_NETDIAG_CLIENT / CONSOLE_HELPER */
+    try {
+      (globalThis as any).__COLOR_HUNT_NETDIAG__ =
+        () => this.getReconnectDiagnostics();
+    } catch {
+      // Optional debug helper only.
+    }
 
     void fetch(
       `${this.serverUrl}/hi`,
@@ -3007,6 +3058,21 @@ this.room = room;
           },
         );
 
+        this.recordReconnectDiagnostic(
+          "drop",
+          {
+            code: _code,
+            reason: reason ?? "",
+            sessionId: room.sessionId,
+            phase: this.deliveredPhase,
+            reconnecting: room.reconnection.isReconnecting,
+            online: typeof navigator === "undefined" ? undefined : navigator.onLine,
+            hidden: typeof document === "undefined" ? undefined : document.hidden,
+            msSincePing: this.lastRoomPingAt > 0 ? diagNow - this.lastRoomPingAt : null,
+            msSinceMove: this.lastDiagMoveSentAt > 0 ? diagNow - this.lastDiagMoveSentAt : null,
+          },
+        );
+
         this.notifyConnectionIssue(
           reason,
         );
@@ -3088,23 +3154,44 @@ this.room = room;
           },
         );
 
+        this.recordReconnectDiagnostic(
+          "reconnect",
+          {
+            sessionId: room.sessionId,
+            phase: this.deliveredPhase,
+            reconnecting: room.reconnection.isReconnecting,
+            msSinceConfirmedDrop: this.lastConfirmedTransportDropAt > 0
+              ? diagNow - this.lastConfirmedTransportDropAt
+              : null,
+            msSincePing: this.lastRoomPingAt > 0
+              ? diagNow - this.lastRoomPingAt
+              : null,
+          },
+        );
+
         this.lastHunterAimSentAt = 0;
         this.lastHunterAimSentAngle =
           Number.NaN;
 
         this.deliveredPhase = "";
 
-        this.requestLobbySnapshot();
-        this.requestPaintReadyState();
-        this.requestAvatarPresets();
-        this.requestRoundPaintState(
-          true,
-        );
-
+        /*
+         * V1010560_RECONNECT_STORM_LIGHT_RECOVERY_NETDIAG_CLIENT / LIGHT_SAME_SESSION_RECOVERY
+         * Clear the transport gate FIRST. GameScene owns the one heavyweight
+         * Paint convergence request. Do not duplicate Paint/avatar payloads on
+         * every same-session reconnect.
+         */
         this.lastConfirmedTransportDropAt = 0;
         this.browserOfflineCycleActive = false;
         this.recoveryEscalationGeneration += 1;
         this.clearConnectionIssue();
+
+        this.requestLobbySnapshot();
+        this.requestPaintReadyState();
+
+        if (this.lastStablePhase === "lobby") {
+          this.requestAvatarPresets();
+        }
 
         /*
          * One cheap delayed phase/READY settle only.
