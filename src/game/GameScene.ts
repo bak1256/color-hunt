@@ -1,3 +1,4 @@
+/* V1010557C_HIDER_CANCEL_BUTTON_COMPACT: mobile Hider long-skill cancel button narrowed from 176px to 144px; height and right-side placement unchanged. */
 /* V1010557B_TAUNT_UI_CANCEL_GUIDE_POLISH_CLIENT_SOURCEWIDE: robust spectator gate; smoke cancel parity, no-repeat-friendly UI, right-side cancel/tip, Hardened hint below gauge, Triple Teleport spectator cleanup, tight first guide. */
 /* V1010556_HIDER_LONG_SKILL_CANCEL_FIRST_GUIDE_CLIENT: ESC/mobile cancel for Hardened + Clone Dance; invincibility bubble; no-scroll two-role first guide. */
 /* V1010555G_REMOVE_CLONE_DANCE_TEST_BUTTON: temporary Clone Dance Party TEST button removed; production Random Taunt skill unchanged. */
@@ -4821,9 +4822,9 @@ private timerText!: Phaser.GameObjects.Text;
             button.type='button';
             Object.assign(button.style,{
                 display:'none',
-                width:'176px',
+                width:'144px',
                 height:'46px',
-                padding:'0 16px',
+                padding:'0 12px',
                 border:'2px solid rgba(255,154,144,.98)',
                 borderRadius:'13px',
                 background:'rgba(90,23,23,.98)',
@@ -4988,7 +4989,7 @@ private timerText!: Phaser.GameObjects.Text;
         /* v557: both desktop hint and mobile button prefer the Hider's RIGHT. */
         const offsetX=this.mobileControlsEnabled?166:150;
         const offsetY=this.mobileControlsEnabled?34:8;
-        const halfWidth=this.mobileControlsEnabled?92:105;
+        const halfWidth=this.mobileControlsEnabled?76:105;
         const halfHeight=this.mobileControlsEnabled?28:26;
         const desiredRight=gameScreenX+offsetX;
         const hasRightRoom=desiredRight+halfWidth<=this.gameWidth-8;
