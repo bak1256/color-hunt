@@ -1,3 +1,4 @@
+/* V1010563_FART_RAMPAGE_HYPER_DANCE_SMOOTH_CURSOR_TEST_CLIENT: frame-smoothed cinematic targets + 60fps taunt dance. */
 /* V1010562D_FART_RAMPAGE_CINEMATIC_SMOOTH_SMOKE_CLIENT: smooth cinematic taunt interpolation. */
 /* V1010562C_HIDER_FART_RAMPAGE_TEST_BUTTON_ROBUST: scripted local taunt position support. */
 /* V1010554G3_TRIPLE_TELEPORT_MOTION_CAMERA_AUTHORITY_BUSY_UI_ROBUST_METHODS: cinematic transform ownership + local prediction rebase for server-owned Hider taunts. */
@@ -158,6 +159,12 @@ export class NetworkPlayerManager {
    */
   private readonly cinematicTransformOwnedSessionIds =
     new Set<string>();
+  /* V1010563_FART_RAMPAGE_HYPER_DANCE_SMOOTH_CURSOR_TEST_CLIENT: dance transform is evaluated every frame, independently of network packet cadence. */
+  private readonly cinematicTauntDanceSessionIds =
+    new Set<string>();
+  private readonly cinematicTauntDanceBaseBySessionId =
+    new Map<string,{angle:number;scaleX:number;scaleY:number}>();
+
 
   setCinematicTransformOwned(
     sessionId: string,
@@ -173,6 +180,35 @@ export class NetworkPlayerManager {
       this.cinematicTransformOwnedSessionIds.delete(
         sessionId,
       );
+    }
+  }
+
+  setCinematicTauntDance(
+    sessionId:string,
+    active:boolean,
+  ):void {
+    const view=this.players.get(sessionId);
+    if(!view)return;
+    if(active){
+      if(!this.cinematicTauntDanceBaseBySessionId.has(sessionId)){
+        this.cinematicTauntDanceBaseBySessionId.set(sessionId,{
+          angle:view.container.angle,
+          scaleX:view.container.scaleX,
+          scaleY:view.container.scaleY,
+        });
+      }
+      this.cinematicTauntDanceSessionIds.add(sessionId);
+      return;
+    }
+    this.cinematicTauntDanceSessionIds.delete(sessionId);
+    const base=this.cinematicTauntDanceBaseBySessionId.get(sessionId);
+    if(base){
+      view.container.setAngle(base.angle);
+      view.container.setScale(base.scaleX,base.scaleY);
+      this.cinematicTauntDanceBaseBySessionId.delete(sessionId);
+    }else{
+      view.container.setAngle(0);
+      view.container.setScale(1);
     }
   }
 
@@ -1577,50 +1613,20 @@ export class NetworkPlayerManager {
   }
 
   /* V1010562D_FART_RAMPAGE_CINEMATIC_SMOOTH_SMOKE_CLIENT: interpolate server-owned Hider taunt motion instead of 60-100ms stepping. */
+  /* V1010563_FART_RAMPAGE_HYPER_DANCE_SMOOTH_CURSOR_TEST_CLIENT: packet arrivals only advance the target; render interpolation is 60fps in update(). */
   tweenCinematicTauntPosition(
-    sessionId: string,
-    x: number,
-    y: number,
-    durationMs = 82,
-  ): void {
+    sessionId:string,
+    x:number,
+    y:number,
+    durationMs=82,
+  ):void {
     const view=this.players.get(sessionId);
-    if(!view) return;
-
+    if(!view)return;
     view.targetX=x;
     view.targetY=y;
     view.savedX=x;
     view.savedY=y;
-    view.movingUntil=this.scene.time.now+Math.max(80,durationMs);
-
-    /* Replace only the previous scripted movement tween for this cinematic-owned body. */
-    this.scene.tweens.killTweensOf(view.container);
-    this.scene.tweens.add({
-      targets:view.container,
-      x,
-      y,
-      duration:Math.max(34,durationMs),
-      ease:'Sine.easeOut',
-      onUpdate:()=>{
-        if(sessionId===this.getEffectiveLocalSessionId()){
-          this.localX=view.container.x;
-          this.localY=view.container.y;
-          this.localMovementInitialized=true;
-          this.localWasMoving=false;
-          this.lastLocalMoveInputAt=0;
-        }
-      },
-      onComplete:()=>{
-        this.setViewPosition(view,x,y);
-        if(sessionId===this.getEffectiveLocalSessionId()){
-          this.localX=x;
-          this.localY=y;
-          this.localMovementInitialized=true;
-          this.localWasMoving=false;
-          this.lastLocalMoveInputAt=0;
-          this.recentSentPositions=[];
-        }
-      },
-    });
+    view.movingUntil=this.scene.time.now+Math.max(110,durationMs);
   }
 
   moveLocalPlayer(
@@ -1830,6 +1836,46 @@ export class NetworkPlayerManager {
             sessionId,
           )
         ) {
+          /* V1010563_CINEMATIC_FRAME_SMOOTH_BLOCK */
+          const dx=view.targetX-view.container.x;
+          const dy=view.targetY-view.container.y;
+          const distance=Math.hypot(dx,dy);
+          if(distance>0.05){
+            /* Fast, frame-rate-independent catch-up. No packet-by-packet tween restart. */
+            const smoothing=1-Math.pow(0.000003,Math.max(1,delta)/1000);
+            const catchup=distance>70?Math.min(1,smoothing*1.34):smoothing;
+            this.setViewPosition(
+              view,
+              Phaser.Math.Linear(view.container.x,view.targetX,catchup),
+              Phaser.Math.Linear(view.container.y,view.targetY,catchup),
+            );
+          }else{
+            this.setViewPosition(view,view.targetX,view.targetY);
+          }
+
+          if(sessionId===localSessionId){
+            this.localX=view.container.x;
+            this.localY=view.container.y;
+            this.localMovementInitialized=true;
+            this.localWasMoving=false;
+            this.lastLocalMoveInputAt=0;
+          }
+
+          if(this.cinematicTauntDanceSessionIds.has(sessionId)){
+            const base=this.cinematicTauntDanceBaseBySessionId.get(sessionId);
+            if(base){
+              const t=this.scene.time.now;
+              const shimmy=Math.sin(t*0.031);
+              const bounce=Math.sin(t*0.020);
+              const hop=Math.max(0,Math.sin(t*0.026));
+              view.container.setAngle(base.angle+shimmy*6.5);
+              view.container.setScale(
+                base.scaleX*(1+hop*0.085+Math.abs(shimmy)*0.018),
+                base.scaleY*(1-hop*0.045+bounce*0.018),
+              );
+            }
+          }
+
           this.syncPaintLayerPosition(
             view,
             true,

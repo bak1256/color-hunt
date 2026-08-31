@@ -1,3 +1,4 @@
+/* V1010563_FART_RAMPAGE_HYPER_DANCE_SMOOTH_CURSOR_TEST_CLIENT: smoother Rampage render, dance tease, repeated TEST restart, Hider cursor focus recovery. */
 /* V1010562D_FART_RAMPAGE_CINEMATIC_SMOOTH_SMOKE_CLIENT: fixed-origin zoom-out, no Hider darkness, smooth scripted motion, 4s gas cover, mobile/input lock. */
 /* V1010562H_FIX_REMAINING_FART_CAMERA_CALL: update final event-origin call to zero-argument fixed-camera helper. */
 /* V1010562G_REMOVE_UNUSED_FART_CAMERA_PARAMS: fart-rampage camera uses current locked camera position; remove dead origin parameters. */
@@ -1599,7 +1600,8 @@ private timerText!: Phaser.GameObjects.Text;
         const fartTestHit=this.add.zone(0,0,126,28).setDepth(3903).setInteractive({useHandCursor:true});
         fartTestHit.on('pointerup',()=>{
             const id=multiplayerClient.getSessionId();
-            if(!id||this.hiderRandomTauntSkillBusy||this.hardenedEndsAtBySessionId.has(id))return;
+            if(!id||this.hardenedEndsAtBySessionId.has(id))return;
+            if(this.hiderRandomTauntSkillBusy&&!this.hiderFartRampageActiveSessionIds.has(id))return;
             dismissTip();
             this.setHiderRandomTauntSkillBusy(true);
             multiplayerClient.sendHiderFartRampageTest();
@@ -5329,6 +5331,7 @@ private timerText!: Phaser.GameObjects.Text;
     private clearAllHiderFartRampage():void {
         const localId=multiplayerClient.getSessionId();
         for(const sessionId of this.hiderFartRampageActiveSessionIds){
+            this.networkPlayerManager.setCinematicTauntDance(sessionId,false);
             this.networkPlayerManager.setCinematicTransformOwned(sessionId,false);
         }
         this.hiderFartRampageActiveSessionIds.clear();
@@ -20443,6 +20446,7 @@ const ribbon =
                 if(event.stage==='start'){
                     this.hiderFartRampageActiveSessionIds.add(event.sessionId);
                     this.networkPlayerManager.setCinematicTransformOwned(event.sessionId,true);
+                    this.networkPlayerManager.setCinematicTauntDance(event.sessionId,true);
                     this.networkPlayerManager.setCinematicAuthoritativePosition(event.sessionId,event.originX,event.originY,true);
                     if(isLocal){
                         this.setHiderRandomTauntSkillBusy(true);
@@ -20467,6 +20471,7 @@ const ribbon =
                     this.networkPlayerManager.setCinematicAuthoritativePosition(
                         event.sessionId,event.stage==='end'?event.originX:event.x,event.stage==='end'?event.originY:event.y,true,
                     );
+                    this.networkPlayerManager.setCinematicTauntDance(event.sessionId,false);
                     if(!isLocal){
                         this.networkPlayerManager.setCinematicTransformOwned(event.sessionId,false);
                     }else{
@@ -75811,6 +75816,18 @@ this.weaponHeat =
 
                 this.audioGuardHidden =
                     false;
+
+                /* V1010563_HIDER_CURSOR_FOCUS_RECOVERY:
+                 * Some browsers keep the canvas cursor hidden after alt-tab/window focus changes.
+                 * Restore only for Hider/non-Hunt; Hunter custom aim behavior remains untouched.
+                 */
+                const focusRole=multiplayerClient.getLocalPlayer()?.role;
+                if(focusRole==='hider'||this.phase!=='hunt'){
+                    document.documentElement.style.cursor='';
+                    document.body.style.cursor='';
+                    this.game.canvas.style.cursor='default';
+                    this.input.setDefaultCursor('default');
+                }
 
                 /*
                  * Restore BGM/master audio IMMEDIATELY.
