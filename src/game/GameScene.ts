@@ -232,6 +232,7 @@ type Obstacle = {
 };
 
 export class GameScene extends Phaser.Scene {
+    /* V1010559_CHAT_HISTORY_BATCH_IME_SUBMIT_GUARD_CLIENT: batch chat-history DOM rebuild + IME-safe/local duplicate submit guard. */
     /* V1010542_SNIPER_CANCEL_SCOPE_SMOOTH_LOADING: ESC/mobile cancel after sniper cinematic; 1.5x optics; smooth Hider spectator scope; calm LOADING dots. */
     /* V1010452O2_STALE_CHAT_MOBILE_READY_EXACT */
     /* V1010452N3_RESTORE_HIDER_CORE_PC_MOBILE_PARITY */
@@ -14243,6 +14244,15 @@ private timerText!: Phaser.GameObjects.Text;
         this.chatSendButton =
             sendButton;
 
+        /*
+         * V1010559_CHAT_HISTORY_BATCH_IME_SUBMIT_GUARD_CLIENT / LOCAL_SUBMIT_GUARD
+         * Korean/Japanese/Chinese IME can emit Enter while composition is being
+         * confirmed, and mobile browsers can occasionally duplicate a tap.
+         * Keep a tiny local guard so one user action never becomes two packets.
+         */
+        let lastLocalChatSubmitAt =
+            0;
+
         const send =
             (): void => {
                 const text =
@@ -14251,6 +14261,20 @@ private timerText!: Phaser.GameObjects.Text;
                 if (!text) {
                     return;
                 }
+
+                const now =
+                    performance.now();
+
+                if (
+                    now -
+                        lastLocalChatSubmitAt <
+                    220
+                ) {
+                    return;
+                }
+
+                lastLocalChatSubmitAt =
+                    now;
 
                 multiplayerClient
                     .sendChatMessage(
@@ -14278,6 +14302,20 @@ private timerText!: Phaser.GameObjects.Text;
                     event.key ===
                     'Enter'
                 ) {
+                    /*
+                     * Do not send the IME composition-confirm Enter as chat.
+                     * keyCode 229 is kept as a compatibility fallback for a few
+                     * Android/WebView keyboards that report isComposing late.
+                     */
+                    if (
+                        event.isComposing ||
+                        event.repeat ||
+                        event.keyCode ===
+                            229
+                    ) {
+                        return;
+                    }
+
                     event.preventDefault();
                     send();
                 }
@@ -14990,33 +15028,85 @@ private timerText!: Phaser.GameObjects.Text;
                 .childElementCount >
             40
         ) {
-            this.chatLog.firstElementChild
-                ?.remove();
+            const oldest =
+                this.chatLog
+                    .firstElementChild;
+
+            oldest?.remove();
         }
 
         /*
-         * V1010339C_CRITICAL_ROUND_STABILITY_CLIENT / CHAT_ALWAYS_FOLLOW_NEWEST
+         * Do not force scrollHeight/layout here. The caller shows/follows the
+         * chat exactly once after the DOM mutation.
          */
-        const scrollChatToBottom =
-            (): void => {
-                if (!this.chatLog) {
-                    return;
-                }
+    }
 
-                this.chatLog.scrollTop =
-                    this.chatLog.scrollHeight;
-            };
+    private replaceChatHistoryBatch(
+        messages:
+            NetworkChatMessage[],
+    ): void {
+        if (!this.chatLog) {
+            return;
+        }
 
-        scrollChatToBottom();
-        queueMicrotask(
-            scrollChatToBottom,
+        this.chatMessageIds.clear();
+
+        const fragment =
+            document.createDocumentFragment();
+
+        messages
+            .slice(-40)
+            .forEach(
+                (message) => {
+                    if (
+                        !message.id ||
+                        this.chatMessageIds.has(
+                            message.id,
+                        )
+                    ) {
+                        return;
+                    }
+
+                    this.chatMessageIds.add(
+                        message.id,
+                    );
+
+                    const line =
+                        document.createElement(
+                            'div',
+                        );
+                    line.className =
+                        'colorhunt-chat__message';
+
+                    const name =
+                        document.createElement(
+                            'strong',
+                        );
+                    name.textContent =
+                        `${message.name}: `;
+
+                    const text =
+                        document.createElement(
+                            'span',
+                        );
+                    text.textContent =
+                        message.text;
+
+                    line.append(
+                        name,
+                        text,
+                    );
+                    fragment.appendChild(
+                        line,
+                    );
+                },
+            );
+
+        /* One DOM commit instead of up to 40 append + layout cycles. */
+        this.chatLog.replaceChildren(
+            fragment,
         );
-        window.requestAnimationFrame(
-            scrollChatToBottom,
-        );
-    
-        this.followNewestChatMessage();
-}
+    }
 
     private showChatNotice(
         message: string,
@@ -19435,10 +19525,10 @@ const ribbon =
                         return;
                     }
 
-                    this.showChatUi();
                     this.appendChatMessage(
                         message,
                     );
+                    this.showChatUi();
                 },
             ),
         );
@@ -19458,20 +19548,15 @@ const ribbon =
                         return;
                     }
 
-                    this.chatMessageIds
-                        .clear();
-
-                    this.chatLog
-                        ?.replaceChildren();
-
-                    messages.forEach(
-                        (message) => {
-                            this.appendChatMessage(
-                                message,
-                            );
-                        },
+                    /*
+                     * V1010559_CHAT_HISTORY_BATCH_IME_SUBMIT_GUARD_CLIENT / HISTORY_BATCH
+                     * Build the last 40 lines in a DocumentFragment and commit
+                     * once. showChatUi() then performs the only follow-newest
+                     * layout pass for the restored history.
+                     */
+                    this.replaceChatHistoryBatch(
+                        messages,
                     );
-
                     this.showChatUi();
                 },
             ),
