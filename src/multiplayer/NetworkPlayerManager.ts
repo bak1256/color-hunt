@@ -1,3 +1,4 @@
+/* V1010562D_FART_RAMPAGE_CINEMATIC_SMOOTH_SMOKE_CLIENT: smooth cinematic taunt interpolation. */
 /* V1010562C_HIDER_FART_RAMPAGE_TEST_BUTTON_ROBUST: scripted local taunt position support. */
 /* V1010554G3_TRIPLE_TELEPORT_MOTION_CAMERA_AUTHORITY_BUSY_UI_ROBUST_METHODS: cinematic transform ownership + local prediction rebase for server-owned Hider taunts. */
 /* V1010553J_HARDENED_FINAL_CLEANUP: no Hardened text overlay; below-foot 15s gauge with existing hit feedback preserved. */
@@ -1573,6 +1574,53 @@ export class NetworkPlayerManager {
     view.targetX=x; view.targetY=y; view.savedX=x; view.savedY=y;
     this.localMovementInitialized=true; this.lastLocalMoveInputAt=0; this.localWasMoving=false;
     this.setViewPosition(view,x,y);
+  }
+
+  /* V1010562D_FART_RAMPAGE_CINEMATIC_SMOOTH_SMOKE_CLIENT: interpolate server-owned Hider taunt motion instead of 60-100ms stepping. */
+  tweenCinematicTauntPosition(
+    sessionId: string,
+    x: number,
+    y: number,
+    durationMs = 82,
+  ): void {
+    const view=this.players.get(sessionId);
+    if(!view) return;
+
+    view.targetX=x;
+    view.targetY=y;
+    view.savedX=x;
+    view.savedY=y;
+    view.movingUntil=this.scene.time.now+Math.max(80,durationMs);
+
+    /* Replace only the previous scripted movement tween for this cinematic-owned body. */
+    this.scene.tweens.killTweensOf(view.container);
+    this.scene.tweens.add({
+      targets:view.container,
+      x,
+      y,
+      duration:Math.max(34,durationMs),
+      ease:'Sine.easeOut',
+      onUpdate:()=>{
+        if(sessionId===this.getEffectiveLocalSessionId()){
+          this.localX=view.container.x;
+          this.localY=view.container.y;
+          this.localMovementInitialized=true;
+          this.localWasMoving=false;
+          this.lastLocalMoveInputAt=0;
+        }
+      },
+      onComplete:()=>{
+        this.setViewPosition(view,x,y);
+        if(sessionId===this.getEffectiveLocalSessionId()){
+          this.localX=x;
+          this.localY=y;
+          this.localMovementInitialized=true;
+          this.localWasMoving=false;
+          this.lastLocalMoveInputAt=0;
+          this.recentSentPositions=[];
+        }
+      },
+    });
   }
 
   moveLocalPlayer(
