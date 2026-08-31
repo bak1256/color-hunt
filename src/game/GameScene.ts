@@ -1,3 +1,8 @@
+/* V1010562D_FART_RAMPAGE_CINEMATIC_SMOOTH_SMOKE_CLIENT: fixed-origin zoom-out, no Hider darkness, smooth scripted motion, 4s gas cover, mobile/input lock. */
+/* V1010562H_FIX_REMAINING_FART_CAMERA_CALL: update final event-origin call to zero-argument fixed-camera helper. */
+/* V1010562G_REMOVE_UNUSED_FART_CAMERA_PARAMS: fart-rampage camera uses current locked camera position; remove dead origin parameters. */
+/* V1010562F_REMOVE_STALE_FART_RAMPAGE_ORIGIN_WRITES: remove v562d write-only local-origin field assignments; runtime behavior unchanged. */
+/* V1010562E_REMOVE_UNUSED_FART_RAMPAGE_LOCAL_ORIGIN: remove stale v562d field rejected by noUnusedLocals. */
 /* V1010562C_HIDER_FART_RAMPAGE_TEST_BUTTON_ROBUST: cumulative Fart Rampage + temporary direct TEST button; current-source robust. */
 /* V1010558_MOBILE_HIDER_PAINT_UI_TOGGLE_CANCEL_HALF: mobile Hider Paint UI hide/show button; hides assist/mode/READY+bubbles only; cancel button width halved to 72px. */
 /* V1010557C_HIDER_CANCEL_BUTTON_COMPACT: mobile Hider long-skill cancel button narrowed from 176px to 144px; height and right-side placement unchanged. */
@@ -1368,8 +1373,13 @@ private timerText!: Phaser.GameObjects.Text;
     /* V1010562C_HIDER_FART_RAMPAGE_TEST_BUTTON_ROBUST: gameplay-only Fart Rampage state/VFX. */
     private readonly hiderFartRampageActiveSessionIds=new Set<string>();
     private readonly hiderFartRampageSmokeVfx=new Set<Phaser.GameObjects.GameObject>();
+    private readonly hiderFartRampageDashUntilBySessionId=new Map<string,number>();
     private hiderFartRampageTestButton?:Phaser.GameObjects.Text;
     private hiderFartRampageTestHit?:Phaser.GameObjects.Zone;
+    private hiderFartRampageLocalActive=false;
+    private hiderFartRampageCameraOwned=false;
+    private hiderFartRampageCameraSnapshot?:{zoom:number;scrollX:number;scrollY:number};
+
     private readonly hardenedNextPhraseAtBySessionId = new Map<string, number>();
     private readonly hardenedPhraseIndexBySessionId = new Map<string, number>();
     /* V1010556_HIDER_LONG_SKILL_CANCEL_FIRST_GUIDE_CLIENT: Hardened invincibility callout + shared long-skill cancel UX. */
@@ -1561,6 +1571,7 @@ private timerText!: Phaser.GameObjects.Text;
                         this.hiderRandomTauntSkillBusy &&
                         !hardenedActive &&
                         !this.tripleTeleportLocalActive &&
+                        !this.hiderFartRampageLocalActive &&
                         !(
                             localId &&
                             this.cloneDancePartyRuntimes.has(
@@ -5092,7 +5103,8 @@ private timerText!: Phaser.GameObjects.Text;
              */
             this.setHiderRandomTauntSkillBusy(
                 state.active ||
-                this.tripleTeleportLocalActive,
+                this.tripleTeleportLocalActive ||
+                this.hiderFartRampageLocalActive,
             );
         }
         const pos=this.networkPlayerManager.getPlayerPosition(id);
@@ -5223,19 +5235,113 @@ private timerText!: Phaser.GameObjects.Text;
         this.updateHardenedInvincibleHints();
     }
 
-    private showHiderFartRampageSmoke(x:number,y:number):void {
-        const core=this.add.circle(x,y,18,0x91b85b,0.50).setDepth(18020);
+    /* V1010562D_FART_RAMPAGE_CINEMATIC_SMOOTH_SMOKE_CLIENT: same zero-pan cinematic rule as Triple Teleport. */
+    private startHiderFartRampageLocalCamera():void{
+        if(this.roundResultWinner!==null||this.victoryShowcaseCleanCaptureActive||this.phase!=='hunt')return;
+        const camera=this.cameras.main;
+        this.tweens.killTweensOf(camera);
+        this.hiderFartRampageCameraSnapshot={zoom:camera.zoom,scrollX:camera.scrollX,scrollY:camera.scrollY};
+        this.hiderFartRampageCameraOwned=true;
+        this.hiderFartRampageLocalActive=true;
+
+        this.hiderVisionGraphics?.clear().setVisible(false);
+        this.hiderVisionOverlays.forEach((overlay)=>overlay.setVisible(false).setAlpha(0));
+        this.heartbeatDangerOverlay?.setVisible(false).setAlpha(0);
+        this.heartbeatBorders.forEach((border)=>border.setVisible(false).setAlpha(0));
+
+        const lockedScrollX=camera.scrollX;
+        const lockedScrollY=camera.scrollY;
+        const targetZoom=Math.min(camera.zoom,Math.max(1.20,camera.zoom*0.80));
+        camera.stopFollow().removeBounds();
+
+        this.resetMobileMoveControl();
+        this.mobileMoveBase?.setVisible(false);
+        this.mobileMoveKnob?.setVisible(false);
+        this.mobileMoveLabel?.setVisible(false);
+
+        this.tweens.add({
+            targets:camera,zoom:targetZoom,duration:360,ease:'Sine.easeInOut',
+            onUpdate:()=>{camera.setScroll(lockedScrollX,lockedScrollY);this.applyFixedHudForZoom(camera.zoom);},
+            onComplete:()=>{camera.setScroll(lockedScrollX,lockedScrollY);this.applyFixedHudForZoom(camera.zoom);},
+        });
+    }
+
+    private restoreHiderFartRampageLocalCamera(originX:number,originY:number,animate=true):void{
+        const snapshot=this.hiderFartRampageCameraSnapshot;
+        const camera=this.cameras.main;
+        this.tweens.killTweensOf(camera);
+
+        const finish=()=>{
+            const localId=multiplayerClient.getSessionId();
+            if(localId){
+                this.networkPlayerManager.setCinematicAuthoritativePosition(localId,originX,originY,true);
+                this.networkPlayerManager.setCinematicTransformOwned(localId,false);
+            }
+            this.hiderFartRampageCameraSnapshot=undefined;
+            this.hiderFartRampageCameraOwned=false;
+            this.hiderFartRampageLocalActive=false;
+            this.hiderRandomTauntSkillBusy=false;
+            this.networkPlayerManager.setLocalMovementHardLocked(false);
+            this.resetMobileMoveControl();
+            if(this.roundResultWinner===null&&this.phase==='hunt'&&!this.victoryShowcaseCleanCaptureActive){
+                this.ensureGameplayCameraFollow();
+                this.updateHuntTension(0);
+                this.updateMobileControlVisibility();
+                this.updateHiderTauntHud();
+            }
+        };
+
+        if(this.roundResultWinner!==null||this.victoryShowcaseCleanCaptureActive||this.phase!=='hunt'){finish();return;}
+        if(!snapshot){finish();return;}
+        camera.stopFollow().removeBounds();
+        if(!animate){camera.setZoom(snapshot.zoom).setScroll(snapshot.scrollX,snapshot.scrollY);this.applyFixedHudForZoom(snapshot.zoom);finish();return;}
+        this.tweens.add({
+            targets:camera,zoom:snapshot.zoom,scrollX:snapshot.scrollX,scrollY:snapshot.scrollY,
+            duration:500,ease:'Sine.easeInOut',onUpdate:()=>this.applyFixedHudForZoom(camera.zoom),onComplete:finish,
+        });
+    }
+
+    private showHiderFartRampageSmoke(x:number,y:number,large=false):void {
+        /* Every Rampage fart leaves real visual cover for about four seconds. */
+        const radius=large?28:18;
+        const core=this.add.circle(x,y,radius,0x91b85b,large?0.62:0.52).setDepth(18020);
         this.hiderFartRampageSmokeVfx.add(core);
-        this.tweens.add({targets:core,scale:4.6,alpha:0.10,duration:4200,ease:'Sine.Out',onComplete:()=>{this.hiderFartRampageSmokeVfx.delete(core);core.destroy();}});
-        for(let i=0;i<14;i++){const a=Math.PI*2*i/14+Math.random()*0.35;const puff=this.add.circle(x+Math.cos(a)*8,y+Math.sin(a)*8,7+Math.random()*7,0xa8cb72,0.58).setDepth(18019);this.hiderFartRampageSmokeVfx.add(puff);this.tweens.add({targets:puff,x:x+Math.cos(a)*(38+Math.random()*28),y:y+Math.sin(a)*(24+Math.random()*22),scale:2.2+Math.random()*1.2,alpha:0,duration:3600+Math.random()*700,ease:'Sine.Out',onComplete:()=>{this.hiderFartRampageSmokeVfx.delete(puff);puff.destroy();}});}
+        this.tweens.add({
+            targets:core,scale:large?5.1:4.0,alpha:0,duration:4000,ease:'Sine.easeOut',
+            onComplete:()=>{this.hiderFartRampageSmokeVfx.delete(core);core.destroy();},
+        });
+        const puffCount=large?20:13;
+        for(let i=0;i<puffCount;i++){
+            const a=Math.PI*2*i/puffCount+Math.random()*0.4;
+            const spread=large?78:54;
+            const puff=this.add.circle(x+Math.cos(a)*7,y+Math.sin(a)*7,7+Math.random()*(large?9:6),0xa8cb72,large?0.68:0.56).setDepth(18019);
+            this.hiderFartRampageSmokeVfx.add(puff);
+            this.tweens.add({
+                targets:puff,
+                x:x+Math.cos(a)*(spread*0.55+Math.random()*spread*0.45),
+                y:y+Math.sin(a)*(spread*0.38+Math.random()*spread*0.34),
+                scale:2.0+Math.random()*(large?1.8:1.2),alpha:0,duration:3900+Math.random()*200,ease:'Sine.easeOut',
+                onComplete:()=>{this.hiderFartRampageSmokeVfx.delete(puff);puff.destroy();},
+            });
+        }
     }
 
     private clearAllHiderFartRampage():void {
+        const localId=multiplayerClient.getSessionId();
+        for(const sessionId of this.hiderFartRampageActiveSessionIds){
+            this.networkPlayerManager.setCinematicTransformOwned(sessionId,false);
+        }
         this.hiderFartRampageActiveSessionIds.clear();
+        this.hiderFartRampageDashUntilBySessionId.clear();
         for(const object of this.hiderFartRampageSmokeVfx){this.tweens.killTweensOf(object);object.destroy();}
         this.hiderFartRampageSmokeVfx.clear();
+        this.hiderFartRampageCameraSnapshot=undefined;
+        this.hiderFartRampageCameraOwned=false;
+        this.hiderFartRampageLocalActive=false;
+        if(localId)this.networkPlayerManager.setCinematicTransformOwned(localId,false);
         if(this.networkPlayerManager.isLocalHider())this.networkPlayerManager.setLocalMovementHardLocked(false);
         this.hiderRandomTauntSkillBusy=false;
+        this.resetMobileMoveControl();
     }
 
     private clearAllHardenedVisuals():void {
@@ -5609,7 +5715,7 @@ private timerText!: Phaser.GameObjects.Text;
          * to pass through to its existing clean-capture barrier below.
          */
         if(
-            this.tripleTeleportLocalActive &&
+            (this.tripleTeleportLocalActive||this.hiderFartRampageLocalActive) &&
             !this.victoryShowcaseCleanCaptureActive &&
             this.roundResultWinner===null &&
             this.phase==='hunt'
@@ -20332,16 +20438,40 @@ const ribbon =
             multiplayerClient.onHiderFartRampage((event)=>{
                 if(this.practiceMode!==null)return;
                 const localId=multiplayerClient.getSessionId();
+                const isLocal=event.sessionId===localId;
+
                 if(event.stage==='start'){
                     this.hiderFartRampageActiveSessionIds.add(event.sessionId);
-                    if(event.sessionId===localId){this.setHiderRandomTauntSkillBusy(true);this.networkPlayerManager.setLocalMovementHardLocked(true);this.networkPlayerManager.setLocalTauntScriptedPosition(event.x,event.y);}
+                    this.networkPlayerManager.setCinematicTransformOwned(event.sessionId,true);
+                    this.networkPlayerManager.setCinematicAuthoritativePosition(event.sessionId,event.originX,event.originY,true);
+                    if(isLocal){
+                        this.setHiderRandomTauntSkillBusy(true);
+                        this.networkPlayerManager.setLocalMovementHardLocked(true);
+                        this.startHiderFartRampageLocalCamera();
+                        this.updateHiderTauntHud();
+                    }
                     return;
                 }
-                if(event.stage==='smoke')this.showHiderFartRampageSmoke(event.originX,event.originY);
-                if(event.sessionId===localId&&(event.stage==='move'||event.stage==='smoke'||event.stage==='end'))this.networkPlayerManager.setLocalTauntScriptedPosition(event.x,event.y);
+
+                if(event.stage==='move'||event.stage==='smoke'){
+                    const dashing=(this.hiderFartRampageDashUntilBySessionId.get(event.sessionId)??0)>this.time.now;
+                    this.networkPlayerManager.tweenCinematicTauntPosition(
+                        event.sessionId,event.x,event.y,dashing?42:82,
+                    );
+                    return;
+                }
+
                 if(event.stage==='end'||event.stage==='cancel'){
                     this.hiderFartRampageActiveSessionIds.delete(event.sessionId);
-                    if(event.sessionId===localId){if(event.stage==='end')this.networkPlayerManager.setLocalTauntScriptedPosition(event.originX,event.originY);this.networkPlayerManager.setLocalMovementHardLocked(false);this.setHiderRandomTauntSkillBusy(false);}
+                    this.hiderFartRampageDashUntilBySessionId.delete(event.sessionId);
+                    this.networkPlayerManager.setCinematicAuthoritativePosition(
+                        event.sessionId,event.stage==='end'?event.originX:event.x,event.stage==='end'?event.originY:event.y,true,
+                    );
+                    if(!isLocal){
+                        this.networkPlayerManager.setCinematicTransformOwned(event.sessionId,false);
+                    }else{
+                        this.restoreHiderFartRampageLocalCamera(event.originX,event.originY,true);
+                    }
                 }
             }),
         );
@@ -20354,6 +20484,10 @@ const ribbon =
                     return;
                 }
 
+                if(this.hiderFartRampageActiveSessionIds.has(event.hunterId)){
+                    this.hiderFartRampageDashUntilBySessionId.set(event.hunterId,this.time.now+240);
+                    this.showHiderFartRampageSmoke(event.x,event.y,event.soundTier>=3||event.radius>=60);
+                }
                 this.showFartBurst(event);
             }),
         );
@@ -49474,7 +49608,7 @@ this.networkUnsubscribers.push(
          * V1010554F_TRIPLE_TELEPORT_CINEMATIC_CAMERA: Triple Teleport uses one stable wide shot.
          * Never chase the Hider between authoritative teleport positions.
          */
-        if(this.tripleTeleportCameraOwned){
+        if(this.tripleTeleportCameraOwned||this.hiderFartRampageCameraOwned){
             return;
         }
         /* V1010543_RESULT_CAMERA_CANCEL_HINT_HIDER_OUTLINE / RESULT_FULL_MAP_LOCK
