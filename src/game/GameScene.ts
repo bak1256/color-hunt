@@ -1,3 +1,4 @@
+/* V1010558_MOBILE_HIDER_PAINT_UI_TOGGLE_CANCEL_HALF: mobile Hider Paint UI hide/show button; hides assist/mode/READY+bubbles only; cancel button width halved to 72px. */
 /* V1010557C_HIDER_CANCEL_BUTTON_COMPACT: mobile Hider long-skill cancel button narrowed from 176px to 144px; height and right-side placement unchanged. */
 /* V1010557B_TAUNT_UI_CANCEL_GUIDE_POLISH_CLIENT_SOURCEWIDE: robust spectator gate; smoke cancel parity, no-repeat-friendly UI, right-side cancel/tip, Hardened hint below gauge, Triple Teleport spectator cleanup, tight first guide. */
 /* V1010556_HIDER_LONG_SKILL_CANCEL_FIRST_GUIDE_CLIENT: ESC/mobile cancel for Hardened + Clone Dance; invincibility bubble; no-scroll two-role first guide. */
@@ -4822,9 +4823,9 @@ private timerText!: Phaser.GameObjects.Text;
             button.type='button';
             Object.assign(button.style,{
                 display:'none',
-                width:'144px',
+                width:'72px',
                 height:'46px',
-                padding:'0 12px',
+                padding:'0 8px',
                 border:'2px solid rgba(255,154,144,.98)',
                 borderRadius:'13px',
                 background:'rgba(90,23,23,.98)',
@@ -4989,7 +4990,7 @@ private timerText!: Phaser.GameObjects.Text;
         /* v557: both desktop hint and mobile button prefer the Hider's RIGHT. */
         const offsetX=this.mobileControlsEnabled?166:150;
         const offsetY=this.mobileControlsEnabled?34:8;
-        const halfWidth=this.mobileControlsEnabled?76:105;
+        const halfWidth=this.mobileControlsEnabled?40:105;
         const halfHeight=this.mobileControlsEnabled?28:26;
         const desiredRight=gameScreenX+offsetX;
         const hasRightRoom=desiredRight+halfWidth<=this.gameWidth-8;
@@ -6744,6 +6745,14 @@ private timerText!: Phaser.GameObjects.Text;
         message: string =
             tr('모두 준비 완료! 바로 찾기 시작 가능!'),
     ): void {
+        if (
+            this.mobileControlsEnabled &&
+            this.mobileHiderPaintUiHidden
+        ) {
+            this.hideAllHidersReadyBubble();
+            return;
+        }
+
         if (!show) {
             this.hideAllHidersReadyBubble();
             return;
@@ -6937,7 +6946,13 @@ private timerText!: Phaser.GameObjects.Text;
         const authoritativePhase =
             multiplayerClient.getPhase();
 
+        const mobileHiderAuxUiHidden =
+            this.mobileControlsEnabled &&
+            role === 'hider' &&
+            this.mobileHiderPaintUiHidden;
+
         const visible =
+            !mobileHiderAuxUiHidden &&
             this.isMultiplayerSession() &&
             multiplayerClient.isConnected() &&
             (
@@ -11480,6 +11495,9 @@ private timerText!: Phaser.GameObjects.Text;
         'brush' = 'finger';
     private mobilePaintModeButton?: HTMLButtonElement;
     private paintAssistButton?: HTMLButtonElement;
+    /* V1010558_MOBILE_HIDER_PAINT_UI_TOGGLE */
+    private mobileHiderPaintUiToggleButton?: HTMLButtonElement;
+    private mobileHiderPaintUiHidden = false;
     private paintAssistModal?: HTMLDivElement;
     private paintAssistUsedThisRound = false;
     private mobilePrecisionBrushHint?: HTMLDivElement;
@@ -16374,6 +16392,10 @@ const ribbon =
         button: HTMLButtonElement,
     ): void {
         if (
+            (
+                this.mobileControlsEnabled &&
+                this.mobileHiderPaintUiHidden
+            ) ||
             this.phase !== 'paint' ||
             this.paintAssistUsedThisRound ||
             !document.body.contains(button) ||
@@ -17187,6 +17209,99 @@ const ribbon =
         this.mobilePaintModeButton =
             modeButton;
 
+        /*
+         * V1010558_MOBILE_HIDER_PAINT_UI_TOGGLE
+         * Mobile Hider only. Same visual family/size as Paint Help and
+         * Finger/Precision toggle. It hides ONLY the auxiliary Paint buttons
+         * and their speech bubbles; palette, brush tools, camera and chat stay.
+         */
+        if (this.mobileControlsEnabled) {
+            const uiToggleButton =
+                document.createElement(
+                    'button',
+                );
+
+            uiToggleButton.type =
+                'button';
+            uiToggleButton.className =
+                'colorhunt-mobile-hider-paint-ui-toggle';
+
+            Object.assign(
+                uiToggleButton.style,
+                {
+                    position: 'fixed',
+                    zIndex: '2142',
+                    display: 'none',
+                    minWidth: '126px',
+                    minHeight: '46px',
+                    padding: '7px 12px',
+                    border: '2px solid #5c8f66',
+                    borderRadius: '13px',
+                    background: '#dff7e6',
+                    color: '#26352b',
+                    boxShadow:
+                        '0 4px 14px rgba(35,59,42,.22)',
+                    fontFamily:
+                        'Arial, sans-serif',
+                    fontWeight: '900',
+                    fontSize: '13px',
+                    lineHeight: '1.15',
+                    whiteSpace: 'pre-line',
+                    textAlign: 'center',
+                    cursor: 'pointer',
+                    touchAction: 'manipulation',
+                    userSelect: 'none',
+                    WebkitUserSelect: 'none',
+                    WebkitTapHighlightColor:
+                        'transparent',
+                },
+            );
+
+            uiToggleButton.addEventListener(
+                'pointerdown',
+                (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+
+                    const localRole =
+                        multiplayerClient
+                            .getLocalPlayer()
+                            ?.role;
+                    const localIsHider =
+                        localRole === 'hider' ||
+                        this.networkPlayerManager
+                            ?.isLocalHider?.();
+
+                    if (
+                        this.phase !== 'paint' ||
+                        !localIsHider
+                    ) {
+                        return;
+                    }
+
+                    this.mobileHiderPaintUiHidden =
+                        !this.mobileHiderPaintUiHidden;
+
+                    if (this.mobileHiderPaintUiHidden) {
+                        this.hidePaintAssistReadyStyleBubble();
+                        this.hideAllHidersReadyBubble();
+                    }
+
+                    this.syncMobileHiderPaintUiToggleUi();
+                    this.setMobilePaintDockVisible(true);
+                    this.updatePaintReadyButton();
+                    this.updateMobilePaintDockPosition();
+                },
+            );
+
+            document.body.appendChild(
+                uiToggleButton,
+            );
+            this.mobileHiderPaintUiToggleButton =
+                uiToggleButton;
+            this.syncMobileHiderPaintUiToggleUi();
+        }
+
         const assistButton =
             document.createElement(
                 'button',
@@ -17725,16 +17840,63 @@ const ribbon =
         this.mobilePaintDock.hidden =
             !visible;
 
+        const localRole =
+            multiplayerClient
+                .getLocalPlayer()
+                ?.role;
+
+        const localIsHunter =
+            this.practiceMode === 'hunter' ||
+            localRole === 'hunter' ||
+            this.networkPlayerManager
+                ?.isLocalHunter?.();
+
+        const localIsHider =
+            this.practiceMode === 'hider' ||
+            localRole === 'hider' ||
+            this.networkPlayerManager
+                ?.isLocalHider?.();
+
+        const canUseMobileHiderUiToggle =
+            visible &&
+            this.mobileControlsEnabled &&
+            this.phase === 'paint' &&
+            localIsHider &&
+            !localIsHunter;
+
+        const hideMobileHiderAuxUi =
+            canUseMobileHiderUiToggle &&
+            this.mobileHiderPaintUiHidden;
+
+        if (
+            this.mobileHiderPaintUiToggleButton
+        ) {
+            this.mobileHiderPaintUiToggleButton.hidden =
+                !canUseMobileHiderUiToggle;
+            this.mobileHiderPaintUiToggleButton.style.display =
+                canUseMobileHiderUiToggle
+                    ? 'block'
+                    : 'none';
+            this.mobileHiderPaintUiToggleButton.style.pointerEvents =
+                canUseMobileHiderUiToggle
+                    ? 'auto'
+                    : 'none';
+            this.syncMobileHiderPaintUiToggleUi();
+        }
+
         if (
             this.mobilePaintModeButton
         ) {
+            const showModeButton =
+                visible &&
+                this.mobileControlsEnabled &&
+                !hideMobileHiderAuxUi;
+
             this.mobilePaintModeButton.hidden =
-                !visible ||
-                !this.mobileControlsEnabled;
+                !showModeButton;
 
             this.mobilePaintModeButton.style.display =
-                visible &&
-                this.mobileControlsEnabled
+                showModeButton
                     ? 'block'
                     : 'none';
         }
@@ -17746,28 +17908,12 @@ const ribbon =
              * be a Hider. This prevents setMobilePaintDockVisible(true) from
              * re-showing Paint Help for Hunters.
              */
-            const localRole =
-                multiplayerClient
-                    .getLocalPlayer()
-                    ?.role;
-
-            const localIsHunter =
-                this.practiceMode === 'hunter' ||
-                localRole === 'hunter' ||
-                this.networkPlayerManager
-                    ?.isLocalHunter?.();
-
-            const localIsHider =
-                this.practiceMode === 'hider' ||
-                localRole === 'hider' ||
-                this.networkPlayerManager
-                    ?.isLocalHider?.();
-
             const canAssist =
                 visible &&
                 this.phase === 'paint' &&
                 localIsHider &&
-                !localIsHunter;
+                !localIsHunter &&
+                !hideMobileHiderAuxUi;
 
             this.paintAssistButton.hidden =
                 !canAssist;
@@ -17822,6 +17968,11 @@ const ribbon =
             }
         }
 
+        if (hideMobileHiderAuxUi) {
+            this.hidePaintAssistReadyStyleBubble();
+            this.hideAllHidersReadyBubble();
+        }
+
         if (!visible) {
             if (
                 this.mobilePrecisionBrushHint
@@ -17837,6 +17988,7 @@ const ribbon =
 
         this.syncMobilePaintDockUi();
         this.syncMobilePaintModeUi();
+        this.syncMobileHiderPaintUiToggleUi();
         this.updateMobilePaintDockPosition();
 
         if (
@@ -17853,6 +18005,60 @@ const ribbon =
                 ?.setVisible(false);
             this.hideMobilePaintPrecisionGuide();
         }
+    }
+
+    private syncMobileHiderPaintUiToggleUi(): void {
+        const button =
+            this.mobileHiderPaintUiToggleButton;
+
+        if (!button) {
+            return;
+        }
+
+        const language =
+            getLanguage();
+
+        const hiddenLabel =
+            language === 'ja'
+                ? 'UIを表示'
+                : language === 'en'
+                    ? 'Show UI'
+                    : language === 'zh'
+                        ? '显示UI'
+                        : 'UI 보이기';
+
+        const visibleLabel =
+            language === 'ja'
+                ? 'UIを隠す'
+                : language === 'en'
+                    ? 'Hide UI'
+                    : language === 'zh'
+                        ? '隐藏UI'
+                        : 'UI 숨기기';
+
+        button.textContent =
+            this.mobileHiderPaintUiHidden
+                ? hiddenLabel
+                : visibleLabel;
+
+        button.style.setProperty(
+            'opacity',
+            this.mobileHiderPaintUiHidden
+                ? '0.5'
+                : '1',
+            'important',
+        );
+        button.style.setProperty(
+            'filter',
+            'none',
+            'important',
+        );
+        button.setAttribute(
+            'aria-pressed',
+            this.mobileHiderPaintUiHidden
+                ? 'true'
+                : 'false',
+        );
     }
 
     /*
@@ -18215,33 +18421,53 @@ const ribbon =
             this.mobilePaintModeButton &&
             this.mobileControlsEnabled
         ) {
+            const mobileLeft =
+                rect.left +
+                Math.max(
+                    110,
+                    rect.width * 0.10 + 5,
+                );
+
+            const modeCenterY =
+                rect.top +
+                rect.height * 0.48;
+
             this.mobilePaintModeButton.style.left =
                 `${Math.round(
-                    rect.left +
-                    Math.max(
-                        110,
-                        rect.width * 0.10 + 5,
-                    ),
+                    mobileLeft,
                 )}px`;
 
             this.mobilePaintModeButton.style.top =
                 `${Math.round(
-                    rect.top +
-                    rect.height * 0.48,
+                    modeCenterY,
                 )}px`;
 
             this.mobilePaintModeButton.style.transform =
                 'translateY(-50%)';
 
             if (this.paintAssistButton) {
-                const modeRect =
-                    this.mobilePaintModeButton
-                        .getBoundingClientRect();
+                /* 46px button + 8px row gap, same left edge. */
                 this.paintAssistButton.style.left =
-                    `${Math.round(modeRect.left)}px`;
+                    `${Math.round(mobileLeft)}px`;
                 this.paintAssistButton.style.top =
-                    `${Math.round(modeRect.top - 54)}px`;
+                    `${Math.round(
+                        modeCenterY - 77,
+                    )}px`;
                 this.paintAssistButton.style.transform =
+                    'none';
+            }
+
+            if (
+                this.mobileHiderPaintUiToggleButton
+            ) {
+                /* Red-box target: one matching row below Finger Paint. */
+                this.mobileHiderPaintUiToggleButton.style.left =
+                    `${Math.round(mobileLeft)}px`;
+                this.mobileHiderPaintUiToggleButton.style.top =
+                    `${Math.round(
+                        modeCenterY + 31,
+                    )}px`;
+                this.mobileHiderPaintUiToggleButton.style.transform =
                     'none';
             }
 
@@ -18336,6 +18562,9 @@ const ribbon =
         this.mobilePaintModeButton
             ?.remove();
 
+        this.mobileHiderPaintUiToggleButton
+            ?.remove();
+
         this.paintAssistButton
             ?.remove();
         this.paintAssistModal
@@ -18351,6 +18580,8 @@ const ribbon =
         this.mobilePaintDock =
             undefined;
         this.mobilePaintModeButton =
+            undefined;
+        this.mobileHiderPaintUiToggleButton =
             undefined;
         this.paintAssistButton =
             undefined;
@@ -77320,6 +77551,10 @@ this.weaponHeat =
             false;
         this.clearStraightLinePreview();
         this.phase = 'paint';
+        /* New Paint round always starts with the normal full mobile Hider UI. */
+        this.mobileHiderPaintUiHidden =
+            false;
+        this.syncMobileHiderPaintUiToggleUi();
         this.paintCameraOffsetScreenX = 0;
         this.paintCameraOffsetScreenY = 0;
         this.mobilePaintCameraPanX = 0;
