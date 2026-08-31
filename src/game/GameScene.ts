@@ -1076,7 +1076,10 @@ export class GameScene extends Phaser.Scene {
 
     private vulcanSupportCommitted = false;
     /* V1010549_VULCAN_CANCEL_SLIDE_HUD_RESTORE: Vulcan cancel mirrors the proven v548 Sniper mobile slide UX. */
+    /* V1010561_VULCAN_CANCEL_PC_MOBILE_PARITY: desktop ESC + topmost desktop hint + Sniper-equivalent mobile cancel. */
     private vulcanCancelButtonDom?: HTMLButtonElement;
+    private vulcanCancelHintDom?: HTMLDivElement;
+    private vulcanCancelKey?: Phaser.Input.Keyboard.Key;
     private vulcanCancelRevealNotBefore = 0;
     private vulcanCancelAwaitingServerFalse = false;
     private vulcanButton?: Phaser.GameObjects.Container;
@@ -70074,68 +70077,162 @@ const roomPlayers =
 
     /* V1010549_VULCAN_CANCEL_SLIDE_HUD_RESTORE: DOM cancel sits above the Vulcan canvas/overlays and slides solely from finger state. */
     private ensureVulcanCancelUi(): void {
-        if (this.vulcanCancelButtonDom || typeof document === 'undefined') {
+        if (typeof document === 'undefined') {
             return;
         }
 
-        const cancel = document.createElement('button');
-        cancel.type = 'button';
-        cancel.className = 'colorhunt-vulcan-mobile-cancel';
+        /*
+         * V1010561_VULCAN_CANCEL_PC_MOBILE_PARITY / DESKTOP_HINT
+         * Vulcan owns a browser-top hint just like Sniper so the player can
+         * clearly see that ESC is a valid cancel action even above canvas FX.
+         */
+        if (!this.vulcanCancelHintDom) {
+            const hint = document.createElement('div');
+            hint.className = 'colorhunt-vulcan-cancel-hint';
+            Object.assign(hint.style, {
+                position: 'fixed',
+                zIndex: '2147483646',
+                display: 'none',
+                pointerEvents: 'none',
+                transform: 'translateX(-50%)',
+                padding: '7px 12px',
+                borderRadius: '10px',
+                border: '1px solid rgba(255,185,185,.88)',
+                background: 'rgba(34,8,8,.92)',
+                color: '#fff7f7',
+                fontFamily: 'Arial, sans-serif',
+                fontSize: '14px',
+                fontWeight: '800',
+                lineHeight: '1.2',
+                whiteSpace: 'nowrap',
+                textShadow: '0 1px 2px rgba(0,0,0,.9)',
+                boxShadow: '0 5px 16px rgba(0,0,0,.32)',
+                filter: 'none',
+                backdropFilter: 'none',
+            });
+            document.body.appendChild(hint);
+            this.vulcanCancelHintDom = hint;
+        }
 
-        Object.assign(cancel.style, {
-            position: 'fixed',
-            zIndex: '2147483647',
-            display: 'none',
-            left: '50%',
-            top: '100%',
-            opacity: '0',
-            transform: 'translate(-50%, calc(-50% + 96px))',
-            transition: 'transform 180ms cubic-bezier(.22,.8,.26,1), opacity 120ms ease',
-            willChange: 'transform, opacity',
-            width: '176px',
-            height: '46px',
-            padding: '0 16px',
-            border: '2px solid rgba(255,190,96,.98)',
-            borderRadius: '13px',
-            background: 'rgba(78,49,10,.98)',
-            color: '#ffffff',
-            fontFamily: 'Arial, sans-serif',
-            fontSize: '15px',
-            fontWeight: '900',
-            lineHeight: '1',
-            textAlign: 'center',
-            textShadow: '0 1px 2px rgba(30,16,2,.95)',
-            boxShadow: '0 5px 0 rgba(38,22,4,.55), 0 10px 24px rgba(0,0,0,.32)',
-            cursor: 'pointer',
-            userSelect: 'none',
-            WebkitUserSelect: 'none',
-            WebkitTapHighlightColor: 'transparent',
-            touchAction: 'manipulation',
-        });
+        /*
+         * V1010561_VULCAN_CANCEL_PC_MOBILE_PARITY / MOBILE_CANCEL
+         * Exact Sniper-family visual language: same topmost DOM button, same
+         * slide behavior, same red cancel treatment.
+         */
+        if (!this.vulcanCancelButtonDom) {
+            const cancel = document.createElement('button');
+            cancel.type = 'button';
+            cancel.className = 'colorhunt-vulcan-mobile-cancel';
 
-        cancel.addEventListener(
-            'pointerdown',
-            (event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                this.requestVulcanCancel();
-            },
-            { passive: false },
-        );
+            Object.assign(cancel.style, {
+                position: 'fixed',
+                zIndex: '2147483647',
+                display: 'none',
+                left: '50%',
+                top: '100%',
+                opacity: '0',
+                transform: 'translate(-50%, calc(-50% + 96px))',
+                transition: 'transform 180ms cubic-bezier(.22,.8,.26,1), opacity 120ms ease',
+                willChange: 'transform, opacity',
+                width: '176px',
+                height: '46px',
+                padding: '0 16px',
+                border: '2px solid rgba(255,154,144,.98)',
+                borderRadius: '13px',
+                background: 'rgba(90,23,23,.98)',
+                color: '#ffffff',
+                fontFamily: 'Arial, sans-serif',
+                fontSize: '15px',
+                fontWeight: '900',
+                lineHeight: '1',
+                textAlign: 'center',
+                textShadow: '0 1px 2px rgba(38,6,6,.95)',
+                boxShadow: '0 5px 0 rgba(42,7,7,.55), 0 10px 24px rgba(0,0,0,.32)',
+                cursor: 'pointer',
+                userSelect: 'none',
+                WebkitUserSelect: 'none',
+                WebkitTapHighlightColor: 'transparent',
+                touchAction: 'manipulation',
+                filter: 'none',
+                backdropFilter: 'none',
+            });
 
-        document.body.appendChild(cancel);
-        this.vulcanCancelButtonDom = cancel;
+            cancel.addEventListener(
+                'pointerdown',
+                (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    this.requestVulcanCancel();
+                },
+                { passive: false },
+            );
+
+            document.body.appendChild(cancel);
+            this.vulcanCancelButtonDom = cancel;
+        }
+
+        /*
+         * V1010561_VULCAN_CANCEL_PC_MOBILE_PARITY / DESKTOP_ESC
+         * Sniper already owns ESC independently. Phaser can safely return the
+         * same Key object with another guarded listener; each mode's request
+         * method is self-gated so only the active tactical mode reacts.
+         */
+        if (!this.vulcanCancelKey && this.input.keyboard) {
+            this.vulcanCancelKey =
+                this.input.keyboard.addKey(
+                    Phaser.Input.Keyboard.KeyCodes.ESC,
+                );
+
+            this.vulcanCancelKey.on(
+                'down',
+                () => {
+                    if (
+                        this.phase === 'hunt' &&
+                        this.vulcanActive &&
+                        !this.vulcanCinematicActive
+                    ) {
+                        this.requestVulcanCancel();
+                    }
+                },
+            );
+        }
     }
 
     private refreshVulcanCancelUi(): void {
         this.ensureVulcanCancelUi();
-        const cancel = this.vulcanCancelButtonDom;
-        if (!cancel) return;
 
         const canCancel =
             this.phase === 'hunt' &&
             this.vulcanActive &&
             !this.vulcanCinematicActive;
+
+        const language = getLanguage();
+
+        if (this.vulcanCancelHintDom) {
+            this.vulcanCancelHintDom.textContent =
+                language === 'ja'
+                    ? 'ESCを押すとバルカンモードを解除'
+                    : language === 'en'
+                        ? 'Press ESC to cancel Vulcan mode'
+                        : language === 'zh'
+                            ? '按 ESC 取消火神炮模式'
+                            : 'ESC를 누르면 발칸 모드 취소';
+
+            const canvasRect =
+                this.game.canvas.getBoundingClientRect();
+
+            this.vulcanCancelHintDom.style.left =
+                String(Math.round(canvasRect.left + canvasRect.width / 2)) + 'px';
+            this.vulcanCancelHintDom.style.top =
+                String(Math.round(canvasRect.bottom - 44)) + 'px';
+            this.vulcanCancelHintDom.style.display =
+                canCancel && !this.mobileControlsEnabled
+                    ? 'block'
+                    : 'none';
+        }
+
+        const cancel = this.vulcanCancelButtonDom;
+        if (!cancel) return;
 
         const fingerDown = this.vulcanPointerHeld;
         const show =
@@ -70144,7 +70241,6 @@ const roomPlayers =
             !fingerDown &&
             this.time.now >= this.vulcanCancelRevealNotBefore;
 
-        const language = getLanguage();
         cancel.textContent =
             language === 'ja'
                 ? '✕ キャンセル'
@@ -70167,6 +70263,10 @@ const roomPlayers =
     }
 
     private hideVulcanCancelUi(): void {
+        if (this.vulcanCancelHintDom) {
+            this.vulcanCancelHintDom.style.display = 'none';
+        }
+
         const cancel = this.vulcanCancelButtonDom;
         if (!cancel) return;
         cancel.style.transform = 'translate(-50%, calc(-50% + 96px))';
