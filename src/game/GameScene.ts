@@ -1,3 +1,6 @@
+/* V1010564C_REMOVE_LEFTOVER_FART_TEST_UI_REFERENCES: remove stale temporary Fart Rampage TEST HUD references only. */
+/* V1010564B_REPAIR_HIDER_TAUNT_HUD_AFTER_TEST_REMOVAL: restore clean production Random Taunt HUD after v564 TEST-button removal. */
+/* V1010564_REMOVE_FART_RAMPAGE_TEST_ONLY_CLIENT: remove temporary Fart Rampage TEST UI only; Random Taunt v563 Rampage remains. */
 /* V1010563_FART_RAMPAGE_HYPER_DANCE_SMOOTH_CURSOR_TEST_CLIENT: smoother Rampage render, dance tease, repeated TEST restart, Hider cursor focus recovery. */
 /* V1010562D_FART_RAMPAGE_CINEMATIC_SMOOTH_SMOKE_CLIENT: fixed-origin zoom-out, no Hider darkness, smooth scripted motion, 4s gas cover, mobile/input lock. */
 /* V1010562H_FIX_REMAINING_FART_CAMERA_CALL: update final event-origin call to zero-argument fixed-camera helper. */
@@ -1375,8 +1378,6 @@ private timerText!: Phaser.GameObjects.Text;
     private readonly hiderFartRampageActiveSessionIds=new Set<string>();
     private readonly hiderFartRampageSmokeVfx=new Set<Phaser.GameObjects.GameObject>();
     private readonly hiderFartRampageDashUntilBySessionId=new Map<string,number>();
-    private hiderFartRampageTestButton?:Phaser.GameObjects.Text;
-    private hiderFartRampageTestHit?:Phaser.GameObjects.Zone;
     private hiderFartRampageLocalActive=false;
     private hiderFartRampageCameraOwned=false;
     private hiderFartRampageCameraSnapshot?:{zoom:number;scrollX:number;scrollY:number};
@@ -1447,8 +1448,6 @@ private timerText!: Phaser.GameObjects.Text;
         this.hiderTauntButtonBody?.destroy();
         this.hiderTauntButtonShadow?.destroy();
         this.hiderTauntButtonHit?.destroy();
-        this.hiderFartRampageTestButton?.destroy();
-        this.hiderFartRampageTestHit?.destroy();
         this.hiderTauntTipBubble?.destroy();
         this.hiderTauntTipTitle?.destroy();
         this.hiderTauntTipBody?.destroy();
@@ -1456,8 +1455,6 @@ private timerText!: Phaser.GameObjects.Text;
         this.hiderTauntButtonBody=undefined;
         this.hiderTauntButtonShadow=undefined;
         this.hiderTauntButtonHit=undefined;
-        this.hiderFartRampageTestButton=undefined;
-        this.hiderFartRampageTestHit=undefined;
         this.hiderTauntTipBubble=undefined;
         this.hiderTauntTipTitle=undefined;
         this.hiderTauntTipBody=undefined;
@@ -1572,10 +1569,15 @@ private timerText!: Phaser.GameObjects.Text;
                         this.hiderRandomTauntSkillBusy &&
                         !hardenedActive &&
                         !this.tripleTeleportLocalActive &&
-                        !this.hiderFartRampageLocalActive &&
                         !(
                             localId &&
                             this.cloneDancePartyRuntimes.has(
+                                localId,
+                            )
+                        ) &&
+                        !(
+                            localId &&
+                            this.hiderFartRampageActiveSessionIds.has(
                                 localId,
                             )
                         )
@@ -1591,27 +1593,6 @@ private timerText!: Phaser.GameObjects.Text;
         hit.on('pointerdown',()=>{drawBody(true,true);button.setY(hit.y+2);});
         hit.on('pointerup',()=>{drawBody(true,false);button.setY(hit.y);activate();});
 
-        /* V1010562C_HIDER_FART_RAMPAGE_TEST_BUTTON_ROBUST: temporary direct test button. Random Taunt remains untouched. */
-        const fartTest=this.add.text(0,0,'TEST 💨 방구 폭주',{
-            fontFamily:'Arial Black, sans-serif',fontSize:'11px',fontStyle:'bold',
-            color:'#ffffff',backgroundColor:'#34551f',stroke:'#14220c',strokeThickness:3,
-            padding:{left:8,right:8,top:5,bottom:5}
-        }).setOrigin(0.5).setDepth(3902).setInteractive({useHandCursor:true});
-        const fartTestHit=this.add.zone(0,0,126,28).setDepth(3903).setInteractive({useHandCursor:true});
-        fartTestHit.on('pointerup',()=>{
-            const id=multiplayerClient.getSessionId();
-            if(!id||this.hardenedEndsAtBySessionId.has(id))return;
-            if(this.hiderRandomTauntSkillBusy&&!this.hiderFartRampageActiveSessionIds.has(id))return;
-            dismissTip();
-            this.setHiderRandomTauntSkillBusy(true);
-            multiplayerClient.sendHiderFartRampageTest();
-            this.time.delayedCall(1200,()=>{
-                if(this.hiderRandomTauntSkillBusy&&!this.hiderFartRampageActiveSessionIds.has(id))this.setHiderRandomTauntSkillBusy(false);
-            });
-        });
-        this.hiderFartRampageTestButton=fartTest;
-        this.hiderFartRampageTestHit=fartTestHit;
-
         this.hiderTauntButton=button;
         this.hiderTauntButtonBody=body;
         this.hiderTauntButtonShadow=shadow;
@@ -1619,7 +1600,6 @@ private timerText!: Phaser.GameObjects.Text;
         this.hiderTauntTipBubble=tipBubble;
         this.hiderTauntTipTitle=tipTitle;
         this.hiderTauntTipBody=tipBody;
-
 
         this.updateHiderTauntHud();
     }
@@ -1634,8 +1614,6 @@ private timerText!: Phaser.GameObjects.Text;
             this.hiderTauntButtonBody?.setVisible(false);
             this.hiderTauntButtonShadow?.setVisible(false);
             this.hiderTauntButtonHit?.setVisible(false);
-            this.hiderFartRampageTestButton?.setVisible(false);
-            this.hiderFartRampageTestHit?.setVisible(false);
             this.hiderTauntTipBubble?.setVisible(false);
             this.hiderTauntTipTitle?.setVisible(false);
             this.hiderTauntTipBody?.setVisible(false);
@@ -1665,8 +1643,6 @@ private timerText!: Phaser.GameObjects.Text;
         body.setVisible(show);
         shadow.setVisible(show);
         hit.setVisible(show);
-        this.hiderFartRampageTestButton?.setVisible(show);
-        this.hiderFartRampageTestHit?.setVisible(show);
 
         const tipBubble=this.hiderTauntTipBubble;
         const tipTitle=this.hiderTauntTipTitle;
@@ -1681,8 +1657,6 @@ private timerText!: Phaser.GameObjects.Text;
         shadow.setPosition(pos.x,pos.y+66);
         hit.setPosition(pos.x,pos.y+62);
         b.setPosition(pos.x,pos.y+62);
-        this.hiderFartRampageTestButton?.setPosition(pos.x,pos.y+96);
-        this.hiderFartRampageTestHit?.setPosition(pos.x,pos.y+96);
 
         if(tipBubble&&tipTitle&&tipBody){
             if(this.mobileControlsEnabled){

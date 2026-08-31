@@ -1,3 +1,4 @@
+/* V1010564_REMOVE_FART_RAMPAGE_TEST_ONLY_CLIENT: remove temporary direct Fart Rampage TEST sender only. */
 /* V1010562C_HIDER_FART_RAMPAGE_TEST_BUTTON_ROBUST: Fart Rampage transport + direct TEST request. */
 /* V1010556_HIDER_LONG_SKILL_CANCEL_FIRST_GUIDE_CLIENT: Hider long-skill cancel transport. */
 /* V1010555B_CLONE_DANCE_ASSIST_BGM_RANDOM_OWNER_CLIENT: Clone Dance payload separates random owner dance slot from exact pre-skill return position. */
@@ -4900,11 +4901,6 @@ this.room = room;
     if (!this.isGameplayTransportStable()) return;
     this.room?.send("hider_clone_dance_test", {});
   }
-  sendHiderFartRampageTest(): void {
-    if (!this.isGameplayTransportStable()) return;
-    this.room?.send('hider_fart_rampage_test', {});
-  }
-
   onHiderHardenedState(handler: HiderHardenedStateHandler): () => void {
     this.hiderHardenedStateHandlers.add(handler); return () => this.hiderHardenedStateHandlers.delete(handler);
   }
