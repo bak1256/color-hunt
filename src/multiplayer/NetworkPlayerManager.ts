@@ -1,3 +1,4 @@
+/* V1010562C_HIDER_FART_RAMPAGE_TEST_BUTTON_ROBUST: scripted local taunt position support. */
 /* V1010554G3_TRIPLE_TELEPORT_MOTION_CAMERA_AUTHORITY_BUSY_UI_ROBUST_METHODS: cinematic transform ownership + local prediction rebase for server-owned Hider taunts. */
 /* V1010553J_HARDENED_FINAL_CLEANUP: no Hardened text overlay; below-foot 15s gauge with existing hit feedback preserved. */
 /* V1010553H_HARDENED_DEATH_LOBBY_BODY_RESTORE: restore hidden Hider body/paint even when Hardened ends after death, so Lobby reuse cannot stay invisible. */
@@ -1561,6 +1562,17 @@ export class NetworkPlayerManager {
           y,
         ) <= 2.25,
     );
+  }
+
+  /* V1010562C_HIDER_FART_RAMPAGE_TEST_BUTTON_ROBUST: exact local position for server-owned taunt motion; sends no move packet. */
+  setLocalTauntScriptedPosition(x: number, y: number): void {
+    const sessionId=this.getEffectiveLocalSessionId();
+    const view=sessionId ? this.players.get(sessionId) : undefined;
+    if(!view) return;
+    this.localX=x; this.localY=y;
+    view.targetX=x; view.targetY=y; view.savedX=x; view.savedY=y;
+    this.localMovementInitialized=true; this.lastLocalMoveInputAt=0; this.localWasMoving=false;
+    this.setViewPosition(view,x,y);
   }
 
   moveLocalPlayer(

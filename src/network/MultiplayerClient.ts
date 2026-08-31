@@ -1,3 +1,4 @@
+/* V1010562C_HIDER_FART_RAMPAGE_TEST_BUTTON_ROBUST: Fart Rampage transport + direct TEST request. */
 /* V1010556_HIDER_LONG_SKILL_CANCEL_FIRST_GUIDE_CLIENT: Hider long-skill cancel transport. */
 /* V1010555B_CLONE_DANCE_ASSIST_BGM_RANDOM_OWNER_CLIENT: Clone Dance payload separates random owner dance slot from exact pre-skill return position. */
 /* V1010555_CLONE_DANCE_PARTY_CLIENT: Clone Dance Party transport; Triple Teleport production TEST endpoint removed/replaced. */
@@ -232,6 +233,15 @@ export type NetworkFartState = {
 export type NetworkFartBurst = {
   hunterId: string; x: number; y: number; radius: number; soundTier: number;
 };
+/* V1010562C_HIDER_FART_RAMPAGE_TEST_BUTTON_ROBUST: synchronized Hider figure-eight Fart Rampage. */
+export type NetworkHiderFartRampage = {
+  sessionId: string;
+  stage: 'start' | 'move' | 'smoke' | 'end' | 'cancel';
+  x: number; y: number; originX: number; originY: number;
+  durationMs: number; serverNow: number;
+};
+export type HiderFartRampageHandler = (event: NetworkHiderFartRampage) => void;
+
 export type NetworkPoopBurst = {
   hunterId: string;
   hunterName?: string;
@@ -790,6 +800,7 @@ this.phaseChangedHandlers.forEach(
 
   private readonly fartStateHandlers = new Set<FartStateHandler>();
   private readonly fartBurstHandlers = new Set<FartBurstHandler>();
+  private readonly hiderFartRampageHandlers = new Set<HiderFartRampageHandler>();
   private readonly poopBurstHandlers = new Set<PoopBurstHandler>();
   private readonly hiderCoughHandlers = new Set<HiderReactionHandler>();
   private readonly hiderLaughHandlers = new Set<HiderReactionHandler>();
@@ -4131,6 +4142,9 @@ this.room = room;
     room.onMessage<NetworkFartBurst>('fart_burst', (event) => {
       this.fartBurstHandlers.forEach((handler) => handler(event));
     });
+    room.onMessage<NetworkHiderFartRampage>('hider_fart_rampage', (event) => {
+      this.hiderFartRampageHandlers.forEach((handler) => handler(event));
+    });
     room.onMessage<NetworkPoopBurst>('poop_burst', (event) => {
       this.poopBurstHandlers.forEach((handler) => handler(event));
     });
@@ -4886,6 +4900,11 @@ this.room = room;
     if (!this.isGameplayTransportStable()) return;
     this.room?.send("hider_clone_dance_test", {});
   }
+  sendHiderFartRampageTest(): void {
+    if (!this.isGameplayTransportStable()) return;
+    this.room?.send('hider_fart_rampage_test', {});
+  }
+
   onHiderHardenedState(handler: HiderHardenedStateHandler): () => void {
     this.hiderHardenedStateHandlers.add(handler); return () => this.hiderHardenedStateHandlers.delete(handler);
   }
@@ -5453,6 +5472,11 @@ this.room = room;
     this.fartBurstHandlers.add(handler);
     return () => this.fartBurstHandlers.delete(handler);
   }
+  onHiderFartRampage(handler: HiderFartRampageHandler): () => void {
+    this.hiderFartRampageHandlers.add(handler);
+    return () => this.hiderFartRampageHandlers.delete(handler);
+  }
+
   onPoopBurst(handler: PoopBurstHandler): () => void {
     this.poopBurstHandlers.add(handler);
     return () => this.poopBurstHandlers.delete(handler);

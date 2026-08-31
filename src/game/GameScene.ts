@@ -1,3 +1,4 @@
+/* V1010562C_HIDER_FART_RAMPAGE_TEST_BUTTON_ROBUST: cumulative Fart Rampage + temporary direct TEST button; current-source robust. */
 /* V1010558_MOBILE_HIDER_PAINT_UI_TOGGLE_CANCEL_HALF: mobile Hider Paint UI hide/show button; hides assist/mode/READY+bubbles only; cancel button width halved to 72px. */
 /* V1010557C_HIDER_CANCEL_BUTTON_COMPACT: mobile Hider long-skill cancel button narrowed from 176px to 144px; height and right-side placement unchanged. */
 /* V1010557B_TAUNT_UI_CANCEL_GUIDE_POLISH_CLIENT_SOURCEWIDE: robust spectator gate; smoke cancel parity, no-repeat-friendly UI, right-side cancel/tip, Hardened hint below gauge, Triple Teleport spectator cleanup, tight first guide. */
@@ -1364,6 +1365,11 @@ private timerText!: Phaser.GameObjects.Text;
         this.updateHiderTauntHud();
     }
     private readonly hardenedEndsAtBySessionId = new Map<string, number>();
+    /* V1010562C_HIDER_FART_RAMPAGE_TEST_BUTTON_ROBUST: gameplay-only Fart Rampage state/VFX. */
+    private readonly hiderFartRampageActiveSessionIds=new Set<string>();
+    private readonly hiderFartRampageSmokeVfx=new Set<Phaser.GameObjects.GameObject>();
+    private hiderFartRampageTestButton?:Phaser.GameObjects.Text;
+    private hiderFartRampageTestHit?:Phaser.GameObjects.Zone;
     private readonly hardenedNextPhraseAtBySessionId = new Map<string, number>();
     private readonly hardenedPhraseIndexBySessionId = new Map<string, number>();
     /* V1010556_HIDER_LONG_SKILL_CANCEL_FIRST_GUIDE_CLIENT: Hardened invincibility callout + shared long-skill cancel UX. */
@@ -1430,6 +1436,8 @@ private timerText!: Phaser.GameObjects.Text;
         this.hiderTauntButtonBody?.destroy();
         this.hiderTauntButtonShadow?.destroy();
         this.hiderTauntButtonHit?.destroy();
+        this.hiderFartRampageTestButton?.destroy();
+        this.hiderFartRampageTestHit?.destroy();
         this.hiderTauntTipBubble?.destroy();
         this.hiderTauntTipTitle?.destroy();
         this.hiderTauntTipBody?.destroy();
@@ -1437,6 +1445,8 @@ private timerText!: Phaser.GameObjects.Text;
         this.hiderTauntButtonBody=undefined;
         this.hiderTauntButtonShadow=undefined;
         this.hiderTauntButtonHit=undefined;
+        this.hiderFartRampageTestButton=undefined;
+        this.hiderFartRampageTestHit=undefined;
         this.hiderTauntTipBubble=undefined;
         this.hiderTauntTipTitle=undefined;
         this.hiderTauntTipBody=undefined;
@@ -1569,6 +1579,26 @@ private timerText!: Phaser.GameObjects.Text;
         hit.on('pointerdown',()=>{drawBody(true,true);button.setY(hit.y+2);});
         hit.on('pointerup',()=>{drawBody(true,false);button.setY(hit.y);activate();});
 
+        /* V1010562C_HIDER_FART_RAMPAGE_TEST_BUTTON_ROBUST: temporary direct test button. Random Taunt remains untouched. */
+        const fartTest=this.add.text(0,0,'TEST 💨 방구 폭주',{
+            fontFamily:'Arial Black, sans-serif',fontSize:'11px',fontStyle:'bold',
+            color:'#ffffff',backgroundColor:'#34551f',stroke:'#14220c',strokeThickness:3,
+            padding:{left:8,right:8,top:5,bottom:5}
+        }).setOrigin(0.5).setDepth(3902).setInteractive({useHandCursor:true});
+        const fartTestHit=this.add.zone(0,0,126,28).setDepth(3903).setInteractive({useHandCursor:true});
+        fartTestHit.on('pointerup',()=>{
+            const id=multiplayerClient.getSessionId();
+            if(!id||this.hiderRandomTauntSkillBusy||this.hardenedEndsAtBySessionId.has(id))return;
+            dismissTip();
+            this.setHiderRandomTauntSkillBusy(true);
+            multiplayerClient.sendHiderFartRampageTest();
+            this.time.delayedCall(1200,()=>{
+                if(this.hiderRandomTauntSkillBusy&&!this.hiderFartRampageActiveSessionIds.has(id))this.setHiderRandomTauntSkillBusy(false);
+            });
+        });
+        this.hiderFartRampageTestButton=fartTest;
+        this.hiderFartRampageTestHit=fartTestHit;
+
         this.hiderTauntButton=button;
         this.hiderTauntButtonBody=body;
         this.hiderTauntButtonShadow=shadow;
@@ -1591,6 +1621,8 @@ private timerText!: Phaser.GameObjects.Text;
             this.hiderTauntButtonBody?.setVisible(false);
             this.hiderTauntButtonShadow?.setVisible(false);
             this.hiderTauntButtonHit?.setVisible(false);
+            this.hiderFartRampageTestButton?.setVisible(false);
+            this.hiderFartRampageTestHit?.setVisible(false);
             this.hiderTauntTipBubble?.setVisible(false);
             this.hiderTauntTipTitle?.setVisible(false);
             this.hiderTauntTipBody?.setVisible(false);
@@ -1620,6 +1652,8 @@ private timerText!: Phaser.GameObjects.Text;
         body.setVisible(show);
         shadow.setVisible(show);
         hit.setVisible(show);
+        this.hiderFartRampageTestButton?.setVisible(show);
+        this.hiderFartRampageTestHit?.setVisible(show);
 
         const tipBubble=this.hiderTauntTipBubble;
         const tipTitle=this.hiderTauntTipTitle;
@@ -1634,6 +1668,8 @@ private timerText!: Phaser.GameObjects.Text;
         shadow.setPosition(pos.x,pos.y+66);
         hit.setPosition(pos.x,pos.y+62);
         b.setPosition(pos.x,pos.y+62);
+        this.hiderFartRampageTestButton?.setPosition(pos.x,pos.y+96);
+        this.hiderFartRampageTestHit?.setPosition(pos.x,pos.y+96);
 
         if(tipBubble&&tipTitle&&tipBody){
             if(this.mobileControlsEnabled){
@@ -5185,6 +5221,21 @@ private timerText!: Phaser.GameObjects.Text;
         }
     
         this.updateHardenedInvincibleHints();
+    }
+
+    private showHiderFartRampageSmoke(x:number,y:number):void {
+        const core=this.add.circle(x,y,18,0x91b85b,0.50).setDepth(18020);
+        this.hiderFartRampageSmokeVfx.add(core);
+        this.tweens.add({targets:core,scale:4.6,alpha:0.10,duration:4200,ease:'Sine.Out',onComplete:()=>{this.hiderFartRampageSmokeVfx.delete(core);core.destroy();}});
+        for(let i=0;i<14;i++){const a=Math.PI*2*i/14+Math.random()*0.35;const puff=this.add.circle(x+Math.cos(a)*8,y+Math.sin(a)*8,7+Math.random()*7,0xa8cb72,0.58).setDepth(18019);this.hiderFartRampageSmokeVfx.add(puff);this.tweens.add({targets:puff,x:x+Math.cos(a)*(38+Math.random()*28),y:y+Math.sin(a)*(24+Math.random()*22),scale:2.2+Math.random()*1.2,alpha:0,duration:3600+Math.random()*700,ease:'Sine.Out',onComplete:()=>{this.hiderFartRampageSmokeVfx.delete(puff);puff.destroy();}});}
+    }
+
+    private clearAllHiderFartRampage():void {
+        this.hiderFartRampageActiveSessionIds.clear();
+        for(const object of this.hiderFartRampageSmokeVfx){this.tweens.killTweensOf(object);object.destroy();}
+        this.hiderFartRampageSmokeVfx.clear();
+        if(this.networkPlayerManager.isLocalHider())this.networkPlayerManager.setLocalMovementHardLocked(false);
+        this.hiderRandomTauntSkillBusy=false;
     }
 
     private clearAllHardenedVisuals():void {
@@ -20275,6 +20326,23 @@ const ribbon =
                     );
 
                 this.updateFartHud();
+            }),
+        );
+        this.networkUnsubscribers.push(
+            multiplayerClient.onHiderFartRampage((event)=>{
+                if(this.practiceMode!==null)return;
+                const localId=multiplayerClient.getSessionId();
+                if(event.stage==='start'){
+                    this.hiderFartRampageActiveSessionIds.add(event.sessionId);
+                    if(event.sessionId===localId){this.setHiderRandomTauntSkillBusy(true);this.networkPlayerManager.setLocalMovementHardLocked(true);this.networkPlayerManager.setLocalTauntScriptedPosition(event.x,event.y);}
+                    return;
+                }
+                if(event.stage==='smoke')this.showHiderFartRampageSmoke(event.originX,event.originY);
+                if(event.sessionId===localId&&(event.stage==='move'||event.stage==='smoke'||event.stage==='end'))this.networkPlayerManager.setLocalTauntScriptedPosition(event.x,event.y);
+                if(event.stage==='end'||event.stage==='cancel'){
+                    this.hiderFartRampageActiveSessionIds.delete(event.sessionId);
+                    if(event.sessionId===localId){if(event.stage==='end')this.networkPlayerManager.setLocalTauntScriptedPosition(event.originX,event.originY);this.networkPlayerManager.setLocalMovementHardLocked(false);this.setHiderRandomTauntSkillBusy(false);}
+                }
             }),
         );
         this.networkUnsubscribers.push(
@@ -49795,6 +49863,8 @@ this.networkUnsubscribers.push(
             .setVisible(false);
 
         this.clearVulcanForResultCapture();
+        /* V1010562C_RESULT_FART_RAMPAGE_CLEAN */
+        this.clearAllHiderFartRampage();
 
         this.exitSniperCinematic();
 
