@@ -1902,11 +1902,49 @@ this.phaseChangedHandlers.forEach(
     );
   }
 
+  /*
+   * V1010565B_BOT_LOBBY_RECONNECT_HOTFIX / VIRTUAL_LOBBY_BOT_SEATS
+   *
+   * +/- no longer inserts/removes PlayerState inside the synchronized MapSchema.
+   * In Lobby, count REAL human schema/snapshot ids and add the tiny configured
+   * bot count from lobby_snapshot. Active phases keep normal Schema authority.
+   */
   getPlayerCount(): number {
-    const schemaCount =
-      this.room?.state
-        ?.players
-        ?.size ?? 0;
+    const schemaPlayers = this.room?.state?.players as any;
+
+    if (this.getPhase() === "lobby") {
+      const ids = new Set<string>();
+
+      schemaPlayers?.forEach?.(
+        (_player: NetworkPlayerState, sessionId: string) => {
+          ids.add(String(sessionId));
+        },
+      );
+
+      this.snapshotPlayers.forEach(
+        (_player, sessionId) => {
+          ids.add(String(sessionId));
+        },
+      );
+
+      let humanCount = 0;
+      ids.forEach((sessionId) => {
+        if (
+          sessionId.startsWith("bot_") ||
+          sessionId.startsWith("bot:")
+        ) {
+          return;
+        }
+        humanCount += 1;
+      });
+
+      return Math.min(
+        10,
+        Math.max(0, humanCount) + this.snapshotBotCount,
+      );
+    }
+
+    const schemaCount = schemaPlayers?.size ?? 0;
 
     return Math.max(
       schemaCount,
@@ -4872,10 +4910,13 @@ this.room = room;
   }
 
   /* V1010565_BOTS_V1: host-only controls; server performs final authority/capacity checks. */
+  /* V1010565B_BOT_LOBBY_RECONNECT_HOTFIX: bot count changes are optimistic locally; server remains authoritative. */
   sendBotCountSelection(botCount: number): void {
     if (!Number.isFinite(botCount)) return;
+    const normalized = Math.max(0, Math.min(9, Math.floor(botCount)));
+    this.snapshotBotCount = normalized;
     this.room?.send("bot_settings", {
-      botCount: Math.max(0, Math.min(9, Math.floor(botCount))),
+      botCount: normalized,
     });
   }
 
@@ -4887,6 +4928,8 @@ this.room = room;
       botDifficulty !== "normal" &&
       botDifficulty !== "hard"
     ) return;
+    /* V1010565B_BOT_LOBBY_RECONNECT_HOTFIX: immediate visual feedback; authoritative snapshot will converge it. */
+    this.snapshotBotDifficulty = botDifficulty;
     this.room?.send("bot_settings", { botDifficulty });
   }
 

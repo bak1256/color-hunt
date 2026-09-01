@@ -17386,7 +17386,10 @@ const ribbon =
         let nextBot: NetworkPlayerState | undefined;
         for (const [sessionId, player] of players.entries()) {
             if (
-                String(sessionId).startsWith('bot:') &&
+                (
+                    String(sessionId).startsWith('bot_') ||
+                    String(sessionId).startsWith('bot:')
+                ) &&
                 player?.role === 'hider' &&
                 player?.alive &&
                 !this.botPaintAuthoredSessionIds.has(String(sessionId))
@@ -40702,6 +40705,91 @@ this.networkUnsubscribers.push(
                 );
         }
 
+
+        /*
+         * V1010565B_BOT_LOBBY_RECONNECT_HOTFIX / WAITING_BOT_GEOMETRY_FINAL_AUTHORITY
+         * The legacy timing CSS was written for exactly Paint + Hunt and gives
+         * every timing section a short fixed height. A 4-row Bot section was
+         * therefore clipped underneath Paint. Override ONLY geometry here,
+         * after all older waiting-room style blocks, then let the existing
+         * whole-panel scaler fit the resulting natural height into the canvas.
+         */
+        {
+            const styleId = 'colorhunt-v565b-bot-lobby-fit-hotfix';
+            document.getElementById(styleId)?.remove();
+
+            const style = document.createElement('style');
+            style.id = styleId;
+            style.textContent = `
+                .colorhunt-waiting-room .ch-waiting-timing {
+                    height: auto !important;
+                    min-height: 0 !important;
+                    max-height: none !important;
+                    flex: 0 0 auto !important;
+                    overflow: visible !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-bot-section {
+                    display: grid !important;
+                    grid-template-rows: 18px 28px 12px 28px !important;
+                    row-gap: 4px !important;
+                    align-content: start !important;
+                    height: 110px !important;
+                    min-height: 110px !important;
+                    max-height: 110px !important;
+                    padding: 7px !important;
+                    box-sizing: border-box !important;
+                    overflow: hidden !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-bot-section
+                .ch-waiting-timing-title {
+                    height: 18px !important;
+                    min-height: 18px !important;
+                    max-height: 18px !important;
+                    line-height: 18px !important;
+                    margin: 0 !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-bot-subtitle {
+                    display: flex !important;
+                    align-items: center !important;
+                    height: 12px !important;
+                    min-height: 12px !important;
+                    max-height: 12px !important;
+                    margin: 0 !important;
+                    line-height: 12px !important;
+                    overflow: visible !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-bot-count-options,
+                .colorhunt-waiting-room .ch-waiting-bot-difficulty-options {
+                    display: grid !important;
+                    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+                    gap: 5px !important;
+                    width: 100% !important;
+                    height: 28px !important;
+                    min-height: 28px !important;
+                    max-height: 28px !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-bot-count-options button,
+                .colorhunt-waiting-room .ch-waiting-bot-difficulty-options button {
+                    width: 100% !important;
+                    height: 28px !important;
+                    min-height: 28px !important;
+                    max-height: 28px !important;
+                    margin: 0 !important;
+                    padding: 0 4px !important;
+                    box-sizing: border-box !important;
+                    line-height: 1 !important;
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
         this.waitingRoomInfo =
             root.querySelector('.ch-waiting-info') ?? undefined;
         this.waitingRoomMapText =
@@ -41035,6 +41123,17 @@ this.networkUnsubscribers.push(
         this.updateWaitingRoomDomPosition();
         this.updateWaitingRoomDom();
         this.updateControlsHelpPosition();
+
+        /* V1010565B_BOT_LOBBY_RECONNECT_HOTFIX: re-measure after CSS/layout settles; scale the WHOLE panel only. */
+        this.time.delayedCall(
+            40,
+            () => {
+                if (this.phase !== 'lobby' || this.waitingRoomRoot !== root) return;
+                this.updateWaitingRoomDomPosition();
+                this.updateWaitingRoomDom();
+                this.updateControlsHelpPosition();
+            },
+        );
 
         this.waitingRoomViewportHandler =
             (): void => {
