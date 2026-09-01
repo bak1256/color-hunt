@@ -17989,12 +17989,16 @@ const ribbon =
         try {
             const sampler = this.createCurrentPaintBackgroundSampler();
             const difficulty = multiplayerClient.getBotDifficulty();
+            /* V1010565Q_BOT_ROLE_BALANCE_REWORK: Hider difficulty is intentionally stronger than Hunter difficulty. */
             const cfg =
                 difficulty === 'easy'
-                    ? { step: 5, baseSize: 12, quant: 40, noise: 24 }
+                    /* old NORMAL */
+                    ? { step: 3, baseSize: 8, quant: 20, noise: 10 }
                     : difficulty === 'hard'
-                        ? { step: 2, baseSize: 6, quant: 8, noise: 3 }
-                        : { step: 3, baseSize: 8, quant: 20, noise: 10 };
+                        /* stronger than old HARD: same dense coverage, almost exact sampled color */
+                        ? { step: 2, baseSize: 5, quant: 4, noise: 1 }
+                        /* NORMAL = old HARD */
+                        : { step: 2, baseSize: 6, quant: 8, noise: 3 };
 
             let seed = 2166136261 >>> 0;
             for (let i = 0; i < nextBotId.length; i += 1) {
