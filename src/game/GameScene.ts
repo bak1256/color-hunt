@@ -40908,6 +40908,113 @@ this.networkUnsubscribers.push(
             document.head.appendChild(style);
         }
 
+        /*
+         * V1010565D_TIMING_PADDING_RESTORE
+         * v565c fixed clipping by giving Bot a real grid row, but Paint/Hunt
+         * were left at 65px and inherited the older compact 3px vertical
+         * padding. Restore the known comfortable 73px timing-card geometry:
+         * 7px top + 18px title + 7px gap + 31px controls + 8px bottom.
+         * The WHOLE waiting panel is still uniformly scaled afterwards.
+         */
+        {
+            const styleId = 'colorhunt-v565d-timing-padding-restore';
+            document.getElementById(styleId)?.remove();
+
+            const style = document.createElement('style');
+            style.id = styleId;
+            style.textContent = `
+                .colorhunt-waiting-room.ch-uniform-mobile-scale
+                .ch-waiting-timing {
+                    grid-template-rows: 118px 73px 73px !important;
+                    grid-auto-rows: max-content !important;
+                    row-gap: 7px !important;
+                    gap: 7px !important;
+                    height: 278px !important;
+                    min-height: 278px !important;
+                    max-height: 278px !important;
+                    flex: 0 0 278px !important;
+                    overflow: visible !important;
+                }
+
+                .colorhunt-waiting-room.ch-uniform-mobile-scale
+                .ch-waiting-timing
+                > section:not(.ch-waiting-bot-section) {
+                    position: relative !important;
+                    display: grid !important;
+                    grid-template-columns: minmax(0, 1fr) !important;
+                    grid-template-rows: 18px 31px !important;
+                    align-content: start !important;
+                    row-gap: 7px !important;
+                    gap: 7px !important;
+                    width: 100% !important;
+                    height: 73px !important;
+                    min-height: 73px !important;
+                    max-height: 73px !important;
+                    margin: 0 !important;
+                    padding: 7px 7px 8px !important;
+                    box-sizing: border-box !important;
+                    overflow: hidden !important;
+                }
+
+                .colorhunt-waiting-room.ch-uniform-mobile-scale
+                .ch-waiting-timing
+                > section:not(.ch-waiting-bot-section)
+                .ch-waiting-timing-title {
+                    position: static !important;
+                    inset: auto !important;
+                    transform: none !important;
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: space-between !important;
+                    gap: 6px !important;
+                    width: 100% !important;
+                    height: 18px !important;
+                    min-height: 18px !important;
+                    max-height: 18px !important;
+                    margin: 0 !important;
+                    padding: 0 1px !important;
+                    box-sizing: border-box !important;
+                    line-height: 18px !important;
+                    overflow: visible !important;
+                }
+
+                .colorhunt-waiting-room.ch-uniform-mobile-scale
+                .ch-waiting-timing
+                > section:not(.ch-waiting-bot-section)
+                .ch-waiting-time-options {
+                    position: static !important;
+                    inset: auto !important;
+                    transform: none !important;
+                    display: grid !important;
+                    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+                    gap: 5px !important;
+                    width: 100% !important;
+                    height: 31px !important;
+                    min-height: 31px !important;
+                    max-height: 31px !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    box-sizing: border-box !important;
+                }
+
+                .colorhunt-waiting-room.ch-uniform-mobile-scale
+                .ch-waiting-timing
+                > section:not(.ch-waiting-bot-section)
+                .ch-waiting-time-options button {
+                    width: 100% !important;
+                    height: 31px !important;
+                    min-height: 31px !important;
+                    max-height: 31px !important;
+                    margin: 0 !important;
+                    padding: 0 4px !important;
+                    box-sizing: border-box !important;
+                    line-height: 1 !important;
+                }
+            `;
+
+            document.head.appendChild(style);
+        }
+
         this.waitingRoomInfo =
             root.querySelector('.ch-waiting-info') ?? undefined;
         this.waitingRoomMapText =
