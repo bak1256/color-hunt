@@ -79987,7 +79987,7 @@ this.weaponHeat =
         this.syncDesktopHiderCursor();
     }
 
-    /* V1010565K_HIDER_CURSOR_MOBILE_FART_VISIBLE_ACTIVE: desktop Hiders always keep a visible native mouse cursor in Hunt. */
+    /* V1010565K_HIDER_CURSOR_MOBILE_FART_VISIBLE_ACTIVE: desktop Hiders and Hunters always keep a visible native mouse cursor in Hunt. */
     private syncDesktopHiderCursor(): void {
         if (
             this.mobileControlsEnabled ||
@@ -80021,10 +80021,15 @@ this.weaponHeat =
             return;
         }
 
+        /*
+         * V1010565O_DESKTOP_HUNTER_CURSOR_VISIBLE
+         * Desktop cursor policy is now intentionally identical for BOTH roles.
+         * Hunter still keeps the in-game aim/crosshair visuals, but the native
+         * OS mouse cursor must never disappear after Sniper/Vulcan teardown,
+         * reconnect, role recovery, or a later Hunt round.
+         */
         const desiredCursor =
-            localIsHider
-                ? 'default'
-                : 'none';
+            'default';
 
         this.input.setDefaultCursor(
             desiredCursor,
