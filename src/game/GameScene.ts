@@ -166,6 +166,7 @@ import {
     type NetworkSniperFired,
     type NetworkHiderHardenedState,
     type NetworkHiderHardenedHit,
+    type NetworkBotMercy,
     type NetworkHiderTripleTeleport,
     type NetworkHiderCloneDanceParty,
     type NetworkVulcanState,
@@ -5063,6 +5064,69 @@ private timerText!: Phaser.GameObjects.Text;
         root.style.display='flex';
         hint.style.display=this.mobileControlsEnabled?'none':'block';
         button.style.display=this.mobileControlsEnabled?'block':'none';
+    }
+
+    /* V1010565G_BOT_HUMANIZED_HUNT: visual-only 20% mercy cue. */
+    private applyBotMercy(event: NetworkBotMercy): void {
+        if (this.phase !== 'hunt') {
+            return;
+        }
+
+        const language = getLanguage();
+        const sigh =
+            language === 'ja'
+                ? 'ふぅ…'
+                : language === 'en'
+                    ? 'Phew…'
+                    : '후…';
+
+        const puff = this.add
+            .ellipse(
+                event.x + 13,
+                event.y - 28,
+                17,
+                9,
+                0xe9f5f4,
+                0.82,
+            )
+            .setStrokeStyle(
+                1,
+                0x6d8588,
+                0.72,
+            )
+            .setDepth(1130);
+
+        const text = this.add
+            .text(
+                event.x,
+                event.y - 42,
+                sigh,
+                {
+                    fontFamily: 'monospace',
+                    fontSize: '13px',
+                    fontStyle: 'bold',
+                    color: '#405b61',
+                    backgroundColor: '#f2fbf8e8',
+                    padding: {
+                        x: 6,
+                        y: 3,
+                    },
+                },
+            )
+            .setOrigin(0.5, 1)
+            .setDepth(1131);
+
+        this.tweens.add({
+            targets: [puff, text],
+            y: '-=14',
+            alpha: 0,
+            duration: 1050,
+            ease: 'Cubic.Out',
+            onComplete: () => {
+                puff.destroy();
+                text.destroy();
+            },
+        });
     }
 
     private applyHardenedState(state:NetworkHiderHardenedState):void {
@@ -21625,6 +21689,7 @@ const localId =
 
         this.networkUnsubscribers.push(multiplayerClient.onHiderHardenedState((state: NetworkHiderHardenedState) => this.applyHardenedState(state)));
         this.networkUnsubscribers.push(multiplayerClient.onHiderHardenedHit((event: NetworkHiderHardenedHit) => this.applyHardenedHit(event)));
+        this.networkUnsubscribers.push(multiplayerClient.onBotMercy((event: NetworkBotMercy) => this.applyBotMercy(event)));
         this.networkUnsubscribers.push(multiplayerClient.onHiderTripleTeleport((event: NetworkHiderTripleTeleport) => this.applyTripleTeleport(event)));
         this.networkUnsubscribers.push(
             multiplayerClient.onHiderCloneDanceParty(

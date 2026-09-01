@@ -118,6 +118,15 @@ export type NetworkHiderHardenedHit = { sessionId: string; x: number; y: number;
 export type HiderHardenedStateHandler = (state: NetworkHiderHardenedState) => void;
 export type HiderHardenedHitHandler = (event: NetworkHiderHardenedHit) => void;
 
+/* V1010565G_BOT_HUMANIZED_HUNT: visual-only Hunter-bot mercy/sigh cue. */
+export type NetworkBotMercy = {
+  sessionId: string;
+  x: number;
+  y: number;
+  serverNow: number;
+};
+export type BotMercyHandler = (event: NetworkBotMercy) => void;
+
 /* V1010554A_TRIPLE_TELEPORT_CLIENT */
 export type NetworkHiderTripleTeleport = {
   sessionId: string;
@@ -1204,6 +1213,7 @@ this.phaseChangedHandlers.forEach(
 
   private readonly hiderHardenedStateHandlers = new Set<HiderHardenedStateHandler>();
   private readonly hiderHardenedHitHandlers = new Set<HiderHardenedHitHandler>();
+  private readonly botMercyHandlers = new Set<BotMercyHandler>();
   private readonly hiderTripleTeleportHandlers = new Set<HiderTripleTeleportHandler>();
   private readonly hiderCloneDancePartyHandlers =
     new Set<HiderCloneDancePartyHandler>();
@@ -3940,6 +3950,14 @@ this.room = room;
         pose: Math.max(1, Math.min(5, Number(payload?.pose) || 1)), endsAt: Number(payload?.endsAt ?? 0), serverNow: Number(payload?.serverNow ?? Date.now()),
       }));
     });
+    room.onMessage<NetworkBotMercy>("bot_mercy", (payload) => {
+      this.botMercyHandlers.forEach((handler) => handler({
+        sessionId: String(payload?.sessionId ?? ""),
+        x: Number(payload?.x ?? 0),
+        y: Number(payload?.y ?? 0),
+        serverNow: Number(payload?.serverNow ?? Date.now()),
+      }));
+    });
     room.onMessage<NetworkHiderTripleTeleport>("hider_triple_teleport", (payload) => {
       const stage = payload?.stage === 'start' || payload?.stage === 'step' || payload?.stage === 'vanish' || payload?.stage === 'return' || payload?.stage === 'cancel'
         ? payload.stage : 'cancel';
@@ -5001,6 +5019,10 @@ this.room = room;
   }
   onHiderHardenedHit(handler: HiderHardenedHitHandler): () => void {
     this.hiderHardenedHitHandlers.add(handler); return () => this.hiderHardenedHitHandlers.delete(handler);
+  }
+  onBotMercy(handler: BotMercyHandler): () => void {
+    this.botMercyHandlers.add(handler);
+    return () => this.botMercyHandlers.delete(handler);
   }
   onHiderTripleTeleport(handler: HiderTripleTeleportHandler): () => void {
     this.hiderTripleTeleportHandlers.add(handler); return () => this.hiderTripleTeleportHandlers.delete(handler);
