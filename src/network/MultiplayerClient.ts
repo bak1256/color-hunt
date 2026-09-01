@@ -1,3 +1,4 @@
+/* V1010565I_BOT_ATTENTION_STIMULUS: Random Taunt emits a server-validated Hunter-bot attention ping. */
 /* V1010564_REMOVE_FART_RAMPAGE_TEST_ONLY_CLIENT: remove temporary direct Fart Rampage TEST sender only. */
 /* V1010562C_HIDER_FART_RAMPAGE_TEST_BUTTON_ROBUST: Fart Rampage transport + direct TEST request. */
 /* V1010556_HIDER_LONG_SKILL_CANCEL_FIRST_GUIDE_CLIENT: Hider long-skill cancel transport. */
@@ -5029,10 +5030,20 @@ this.room = room;
     if (!this.isGameplayTransportStable()) return;
     /* Random Taunt entry point: server authoritatively chooses Hardened or Triple Teleport. */
     this.room?.send("hider_random_taunt", {});
+    /*
+     * V1010565I_BOT_ATTENTION_STIMULUS: visual/loud taunts should attract nearby Hunter bots even if
+     * the exact taunt implementation changes. Position is NOT sent/trusted.
+     */
+    this.room?.send("hider_bot_taunt_ping", {
+      kind: "random_taunt",
+    });
   }
   sendHiderCloneDanceTest(): void {
     if (!this.isGameplayTransportStable()) return;
     this.room?.send("hider_clone_dance_test", {});
+    this.room?.send("hider_bot_taunt_ping", {
+      kind: "clone_dance",
+    });
   }
   onHiderHardenedState(handler: HiderHardenedStateHandler): () => void {
     this.hiderHardenedStateHandlers.add(handler); return () => this.hiderHardenedStateHandlers.delete(handler);
