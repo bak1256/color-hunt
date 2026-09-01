@@ -167,6 +167,7 @@ import {
     type NetworkHiderHardenedState,
     type NetworkHiderHardenedHit,
     type NetworkBotMercy,
+    type NetworkBotRage,
     type NetworkHiderTripleTeleport,
     type NetworkHiderCloneDanceParty,
     type NetworkVulcanState,
@@ -5064,6 +5065,85 @@ private timerText!: Phaser.GameObjects.Text;
         root.style.display='flex';
         hint.style.display=this.mobileControlsEnabled?'none':'block';
         button.style.display=this.mobileControlsEnabled?'block':'none';
+    }
+
+    /* V1010565H_HARDENED_RAGE_LOCK: Hardened taunt made this bot angry. Visual only. */
+    private applyBotRage(event: NetworkBotRage): void {
+        if (this.phase !== 'hunt') {
+            return;
+        }
+
+        const language = getLanguage();
+        const label =
+            language === 'ja'
+                ? '💢 ターゲットロック'
+                : language === 'en'
+                    ? '💢 TARGET LOCK'
+                    : '💢 타깃 고정!';
+
+        const ring = this.add
+            .circle(
+                event.x,
+                event.y - 20,
+                17,
+                0xff4d45,
+                0.10,
+            )
+            .setStrokeStyle(
+                3,
+                0xff544c,
+                0.92,
+            )
+            .setDepth(1132);
+
+        const text = this.add
+            .text(
+                event.x,
+                event.y - 39,
+                label,
+                {
+                    fontFamily: 'monospace',
+                    fontSize: '12px',
+                    fontStyle: 'bold',
+                    color: '#fff4e8',
+                    backgroundColor: '#8e241fe8',
+                    stroke: '#36100e',
+                    strokeThickness: 2,
+                    padding: {
+                        x: 6,
+                        y: 3,
+                    },
+                },
+            )
+            .setOrigin(0.5, 1)
+            .setDepth(1133);
+
+        this.tweens.add({
+            targets: ring,
+            scale: 1.45,
+            alpha: 0,
+            duration: 720,
+            ease: 'Cubic.Out',
+            onComplete: () => ring.destroy(),
+        });
+
+        this.tweens.add({
+            targets: text,
+            y: '-=9',
+            duration: 130,
+            yoyo: true,
+            repeat: 3,
+            ease: 'Sine.InOut',
+            onComplete: () => {
+                this.tweens.add({
+                    targets: text,
+                    alpha: 0,
+                    y: '-=8',
+                    duration: 260,
+                    onComplete: () => text.destroy(),
+                });
+            },
+        });
     }
 
     /* V1010565G_BOT_HUMANIZED_HUNT: visual-only 20% mercy cue. */
@@ -21690,6 +21770,7 @@ const localId =
         this.networkUnsubscribers.push(multiplayerClient.onHiderHardenedState((state: NetworkHiderHardenedState) => this.applyHardenedState(state)));
         this.networkUnsubscribers.push(multiplayerClient.onHiderHardenedHit((event: NetworkHiderHardenedHit) => this.applyHardenedHit(event)));
         this.networkUnsubscribers.push(multiplayerClient.onBotMercy((event: NetworkBotMercy) => this.applyBotMercy(event)));
+        this.networkUnsubscribers.push(multiplayerClient.onBotRage((event: NetworkBotRage) => this.applyBotRage(event)));
         this.networkUnsubscribers.push(multiplayerClient.onHiderTripleTeleport((event: NetworkHiderTripleTeleport) => this.applyTripleTeleport(event)));
         this.networkUnsubscribers.push(
             multiplayerClient.onHiderCloneDanceParty(
