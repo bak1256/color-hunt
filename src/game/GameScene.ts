@@ -11682,6 +11682,10 @@ private timerText!: Phaser.GameObjects.Text;
     private readonly botPaintAuthoredSessionIds = new Set<string>();
     private botPaintLastAuthorAttemptAt = 0;
     private botPaintAuthoringNotBefore = 0;
+    /* V1010565E_BOT_AI_VISUAL_LOBBY_POLISH: local-only Lobby bot previews + stationary roster visibility heal. */
+    private readonly lobbyBotPreviewActors: Phaser.GameObjects.Container[] = [];
+    private lobbyBotPreviewKey = '';
+    private lastLobbyRosterVisibilityHealAt = 0;
     private waitingRoomResizeObserver?: ResizeObserver;
     private waitingRoomViewportHandler?: () => void;
     /* V1010451M3J2_WAITING_MOCK_HOST_TRANSFER_ROBUST: guest->host transition notification state. */
@@ -13843,6 +13847,9 @@ private timerText!: Phaser.GameObjects.Text;
         this.syncMapBackground();
         /* V1010565_BOTS_V1: at most one bot is authored per throttled pass. */
         this.updateHostBotPaintAuthoring();
+        /* V1010565E_BOT_AI_VISUAL_LOBBY_POLISH: preview virtual bot seats + heal stationary Lobby roster visibility. */
+        this.updateLobbyBotPreviewActors();
+        this.updateLobbyRosterVisibilityHeal();
 
         /*
          * V1010453B_SNIPER_FRAME_UPDATE_FIX
@@ -17352,6 +17359,97 @@ const ribbon =
      * - difficulty changes color precision, dab size and sampling density,
      *   not whether body parts are left unpainted.
      */
+    /*
+     * V1010565E_BOT_AI_VISUAL_LOBBY_POLISH / LOBBY_BOT_PREVIEW
+     * Lobby +/- stays virtual to protect WebSocket stability. Render only the
+     * not-yet-materialized seats locally as obvious little robots instead of
+     * mutating synchronized PlayerState on each click.
+     */
+    private destroyLobbyBotPreviewActors(): void {
+        this.lobbyBotPreviewActors.forEach((actor) => actor.destroy(true));
+        this.lobbyBotPreviewActors.length = 0;
+        this.lobbyBotPreviewKey = '';
+    }
+
+    private createLobbyBotPreviewActor(index: number): Phaser.GameObjects.Container {
+        const leftWorldWidth = Math.min(600, this.gameWidth * 0.62);
+        const columns = 3;
+        const col = index % columns;
+        const row = Math.floor(index / columns);
+        const x = 95 + col * Math.max(125, (leftWorldWidth - 170) / 2);
+        const y = 145 + row * 128 + ((index * 17) % 23);
+
+        const shadow = this.add.ellipse(0, 26, 34, 11, 0x304d37, 0.25);
+        const body = this.add.rectangle(0, 7, 30, 31, 0x8da4ad).setStrokeStyle(2, 0x39505a);
+        const head = this.add.rectangle(0, -20, 31, 24, 0xb9cbd1).setStrokeStyle(2, 0x39505a);
+        const leftEye = this.add.rectangle(-7, -22, 5, 5, 0x183a46);
+        const rightEye = this.add.rectangle(7, -22, 5, 5, 0x183a46);
+        const mouth = this.add.rectangle(0, -13, 13, 3, 0x526a73);
+        const antenna = this.add.rectangle(0, -37, 3, 11, 0x526a73);
+        const lamp = this.add.circle(0, -44, 4, 0x63c977);
+        const chest = this.add.rectangle(0, 5, 17, 10, 0x6f8790).setStrokeStyle(1, 0x39505a);
+        const leftArm = this.add.rectangle(-20, 8, 8, 24, 0x9dafb6).setStrokeStyle(1, 0x39505a);
+        const rightArm = this.add.rectangle(20, 8, 8, 24, 0x9dafb6).setStrokeStyle(1, 0x39505a);
+        const leftLeg = this.add.rectangle(-8, 31, 9, 19, 0x81969f).setStrokeStyle(1, 0x39505a);
+        const rightLeg = this.add.rectangle(8, 31, 9, 19, 0x81969f).setStrokeStyle(1, 0x39505a);
+        const label = this.add.text(0, -50, `BOT ${index + 1} · AI`, {
+            fontFamily: 'monospace',
+            fontSize: '10px',
+            fontStyle: 'bold',
+            color: '#234552',
+            backgroundColor: '#d9f4ffdd',
+            padding: { x: 5, y: 3 },
+        }).setOrigin(0.5, 1);
+
+        return this.add.container(x, y, [
+            shadow, body, head, leftEye, rightEye, mouth, antenna, lamp, chest,
+            leftArm, rightArm, leftLeg, rightLeg, label,
+        ]).setDepth(132);
+    }
+
+    private updateLobbyBotPreviewActors(): void {
+        if (
+            this.phase !== 'lobby' ||
+            !this.isMultiplayerSession()
+        ) {
+            if (this.lobbyBotPreviewActors.length > 0) this.destroyLobbyBotPreviewActors();
+            return;
+        }
+
+        const room = multiplayerClient.getRoom();
+        if (!room) {
+            this.destroyLobbyBotPreviewActors();
+            return;
+        }
+
+        let physicalBotCount = 0;
+        room.state.players?.forEach?.((_player: NetworkPlayerState, sessionId: string) => {
+            const id = String(sessionId);
+            if (id.startsWith('bot_') || id.startsWith('bot:')) physicalBotCount += 1;
+        });
+
+        const configured = multiplayerClient.getBotCount();
+        const previewCount = Math.max(0, configured - physicalBotCount);
+        const key = `${room.roomId}:${configured}:${physicalBotCount}`;
+        if (key === this.lobbyBotPreviewKey && this.lobbyBotPreviewActors.length === previewCount) return;
+
+        this.destroyLobbyBotPreviewActors();
+        this.lobbyBotPreviewKey = key;
+        for (let i = 0; i < previewCount; i += 1) {
+            this.lobbyBotPreviewActors.push(this.createLobbyBotPreviewActor(i));
+        }
+    }
+
+    private updateLobbyRosterVisibilityHeal(): void {
+        if (this.phase !== 'lobby' || !this.isMultiplayerSession()) return;
+        if (this.time.now - this.lastLobbyRosterVisibilityHealAt < 350) return;
+        this.lastLobbyRosterVisibilityHealAt = this.time.now;
+
+        /* No network sends: only make already-authoritative stationary players visible. */
+        this.networkPlayerManager?.syncPlayersFromCurrentRoom();
+        this.networkPlayerManager?.forceLobbyPositionsFromState();
+    }
+
     private updateHostBotPaintAuthoring(): void {
         if (
             this.phase !== 'paint' ||
@@ -41015,6 +41113,102 @@ this.networkUnsubscribers.push(
             document.head.appendChild(style);
         }
 
+        /*
+         * V1010565E_BOT_AI_VISUAL_LOBBY_POLISH / TIMING_BREATHING_ROOM_FINAL_AUTHORITY
+         * v565d restored padding only when ch-uniform-mobile-scale was present.
+         * Some narrow/mobile layouts never carry that class at the exact DOM
+         * build moment, so the older compact rules still won. Apply the same
+         * geometry unconditionally and let the existing WHOLE-panel scaler fit it.
+         */
+        {
+            const styleId = 'colorhunt-v565e-timing-breathing-room';
+            document.getElementById(styleId)?.remove();
+            const style = document.createElement('style');
+            style.id = styleId;
+            style.textContent = `
+                .colorhunt-waiting-room .ch-waiting-timing {
+                    grid-template-rows: 118px 73px 73px !important;
+                    grid-auto-rows: max-content !important;
+                    row-gap: 7px !important;
+                    gap: 7px !important;
+                    height: 278px !important;
+                    min-height: 278px !important;
+                    max-height: 278px !important;
+                    flex: 0 0 278px !important;
+                    overflow: visible !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-timing
+                > section:not(.ch-waiting-bot-section) {
+                    position: relative !important;
+                    display: grid !important;
+                    grid-template-columns: minmax(0, 1fr) !important;
+                    grid-template-rows: 18px 31px !important;
+                    align-content: start !important;
+                    row-gap: 7px !important;
+                    gap: 7px !important;
+                    width: 100% !important;
+                    height: 73px !important;
+                    min-height: 73px !important;
+                    max-height: 73px !important;
+                    margin: 0 !important;
+                    padding: 7px 7px 8px !important;
+                    box-sizing: border-box !important;
+                    overflow: hidden !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-timing
+                > section:not(.ch-waiting-bot-section)
+                .ch-waiting-timing-title {
+                    position: static !important;
+                    inset: auto !important;
+                    transform: none !important;
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: space-between !important;
+                    width: 100% !important;
+                    height: 18px !important;
+                    min-height: 18px !important;
+                    max-height: 18px !important;
+                    margin: 0 !important;
+                    padding: 0 1px !important;
+                    box-sizing: border-box !important;
+                    line-height: 18px !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-timing
+                > section:not(.ch-waiting-bot-section)
+                .ch-waiting-time-options {
+                    position: static !important;
+                    inset: auto !important;
+                    transform: none !important;
+                    display: grid !important;
+                    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+                    gap: 5px !important;
+                    width: 100% !important;
+                    height: 31px !important;
+                    min-height: 31px !important;
+                    max-height: 31px !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    box-sizing: border-box !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-timing
+                > section:not(.ch-waiting-bot-section)
+                .ch-waiting-time-options button {
+                    width: 100% !important;
+                    height: 31px !important;
+                    min-height: 31px !important;
+                    max-height: 31px !important;
+                    margin: 0 !important;
+                    padding: 0 4px !important;
+                    box-sizing: border-box !important;
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
         this.waitingRoomInfo =
             root.querySelector('.ch-waiting-info') ?? undefined;
         this.waitingRoomMapText =
@@ -41529,6 +41723,39 @@ this.networkUnsubscribers.push(
         ) {
             return;
         }
+
+        /* V1010565E_BOT_AI_VISUAL_LOBBY_POLISH / TIMING_INLINE_FINAL_LOCK: beat every legacy !important rescue stylesheet. */
+        this.waitingRoomRoot
+            .querySelectorAll<HTMLElement>(
+                '.ch-waiting-timing > section:not(.ch-waiting-bot-section)',
+            )
+            .forEach((section) => {
+                section.style.setProperty('display', 'grid', 'important');
+                section.style.setProperty('grid-template-rows', '18px 31px', 'important');
+                section.style.setProperty('row-gap', '7px', 'important');
+                section.style.setProperty('gap', '7px', 'important');
+                section.style.setProperty('height', '73px', 'important');
+                section.style.setProperty('min-height', '73px', 'important');
+                section.style.setProperty('max-height', '73px', 'important');
+                section.style.setProperty('padding', '7px 7px 8px', 'important');
+                section.style.setProperty('box-sizing', 'border-box', 'important');
+
+                const title = section.querySelector<HTMLElement>('.ch-waiting-timing-title');
+                title?.style.setProperty('position', 'static', 'important');
+                title?.style.setProperty('height', '18px', 'important');
+                title?.style.setProperty('min-height', '18px', 'important');
+                title?.style.setProperty('max-height', '18px', 'important');
+                title?.style.setProperty('margin', '0', 'important');
+                title?.style.setProperty('padding', '0 1px', 'important');
+
+                const options = section.querySelector<HTMLElement>('.ch-waiting-time-options');
+                options?.style.setProperty('position', 'static', 'important');
+                options?.style.setProperty('height', '31px', 'important');
+                options?.style.setProperty('min-height', '31px', 'important');
+                options?.style.setProperty('max-height', '31px', 'important');
+                options?.style.setProperty('margin', '0', 'important');
+                options?.style.setProperty('padding', '0', 'important');
+            });
 
         this.setUnifiedBgmButtonVisible(
             false,

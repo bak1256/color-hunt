@@ -1038,6 +1038,8 @@ export class NetworkPlayerManager {
         player.role,
       );
 
+      this.refreshBotRobotVisual(createdView);
+
       /*
        * 생성 직후 서버 좌표를 컨테이너와 페인트 레이어에
        * 즉시 동일하게 적용합니다.
@@ -1831,6 +1833,7 @@ export class NetworkPlayerManager {
 
     this.players.forEach(
       (view, sessionId) => {
+        this.refreshBotRobotVisual(view);
         if (
           this.cinematicTransformOwnedSessionIds.has(
             sessionId,
@@ -4617,6 +4620,60 @@ export class NetworkPlayerManager {
     );
   }
 
+
+  /* V1010565E_BOT_AI_VISUAL_LOBBY_POLISH: obvious bot rendering without changing gameplay hitboxes. */
+  private isBotSessionId(sessionId: string): boolean {
+    return sessionId.startsWith("bot_") || sessionId.startsWith("bot:");
+  }
+
+  private ensureBotRobotOverlay(view: NetworkPlayerView): Phaser.GameObjects.Container | undefined {
+    if (!this.isBotSessionId(view.sessionId)) return undefined;
+
+    const existing = view.container.getByName(
+      "network-bot-robot-overlay",
+    ) as Phaser.GameObjects.Container | null;
+    if (existing) return existing;
+
+    const body = this.scene.add.rectangle(0, 6, 31, 32, 0x8da4ad).setStrokeStyle(2, 0x39505a);
+    const head = this.scene.add.rectangle(0, -21, 32, 24, 0xb9cbd1).setStrokeStyle(2, 0x39505a);
+    const leftEye = this.scene.add.rectangle(-7, -23, 5, 5, 0x183a46);
+    const rightEye = this.scene.add.rectangle(7, -23, 5, 5, 0x183a46);
+    const mouth = this.scene.add.rectangle(0, -14, 13, 3, 0x526a73);
+    const antenna = this.scene.add.rectangle(0, -38, 3, 11, 0x526a73);
+    const lamp = this.scene.add.circle(0, -45, 4, 0x63c977);
+    const chest = this.scene.add.rectangle(0, 4, 17, 10, 0x6f8790).setStrokeStyle(1, 0x39505a);
+    const leftArm = this.scene.add.rectangle(-20, 7, 8, 24, 0x9dafb6).setStrokeStyle(1, 0x39505a);
+    const rightArm = this.scene.add.rectangle(20, 7, 8, 24, 0x9dafb6).setStrokeStyle(1, 0x39505a);
+    const leftLeg = this.scene.add.rectangle(-8, 31, 9, 19, 0x81969f).setStrokeStyle(1, 0x39505a);
+    const rightLeg = this.scene.add.rectangle(8, 31, 9, 19, 0x81969f).setStrokeStyle(1, 0x39505a);
+
+    const overlay = this.scene.add.container(0, 0, [
+      body, head, leftEye, rightEye, mouth, antenna, lamp, chest,
+      leftArm, rightArm, leftLeg, rightLeg,
+    ]).setName("network-bot-robot-overlay");
+
+    view.container.add(overlay);
+    return overlay;
+  }
+
+  private refreshBotRobotVisual(view: NetworkPlayerView): void {
+    if (!this.isBotSessionId(view.sessionId)) return;
+    const overlay = this.ensureBotRobotOverlay(view);
+    if (!overlay) return;
+
+    const phase = multiplayerClient.getRoom()?.state?.phase ?? "lobby";
+    /* Hider bots must keep camouflage unobstructed in Paint/Hunt. */
+    const showRobot = view.alive && (phase === "lobby" || view.role === "hunter");
+    overlay.setVisible(showRobot);
+
+    if (showRobot) {
+      view.nameText.setBackgroundColor("#d9f4ffdd");
+      view.nameText.setColor("#234552");
+    } else {
+      view.nameText.setBackgroundColor("#fff4d6dd");
+      view.nameText.setColor("#4f3f34");
+    }
+  }
 
   private createPlayerContainer(
     player: NetworkPlayerState,
