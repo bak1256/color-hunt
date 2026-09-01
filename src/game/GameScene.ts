@@ -40790,6 +40790,124 @@ this.networkUnsubscribers.push(
             document.head.appendChild(style);
         }
 
+        /*
+         * V1010565C_BOT_UI_TRACK_HOTFIX
+         * Final authority for the THREE timing grid rows after Bot was added.
+         * Important: sizing the Bot item alone is insufficient; CSS Grid's
+         * parent row itself must also be 118px or Paint overlaps it.
+         */
+        {
+            const styleId = 'colorhunt-v565c-bot-ui-track-hotfix';
+            document.getElementById(styleId)?.remove();
+
+            const style = document.createElement('style');
+            style.id = styleId;
+            style.textContent = `
+                /* Parent owns the real flow height: Bot + Paint + Hunt. */
+                .colorhunt-waiting-room .ch-waiting-timing {
+                    display: grid !important;
+                    grid-template-columns: minmax(0, 1fr) !important;
+                    grid-template-rows: 118px 65px 65px !important;
+                    grid-auto-rows: max-content !important;
+                    column-gap: 0 !important;
+                    row-gap: 7px !important;
+                    gap: 7px !important;
+                    width: 100% !important;
+                    height: 262px !important;
+                    min-height: 262px !important;
+                    max-height: 262px !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    box-sizing: border-box !important;
+                    overflow: visible !important;
+                    flex: 0 0 262px !important;
+                    align-content: start !important;
+                }
+
+                /* Bot = title / count controls / difficulty label / difficulty controls. */
+                .colorhunt-waiting-room .ch-waiting-timing
+                > .ch-waiting-bot-section {
+                    position: relative !important;
+                    display: grid !important;
+                    grid-template-columns: minmax(0, 1fr) !important;
+                    grid-template-rows: 18px 30px 14px 30px !important;
+                    row-gap: 4px !important;
+                    gap: 4px !important;
+                    width: 100% !important;
+                    height: 118px !important;
+                    min-height: 118px !important;
+                    max-height: 118px !important;
+                    margin: 0 !important;
+                    padding: 7px !important;
+                    box-sizing: border-box !important;
+                    overflow: hidden !important;
+                    align-content: start !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-bot-section
+                .ch-waiting-timing-title {
+                    height: 18px !important;
+                    min-height: 18px !important;
+                    max-height: 18px !important;
+                    margin: 0 !important;
+                    line-height: 18px !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-bot-subtitle {
+                    display: flex !important;
+                    align-items: center !important;
+                    width: 100% !important;
+                    height: 14px !important;
+                    min-height: 14px !important;
+                    max-height: 14px !important;
+                    margin: 0 !important;
+                    padding: 0 1px !important;
+                    box-sizing: border-box !important;
+                    line-height: 14px !important;
+                    overflow: visible !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-bot-count-options,
+                .colorhunt-waiting-room .ch-waiting-bot-difficulty-options {
+                    display: grid !important;
+                    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+                    gap: 5px !important;
+                    width: 100% !important;
+                    height: 30px !important;
+                    min-height: 30px !important;
+                    max-height: 30px !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    box-sizing: border-box !important;
+                    overflow: visible !important;
+                }
+
+                .colorhunt-waiting-room .ch-waiting-bot-count-options button,
+                .colorhunt-waiting-room .ch-waiting-bot-difficulty-options button {
+                    width: 100% !important;
+                    height: 30px !important;
+                    min-height: 30px !important;
+                    max-height: 30px !important;
+                    margin: 0 !important;
+                    padding: 0 4px !important;
+                    box-sizing: border-box !important;
+                    line-height: 1 !important;
+                }
+
+                /* Paint/Hunt remain exactly their established 65px cards. */
+                .colorhunt-waiting-room .ch-waiting-timing
+                > section:not(.ch-waiting-bot-section) {
+                    height: 65px !important;
+                    min-height: 65px !important;
+                    max-height: 65px !important;
+                    margin: 0 !important;
+                    box-sizing: border-box !important;
+                }
+            `;
+
+            document.head.appendChild(style);
+        }
+
         this.waitingRoomInfo =
             root.querySelector('.ch-waiting-info') ?? undefined;
         this.waitingRoomMapText =
@@ -41126,7 +41244,7 @@ this.networkUnsubscribers.push(
 
         /* V1010565B_BOT_LOBBY_RECONNECT_HOTFIX: re-measure after CSS/layout settles; scale the WHOLE panel only. */
         this.time.delayedCall(
-            40,
+            80,
             () => {
                 if (this.phase !== 'lobby' || this.waitingRoomRoot !== root) return;
                 this.updateWaitingRoomDomPosition();
