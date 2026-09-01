@@ -1,3 +1,4 @@
+/* V1010565N2_SNIPER_ROUND_LIFECYCLE_HARD_RESET_ROBUST: disposable sniper DOM/camera render epoch per activation; supports pre/post-v565m sources. */
 /* V1010564C_REMOVE_LEFTOVER_FART_TEST_UI_REFERENCES: remove stale temporary Fart Rampage TEST HUD references only. */
 /* V1010564B_REPAIR_HIDER_TAUNT_HUD_AFTER_TEST_REMOVAL: restore clean production Random Taunt HUD after v564 TEST-button removal. */
 /* V1010564_REMOVE_FART_RAMPAGE_TEST_ONLY_CLIENT: remove temporary Fart Rampage TEST UI only; Random Taunt v563 Rampage remains. */
@@ -1218,6 +1219,8 @@ export class GameScene extends Phaser.Scene {
     private sniperScopeClipDom?: HTMLDivElement;
     private sniperScopeBlurDom?: HTMLDivElement;
     private sniperScopeLastAppliedMask = '';
+    /* V1010565N2_SNIPER_ROUND_LIFECYCLE_HARD_RESET_ROBUST / ONE_SHUTDOWN_LISTENER */
+    private sniperScopeShutdownCleanupRegistered = false;
     private sniperScopeLensShieldDom?: HTMLDivElement;
     private sniperScopeRackInBlackoutDom?: HTMLDivElement;
     /* V1010388_SNIPER_UI_PASS_THROUGH_PRIORITY_TIMER_FIXED_BUTTON */
@@ -67920,6 +67923,9 @@ const roomPlayers =
             return;
         }
 
+        /* V1010565N2_SNIPER_ROUND_LIFECYCLE_HARD_RESET_ROBUST / FRESH_RENDER_EPOCH */
+        this.destroySniperScopeRoundRenderState();
+
         this.sniperCinematicActive =
             true;
         this.sniperScopeInteractive =
@@ -68427,6 +68433,9 @@ const roomPlayers =
         this.mobileSniperScopeDirty =
             true;
 
+        /* V1010565N2_SNIPER_ROUND_LIFECYCLE_HARD_RESET_ROBUST / PRE_CREATE_CLEAN_EPOCH */
+        this.destroySniperScopeRoundRenderState();
+
         this.createSniperScopeCamera();
         this.ensureSniperScopeDom();
 
@@ -68663,6 +68672,9 @@ const roomPlayers =
         }
         this.sniperScopeMaskGraphics?.destroy();
         this.sniperScopeMaskGraphics = undefined;
+
+        /* V1010565N2_SNIPER_ROUND_LIFECYCLE_HARD_RESET_ROBUST / DESTROY_ON_EXIT */
+        this.destroySniperScopeRoundRenderState();
 
         if (this.phase === 'hunt') {
             const camera = this.cameras.main;
@@ -69499,6 +69511,172 @@ const roomPlayers =
             ?.setVisible(false);
 }
 
+    /*
+     * V1010565N2_SNIPER_ROUND_LIFECYCLE_HARD_RESET_ROBUST
+     * Each sniper activation owns a disposable browser/WebGL render epoch.
+     * Round 2/3/etc must start from the same empty state as round 1.
+     * Existing blur strength, circular mask, scope magnification and gameplay
+     * mechanics are intentionally left to the normal renderer.
+     */
+    private destroySniperScopeRoundRenderState(): void {
+        this.sniperScopeIntroTween
+            ?.stop();
+        this.sniperScopeIntroTween =
+            undefined;
+
+        this.sniperScopeStripCameras
+            .forEach(
+                (camera) => {
+                    try {
+                        this.cameras.remove(
+                            camera,
+                            true,
+                        );
+                    } catch {
+                        // Already removed by another teardown path.
+                    }
+                },
+            );
+
+        this.sniperScopeStripCameras =
+            [];
+
+        /* Defensive orphan sweep for older/partial sniper lifecycles. */
+        const staleCameraNames: string[] = [
+            'sniper-overwatch-camera',
+            'sniper-scope-camera',
+        ];
+
+        for (
+            let index = 0;
+            index < 64;
+            index += 1
+        ) {
+            staleCameraNames.push(
+                'sniper-overwatch-strip-' +
+                    String(index),
+            );
+        }
+
+        staleCameraNames.forEach(
+            (cameraName) => {
+                for (
+                    let attempt = 0;
+                    attempt < 8;
+                    attempt += 1
+                ) {
+                    const stale =
+                        this.cameras.getCamera(
+                            cameraName,
+                        );
+
+                    if (
+                        !stale ||
+                        stale === this.cameras.main
+                    ) {
+                        break;
+                    }
+
+                    try {
+                        this.cameras.remove(
+                            stale,
+                            true,
+                        );
+                    } catch {
+                        break;
+                    }
+                }
+            },
+        );
+
+        if (this.sniperScopeCamera) {
+            try {
+                this.cameras.remove(
+                    this.sniperScopeCamera,
+                    true,
+                );
+            } catch {
+                // Already removed.
+            }
+            this.sniperScopeCamera =
+                undefined;
+        }
+
+        this.sniperScopeMaskGraphics
+            ?.destroy();
+        this.sniperScopeMaskGraphics =
+            undefined;
+
+        this.sniperScopeCornerMask
+            ?.clear()
+            .setVisible(false);
+
+        /* Cancel any stale recoil/rack-in Web Animations before DOM removal. */
+        [
+            this.sniperScopeClipDom,
+            this.sniperScopeBlurDom,
+            this.sniperScopeLensShieldDom,
+            this.sniperScopeRackInBlackoutDom,
+            this.sniperScopeDom,
+            this.sniperScopeReloadDom,
+            this.sniperPriorityTimerDom,
+            this.sniperMobileHintDom,
+        ].forEach(
+            (element) => {
+                if (!element) return;
+                try {
+                    element
+                        .getAnimations()
+                        .forEach(
+                            (animation) => {
+                                try {
+                                    animation.cancel();
+                                } catch {
+                                    // Ignore an already-finished animation.
+                                }
+                            },
+                        );
+                } catch {
+                    // Older webviews may not expose getAnimations().
+                }
+            },
+        );
+
+        /* clipRoot normally owns the whole optical subtree. */
+        this.sniperScopeClipDom
+            ?.remove();
+
+        /* Defensive removal if an old version mounted one outside clipRoot. */
+        this.sniperPriorityTimerDom
+            ?.remove();
+        this.sniperMobileHintDom
+            ?.remove();
+        this.sniperScopeDom
+            ?.remove();
+
+        this.sniperScopeClipDom =
+            undefined;
+        this.sniperScopeBlurDom =
+            undefined;
+        this.sniperScopeLensShieldDom =
+            undefined;
+        this.sniperScopeRackInBlackoutDom =
+            undefined;
+        this.sniperPriorityTimerDom =
+            undefined;
+        this.sniperMobileHintDom =
+            undefined;
+        this.sniperScopeDom =
+            undefined;
+        this.sniperScopeReloadDom =
+            undefined;
+
+        this.sniperScopeLastAppliedMask =
+            '';
+        this.mobileSniperScopeDirty =
+            true;
+    }
+
     private ensureSniperScopeDom(): void {
         if (
             this.sniperScopeDom
@@ -69791,13 +69969,7 @@ const roomPlayers =
                 height: '6px',
                 transform: 'translateY(-50%)',
             },
-            {
-                right: '-15px',
-                top: '50%',
-                width: '20px',
-                height: '6px',
-                transform: 'translateY(-50%)',
-            },
+            /* V1010565N2_SNIPER_ROUND_LIFECYCLE_HARD_RESET_ROBUST / RIGHT_NOTCH_REMOVED */
         ].forEach(
             (spec) => {
                 const notch =
@@ -70015,37 +70187,22 @@ const roomPlayers =
         this.sniperScopeReloadDom =
             reload;
 
-        this.events.once(
-            Phaser.Scenes.Events.SHUTDOWN,
-            () => {
-                this.sniperScopeClipDom
-                    ?.remove();
+        /* V1010565N2_SNIPER_ROUND_LIFECYCLE_HARD_RESET_ROBUST / ONE_SHUTDOWN_LISTENER */
+        if (
+            !this.sniperScopeShutdownCleanupRegistered
+        ) {
+            this.sniperScopeShutdownCleanupRegistered =
+                true;
 
-                this.sniperScopeClipDom =
-                    undefined;
-
-                this.sniperScopeBlurDom =
-                    undefined;
-
-                this.sniperScopeLensShieldDom =
-                    undefined;
-
-                this.sniperScopeRackInBlackoutDom =
-                    undefined;
-
-                this.sniperPriorityTimerDom =
-                    undefined;
-
-                this.sniperMobileHintDom =
-                    undefined;
-
-                this.sniperScopeDom =
-                    undefined;
-
-                this.sniperScopeReloadDom =
-                    undefined;
-            },
-        );
+            this.events.once(
+                Phaser.Scenes.Events.SHUTDOWN,
+                () => {
+                    this.destroySniperScopeRoundRenderState();
+                    this.sniperScopeShutdownCleanupRegistered =
+                        false;
+                },
+            );
+        }
     }
 
     private syncSniperScopeDom(): void {
