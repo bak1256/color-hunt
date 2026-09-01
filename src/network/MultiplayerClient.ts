@@ -6,6 +6,7 @@
 /* V1010554A_TRIPLE_TELEPORT_CLIENT: Random Taunt/Triple Teleport transport. */
 /* V1010553_HARDENED_5POSE_GAUGE_HIT_DRAIN_CLIENT */
 /* V1010552_HIDER_HARDENED_NETWORK: Hardened state/hit transport. */
+/* V1010565_BOTS_V1: room-owned bots + difficulty + host-authored organic camouflage transport. */
 /* V1010551_SCHEMA_AUTHORITATIVE_PLAYER_PRESENCE: Schema owns live player presence; lobby_snapshot is recovery fallback only and cannot evict a live Schema player. */
 /* V1010548_FRESH_REJOIN_AUTHORITY_GATE: fresh Client creation requires explicit terminal authority; successful SDK recovery revokes it. */
 /* V1010547_SINGLE_RECONNECT_WINNER: exactly one reconnect path may become authoritative; late SDK/manual/fresh results are retired. */
@@ -385,6 +386,9 @@ export type NetworkLobbySnapshot = {
   activeMap?: string;
   paintDurationMs?: number;
   huntDurationMs?: number;
+  /* V1010565_BOTS_V1: server-owned room bots are represented as normal PlayerState seats. */
+  botCount?: number;
+  botDifficulty?: "easy" | "normal" | "hard";
   phase?: NetworkGamePhase;
   phaseEndsAt?: number;
   serverNow?: number;
@@ -564,6 +568,9 @@ private client: Client;
   private snapshotActiveMap = "forest";
   private snapshotPaintDurationMs = 120_000;
   private snapshotHuntDurationMs = 80_000;
+  /* V1010565_BOTS_V1: lobby bot settings are snapshot-authoritative. */
+  private snapshotBotCount = 0;
+  private snapshotBotDifficulty: "easy" | "normal" | "hard" = "normal";
 
   /*
    * v0.10.10.73 MOBILE CRITICAL:
@@ -1616,6 +1623,22 @@ this.phaseChangedHandlers.forEach(
         ? huntDurationMs
         : 80_000;
 
+    const botCount = Number(
+      snapshot.botCount ?? this.snapshotBotCount,
+    );
+    this.snapshotBotCount = Number.isFinite(botCount)
+      ? Math.max(0, Math.min(9, Math.floor(botCount)))
+      : 0;
+
+    const botDifficulty = String(
+      snapshot.botDifficulty ?? this.snapshotBotDifficulty,
+    ).toLowerCase();
+    this.snapshotBotDifficulty =
+      botDifficulty === "easy" ||
+      botDifficulty === "hard"
+        ? botDifficulty
+        : "normal";
+
     /*
      * v0.10.10.72:
      * lobby_snapshot is now an authoritative recovery snapshot for every
@@ -2427,6 +2450,8 @@ private async attemptFreshRejoin(
     this.snapshotActiveMap = "forest";
     this.snapshotPaintDurationMs = 120_000;
     this.snapshotHuntDurationMs = 80_000;
+    this.snapshotBotCount = 0;
+    this.snapshotBotDifficulty = "normal";
     this.deliveredPhase = "";
     this.lastRoundPaintStateRequestAt = 0;
 
@@ -4846,6 +4871,33 @@ this.room = room;
     return this.snapshotPaintDurationMs;
   }
 
+  /* V1010565_BOTS_V1: host-only controls; server performs final authority/capacity checks. */
+  sendBotCountSelection(botCount: number): void {
+    if (!Number.isFinite(botCount)) return;
+    this.room?.send("bot_settings", {
+      botCount: Math.max(0, Math.min(9, Math.floor(botCount))),
+    });
+  }
+
+  sendBotDifficultySelection(
+    botDifficulty: "easy" | "normal" | "hard",
+  ): void {
+    if (
+      botDifficulty !== "easy" &&
+      botDifficulty !== "normal" &&
+      botDifficulty !== "hard"
+    ) return;
+    this.room?.send("bot_settings", { botDifficulty });
+  }
+
+  getBotCount(): number {
+    return this.snapshotBotCount;
+  }
+
+  getBotDifficulty(): "easy" | "normal" | "hard" {
+    return this.snapshotBotDifficulty;
+  }
+
   sendHuntDurationSelection(
     durationMs: number,
   ): void {
@@ -5255,6 +5307,37 @@ this.room = room;
         points: stroke.points,
       },
     );
+  }
+
+  /*
+   * V1010565_BOTS_V1: only the current human Host authors bot camouflage.
+   * The server validates Host authority + bot ownership before storing it.
+   */
+  sendBotPaintStroke(
+    stroke: NetworkPaintStroke,
+  ): void {
+    if (
+      !this.room ||
+      !this.isHost() ||
+      stroke.points.length === 0
+    ) return;
+
+    this.room.send("bot_paint_stroke", {
+      targetSessionId: stroke.targetSessionId,
+      color: stroke.color,
+      size: stroke.size,
+      shape: stroke.shape,
+      points: stroke.points,
+    });
+  }
+
+  sendBotPaintComplete(
+    targetSessionId: string,
+  ): void {
+    if (!this.room || !this.isHost()) return;
+    this.room.send("bot_paint_complete", {
+      targetSessionId,
+    });
   }
 
   isHost(): boolean {

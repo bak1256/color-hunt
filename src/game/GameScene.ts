@@ -150,6 +150,7 @@
 /* V1010451G_TERMINAL_UI_BARRIER: prevent stale Paint/Hunt callbacks from resurrecting UI after terminal lobby return. */
 /* V1010451F_ASSIST_CAPTURE_TERMINAL_CLEANUP_CARD_POLISH: Paint Help full authoritative replay + cleaner victory tiles + terminal mobile lobby reset. */
 /* V1010451E2_TERMINAL_REJOIN_AND_FOUND_POSITIONS_ROBUST: long-away active-round rejection + authoritative Hunter FOUND positions. */
+/* V1010565_BOTS_V1: lobby bot controls + organic full-body bot camouflage authoring. */
 import Phaser from 'phaser';
 import {
     multiplayerClient,
@@ -11674,6 +11675,13 @@ private timerText!: Phaser.GameObjects.Text;
     private waitingRoomMapText?: HTMLSpanElement;
     private waitingRoomPaintButtons: HTMLButtonElement[] = [];
     private waitingRoomHuntButtons: HTMLButtonElement[] = [];
+    /* V1010565_BOTS_V1: bot controls use the exact same 3-column control language as timing. */
+    private waitingRoomBotCountButtons: HTMLButtonElement[] = [];
+    private waitingRoomBotDifficultyButtons: HTMLButtonElement[] = [];
+    private botPaintAuthoredRoundKey = '';
+    private readonly botPaintAuthoredSessionIds = new Set<string>();
+    private botPaintLastAuthorAttemptAt = 0;
+    private botPaintAuthoringNotBefore = 0;
     private waitingRoomResizeObserver?: ResizeObserver;
     private waitingRoomViewportHandler?: () => void;
     /* V1010451M3J2_WAITING_MOCK_HOST_TRANSFER_ROBUST: guest->host transition notification state. */
@@ -13833,6 +13841,8 @@ private timerText!: Phaser.GameObjects.Text;
          */
         this.repairConnectedRoomUiIfNeeded();
         this.syncMapBackground();
+        /* V1010565_BOTS_V1: at most one bot is authored per throttled pass. */
+        this.updateHostBotPaintAuthoring();
 
         /*
          * V1010453B_SNIPER_FRAME_UPDATE_FIX
@@ -17328,6 +17338,148 @@ const ribbon =
         }
 
         this.hidePaintAssistReadyStyleBubble();
+    }
+
+
+    /*
+     * V1010565_BOTS_V1: human-like FULL camouflage for Hider bots.
+     *
+     * Important design constraints:
+     * - NEVER uses square/mosaic stamps.
+     * - samples the exact rendered map behind each bot in the Host browser.
+     * - every level covers the full 80x120 avatar paint surface; the body mask
+     *   clips the result to head/body/arms/legs.
+     * - difficulty changes color precision, dab size and sampling density,
+     *   not whether body parts are left unpainted.
+     */
+    private updateHostBotPaintAuthoring(): void {
+        if (
+            this.phase !== 'paint' ||
+            !this.isMultiplayerSession() ||
+            !multiplayerClient.isHost()
+        ) {
+            if (this.phase !== 'paint' && this.botPaintAuthoredRoundKey) {
+                this.botPaintAuthoredRoundKey = '';
+                this.botPaintAuthoredSessionIds.clear();
+            }
+            return;
+        }
+
+        if (this.time.now - this.botPaintLastAuthorAttemptAt < 360) return;
+        this.botPaintLastAuthorAttemptAt = this.time.now;
+
+        const room = multiplayerClient.getRoom();
+        const players = room?.state?.players;
+        if (!room || !players?.entries) return;
+
+        const roundKey = `${room.roomId}:${multiplayerClient.getPhaseEndsAt()}:${multiplayerClient.getActiveMap()}`;
+        if (roundKey !== this.botPaintAuthoredRoundKey) {
+            this.botPaintAuthoredRoundKey = roundKey;
+            this.botPaintAuthoredSessionIds.clear();
+            /* Wait for the server-selected hiding coordinates to arrive via Schema. */
+            this.botPaintAuthoringNotBefore = this.time.now + 650;
+            return;
+        }
+        if (this.time.now < this.botPaintAuthoringNotBefore) return;
+
+        let nextBotId = '';
+        let nextBot: NetworkPlayerState | undefined;
+        for (const [sessionId, player] of players.entries()) {
+            if (
+                String(sessionId).startsWith('bot:') &&
+                player?.role === 'hider' &&
+                player?.alive &&
+                !this.botPaintAuthoredSessionIds.has(String(sessionId))
+            ) {
+                nextBotId = String(sessionId);
+                nextBot = player as NetworkPlayerState;
+                break;
+            }
+        }
+        if (!nextBotId || !nextBot) return;
+
+        const renderedPosition = this.networkPlayerManager?.getPlayerPosition?.(nextBotId);
+        const centerX = Number(renderedPosition?.x ?? nextBot.x);
+        const centerY = Number(renderedPosition?.y ?? nextBot.y);
+        if (!Number.isFinite(centerX) || !Number.isFinite(centerY)) return;
+
+        /* Claim before sending: WebSocket ordering is reliable, and this avoids duplicate full passes. */
+        this.botPaintAuthoredSessionIds.add(nextBotId);
+
+        try {
+            const sampler = this.createCurrentPaintBackgroundSampler();
+            const difficulty = multiplayerClient.getBotDifficulty();
+            const cfg =
+                difficulty === 'easy'
+                    ? { step: 5, baseSize: 12, quant: 40, noise: 24 }
+                    : difficulty === 'hard'
+                        ? { step: 2, baseSize: 6, quant: 8, noise: 3 }
+                        : { step: 3, baseSize: 8, quant: 20, noise: 10 };
+
+            let seed = 2166136261 >>> 0;
+            for (let i = 0; i < nextBotId.length; i += 1) {
+                seed ^= nextBotId.charCodeAt(i);
+                seed = Math.imul(seed, 16777619) >>> 0;
+            }
+            seed ^= Math.floor(multiplayerClient.getPhaseEndsAt()) >>> 0;
+
+            const hash = (x: number, y: number, salt: number): number => {
+                let h = seed ^ Math.imul(x + 101, 374761393) ^ Math.imul(y + 67, 668265263) ^ salt;
+                h = Math.imul(h ^ (h >>> 13), 1274126177);
+                return (h ^ (h >>> 16)) >>> 0;
+            };
+            const clampByte = (v: number): number => Math.max(0, Math.min(255, Math.round(v)));
+            const quantize = (v: number): number => clampByte(Math.round(v / cfg.quant) * cfg.quant);
+            const buckets = new Map<string, { color: number; size: number; points: NetworkPaintPoint[] }>();
+
+            for (let localY = 2; localY <= 118; localY += cfg.step) {
+                const rowWave = Math.sin((localY + (seed % 31)) * 0.19) * 1.35;
+                for (let localX = 2; localX <= 78; localX += cfg.step) {
+                    const h = hash(localX, localY, 0x9e3779b9);
+                    const jitterX = ((h & 255) / 255 - 0.5) * 2.4 + rowWave;
+                    const jitterY = (((h >>> 8) & 255) / 255 - 0.5) * 2.2;
+                    const px = Phaser.Math.Clamp(localX + jitterX, 0, 80);
+                    const py = Phaser.Math.Clamp(localY + jitterY, 0, 120);
+                    const worldX = centerX + px - 40;
+                    const worldY = centerY + py - 60;
+                    const sampled = this.samplePracticeBackgroundRgb(sampler, worldX, worldY);
+
+                    const signed = (bits: number): number => ((bits / 255) - 0.5) * 2;
+                    const nr = signed((h >>> 16) & 255) * cfg.noise;
+                    const ng = signed((h >>> 20) & 255) * cfg.noise;
+                    const nb = signed((h >>> 24) & 255) * cfg.noise;
+                    const r = quantize(sampled.r + nr);
+                    const g = quantize(sampled.g + ng);
+                    const b = quantize(sampled.b + nb);
+                    const color = (r << 16) | (g << 8) | b;
+                    const sizeJitter = Number((h >>> 5) % 3) - 1;
+                    const size = Phaser.Math.Clamp(cfg.baseSize + sizeJitter, 4, 14);
+                    const key = `${color}:${size}`;
+                    let bucket = buckets.get(key);
+                    if (!bucket) {
+                        bucket = { color, size, points: [] };
+                        buckets.set(key, bucket);
+                    }
+                    bucket.points.push({ x: px, y: py });
+                }
+            }
+
+            for (const bucket of buckets.values()) {
+                for (let cursor = 0; cursor < bucket.points.length; cursor += 220) {
+                    multiplayerClient.sendBotPaintStroke({
+                        targetSessionId: nextBotId,
+                        color: bucket.color,
+                        size: bucket.size,
+                        shape: 'circle',
+                        points: bucket.points.slice(cursor, cursor + 220),
+                    });
+                }
+            }
+            multiplayerClient.sendBotPaintComplete(nextBotId);
+        } catch (error) {
+            this.botPaintAuthoredSessionIds.delete(nextBotId);
+            console.warn('[Color Hunt] bot camouflage authoring failed; server fallback will cover it', error);
+        }
     }
 
     private createMobilePaintDock(): void {
@@ -38679,6 +38831,8 @@ this.networkUnsubscribers.push(
         this.waitingRoomMapText = undefined;
         this.waitingRoomPaintButtons = [];
         this.waitingRoomHuntButtons = [];
+        this.waitingRoomBotCountButtons = [];
+        this.waitingRoomBotDifficultyButtons = [];
 
         this.setUnifiedBgmButtonVisible(
             true,
@@ -39001,6 +39155,27 @@ this.networkUnsubscribers.push(
                 </div>
 
                 <div class="ch-waiting-timing">
+
+                    <section class="ch-waiting-bot-section">
+                        <div class="ch-waiting-timing-title">
+                            <span>🤖 ${getLanguage() === 'ja' ? 'ボット参加' : getLanguage() === 'en' ? 'Bots' : '봇 참가'}</span>
+                            <b class="ch-waiting-bot-current">0</b>
+                        </div>
+                        <div class="ch-waiting-time-options ch-waiting-bot-count-options">
+                            <button type="button" data-bot-delta="-1">−</button>
+                            <button type="button" class="ch-waiting-bot-count-value" disabled>BOT</button>
+                            <button type="button" data-bot-delta="1">＋</button>
+                        </div>
+                        <div class="ch-waiting-bot-subtitle">
+                            ${getLanguage() === 'ja' ? '難易度' : getLanguage() === 'en' ? 'DIFFICULTY' : '난이도'}
+                        </div>
+                        <div class="ch-waiting-time-options ch-waiting-bot-difficulty-options">
+                            <button type="button" data-bot-difficulty="easy">EASY</button>
+                            <button type="button" data-bot-difficulty="normal">NORMAL</button>
+                            <button type="button" data-bot-difficulty="hard">HARD</button>
+                        </div>
+                    </section>
+
                     <section>
                         <div class="ch-waiting-timing-title">
                             <span>🎨 ${tr('색칠 시간')}</span>
@@ -39039,6 +39214,48 @@ this.networkUnsubscribers.push(
 
         document.body.appendChild(root);
         this.waitingRoomRoot = root;
+
+        {
+            const styleId = 'colorhunt-v565-bot-lobby-style';
+            document.getElementById(styleId)?.remove();
+            const style = document.createElement('style');
+            style.id = styleId;
+            style.textContent = `
+                /* V1010565_BOTS_V1: same visual grammar as Paint/Hunt; never a separate floating card. */
+                .colorhunt-waiting-room .ch-waiting-bot-section {
+                    display: flex !important;
+                    flex-direction: column !important;
+                    gap: 7px !important;
+                }
+                .colorhunt-waiting-room .ch-waiting-bot-subtitle {
+                    margin: 0 1px -1px !important;
+                    padding: 0 !important;
+                    font-size: 11px !important;
+                    font-weight: 900 !important;
+                    line-height: 1.1 !important;
+                    color: #617168 !important;
+                    letter-spacing: .02em !important;
+                }
+                .colorhunt-waiting-room .ch-waiting-bot-count-value {
+                    opacity: 1 !important;
+                    cursor: default !important;
+                    color: #557067 !important;
+                    background: #eef5ec !important;
+                    border-color: #ceddca !important;
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,.92) !important;
+                }
+                .colorhunt-waiting-room .ch-waiting-bot-difficulty-options button.is-active {
+                    opacity: 1 !important;
+                }
+                /* Mobile requirement: add the Bot block, then uniformly scale the WHOLE existing panel.
+                   Do not squash only Bot/Paint/Hunt rows or change their relative proportions. */
+                .colorhunt-waiting-room .ch-waiting-bot-count-options,
+                .colorhunt-waiting-room .ch-waiting-bot-difficulty-options {
+                    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+                }
+            `;
+            document.head.appendChild(style);
+        }
 
         {
             const styleId =
@@ -40502,6 +40719,39 @@ this.networkUnsubscribers.push(
                     '.ch-waiting-hunt-options button',
                 ),
             );
+        this.waitingRoomBotCountButtons =
+            Array.from(
+                root.querySelectorAll<HTMLButtonElement>(
+                    '[data-bot-delta]',
+                ),
+            );
+        this.waitingRoomBotDifficultyButtons =
+            Array.from(
+                root.querySelectorAll<HTMLButtonElement>(
+                    '[data-bot-difficulty]',
+                ),
+            );
+
+        this.waitingRoomBotCountButtons.forEach((button) => {
+            button.addEventListener('click', () => {
+                if (!multiplayerClient.isHost()) return;
+                const delta = Number(button.dataset.botDelta ?? 0);
+                if (!Number.isFinite(delta) || delta === 0) return;
+                multiplayerClient.sendBotCountSelection(
+                    multiplayerClient.getBotCount() + (delta < 0 ? -1 : 1),
+                );
+            });
+        });
+
+        this.waitingRoomBotDifficultyButtons.forEach((button) => {
+            button.addEventListener('click', () => {
+                if (!multiplayerClient.isHost()) return;
+                const value = button.dataset.botDifficulty;
+                if (value === 'easy' || value === 'normal' || value === 'hard') {
+                    multiplayerClient.sendBotDifficultySelection(value);
+                }
+            });
+        });
 
         root.querySelector('.ch-waiting-role-hunter')
             ?.addEventListener(
@@ -41826,6 +42076,37 @@ this.networkUnsubscribers.push(
                     map,
                 );
         }
+
+        const botCount = multiplayerClient.getBotCount();
+        const botDifficulty = multiplayerClient.getBotDifficulty();
+        const botCurrent = this.waitingRoomRoot.querySelector<HTMLElement>(
+            '.ch-waiting-bot-current',
+        );
+        if (botCurrent) {
+            botCurrent.textContent =
+                getLanguage() === 'ja'
+                    ? `${botCount}体`
+                    : getLanguage() === 'en'
+                        ? `${botCount}`
+                        : `${botCount}명`;
+        }
+        const botCountValue = this.waitingRoomRoot.querySelector<HTMLButtonElement>(
+            '.ch-waiting-bot-count-value',
+        );
+        if (botCountValue) botCountValue.textContent = `BOT ${botCount}`;
+
+        const roomSeatCount = multiplayerClient.getPlayerCount();
+        this.waitingRoomBotCountButtons.forEach((button) => {
+            const delta = Number(button.dataset.botDelta ?? 0);
+            button.disabled =
+                !isHost ||
+                (delta < 0 ? botCount <= 0 : roomSeatCount >= 10);
+        });
+        this.waitingRoomBotDifficultyButtons.forEach((button) => {
+            const value = button.dataset.botDifficulty;
+            button.classList.toggle('is-active', value === botDifficulty);
+            button.disabled = !isHost;
+        });
 
         const paint =
             multiplayerClient.getPaintDurationMs();
