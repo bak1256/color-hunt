@@ -11826,6 +11826,17 @@ private timerText!: Phaser.GameObjects.Text;
     private readonly botPaintAuthoredSessionIds = new Set<string>();
     private botPaintLastAuthorAttemptAt = 0;
     private botPaintAuthoringNotBefore = 0;
+    /* V1010565J_BACKGROUND_CAMOUFLAGE_SCORE: Host-only real background-vs-painted-body scoring. */
+    private hostCamouflageScoreRoundKey = '';
+    private hostCamouflageScoreLastPassAt = 0;
+    private readonly hostCamouflageRasterBySession = new Map<
+        string,
+        { signature: string; colors: Int32Array }
+    >();
+    private readonly hostCamouflageLastSentBySession = new Map<
+        string,
+        { score: number; x: number; y: number; at: number }
+    >();
     /* V1010565E_BOT_AI_VISUAL_LOBBY_POLISH: local-only Lobby bot previews + stationary roster visibility heal. */
     private readonly lobbyBotPreviewActors: Phaser.GameObjects.Container[] = [];
     private lobbyBotPreviewKey = '';
@@ -13991,6 +14002,8 @@ private timerText!: Phaser.GameObjects.Text;
         this.syncMapBackground();
         /* V1010565_BOTS_V1: at most one bot is authored per throttled pass. */
         this.updateHostBotPaintAuthoring();
+        /* V1010565J_BACKGROUND_CAMOUFLAGE_SCORE: actual paint-vs-map similarity now feeds Hunter-bot stealth. */
+        this.updateHostCamouflageSimilarity();
         /* V1010565E_BOT_AI_VISUAL_LOBBY_POLISH: preview virtual bot seats + heal stationary Lobby roster visibility. */
         this.updateLobbyBotPreviewActors();
         this.updateLobbyRosterVisibilityHeal();
@@ -17628,6 +17641,262 @@ const ribbon =
         /* No network sends: only make already-authoritative stationary players visible. */
         this.networkPlayerManager?.syncPlayersFromCurrentRoom();
         this.networkPlayerManager?.forceLobbyPositionsFromState();
+    }
+
+    private isCamouflageScorePixelInsideCharacter(
+        textureX: number,
+        textureY: number,
+    ): boolean {
+        const x = Math.round(textureX);
+        const y = Math.round(textureY);
+        const headDx = x - 40;
+        const headDy = y - 48;
+        const insideHead = headDx * headDx + headDy * headDy <= 12 * 12;
+        const insideBody = x >= 31 && x <= 48 && y >= 55 && y <= 78;
+        const insideLeftArm = x >= 24 && x <= 31 && y >= 57 && y <= 74;
+        const insideRightArm = x >= 48 && x <= 55 && y >= 57 && y <= 74;
+        const insideLeftLeg = x >= 31 && x <= 38 && y >= 75 && y <= 88;
+        const insideRightLeg = x >= 41 && x <= 48 && y >= 75 && y <= 88;
+        return (
+            insideHead || insideBody || insideLeftArm || insideRightArm ||
+            insideLeftLeg || insideRightLeg
+        );
+    }
+
+    private getHostCamouflageRasterSignature(
+        strokes: NetworkPaintStroke[],
+    ): string {
+        let hash = 2166136261 >>> 0;
+        for (const stroke of strokes) {
+            hash ^= Number(stroke.color) >>> 0;
+            hash = Math.imul(hash, 16777619) >>> 0;
+            hash ^= Math.round(Number(stroke.size) || 0) >>> 0;
+            hash = Math.imul(hash, 16777619) >>> 0;
+            hash ^= stroke.shape === 'square' ? 0x51 : 0xa7;
+            hash = Math.imul(hash, 16777619) >>> 0;
+            const points = Array.isArray(stroke.points) ? stroke.points : [];
+            hash ^= points.length >>> 0;
+            hash = Math.imul(hash, 16777619) >>> 0;
+            if (points.length > 0) {
+                const first = points[0];
+                const last = points[points.length - 1];
+                hash ^= (Math.round(first.x * 4) & 0xffff) | ((Math.round(first.y * 4) & 0xffff) << 16);
+                hash = Math.imul(hash, 16777619) >>> 0;
+                hash ^= (Math.round(last.x * 4) & 0xffff) | ((Math.round(last.y * 4) & 0xffff) << 16);
+                hash = Math.imul(hash, 16777619) >>> 0;
+            }
+        }
+        return String(strokes.length) + ':' + hash.toString(16);
+    }
+
+    private buildHostCamouflagePaintRaster(
+        sessionId: string,
+        strokes: NetworkPaintStroke[],
+    ): Int32Array {
+        const signature = this.getHostCamouflageRasterSignature(strokes);
+        const cached = this.hostCamouflageRasterBySession.get(sessionId);
+        if (cached?.signature === signature) return cached.colors;
+
+        const width = 80;
+        const height = 120;
+        const colors = new Int32Array(width * height);
+        colors.fill(-1);
+
+        /* Same visible unpainted Hider base used by NetworkPlayerManager. */
+        const baseColor = 0xf5eee2;
+        for (let y = 0; y < height; y += 1) {
+            for (let x = 0; x < width; x += 1) {
+                if (this.isCamouflageScorePixelInsideCharacter(x, y)) {
+                    colors[y * width + x] = baseColor;
+                }
+            }
+        }
+
+        for (const stroke of strokes) {
+            const color = Number(stroke.color);
+            const rawSize = Number(stroke.size);
+            if (!Number.isInteger(color) || !Number.isFinite(rawSize)) continue;
+            const diameter = Math.max(1, Math.min(20, Math.round(rawSize)));
+            const minOffset = -Math.floor(diameter / 2);
+            const maxOffset = minOffset + diameter - 1;
+            const centerOffset = (minOffset + maxOffset) / 2;
+            const circleRadius = Math.max(0.5, diameter / 2 - 0.25);
+            const points = Array.isArray(stroke.points) ? stroke.points : [];
+
+            for (const point of points) {
+                const centerX = Number(point.x);
+                const centerY = Number(point.y);
+                if (!Number.isFinite(centerX) || !Number.isFinite(centerY)) continue;
+
+                for (let offsetY = minOffset; offsetY <= maxOffset; offsetY += 1) {
+                    for (let offsetX = minOffset; offsetX <= maxOffset; offsetX += 1) {
+                        if (stroke.shape !== 'square') {
+                            const dx = offsetX - centerOffset;
+                            const dy = offsetY - centerOffset;
+                            if (dx * dx + dy * dy > circleRadius * circleRadius) continue;
+                        }
+
+                        const pixelX = Math.round(centerX + offsetX);
+                        const pixelY = Math.round(centerY + offsetY);
+                        if (
+                            pixelX < 0 || pixelX >= width ||
+                            pixelY < 0 || pixelY >= height ||
+                            !this.isCamouflageScorePixelInsideCharacter(pixelX, pixelY)
+                        ) continue;
+
+                        colors[pixelY * width + pixelX] = color & 0xffffff;
+                    }
+                }
+            }
+        }
+
+        this.hostCamouflageRasterBySession.set(sessionId, { signature, colors });
+        return colors;
+    }
+
+    private measureHostCamouflageSimilarity(
+        sessionId: string,
+        centerX: number,
+        centerY: number,
+        strokes: NetworkPaintStroke[],
+        sampler: {
+            data: Uint8ClampedArray;
+            width: number;
+            height: number;
+        },
+    ): number {
+        const colors = this.buildHostCamouflagePaintRaster(sessionId, strokes);
+        let matchSum = 0;
+        let goodMatches = 0;
+        let badMatches = 0;
+        let count = 0;
+
+        for (let y = 0; y < 120; y += 1) {
+            for (let x = 0; x < 80; x += 1) {
+                const paintColor = colors[y * 80 + x];
+                if (paintColor < 0) continue;
+
+                const background = this.samplePracticeBackgroundRgb(
+                    sampler,
+                    centerX + x - 40,
+                    centerY + y - 60,
+                );
+                const pr = (paintColor >>> 16) & 255;
+                const pg = (paintColor >>> 8) & 255;
+                const pb = paintColor & 255;
+                const dr = pr - background.r;
+                const dg = pg - background.g;
+                const db = pb - background.b;
+
+                /* Perceptual-ish RGB distance: green/luma differences matter most. */
+                const normalizedDistance = Math.min(
+                    1,
+                    Math.sqrt(
+                        0.30 * dr * dr +
+                        0.59 * dg * dg +
+                        0.11 * db * db,
+                    ) / 255,
+                );
+                const pixelMatch = Math.pow(Math.max(0, 1 - normalizedDistance), 1.25);
+                matchSum += pixelMatch;
+                if (pixelMatch >= 0.72) goodMatches += 1;
+                if (pixelMatch < 0.38) badMatches += 1;
+                count += 1;
+            }
+        }
+
+        if (count < 1) return 0;
+        const mean = matchSum / count;
+        const goodFraction = goodMatches / count;
+        const badFraction = badMatches / count;
+
+        /* Broad similarity matters most; obvious mismatched patches still hurt. */
+        return Phaser.Math.Clamp(
+            mean * 0.82 + goodFraction * 0.22 - badFraction * 0.08,
+            0,
+            1,
+        );
+    }
+
+    private updateHostCamouflageSimilarity(): void {
+        if (
+            this.phase !== 'hunt' ||
+            !this.isMultiplayerSession() ||
+            !multiplayerClient.isHost()
+        ) {
+            if (this.phase !== 'hunt' && this.hostCamouflageScoreRoundKey) {
+                this.hostCamouflageScoreRoundKey = '';
+                this.hostCamouflageScoreLastPassAt = 0;
+                this.hostCamouflageRasterBySession.clear();
+                this.hostCamouflageLastSentBySession.clear();
+            }
+            return;
+        }
+
+        if (this.time.now - this.hostCamouflageScoreLastPassAt < 700) return;
+        this.hostCamouflageScoreLastPassAt = this.time.now;
+
+        const room = multiplayerClient.getRoom();
+        const players = room?.state?.players;
+        if (!room || !players?.entries) return;
+
+        const roundKey = String(room.roomId) + ':' + multiplayerClient.getPhaseEndsAt() + ':' + multiplayerClient.getActiveMap();
+        if (roundKey !== this.hostCamouflageScoreRoundKey) {
+            this.hostCamouflageScoreRoundKey = roundKey;
+            this.hostCamouflageRasterBySession.clear();
+            this.hostCamouflageLastSentBySession.clear();
+        }
+
+        const sampler = this.createCurrentPaintBackgroundSampler();
+        if (!sampler) return;
+        const localSessionId = multiplayerClient.getSessionId() ?? '';
+
+        for (const [rawSessionId, rawPlayer] of players.entries()) {
+            const sessionId = String(rawSessionId);
+            const player = rawPlayer as NetworkPlayerState;
+            if (player?.role !== 'hider' || !player?.alive) continue;
+
+            let strokes = this.victoryRoundPaintBySession.get(sessionId) ?? [];
+            if (strokes.length < 1 && sessionId === localSessionId) {
+                strokes = this.localPaintHistory;
+            }
+
+            const renderedPosition = this.networkPlayerManager?.getPlayerPosition?.(sessionId);
+            const centerX = Number(renderedPosition?.x ?? player.x);
+            const centerY = Number(renderedPosition?.y ?? player.y);
+            if (!Number.isFinite(centerX) || !Number.isFinite(centerY)) continue;
+
+            const score = this.measureHostCamouflageSimilarity(
+                sessionId,
+                centerX,
+                centerY,
+                strokes,
+                sampler,
+            );
+            const previous = this.hostCamouflageLastSentBySession.get(sessionId);
+            const moved = previous
+                ? Math.hypot(centerX - previous.x, centerY - previous.y)
+                : Number.POSITIVE_INFINITY;
+            const changed = previous
+                ? Math.abs(score - previous.score)
+                : Number.POSITIVE_INFINITY;
+            const stale = !previous || this.time.now - previous.at >= 2_200;
+
+            if (moved < 2.5 && changed < 0.018 && !stale) continue;
+
+            multiplayerClient.sendHiderCamouflageSimilarity(
+                sessionId,
+                score,
+                centerX,
+                centerY,
+            );
+            this.hostCamouflageLastSentBySession.set(sessionId, {
+                score,
+                x: centerX,
+                y: centerY,
+                at: this.time.now,
+            });
+        }
     }
 
     private updateHostBotPaintAuthoring(): void {

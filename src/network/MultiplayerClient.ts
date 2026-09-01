@@ -5440,6 +5440,35 @@ this.room = room;
     });
   }
 
+  /*
+   * V1010565J_BACKGROUND_CAMOUFLAGE_SCORE: the current human Host samples the same rendered map used by
+   * Paint Assist and reports how closely the FINAL painted body matches it.
+   * Only a score + sampled authoritative-looking position is sent; the server
+   * still owns all detection timing and validates the target/position.
+   */
+  sendHiderCamouflageSimilarity(
+    targetSessionId: string,
+    score: number,
+    sampleX: number,
+    sampleY: number,
+  ): void {
+    if (
+      !this.room ||
+      !this.isHost() ||
+      !targetSessionId ||
+      !Number.isFinite(score) ||
+      !Number.isFinite(sampleX) ||
+      !Number.isFinite(sampleY)
+    ) return;
+
+    this.room.send("hider_camouflage_similarity", {
+      targetSessionId,
+      score: Math.max(0, Math.min(1, score)),
+      sampleX,
+      sampleY,
+    });
+  }
+
   isHost(): boolean {
     const room = this.room;
 
