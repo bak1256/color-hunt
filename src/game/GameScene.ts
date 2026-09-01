@@ -10270,7 +10270,7 @@ private timerText!: Phaser.GameObjects.Text;
                     return;
                 }
 
-                if (!this.isTacticalSupportInputLocked()) {
+                if (this.mobileFartButton?.visible) {
                     multiplayerClient.sendFart();
                 }
             },
@@ -10316,6 +10316,17 @@ private timerText!: Phaser.GameObjects.Text;
                             )
                         ) {
                             this.mobileFirePointerId =
+                                -1;
+                        }
+
+                        if (
+                            this.mobileFartPointerId >=
+                                0 &&
+                            !this.isMobilePointerActuallyDown(
+                                this.mobileFartPointerId,
+                            )
+                        ) {
+                            this.mobileFartPointerId =
                                 -1;
                         }
                     };
@@ -11569,6 +11580,21 @@ private timerText!: Phaser.GameObjects.Text;
 
         this.mobileFartButton
             ?.setVisible(showHunterCombat);
+
+        /* V1010565K_HIDER_CURSOR_MOBILE_FART_VISIBLE_ACTIVE: if FART is shown as a normal Hunter control, it must accept taps. */
+        if (
+            showHunterCombat &&
+            this.mobileFartButton
+        ) {
+            if (this.mobileFartButton.input) {
+                this.mobileFartButton.input.enabled =
+                    true;
+            } else {
+                this.mobileFartButton.setInteractive({
+                    useHandCursor: true,
+                });
+            }
+        }
 
         this.mobileFartLabel
             ?.setText(
@@ -14152,6 +14178,7 @@ private timerText!: Phaser.GameObjects.Text;
         this.updateWeaponHeatHud();
         this.updateNetworkPlayers(delta);
         this.updateMobileControlVisibility();
+        this.syncDesktopHiderCursor();
 
         if (
             this.phase === 'paint' &&
@@ -79800,7 +79827,59 @@ this.weaponHeat =
          * Do not flash the redundant "N초 안에 하이더를 찾으세요" toast
          * to either Hunter or Hider when Hunt begins.
          */
-        this.input.setDefaultCursor('none');
+        this.syncDesktopHiderCursor();
+    }
+
+    /* V1010565K_HIDER_CURSOR_MOBILE_FART_VISIBLE_ACTIVE: desktop Hiders always keep a visible native mouse cursor in Hunt. */
+    private syncDesktopHiderCursor(): void {
+        if (
+            this.mobileControlsEnabled ||
+            this.phase !== 'hunt'
+        ) {
+            return;
+        }
+
+        const role =
+            multiplayerClient
+                .getLocalPlayer()
+                ?.role;
+
+        const localIsHider =
+            this.practiceMode === 'hider' ||
+            role === 'hider' ||
+            this.networkPlayerManager
+                .isLocalHider();
+
+        const localIsHunter =
+            this.practiceMode === 'hunter' ||
+            (
+                !this.isMultiplayerSession() &&
+                this.practiceMode !== 'hider'
+            ) ||
+            role === 'hunter' ||
+            this.networkPlayerManager
+                .canLocalControlHunter();
+
+        if (!localIsHider && !localIsHunter) {
+            return;
+        }
+
+        const desiredCursor =
+            localIsHider
+                ? 'default'
+                : 'none';
+
+        this.input.setDefaultCursor(
+            desiredCursor,
+        );
+
+        if (
+            this.game.canvas.style.cursor !==
+            desiredCursor
+        ) {
+            this.game.canvas.style.cursor =
+                desiredCursor;
+        }
     }
 
     private getPracticeRankingPosition(
