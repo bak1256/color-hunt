@@ -17372,14 +17372,42 @@ const ribbon =
     }
 
     private createLobbyBotPreviewActor(index: number): Phaser.GameObjects.Container {
-        const leftWorldWidth = Math.min(600, this.gameWidth * 0.62);
-        const columns = 3;
-        const col = index % columns;
-        const row = Math.floor(index / columns);
-        const x = 95 + col * Math.max(125, (leftWorldWidth - 170) / 2);
-        const y = 145 + row * 128 + ((index * 17) % 23);
+        /*
+         * V1010565F_BOT_ROBOT_NATIVE_SCALE_SPAWN / PREVIEW_NATIVE_Y_SCALE
+         * Keep the v565e robot design, only scale it uniformly so its Y span
+         * matches the real player silhouette instead of towering over it.
+         */
+        const ROBOT_SCALE = 0.585;
+        const ROBOT_Y = 4.3;
 
-        const shadow = this.add.ellipse(0, 26, 34, 11, 0x304d37, 0.25);
+        /*
+         * V1010565F_BOT_ROBOT_NATIVE_SCALE_SPAWN / RANDOM_LOOKING_STABLE_LOBBY_SPAWN
+         * No chessboard/grid.  Use a tiny deterministic PRNG keyed by room +
+         * bot index: positions look random, but existing bots do not jump just
+         * because another + button press rebuilds the preview set.
+         */
+        const roomId = String(multiplayerClient.getRoom()?.roomId ?? 'bot-preview');
+        let seed = 2166136261 >>> 0;
+        const seedText = roomId + ':' + index;
+        for (let i = 0; i < seedText.length; i += 1) {
+            seed ^= seedText.charCodeAt(i);
+            seed = Math.imul(seed, 16777619) >>> 0;
+        }
+        const random01 = (): number => {
+            seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+            return seed / 0x100000000;
+        };
+
+        const reservedRight = this.mobileControlsEnabled ? 36 : 300;
+        const minX = 62;
+        const maxX = Math.max(minX + 40, this.gameWidth - reservedRight - 48);
+        const minY = 84;
+        const maxY = Math.max(minY + 60, this.gameHeight - 76);
+        const x = minX + random01() * (maxX - minX);
+        const y = minY + random01() * (maxY - minY);
+
+        /* Match the normal character shadow footprint too. */
+        const shadow = this.add.ellipse(0, 18, 29, 10, 0x304d37, 0.25);
         const body = this.add.rectangle(0, 7, 30, 31, 0x8da4ad).setStrokeStyle(2, 0x39505a);
         const head = this.add.rectangle(0, -20, 31, 24, 0xb9cbd1).setStrokeStyle(2, 0x39505a);
         const leftEye = this.add.rectangle(-7, -22, 5, 5, 0x183a46);
@@ -17392,7 +17420,14 @@ const ribbon =
         const rightArm = this.add.rectangle(20, 8, 8, 24, 0x9dafb6).setStrokeStyle(1, 0x39505a);
         const leftLeg = this.add.rectangle(-8, 31, 9, 19, 0x81969f).setStrokeStyle(1, 0x39505a);
         const rightLeg = this.add.rectangle(8, 31, 9, 19, 0x81969f).setStrokeStyle(1, 0x39505a);
-        const label = this.add.text(0, -50, `BOT ${index + 1} · AI`, {
+
+        const robot = this.add.container(0, ROBOT_Y, [
+            body, head, leftEye, rightEye, mouth, antenna, lamp, chest,
+            leftArm, rightArm, leftLeg, rightLeg,
+        ]).setScale(ROBOT_SCALE);
+
+        /* Keep label readable; only the robot art scales, not the typography. */
+        const label = this.add.text(0, -31, 'BOT ' + (index + 1) + ' · AI', {
             fontFamily: 'monospace',
             fontSize: '10px',
             fontStyle: 'bold',
@@ -17402,8 +17437,9 @@ const ribbon =
         }).setOrigin(0.5, 1);
 
         return this.add.container(x, y, [
-            shadow, body, head, leftEye, rightEye, mouth, antenna, lamp, chest,
-            leftArm, rightArm, leftLeg, rightLeg, label,
+            shadow,
+            robot,
+            label,
         ]).setDepth(132);
     }
 

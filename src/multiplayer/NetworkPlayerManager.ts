@@ -4634,6 +4634,15 @@ export class NetworkPlayerManager {
     ) as Phaser.GameObjects.Container | null;
     if (existing) return existing;
 
+    /*
+     * V1010565F_BOT_ROBOT_NATIVE_SCALE_SPAWN / PHYSICAL_NATIVE_Y_SCALE
+     * Robot source artwork spans roughly -49..+40.5.  The production player
+     * silhouette spans -24..+28.  Uniform 0.585 scale + 4.3px Y offset keeps
+     * the design intact while matching the normal character height.
+     */
+    const ROBOT_SCALE = 0.585;
+    const ROBOT_Y = 4.3;
+
     const body = this.scene.add.rectangle(0, 6, 31, 32, 0x8da4ad).setStrokeStyle(2, 0x39505a);
     const head = this.scene.add.rectangle(0, -21, 32, 24, 0xb9cbd1).setStrokeStyle(2, 0x39505a);
     const leftEye = this.scene.add.rectangle(-7, -23, 5, 5, 0x183a46);
@@ -4647,32 +4656,69 @@ export class NetworkPlayerManager {
     const leftLeg = this.scene.add.rectangle(-8, 31, 9, 19, 0x81969f).setStrokeStyle(1, 0x39505a);
     const rightLeg = this.scene.add.rectangle(8, 31, 9, 19, 0x81969f).setStrokeStyle(1, 0x39505a);
 
-    const overlay = this.scene.add.container(0, 0, [
+    const robot = this.scene.add.container(0, ROBOT_Y, [
       body, head, leftEye, rightEye, mouth, antenna, lamp, chest,
       leftArm, rightArm, leftLeg, rightLeg,
-    ]).setName("network-bot-robot-overlay");
+    ])
+      .setScale(ROBOT_SCALE)
+      .setName("network-bot-robot-overlay");
 
-    view.container.add(overlay);
-    return overlay;
+    view.container.add(robot);
+    return robot;
   }
 
   private refreshBotRobotVisual(view: NetworkPlayerView): void {
     if (!this.isBotSessionId(view.sessionId)) return;
-    const overlay = this.ensureBotRobotOverlay(view);
-    if (!overlay) return;
+    const robot = this.ensureBotRobotOverlay(view);
+    if (!robot) return;
 
     const phase = multiplayerClient.getRoom()?.state?.phase ?? "lobby";
-    /* Hider bots must keep camouflage unobstructed in Paint/Hunt. */
     const showRobot = view.alive && (phase === "lobby" || view.role === "hunter");
-    overlay.setVisible(showRobot);
+
+    const hiderBody = view.container.getByName(
+      "network-hider-pixel-body",
+    ) as Phaser.GameObjects.Image | null;
+    const hunterBody = view.container.getByName(
+      "network-hunter-pixel-body",
+    ) as Phaser.GameObjects.Image | null;
+
+    robot.setVisible(showRobot);
 
     if (showRobot) {
+      /*
+       * V1010565F_BOT_ROBOT_NATIVE_SCALE_SPAWN / ROBOT_IS_THE_BODY
+       * Never draw a normal human silhouette underneath the robot.  This is a
+       * visual replacement only; authoritative position/hitbox stays unchanged.
+       */
+      hiderBody?.setVisible(false);
+      hunterBody?.setVisible(false);
+      view.paintLayer?.texture.setVisible(false);
+
+      /*
+       * Hunter bot uses the SAME network gun object as a human Hunter. Keep it
+       * visible and make sure it renders above the robot body.
+       */
+      view.gun?.setVisible(view.role === "hunter");
+      const sortable = view.container as Phaser.GameObjects.Container & {
+        bringToTop?: (child: Phaser.GameObjects.GameObject) => void;
+        sendToBack?: (child: Phaser.GameObjects.GameObject) => void;
+      };
+      sortable.sendToBack?.(robot);
+      if (view.gun) sortable.bringToTop?.(view.gun);
+      sortable.bringToTop?.(view.nameText);
+
       view.nameText.setBackgroundColor("#d9f4ffdd");
       view.nameText.setColor("#234552");
-    } else {
-      view.nameText.setBackgroundColor("#fff4d6dd");
-      view.nameText.setColor("#4f3f34");
+      return;
     }
+
+    /* Active Hider bot: robot disappears; normal paintable camouflage returns. */
+    hiderBody?.setVisible(view.role === "hider" && view.alive);
+    hunterBody?.setVisible(view.role === "hunter" && view.alive);
+    view.paintLayer?.texture.setVisible(view.role === "hider" && view.alive);
+    view.gun?.setVisible(view.role === "hunter" && view.alive);
+    view.nameText.setBackgroundColor("#fff4d6dd");
+    view.nameText.setColor("#4f3f34");
   }
 
   private createPlayerContainer(
