@@ -1,3 +1,4 @@
+/* V1010565R_CLONE_DEATH_SPECTATOR_DEAD_FILTER: Clone Dance ends on owner death; normal corpse alpha; dead players excluded from Hider view switching. */
 /* V1010565N2_SNIPER_ROUND_LIFECYCLE_HARD_RESET_ROBUST: disposable sniper DOM/camera render epoch per activation; supports pre/post-v565m sources. */
 /* V1010564C_REMOVE_LEFTOVER_FART_TEST_UI_REFERENCES: remove stale temporary Fart Rampage TEST HUD references only. */
 /* V1010564B_REPAIR_HIDER_TAUNT_HUD_AFTER_TEST_REMOVAL: restore clean production Random Taunt HUD after v564 TEST-button removal. */
@@ -3342,6 +3343,39 @@ private timerText!: Phaser.GameObjects.Text;
         this.syncPhaseMusic();
     }
 
+    /*
+     * V1010565R_CLONE_DEATH_SPECTATOR_DEAD_FILTER / ALIVE_VIEW_AUTHORITY
+     * A cinematic or spectator target is valid only while BOTH the room Schema
+     * and the rendered NetworkPlayerManager still consider that player alive.
+     * This closes the brief death frame where a stale container can otherwise
+     * remain camera/cinematic-owned.
+     */
+    private isNetworkPlayerAliveForView(
+        sessionId:string,
+    ):boolean{
+        if(!sessionId)return false;
+
+        const roomPlayer=
+            multiplayerClient.getRoom()
+                ?.state.players.get(
+                    sessionId,
+                );
+
+        const renderedAlive=
+            this.networkPlayerManager
+                .getSpectatablePlayers()
+                .some(
+                    (player)=>
+                        player.sessionId===
+                        sessionId,
+                );
+
+        return roomPlayer
+            ? Boolean(roomPlayer.alive) &&
+                renderedAlive
+            : renderedAlive;
+    }
+
     private startCloneDanceParty(
         event:NetworkHiderCloneDanceParty,
     ):void{
@@ -3360,6 +3394,19 @@ private timerText!: Phaser.GameObjects.Text;
                     event.sessionId,
                 );
         if(!owner)return;
+
+        /*
+         * V1010565R_CLONE_DEATH_SPECTATOR_DEAD_FILTER / LATE_START_DEATH_GUARD
+         * A delayed/reordered Clone Dance start must never resurrect a Hider
+         * that has already been found.
+         */
+        if(
+            !this.isNetworkPlayerAliveForView(
+                event.sessionId,
+            )
+        ){
+            return;
+        }
 
         /*
          * If a duplicate/reconnect start arrives, clean only this owner's old
@@ -3547,6 +3594,23 @@ private timerText!: Phaser.GameObjects.Text;
                     delay:50,
                     loop:true,
                     callback:()=>{
+                        /*
+                         * V1010565R_CLONE_DEATH_SPECTATOR_DEAD_FILTER / SAME_FRAME_DEATH_CANCEL
+                         * Schema death wins over every cinematic timer. Do not
+                         * wait for the normal Clone Dance end event.
+                         */
+                        if(
+                            !this.isNetworkPlayerAliveForView(
+                                event.sessionId,
+                            )
+                        ){
+                            this.finishCloneDanceParty(
+                                event.sessionId,
+                                false,
+                            );
+                            return;
+                        }
+
                         if(
                             this.phase!=='hunt' ||
                             this.roundResultWinner!==null ||
@@ -3756,6 +3820,16 @@ private timerText!: Phaser.GameObjects.Text;
             );
         if(!runtime)return;
 
+        /*
+         * V1010565R_CLONE_DEATH_SPECTATOR_DEAD_FILTER / NORMAL_CORPSE_PARITY
+         * Capture alive state before releasing cinematic ownership. If the
+         * owner died during the dance, never force the parent back to alpha 1.
+         */
+        const ownerAliveForView=
+            this.isNetworkPlayerAliveForView(
+                sessionId,
+            );
+
         runtime.danceTimer?.remove(false);
         runtime.noteTimer?.remove(false);
 
@@ -3794,7 +3868,11 @@ private timerText!: Phaser.GameObjects.Text;
                 runtime.ownerBaseScaleX,
                 runtime.ownerBaseScaleY,
             )
-            .setAlpha(1);
+            .setAlpha(
+                ownerAliveForView
+                    ? 1
+                    : 0.28,
+            );
 
         runtime.clones.forEach(
             (clone)=>{
@@ -3868,7 +3946,11 @@ private timerText!: Phaser.GameObjects.Text;
                 runtime.ownerBaseScaleX,
                 runtime.ownerBaseScaleY,
             )
-            .setAlpha(1);
+            .setAlpha(
+                ownerAliveForView
+                    ? 1
+                    : 0.28,
+            );
 
         this.cloneDancePartyRuntimes.delete(
             sessionId,
@@ -3998,6 +4080,11 @@ private timerText!: Phaser.GameObjects.Text;
             runtime.danceTimer?.remove(false);
             runtime.noteTimer?.remove(false);
 
+            const ownerAliveForView=
+                this.isNetworkPlayerAliveForView(
+                    sessionId,
+                );
+
             runtime.owner
                 .setPosition(
                     runtime.returnX,
@@ -4010,7 +4097,11 @@ private timerText!: Phaser.GameObjects.Text;
                     runtime.ownerBaseScaleX,
                     runtime.ownerBaseScaleY,
                 )
-                .setAlpha(1);
+                .setAlpha(
+                    ownerAliveForView
+                        ? 1
+                        : 0.28,
+                );
 
             this.networkPlayerManager
                 .setCinematicAuthoritativePosition(
@@ -47574,14 +47665,27 @@ this.networkUnsubscribers.push(
             return;
         }
 
+        const localSessionId=
+            multiplayerClient.getSessionId();
+
+        const localAliveForView=
+            Boolean(
+                localSessionId &&
+                this.isNetworkPlayerAliveForView(
+                    localSessionId,
+                ),
+            );
+
         const localPosition =
             spectatedPlayer
                 ? new Phaser.Math.Vector2(
                     spectatedPlayer.x,
                     spectatedPlayer.y,
                 )
-                : this.networkPlayerManager
-                    .getLocalPlayerPosition();
+                : localAliveForView
+                    ? this.networkPlayerManager
+                        .getLocalPlayerPosition()
+                    : null;
 
         /*
          * V1010456_SNIPER_SEQUENCE_SCOPE_REWORK
@@ -50806,14 +50910,25 @@ this.networkUnsubscribers.push(
             );
 
         /*
-         * Final slot is always SELF so TAB can return to normal play.
+         * V1010565R_CLONE_DEATH_SPECTATOR_DEAD_FILTER / DEAD_SELF_FILTER
+         * SELF is a valid camera slot only while the local Hider is alive.
+         * A dead Hider must never cycle back to his own corpse camera.
          */
+        const localAlive=
+            Boolean(
+                multiplayerClient
+                    .getLocalPlayer()
+                    ?.alive,
+            );
+
         const cycle = [
             ...ordered.map(
                 (player) =>
                     player.sessionId,
             ),
-            '',
+            ...(localAlive
+                ? ['']
+                : []),
         ];
 
         if (cycle.length === 0) {
@@ -50863,21 +50978,81 @@ this.networkUnsubscribers.push(
     private getActiveHuntViewTarget():
         Phaser.GameObjects.Container | null {
         if (this.spectatorSessionId) {
-            const spectated =
-                this.networkPlayerManager
-                    .getPlayerContainer(
-                        this.spectatorSessionId,
-                    );
+            const aliveSelected=
+                this.isNetworkPlayerAliveForView(
+                    this.spectatorSessionId,
+                );
 
-            if (spectated) {
-                return spectated;
+            if(aliveSelected){
+                const spectated =
+                    this.networkPlayerManager
+                        .getPlayerContainer(
+                            this.spectatorSessionId,
+                        );
+
+                if (spectated) {
+                    return spectated;
+                }
             }
 
+            /*
+             * V1010565R_CLONE_DEATH_SPECTATOR_DEAD_FILTER / STALE_DEAD_TARGET_EJECT
+             * Never let a dead/stale container remain the camera target.
+             */
             this.spectatorSessionId = '';
+            this.spectatorCycleIndex = -1;
         }
 
-        return this.networkPlayerManager
-            .getLocalPlayerContainer();
+        const localId=
+            multiplayerClient.getSessionId();
+
+        const localAlive=
+            Boolean(
+                localId &&
+                this.isNetworkPlayerAliveForView(
+                    localId,
+                ),
+            );
+
+        if(localAlive){
+            return this.networkPlayerManager
+                .getLocalPlayerContainer();
+        }
+
+        /*
+         * Local Hider is dead: choose a live remote target immediately.
+         * This prevents the empty SELF slot from becoming a corpse camera even
+         * before the user presses TAB again.
+         */
+        const fallback=
+            this.networkPlayerManager
+                .getSpectatablePlayers()
+                .find(
+                    (player)=>
+                        player.sessionId!==
+                        localId,
+                );
+
+        if(fallback){
+            this.spectatorSessionId=
+                fallback.sessionId;
+            this.spectatorCycleIndex=0;
+
+            this.spectatorStatusText
+                ?.setText(
+                    this.formatSpectatorStatus(
+                        fallback.name,
+                    ),
+                )
+                .setVisible(true);
+
+            return this.networkPlayerManager
+                .getPlayerContainer(
+                    fallback.sessionId,
+                );
+        }
+
+        return null;
     }
 
     private forceFinishedFullMapCamera(): void {
